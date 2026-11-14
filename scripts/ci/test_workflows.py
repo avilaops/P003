@@ -1,12 +1,44 @@
 """Structural checks for the public CI/release entry points and their reusable jobs."""
 from pathlib import Path
+import io
+import json
+import os
 import unittest
+from unittest.mock import patch
+import urllib.error
 import yaml
 
 ROOT = Path(__file__).resolve().parents[2]
 
 
 class WorkflowTests(unittest.TestCase):
+    def run_public_release_probe(self, health):
+        steps = self.workflows()['release.yml']['jobs']['deploy']['steps']
+        step = next(s for s in steps if s.get('name') == 'Verify the public version after activation')
+        script = step['run'].split("python3 - <<'PY'\n", 1)[1].split('\nPY\n', 1)[0]
+
+        def edge_request(request, timeout):
+            url = request if isinstance(request, str) else request.full_url
+            agent = '' if isinstance(request, str) else request.get_header('User-agent', '')
+            self.assertEqual(url, 'https://erp.avilaops.com/api/health')
+            self.assertEqual(timeout, 20)
+            if not agent.startswith('AvilaOps-ReleaseVerification/'):
+                raise urllib.error.HTTPError(url, 403, 'Unidentified release probe', {}, None)
+            return io.BytesIO(json.dumps(health).encode())
+
+        with patch.dict(os.environ, {'SOURCE_SHA': 'a' * 40}), \
+                patch('urllib.request.urlopen', side_effect=edge_request):
+            exec(compile(script, 'release-public-verification', 'exec'), {})
+
+    def test_public_release_probe_identifies_itself_to_the_edge(self):
+        self.run_public_release_probe({'ok': True, 'commit': 'a' * 40})
+
+    def test_public_release_probe_still_rejects_unhealthy_or_wrong_revisions(self):
+        for health in ({'ok': False, 'commit': 'a' * 40},
+                       {'ok': True, 'commit': 'b' * 40}, {'ok': True}):
+            with self.subTest(health=health), self.assertRaisesRegex(AssertionError, 'Public release mismatch'):
+                self.run_public_release_probe(health)
+
     def test_private_signature_service_requires_linux_docker_in_existing_policy_job(self):
         policy = self.workflows()['_validate-project.yml']['jobs']['policy']
         step = next((s for s in policy['steps'] if s.get('name') == 'Verify private signature service'), None)
