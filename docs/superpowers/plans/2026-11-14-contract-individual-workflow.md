@@ -47,7 +47,7 @@ Task 1 verificada • commit `e246b83`, CI `43627261243` aprovado: 538 testes AP
 
 ### Task 2: Cliente autenticado e interoperabilidade
 
-**Files:** Create `apps/api/src/domains/contracts/individual/{client,transport,bundle,wire_json,codec_tests}.rs`; modify `apps/api/src/config.rs`, `apps/api/src/main.rs`, `apps/api/src/platform/state.rs`; vetores em `apps/api/tests/fixtures/contract-wire/` e geração de interoperabilidade em `scripts/contracts/`.
+**Files:** Create `apps/api/src/domains/contracts/individual/{client,transport,bundle,result_report,trust,wire_json,codec_tests,bundle_tests,trust_tests,wire_json_tests}.rs`; modify `apps/api/src/config.rs`, `apps/api/src/main.rs`, `apps/api/src/platform/state.rs`; vetores em `apps/api/tests/fixtures/contract-wire/` e geração de interoperabilidade em `scripts/contracts/`.
 
 **Interfaces:** Consumes IDs/hashes/política fixada da Task 1; produces `ValidatorClient::preflight/validate` e `VerifiedBundle` com bytes completos/hash, contexto tipado, veredito e evidência. `VerifiedBundle` só nasce no codec verificado, não por JSON/struct público do chamador.
 
@@ -55,6 +55,8 @@ Task 1 verificada • commit `e246b83`, CI `43627261243` aprovado: 538 testes AP
 - [ ] Implementar transporte e parsing limitados, confiança fixada e TLS; prazo de resposta e limite de corpo antes da alocação. Não duplicar parsing criptográfico PDF/DER.
 - [ ] Executar testes de interoperabilidade Rust/Python, falhas de rede e limites; confirmar `accepted` somente com todas as verificações.
 - [ ] Commit com RED/GREEN e resultados.
+
+Checkpoint de codec • confiança pública fixada, autenticação externa/interna, parser completo do bundle e recomposição do veredito implementados. Os testes isolados atuais cobrem contexto, identidade, hash do pai/candidato, inventário, relógio em microssegundos, MAC, truncamento, duplicações, material tipado não vazio e recategorização; 29 casos passaram. Somente hashes de certificados/CRL/OCSP explicitamente presentes contam como evidência, conforme `_proof` do serviço; raízes de confiança não contam implicitamente. Os relatórios dos vetores são modelos construídos com chave MAC sintética e PDFs fictícios: comprovam interoperabilidade, não validação criptográfica de titulares reais. Cliente HTTP/TLS, configuração, testes de rede e gates globais desta tarefa permanecem pendentes.
 
 ### Task 3: Congelamento, fila transacional e avanço concorrente
 

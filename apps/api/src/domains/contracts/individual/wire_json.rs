@@ -9,6 +9,17 @@ use serde_json::{Map, Value};
 const DEPTH_MAX: usize = 16;
 const BYTES_MAX: usize = 256 * 1024;
 
+pub(super) fn require(condition: bool) -> Result<(), WireError> {
+    if condition { Ok(()) } else { Err(WireError) }
+}
+pub(super) fn keys(value: &Value, expected: &[&str]) -> Result<(), WireError> {
+    let object = value.as_object().ok_or(WireError)?;
+    require(object.len() == expected.len() && expected.iter().all(|key| object.contains_key(*key)))
+}
+pub(super) fn text(value: &Value) -> Result<&str, WireError> {
+    value.as_str().ok_or(WireError)
+}
+
 pub(super) fn parse(raw: &[u8], max_bytes: usize) -> Result<Value, WireError> {
     if raw.is_empty() || raw.len() > max_bytes || !raw.is_ascii() {
         return Err(WireError);

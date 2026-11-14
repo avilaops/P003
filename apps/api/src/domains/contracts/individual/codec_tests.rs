@@ -62,7 +62,7 @@ fn contract_wire_preflight_matches_real_python_frame_and_hmac_bytes() {
         .authenticate(&encoded, value["sentAt"].as_i64().unwrap())
         .unwrap();
     assert_eq!(
-        serde_json::to_value(&authenticated.headers).unwrap(),
+        serde_json::to_value(authenticated.headers()).unwrap(),
         value["headers"]
     );
     assert_eq!(authenticated.request_sha256, value["frameSha256"]);
@@ -117,7 +117,7 @@ fn contract_wire_increment_matches_python_with_prior_identity_without_logging_cp
     )
     .unwrap();
     assert_eq!(
-        serde_json::to_value(key.authenticate(&encoded, 1794657600).unwrap().headers).unwrap(),
+        serde_json::to_value(key.authenticate(&encoded, 1794657600).unwrap().headers()).unwrap(),
         value["headers"]
     );
 }

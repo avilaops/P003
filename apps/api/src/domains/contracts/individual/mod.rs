@@ -1,4 +1,5 @@
 //! Personal ICP workflow, separate from historical DocuSeal completion.
+mod bundle;
 #[cfg_attr(
     not(test),
     expect(
@@ -7,5 +8,7 @@
     )
 )]
 pub mod identity;
+mod result_report;
 mod transport;
+mod trust;
 mod wire_json;

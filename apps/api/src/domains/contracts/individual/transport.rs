@@ -47,6 +47,21 @@ pub(super) struct EncodedRequest {
     body: Zeroizing<Vec<u8>>,
     context: RequestContext,
     operation: &'static str,
+    frame_sha256: String,
+    binding: DocumentBinding,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(super) enum DocumentBinding {
+    Preflight {
+        base_sha256: String,
+        base_size: usize,
+    },
+    Increment {
+        participant_id: Uuid,
+        parent_sha256: String,
+        candidate_sha256: String,
+    },
 }
 
 pub(super) fn sha256(value: &[u8]) -> String {
@@ -60,7 +75,7 @@ pub(super) fn is_sha256(value: &str) -> bool {
 }
 
 // Field declaration order is the protocol's sorted ASCII key order. Borrow CPF
-// directly; the only serialized plaintext buffers are zeroized on drop.
+// directly; buffers owned by this codec are zeroized on drop.
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct WireSigner<'a> {
@@ -181,6 +196,18 @@ pub(super) fn encode(
     if metadata.len() > HEADER_MAX {
         return Err(WireError);
     }
+    let binding = if let Some(signer) = &header.signer {
+        DocumentBinding::Increment {
+            participant_id: signer.participant_id,
+            parent_sha256: header.parts[1].sha256.clone(),
+            candidate_sha256: header.parts[2].sha256.clone(),
+        }
+    } else {
+        DocumentBinding::Preflight {
+            base_sha256: header.parts[0].sha256.clone(),
+            base_size: header.parts[0].length,
+        }
+    };
     let total =
         MAGIC.len() + 4 + metadata.len() + blobs.iter().map(|(_, b)| b.len()).sum::<usize>();
     let mut body = Zeroizing::new(Vec::new());
@@ -191,10 +218,13 @@ pub(super) fn encode(
     for (_, bytes) in blobs {
         body.extend_from_slice(bytes);
     }
+    let frame_sha256 = sha256(&body);
     Ok(EncodedRequest {
         body,
         context,
         operation,
+        frame_sha256,
+        binding,
     })
 }
 
@@ -206,7 +236,16 @@ impl EncodedRequest {
         &self.context
     }
     pub fn operation(&self) -> &'static str {
-        &self.operation
+        self.operation
+    }
+    pub fn binding(&self) -> &DocumentBinding {
+        &self.binding
+    }
+    pub fn frame_sha256(&self) -> &str {
+        &self.frame_sha256
+    }
+    pub fn take_body(&mut self) -> Vec<u8> {
+        std::mem::take(&mut self.body)
     }
 }
 
@@ -242,10 +281,10 @@ impl ServiceKey {
         request: &EncodedRequest,
         sent_at: i64,
     ) -> Result<RequestAuthentication, WireError> {
-        if !(1..=999_999_999_999).contains(&sent_at) {
+        if !(1..=999_999_999_999).contains(&sent_at) || request.body.is_empty() {
             return Err(WireError);
         }
-        let request_sha256 = sha256(request.body());
+        let request_sha256 = request.frame_sha256.clone();
         let message = format!(
             "AVILA-CV-AUTH/1\nPOST\n/internal/v1/{}\n{}\n{sent_at}\n{}\n{request_sha256}\n{}\n",
             request.operation,
@@ -275,6 +314,48 @@ impl ServiceKey {
             sent_at,
             key_id: self.id.clone(),
         })
+    }
+
+    pub fn verify_response(
+        &self,
+        body: &[u8],
+        received: &str,
+        request: &EncodedRequest,
+        authentication: &RequestAuthentication,
+    ) -> Result<(), WireError> {
+        if authentication.key_id != self.id || authentication.request_sha256 != request.frame_sha256
+        {
+            return Err(WireError);
+        }
+        let prefix = format!("HMAC-SHA256 {}:", self.id);
+        let received = received
+            .strip_prefix(&prefix)
+            .filter(|v| is_sha256(v))
+            .ok_or(WireError)?;
+        let signature = (0..64)
+            .step_by(2)
+            .map(|index| u8::from_str_radix(&received[index..index + 2], 16).map_err(|_| WireError))
+            .collect::<Result<Vec<_>, _>>()?;
+        let message = format!(
+            "AVILA-CV-RESPONSE/1\n{}\n{}\n{}\n{}\n{}\n",
+            self.id,
+            request.context.request_id,
+            authentication.request_sha256,
+            sha256(body),
+            body.len()
+        );
+        let mut mac = Hmac::<Sha256>::new_from_slice(&self.bytes).map_err(|_| WireError)?;
+        mac.update(message.as_bytes());
+        mac.verify_slice(&signature).map_err(|_| WireError)
+    }
+}
+
+impl RequestAuthentication {
+    pub fn headers(&self) -> &BTreeMap<String, String> {
+        &self.headers
+    }
+    pub fn sent_at(&self) -> i64 {
+        self.sent_at
     }
 }
 
