@@ -1,0 +1,30 @@
+BEGIN;
+INSERT INTO tenants(id,legal_name,tax_id) VALUES('10000000-0000-4000-8000-000000000001','Synthetic ICP','04252011000110');
+INSERT INTO parties(id,tenant_id,person_type,legal_name,tax_id,is_customer,is_supplier,status) VALUES('20000000-0000-4000-8000-000000000001','10000000-0000-4000-8000-000000000001','fisica','Synthetic','52998224725',true,false,'active');
+INSERT INTO sales_orders(id,tenant_id,customer_id,customer_name,customer_tax_id,due_date,amount_cents,status) VALUES('30000000-0000-4000-8000-000000000001','10000000-0000-4000-8000-000000000001','20000000-0000-4000-8000-000000000001','Synthetic','52998224725','2026-12-01',100,'draft');
+INSERT INTO commercial_contracts(id,tenant_id,customer_id,order_id,template_id,template_name,template_snapshot,snapshot,recipients,fields,fingerprint,status,signature_policy) VALUES('40000000-0000-4000-8000-000000000001','10000000-0000-4000-8000-000000000001','20000000-0000-4000-8000-000000000001','30000000-0000-4000-8000-000000000001',1,'Synthetic','{}','{}','[]','{}','synthetic','created','icp_each_participant');
+INSERT INTO contract_signature_envelopes(tenant_id,id,contract_id,policy,policy_sha256,trust_bundle_sha256,participant_count) VALUES('10000000-0000-4000-8000-000000000001','50000000-0000-4000-8000-000000000001','40000000-0000-4000-8000-000000000001','icp_each_participant',repeat('a',64),repeat('b',64),1);
+INSERT INTO contract_signature_participants(tenant_id,envelope_id,id,position,role,name,email,cpf_masked,identity_key_id,identity_nonce,identity_ciphertext) VALUES('10000000-0000-4000-8000-000000000001','50000000-0000-4000-8000-000000000001','60000000-0000-4000-8000-000000000001',1,'Cliente','Synthetic','synthetic@example.test','***.***.***-25','synthetic',repeat('x',12)::bytea,repeat('x',27)::bytea);
+INSERT INTO contract_signature_documents(tenant_id,envelope_id,id,position,provider_document_id,sha256,content) VALUES('10000000-0000-4000-8000-000000000001','50000000-0000-4000-8000-000000000001','70000000-0000-4000-8000-000000000001',1,'synthetic',encode(sha256('%PDF-synthetic'::bytea),'hex'),'%PDF-synthetic'::bytea);
+INSERT INTO contract_signature_evidence(tenant_id,envelope_id,id,document_id,participant_id,mode,verdict,parent_sha256,candidate_sha256,policy_sha256,trust_bundle_sha256,evidence_set_sha256,report_sha256,bundle_sha256,response_headers,bundle,observed_at) VALUES('10000000-0000-4000-8000-000000000001','50000000-0000-4000-8000-000000000001','80000000-0000-4000-8000-000000000001','70000000-0000-4000-8000-000000000001','60000000-0000-4000-8000-000000000001','increment','accepted',encode(sha256('%PDF-synthetic'::bytea),'hex'),encode(sha256('%PDF-synthetic-increment'::bytea),'hex'),repeat('a',64),repeat('b',64),repeat('c',64),repeat('d',64),encode(sha256(repeat('x',16)::bytea),'hex'),'{}',repeat('x',16)::bytea,clock_timestamp());
+INSERT INTO contract_signature_revisions(tenant_id,envelope_id,document_id,id,sequence,participant_id,base_sha256,parent_sha256,sha256,content,evidence_id) VALUES('10000000-0000-4000-8000-000000000001','50000000-0000-4000-8000-000000000001','70000000-0000-4000-8000-000000000001','90000000-0000-4000-8000-000000000001',1,'60000000-0000-4000-8000-000000000001',encode(sha256('%PDF-synthetic'::bytea),'hex'),encode(sha256('%PDF-synthetic'::bytea),'hex'),encode(sha256('%PDF-synthetic-increment'::bytea),'hex'),'%PDF-synthetic-increment'::bytea,'80000000-0000-4000-8000-000000000001');
+DO $$ DECLARE item text; BEGIN
+ FOREACH item IN ARRAY ARRAY['contract_signature_envelopes','contract_signature_participants','contract_signature_documents','contract_signature_evidence','contract_signature_revisions'] LOOP
+  BEGIN EXECUTE format('UPDATE %I SET tenant_id=tenant_id',item); RAISE EXCEPTION 'Expected UPDATE denied: %',item; EXCEPTION WHEN insufficient_privilege THEN NULL; END;
+  BEGIN EXECUTE format('DELETE FROM %I',item); RAISE EXCEPTION 'Expected DELETE denied: %',item; EXCEPTION WHEN insufficient_privilege THEN NULL; END;
+ END LOOP;
+END $$;
+-- A fake bundle here tests persistence integrity only; it is not sent through
+-- the validator, accepted by the API, or presented as cryptographic evidence.
+-- An accepted proof for the same candidate but a DIFFERENT parent must not
+-- authorize a revision. This exercises the persistence binding, not PDF crypto.
+INSERT INTO contract_signature_documents(tenant_id,envelope_id,id,position,provider_document_id,sha256,content) VALUES('10000000-0000-4000-8000-000000000001','50000000-0000-4000-8000-000000000001','70000000-0000-4000-8000-000000000002',2,'synthetic-second',encode(sha256('%PDF-second'::bytea),'hex'),'%PDF-second'::bytea);
+INSERT INTO contract_signature_evidence(tenant_id,envelope_id,id,document_id,participant_id,mode,verdict,parent_sha256,candidate_sha256,policy_sha256,trust_bundle_sha256,evidence_set_sha256,report_sha256,bundle_sha256,response_headers,bundle,observed_at) VALUES('10000000-0000-4000-8000-000000000001','50000000-0000-4000-8000-000000000001','80000000-0000-4000-8000-000000000002','70000000-0000-4000-8000-000000000002','60000000-0000-4000-8000-000000000001','increment','accepted',repeat('e',64),encode(sha256('%PDF-second-increment'::bytea),'hex'),repeat('a',64),repeat('b',64),repeat('c',64),repeat('d',64),encode(sha256(repeat('x',16)::bytea),'hex'),'{}',repeat('x',16)::bytea,clock_timestamp());
+DO $$ BEGIN
+ BEGIN
+  INSERT INTO contract_signature_revisions(tenant_id,envelope_id,document_id,id,sequence,participant_id,base_sha256,parent_sha256,sha256,content,evidence_id) VALUES('10000000-0000-4000-8000-000000000001','50000000-0000-4000-8000-000000000001','70000000-0000-4000-8000-000000000002','90000000-0000-4000-8000-000000000002',1,'60000000-0000-4000-8000-000000000001',encode(sha256('%PDF-second'::bytea),'hex'),encode(sha256('%PDF-second'::bytea),'hex'),encode(sha256('%PDF-second-increment'::bytea),'hex'),'%PDF-second-increment'::bytea,'80000000-0000-4000-8000-000000000002');
+  RAISE EXCEPTION 'Expected proof-parent FK rejection';
+ EXCEPTION WHEN foreign_key_violation THEN NULL;
+ END;
+END $$;
+ROLLBACK;

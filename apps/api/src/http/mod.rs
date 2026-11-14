@@ -13,6 +13,8 @@ mod commission_tests;
 #[cfg(test)]
 mod company_tests;
 #[cfg(test)]
+mod contract_individual_tests;
+#[cfg(test)]
 mod contracts_tests;
 #[cfg(test)]
 mod cte_distribution_tests;
