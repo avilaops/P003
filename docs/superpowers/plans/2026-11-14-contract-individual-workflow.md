@@ -40,14 +40,14 @@
 - [x] Escrever testes PostgreSQL de classificação do legado, RLS sem bypass, FKs cruzadas, imutabilidade e constraints/índices antes da migration. Escrever testes de CPF real sintético válido/inválido, máscara, cifra aleatória e AAD cruzada.
 - [x] Executar `cargo test --locked -p erp-next-api contract_individual -- --test-threads=2` com DATABASE_URL de teste local; observar falha por schema ausente. Testes de identidade devem falhar antes de implementar seu comportamento.
 - [x] Implementar migration e identidade sem alterar snapshots históricos; registrar módulos e reutilizar AES-GCM/zeroize existentes, sem reusar chave fiscal.
-- [ ] Reexecutar a seleção inteira e testes legados de contratos; executar `cargo fmt --all --check` e clippy dos alvos modificados.
-- [ ] Commit explícito dos arquivos da tarefa, com evidência RED/GREEN no ledger.
+- [x] Reexecutar a seleção inteira e testes legados de contratos; executar `cargo fmt --all --check` e clippy dos alvos modificados.
+- [x] Commit explícito dos arquivos da tarefa, com evidência RED/GREEN no ledger.
 
-Checkpoint local • quatro testes SQLx com a migration atual passaram em PostgreSQL real; três testes de identidade passaram compilando os arquivos atuais e o helper de CPF existente. A compilação Cargo inicial confirmou RED 0/3 por schema ausente; identidade confirmou RED 0/3 antes da implementação. Regressão adicional de vínculo ao pai confirmou RED e depois GREEN ao incluir `parent_sha256` na FK da prova. Lint dos módulos e formatação passaram. A segunda compilação monolítica, que ainda continha os métodos vazios do RED, foi cancelada pelo PID próprio verificado; não é resultado GREEN. Clippy global inicialmente acusou apenas a fronteira ainda não usada no binário normal; a expectativa temporária é restrita ao módulo fora de testes e deve sair na Task 3. A Task 1 permanece aberta até a verificação do conjunto e legado; as próximas tarefas e a homologação continuam pendentes.
+Task 1 verificada • commit `e246b83`, CI `43627261243` aprovado: 538 testes API passaram, um teste anterior ignorado, mais sete auxiliares aprovados; os sete casos novos e o contrato legado constam no log. O merge sintético testado `1ced35c3d2978ce37eb0234e151a8394b95eb996` tem árvore igual ao head. `cargo fmt --all --check` e `cargo clippy --locked -p erp-next-api --all-targets -- -D warnings` passaram localmente. RED do schema, identidade e vínculo ao pai foi observado antes da implementação; a compilação antiga com stubs cancelada não é resultado GREEN. A expectativa temporária de dead_code fora de testes sai quando a Task 3 conectar a identidade ao runtime. A PR 216 continua rascunho até concluir as tarefas restantes; nenhum deploy ou homologação foi feito.
 
 ### Task 2: Cliente autenticado e interoperabilidade
 
-**Files:** Create `apps/api/src/domains/contracts/individual/{client,transport,bundle,codec_tests}.rs`; modify `apps/api/src/platform/{state,config}.rs` ou ponto real de configuração existente; fixtures e verificador de interoperabilidade em `scripts/contracts/` se necessário.
+**Files:** Create `apps/api/src/domains/contracts/individual/{client,transport,bundle,wire_json,codec_tests}.rs`; modify `apps/api/src/config.rs`, `apps/api/src/main.rs`, `apps/api/src/platform/state.rs`; vetores em `apps/api/tests/fixtures/contract-wire/` e geração de interoperabilidade em `scripts/contracts/`.
 
 **Interfaces:** Consumes IDs/hashes/política fixada da Task 1; produces `ValidatorClient::preflight/validate` e `VerifiedBundle` com bytes completos/hash, contexto tipado, veredito e evidência. `VerifiedBundle` só nasce no codec verificado, não por JSON/struct público do chamador.
 

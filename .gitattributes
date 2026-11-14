@@ -1,5 +1,7 @@
 # The reviewed manifest hashes these exact public certificate bundle bytes.
 deploy/fiscal/icp-brasil-roots.pem text eol=lf
+# The cross-language trust identity includes this registry's exact byte hash.
+apps/contract-signature-validator/src/contract_signature_validator/trust_registry.json text eol=lf
 deploy/contracts-validator/seccomp.json text eol=lf
 deploy/contracts-validator/seccomp-provenance.json text eol=lf
 deploy/fiscal/icp-brasil-intermediates.pem text eol=lf

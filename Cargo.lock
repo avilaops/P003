@@ -782,6 +782,7 @@ dependencies = [
  "axum",
  "base64 0.22.1",
  "flate2",
+ "hmac 0.12.1",
  "image",
  "lettre",
  "lopdf",
