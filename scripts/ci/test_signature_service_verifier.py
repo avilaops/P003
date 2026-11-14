@@ -61,3 +61,17 @@ class OwnedDockerCleanupTests(unittest.TestCase):
         with patch.object(verifier.subprocess, 'run', return_value=inspect) as run:
             verifier.remove_owned('volume', 'generated-volume', 'our-token')
             self.assertEqual(run.call_args_list[-1].args[0], ['docker', 'volume', 'rm', 'generated-volume'])
+
+
+class KernelProbeTests(unittest.TestCase):
+    def test_probe_is_fixed_and_does_not_inherit_environment_or_request_data(self):
+        from types import ModuleType
+        fake = ModuleType('contract_signature_service.jail')
+        fake.kernel_abi = lambda: 6
+        outcome = SimpleNamespace(returncode=0, stdout=b'kernel-smoke-ok\n', stderr=b'')
+        with patch.dict('sys.modules', {'contract_signature_service.jail': fake}), \
+             patch.object(verifier.sys, 'platform', 'linux'), \
+             patch.object(verifier.subprocess, 'run', return_value=outcome) as run:
+            verifier.kernel_smoke_probe()
+        self.assertEqual(run.call_args.args[0][-1], 'print("kernel-smoke-ok")')
+        self.assertEqual(set(run.call_args.kwargs['env']), {'PATH', 'LANG', 'PYTHONDONTWRITEBYTECODE'})

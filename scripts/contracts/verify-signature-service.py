@@ -40,6 +40,24 @@ def verify_archives(directory):
     return wheel
 
 
+def kernel_smoke_probe():
+    """CI-only fixed command: no request, credentials, PDF or remote input."""
+    if sys.platform != 'linux': return
+    from contract_signature_service.jail import kernel_abi
+    abi = kernel_abi()
+    result = subprocess.run([sys.executable, '-I', '-m', 'contract_signature_service.limit_exec',
+        'pdf', sys.executable, '-I', '-c', 'print("kernel-smoke-ok")'],
+        input=b'', capture_output=True, timeout=5, start_new_session=True,
+        env={'PATH': os.defpath, 'LANG': 'C.UTF-8', 'PYTHONDONTWRITEBYTECODE': '1'})
+    if result.returncode != 0 or result.stdout != b'kernel-smoke-ok\n':
+        # The only executed payload is the constant above, so this cannot contain
+        # signatory/request data. Do not reuse stderr capture for real validation.
+        diagnostic = result.stderr[:2048].decode('ascii', errors='replace')
+        print(json.dumps({'kernelSmokeExit': result.returncode, 'landlockAbi': abi,
+                          'fixedCommandStderr': diagnostic}))
+        raise RuntimeError('kernel_smoke_probe_failed')
+
+
 def command(args, *, timeout=120, expected=0, capture=True):
     result = subprocess.run(args, cwd=ROOT, capture_output=capture, text=True, timeout=timeout)
     if result.returncode != expected:
@@ -259,6 +277,7 @@ def main():
     import contract_signature_service
     if not isinstance(contract_signature_service.__loader__, zipimport.zipimporter):
         raise RuntimeError('service_must_import_built_wheel')
+    kernel_smoke_probe()
     suite = unittest.TestLoader().discover(str(TESTS), pattern='test_*.py')
     result = unittest.TextTestRunner(verbosity=1).run(suite)
     if not result.wasSuccessful() or (sys.platform == 'linux' and result.skipped): return 1
