@@ -1,5 +1,5 @@
 """Isolated offline orchestration. Caller identity/time/config are bound before parsing."""
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 import hashlib
 
 from contract_signature_validator.model import (CheckResult, EvidenceSet, PreflightBinding,
@@ -27,6 +27,16 @@ class EngineResult:
 
 def _digest(value):
     return hashlib.sha256(value).hexdigest()
+
+
+def _bind_evidence(report, evidence):
+    # Produced here, after offline validation and normalization, never invented by
+    # a gateway/packager for an already recorded report. CheckResult is extensible
+    # in core0.2.0, so its canonical report hash/MAC bind this typed exact set too.
+    if any(check.name == 'evidence_set' for check in report.checks):
+        raise ValueError('evidence_already_bound')
+    check = CheckResult('evidence_set', Verdict.ACCEPTED, 'typed_evidence_set_bound', (evidence.sha256,))
+    return replace(report, checks=(*report.checks, check))
 
 
 def run_engine(stage, authenticated, evidence, config):
@@ -64,7 +74,7 @@ def run_engine(stage, authenticated, evidence, config):
                 personal = ()
             report = validate_increment(request.parent, request.candidate, binding, request.signer,
                 request.previous_signers, opened.baseline, config.policy, config.trust, evidence)
-    response = encode_response(authenticated, report, trust_profile=config.trust.profile)
+    response = encode_response(authenticated, _bind_evidence(report, evidence), trust_profile=config.trust.profile)
     targets = ()
     terminal = request.operation == 'preflight' or stage == 'validate' or report.verdict != Verdict.INDETERMINATE
     if not terminal:

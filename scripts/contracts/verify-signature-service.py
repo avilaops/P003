@@ -57,7 +57,9 @@ def _mount(source, target, *, writable=False):
 
 def _limits(user):
     return ['--read-only', '--init', '--user', user, '--cap-drop', 'ALL',
-            '--security-opt', 'no-new-privileges:true', '--pids-limit', '32', '--memory', '1g', '--cpus', '1']
+            '--security-opt', 'no-new-privileges:true',
+            '--security-opt', 'seccomp='+str(ROOT/'deploy/contracts-validator/seccomp.json'),
+            '--pids-limit', '32', '--memory', '1g', '--cpus', '1']
 
 
 def remove_owned(kind, name, token):
@@ -235,6 +237,7 @@ def verify_docker():
                 '--network', 'none', *_limits('10001:10001'), *_mount(public, '/config/public'),
                 *_mount(secrets, '/run/secrets/validator'), image, 'gateway'], expected=78, timeout=15)
             return {'restrictedTlsUnixPipeline': True, 'productionRejectsSyntheticTrust': True,
+                    'collectorCannotReadGatewaySecretsOrMemory': True,
                     'bundleSha256': decoded.sha256, **probe}
     finally:
         # Names are generated and owned by this invocation; never prune shared state.

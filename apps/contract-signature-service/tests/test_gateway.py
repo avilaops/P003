@@ -43,7 +43,7 @@ class LocalWorker:
 class LocalCollector:
     def __init__(self): self.calls = []
 
-    async def fetch(self, target, *, timeout):
+    async def fetch(self, target, *, timeout, max_bytes):
         self.calls.append((target, timeout))
         chain = chain_fixture()
         if target.url.endswith('/root.crl'): return issued_crl(chain.root, chain.root_key)

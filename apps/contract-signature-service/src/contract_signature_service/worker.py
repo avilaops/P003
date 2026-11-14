@@ -56,6 +56,8 @@ def require_worker_isolation():
             or {name for _, name in socket.if_nameindex()} != {'lo'}
             or not os.statvfs('/').f_flag & os.ST_RDONLY):
             raise WorkerError()
+        from .jail import kernel_abi
+        kernel_abi()
     except OSError:
         raise WorkerError() from None
 

@@ -44,6 +44,8 @@ async def run_bounded(command, input_data, *, timeout, output_limit, profile, ex
         raise SandboxError('invalid_process_configuration')
     if sys.platform != 'linux':
         raise SandboxError('validation_platform_unsupported')
+    from .jail import protect_supervisor
+    protect_supervisor()
     environment = {'PATH': os.defpath, 'LANG': 'C.UTF-8', 'PYTHONNOUSERSITE': '1',
                    'PYTHONDONTWRITEBYTECODE': '1', 'PYTHONUNBUFFERED': '1', **extra_env}
     process, tasks = None, []
@@ -51,7 +53,7 @@ async def run_bounded(command, input_data, *, timeout, output_limit, profile, ex
         process = await asyncio.create_subprocess_exec(sys.executable, '-I', '-m',
             'contract_signature_service.limit_exec', profile, *command,
             stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.DEVNULL, start_new_session=True, env=environment)
+            stderr=asyncio.subprocess.DEVNULL, start_new_session=True, close_fds=True, env=environment)
 
         async def send():
             for start in range(0, len(input_data), 65536):

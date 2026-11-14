@@ -149,7 +149,7 @@ class LinuxWorkerTests(unittest.IsolatedAsyncioTestCase):
         # A stalled local peer is bounded by the client as well as by the supervisor.
         self.server.close()
         await self.server.wait_closed()
-        self.path.unlink()
+        self.path.unlink(missing_ok=True)  # Python3.13 already cleans owned server sockets on close.
         async def stalled(reader, writer):
             try: await reader.read()
             finally:

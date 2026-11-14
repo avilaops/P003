@@ -24,6 +24,7 @@ class PrivateValidatorDeploymentTests(unittest.TestCase):
             self.assertTrue(service['init'])
             self.assertEqual(service['cap_drop'], ['ALL'])
             self.assertIn('no-new-privileges:true', service['security_opt'])
+            self.assertIn('seccomp:./seccomp.json', service['security_opt'])
             self.assertLessEqual(service['pids_limit'], 64)
             self.assertIn('mem_limit', service)
             self.assertIn('cpus', service)
@@ -56,3 +57,14 @@ class PrivateValidatorDeploymentTests(unittest.TestCase):
         self.assertTrue(rules['rules'])
         self.assertLessEqual(len(rules['rules']), 64)
         self.assertLessEqual(len((DEPLOY/'evidence-origins.json').read_bytes()), 32768)
+
+    def test_outer_seccomp_is_pinned_unmodified_upstream_default_with_landlock(self):
+        raw = (DEPLOY/'seccomp.json').read_bytes()
+        policy = json.loads(raw)
+        provenance = json.loads((DEPLOY/'seccomp-provenance.json').read_bytes())
+        self.assertEqual(policy['defaultAction'], 'SCMP_ACT_ERRNO')
+        self.assertEqual(provenance['profileSha256'], hashlib.sha256(raw).hexdigest())
+        self.assertEqual(provenance['modifications'], [])
+        allowed = {name for entry in policy['syscalls'] if entry['action'] == 'SCMP_ACT_ALLOW' for name in entry['names']}
+        self.assertTrue({'landlock_create_ruleset', 'landlock_add_rule', 'landlock_restrict_self'} <= allowed)
+        self.assertRegex(provenance['sourceUrl'], r'^https://raw.githubusercontent.com/moby/profiles/[0-9a-f]{40}/seccomp/default.json$')

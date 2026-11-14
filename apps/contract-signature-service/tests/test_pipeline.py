@@ -8,6 +8,30 @@ class PipelineBudgetTests(unittest.IsolatedAsyncioTestCase):
     @classmethod
     def setUpClass(cls): cls.fixture = validation_fixture()
 
+    async def test_remaining_body_budget_is_enforced_before_download_including_failures(self):
+        api, egress = load(self, 'gateway'), load(self, 'egress')
+        _, context, _, evidence, trust = self.fixture
+        config = load(self, 'config').ServiceConfig(trust, egress.NetworkPolicy({'http://ca.example': ('/',)}))
+        sizes = [8*1024*1024]*3+[8*1024*1024-1, 8*1024*1024]
+        for failing in (False, True):
+            caps, received = [], []
+            class Worker:
+                async def call(self, stage, frame, ctx, material, **kwargs):
+                    return SimpleNamespace(terminal=stage == 'validate', evidence=material,
+                        targets=tuple(egress.FetchTarget('crls', f'http://ca.example/{i}.crl')
+                                      for i in range(5)))
+            class Collector:
+                async def fetch(self, target, *, timeout, max_bytes=None):
+                    size = sizes[int(target.url.rsplit('/', 1)[-1].split('.')[0])]
+                    caps.append(max_bytes)
+                    received.append(min(size, max_bytes) if max_bytes is not None else size)
+                    if failing: raise ValueError('partial_download_failed')
+                    return b'x'*received[-1]
+            await api.Pipeline(config, Worker(), Collector()).run(b'opaque', context)
+            with self.subTest(failing=failing):
+                self.assertLessEqual(sum(received), 32*1024*1024)
+                self.assertTrue(all(type(cap) is int and 0 < cap <= 8*1024*1024 for cap in caps))
+
     async def test_query_limit_is_shared_between_discovery_rounds(self):
         api, egress = load(self, 'gateway'), load(self, 'egress')
         _, context, _, evidence, trust = self.fixture
@@ -39,7 +63,7 @@ class PipelineBudgetTests(unittest.IsolatedAsyncioTestCase):
                 calls.append(stage)
                 return SimpleNamespace(terminal=stage == 'validate', targets=targets, evidence=material)
         class Collector:
-            async def fetch(self, target, *, timeout):
+            async def fetch(self, target, *, timeout, max_bytes):
                 queries.append((target, timeout))
                 elapsed[0] += 3
                 raise ValueError('network unavailable')

@@ -55,9 +55,17 @@ async def gateway():
     _require_gateway_isolation()
     config = configuration()
     auth, tls = load_gateway_security(Path('/run/secrets/validator'))
+    from contract_signature_service.sandbox import run_bounded
+    probe = ('import os\n'
+        'for p in ("/run/secrets/validator/hmac.json","/run/secrets/validator/tls-key.pem",f"/proc/{os.getppid()}/mem"):\n'
+        ' try:\n  open(p,"rb").read(1)\n  raise AssertionError("collector_read_forbidden_material")\n'
+        ' except PermissionError: pass\n'
+        'print("isolated")')
+    assert await run_bounded((sys.executable, '-I', '-c', probe), b'',
+        timeout=3, output_limit=128, profile='network') == b'isolated\n'
     now = datetime.fromisoformat(json.loads((PUBLIC/'clock.json').read_bytes())['observedAt'])
     class MountedPublicEvidence:
-        async def fetch(self, target, *, timeout):
+        async def fetch(self, target, *, timeout, max_bytes):
             if target.kind != 'crls' or target.url not in (
                 'http://revocation.invalid/root.crl', 'http://revocation.invalid/leaf.crl'):
                 raise ValueError('synthetic_evidence_unavailable')

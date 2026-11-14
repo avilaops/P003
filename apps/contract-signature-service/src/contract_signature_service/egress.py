@@ -144,13 +144,15 @@ def _remaining(deadline):
     return min(3, remaining)
 
 
-def fetch_one(target, policy, *, deadline):
+def fetch_one(target, policy, *, deadline, max_bytes=None):
     """Inactivity/byte safeguards here; the process supervisor bounds total DNS/read time."""
     raw, connection, response = None, None, None
     try:
         _require(type(deadline) in (int, float) and math.isfinite(deadline)
                  and 0 < deadline-time.monotonic() <= 3.001, 'evidence_timeout')
         approved = policy.approve(target)
+        limit = LIMITS[approved.kind] if max_bytes is None else max_bytes
+        _require(type(limit) is int and 0 < limit <= LIMITS[approved.kind], 'evidence_size_exceeded')
         family, address = resolve_public(approved.host, approved.port)[0]
         raw = socket.socket(family, socket.SOCK_STREAM, socket.IPPROTO_TCP)
         raw.settimeout(_remaining(deadline))
@@ -189,15 +191,19 @@ def fetch_one(target, policy, *, deadline):
         if lengths:
             _require(re.fullmatch(r'[0-9]{1,9}', lengths[0]) is not None)
             expected = int(lengths[0])
-            _require(0 < expected <= LIMITS[approved.kind], 'evidence_size_exceeded')
+            _require(0 < expected <= limit, 'evidence_size_exceeded')
         chunks, size = [], 0
         while True:
+            if expected is not None and size == expected: break
+            # Unknown-length bodies at the exact cap remain unproven, so close
+            # without probing one extra byte beyond the aggregate reservation.
+            _require(size < limit, 'evidence_size_exceeded')
             stream.settimeout(_remaining(deadline))
-            chunk = response.read1(min(65536, LIMITS[approved.kind]-size+1))
+            chunk = response.read1(min(65536, limit-size))
             if not chunk:
                 break
             size += len(chunk)
-            _require(size <= LIMITS[approved.kind], 'evidence_size_exceeded')
+            _require(size <= limit, 'evidence_size_exceeded')
             chunks.append(chunk)
         _require(size > 0 and (expected is None or size == expected))
         return b''.join(chunks)

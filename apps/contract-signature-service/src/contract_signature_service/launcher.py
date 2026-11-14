@@ -56,6 +56,8 @@ def _require_gateway_isolation():
     fields = dict(line.split(':', 1) for line in status.splitlines() if ':' in line)
     if fields.get('NoNewPrivs', '').strip() != '1' or int(fields.get('CapEff', '1').strip(), 16) != 0:
         raise ConfigurationError()
+    from .jail import kernel_abi
+    kernel_abi()
 
 
 async def _until_stop(coroutine):

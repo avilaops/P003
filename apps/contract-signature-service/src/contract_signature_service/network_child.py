@@ -8,8 +8,8 @@ def main():
         if sys.platform != 'linux' or len(sys.argv) != 1: return 78
         from .collector import JOB_MAX, decode_fetch_job
         from .egress import fetch_one
-        target, policy = decode_fetch_job(sys.stdin.buffer.read(JOB_MAX+1))
-        result = fetch_one(target, policy, deadline=time.monotonic()+3)
+        target, policy, maximum = decode_fetch_job(sys.stdin.buffer.read(JOB_MAX+1))
+        result = fetch_one(target, policy, deadline=time.monotonic()+3, max_bytes=maximum)
         sys.stdout.buffer.write(result)
         sys.stdout.buffer.flush()
         return 0

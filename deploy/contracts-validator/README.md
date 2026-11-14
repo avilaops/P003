@@ -58,10 +58,36 @@ consultas em 12 s, três segundos por subprocesso de rede. PDFs são processados
 offline, com limites de CPU/memória/saída e cancelamento do grupo de processos.
 Ambos os containers usam init, sem capabilities e com no-new-privileges.
 
+Os subprocessos exigem Landlock ABI 3 ou superior e seccomp, em Linux x86-64
+ou aarch64. O launcher recusa ambientes sem esse suporte. Após criar o grupo
+supervisionado, o bootstrap restringe leitura ao runtime e à configuração pública;
+segredos e `/proc` ficam inacessíveis. O filtro herdado pelos descendentes bloqueia
+mudança de sessão/grupo, namespaces, sinais e manipulação da memória do supervisor.
+O supervisor fica não dumpable; somente pipes e devnull são herdados pelo filho.
+
+O perfil externo `seccomp.json` é uma cópia inalterada do padrão público do Moby,
+fixada por commit e hash em `seccomp-provenance.json`, com a licença preservada.
+Esse padrão já permite as chamadas Landlock; o filtro adicional do bootstrap
+impõe as restrições específicas do trabalho. Não usar seccomp unconfined.
+
+O limite restante de bytes acompanha cada consulta até a leitura HTTP e a saída
+do subprocesso. Falhas podem ter consumido bytes: reserva-se o teto da consulta
+antes de iniciá-la, devolvendo capacidade somente após uma resposta bem-sucedida.
+Isso pode deixar uma consulta indeterminada mais cedo, preservando o limite global.
+
 Não há retenção de PDF ou DER no serviço. O volume `channel` contém somente o
 socket e o lock, sem releases ou artefatos de build. Logs limitados a dois
 arquivos de 5 MB por container, sem dados do pedido. O futuro workflow do ERP
 precisa guardar e conferir o bundle antes de avançar estado ou head.
+
+O worker acrescenta ao relatório canônico o check `evidence_set`, que compromete
+o hash do conjunto tipado exato já normalizado. Encoder, IPC e SDK exigem esse
+compromisso; não podem acrescentar evidências ou trocá-las de categoria depois
+da validação. Um relatório bruto do núcleo sem esse check não vira um bundle.
+
+Referências: [Landlock](https://docs.kernel.org/userspace-api/landlock.html),
+[seccomp](https://man7.org/linux/man-pages/man2/seccomp.2.html) e
+[PR_SET_DUMPABLE](https://man7.org/linux/man-pages/man2/PR_SET_DUMPABLE.2const.html).
 
 ## Verificação
 

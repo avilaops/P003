@@ -54,7 +54,12 @@ def _proof(response, evidence, trust, authenticated):
              and response['report']['trustProfile'] == trust.profile
              and evidence.observed_at.isoformat().replace('+00:00', 'Z') == response['checkedAt'])
     available = {_digest(blob) for name in _COUNTS for blob in getattr(evidence, name)}
-    required = {value for check in response['report']['checks'] for value in check['evidenceHashes']}
+    inventory = [check for check in response['report']['checks'] if check['name'] == 'evidence_set']
+    _require(len(inventory) == 1 and inventory[0]['verdict'] == 'accepted'
+             and inventory[0]['reason'] == 'typed_evidence_set_bound'
+             and inventory[0]['evidenceHashes'] == [evidence.sha256])
+    required = {value for check in response['report']['checks'] if check['name'] != 'evidence_set'
+                for value in check['evidenceHashes']}
     _require(required <= available)
 
 

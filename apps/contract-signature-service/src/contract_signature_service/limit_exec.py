@@ -16,6 +16,8 @@ def main():
     resource.setrlimit(resource.RLIMIT_FSIZE, (0, 0))
     resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
     resource.setrlimit(resource.RLIMIT_NOFILE, (64, 64))
+    from .jail import restrict_child
+    restrict_child(sys.argv[2:])
     os.execve(sys.argv[2], sys.argv[2:], dict(os.environ))
     return 78
 

@@ -44,6 +44,8 @@ def validation_fixture():
     report = validate_increment(base, candidate, ValidationBinding(request.document_id, request.signer.participant_id,
         digest(base), digest(candidate), policy.sha256, trust.sha256, NOW), request.signer, (), opened.baseline,
         policy, trust, evidence)
+    from contract_signature_service.engine import _bind_evidence
+    report = _bind_evidence(report, evidence)
     authenticator = TransportAuthenticator({'test': b'SYNTHETIC-TRANSPORT-TEST-KEY-ONLY!!'})
     frame = encode_request(request)
     headers = authenticator.headers_for(frame, operation='increment', request_id=request.request_id,

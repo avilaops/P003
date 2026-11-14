@@ -42,7 +42,7 @@ class Pipeline:
 
     async def run(self, frame, authenticated):
         evidence = EvidenceSet(authenticated.observed_at)
-        queries, downloaded, seen, network_deadline = 0, 0, set(), None
+        queries, charged, seen, network_deadline = 0, 0, set(), None
         for _ in range(2):
             result = await self.worker.call('discover', frame, authenticated, evidence, timeout=15)
             evidence = result.evidence
@@ -52,16 +52,19 @@ class Pipeline:
             for target in result.targets:
                 self.config.network_policy.approve(target)
                 remaining = network_deadline-self.monotonic()
-                if queries >= 12 or remaining <= 0 or downloaded >= 32*1024*1024: break
+                if queries >= 12 or remaining <= 0 or charged >= 32*1024*1024: break
                 if target in seen: continue
                 seen.add(target)
                 queries += 1
                 attempted = True
+                limit = min(LIMITS[target.kind], 32*1024*1024-charged)
+                # A failed query may have consumed its whole body cap before an
+                # error/timeout. Reserve first; refund only a successful bounded read.
+                charged += limit
                 try:
-                    raw = await self.collector.fetch(target, timeout=min(3, remaining))
-                    if not isinstance(raw, bytes) or not 0 < len(raw) <= LIMITS[target.kind]: continue
-                    downloaded += len(raw)
-                    if downloaded > 32*1024*1024: break
+                    raw = await self.collector.fetch(target, timeout=min(3, remaining), max_bytes=limit)
+                    if not isinstance(raw, bytes) or not 0 < len(raw) <= limit: continue
+                    charged -= limit-len(raw)
                     values = tuple(sorted(set((*getattr(evidence, target.kind), raw))))
                     evidence = replace(evidence, **{target.kind: values})
                 except (OSError, ValueError, TimeoutError):
