@@ -87,6 +87,32 @@ class BundleTests(unittest.TestCase):
             with self.assertRaises(self.api.BundleError):
                 self.encode(evidence=replace(self.evidence, **{kind: values[1:]}))
 
+    def test_exact_typed_inventory_cannot_be_recategorized_or_extended_after_validation(self):
+        from fixtures import chain_fixture, issued_crl
+        chain = chain_fixture()
+        negative = issued_crl(chain.intermediate, chain.intermediate_key, revoked=(chain.leaf.serial_number,))
+        altered = (
+            replace(self.evidence, certificates=tuple(sorted((*self.evidence.certificates, *self.evidence.crls))), crls=()),
+            replace(self.evidence, ocsps=self.evidence.crls, crls=()),
+            replace(self.evidence, crls=tuple(sorted((*self.evidence.crls, negative)))))
+        body, _ = self.encode()
+        metadata, blobs = self.split(body)
+        for changed in altered:
+            # Preserve the recorded report and valid outer MAC, but rebuild the
+            # manifest to lie consistently about a different typed exact set.
+            parts = list(metadata['parts'][:3])
+            material = list(blobs[:3])
+            for kind in ('certificates', 'crls', 'ocsps'):
+                for index, raw in enumerate(getattr(changed, kind)):
+                    parts.append({'name': kind, 'index': index, 'length': len(raw),
+                                  'sha256': hashlib.sha256(raw).hexdigest()})
+                    material.append(raw)
+            forged = self.frame(metadata | {'parts': parts, 'evidenceSetSha256': changed.sha256}, material)
+            with self.subTest(inventory=changed.sha256, boundary='encode'):
+                with self.assertRaises(self.api.BundleError): self.encode(evidence=changed)
+            with self.subTest(inventory=changed.sha256, boundary='decode'):
+                with self.assertRaises(self.api.BundleError): self.decode(forged, self.resign(forged))
+
     def test_rehashed_manifest_cannot_hide_a_missing_required_der(self):
         body, _ = self.encode()
         metadata, blobs = self.split(body)

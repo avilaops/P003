@@ -59,6 +59,28 @@ class LinuxSandboxTests(unittest.IsolatedAsyncioTestCase):
         code = 'try:\n x=bytearray(1024*1024*1024)\nexcept MemoryError:\n print("bounded")'
         self.assertEqual(await self.run_code(code), b'bounded\n')
 
+    async def test_child_cannot_detach_or_signal_its_supervisor(self):
+        # SIGCONT is harmless to a running parent and exercises the same syscall
+        # as SIGSTOP/SIGKILL without risking a stuck test runner on the RED side.
+        code = ('import os,signal;supervisor=os.getppid()\n'
+            'for call in (os.setsid,lambda:os.setpgid(0,0),lambda:os.kill(supervisor,signal.SIGCONT)):\n'
+            ' pid=os.fork()\n'
+            ' if pid==0:\n'
+            '  try: call();print("allowed",flush=True)\n'
+            '  except PermissionError: print("denied",flush=True)\n'
+            '  os._exit(0)\n'
+            ' os.waitpid(pid,0)')
+        self.assertEqual((await self.run_code(code)).splitlines(), [b'denied']*3)
+
+    async def test_collector_cannot_read_supervisor_secret_files(self):
+        with tempfile.TemporaryDirectory() as directory:
+            secret = Path(directory)/'synthetic-hmac.json'
+            secret.write_text('SYNTHETIC NOT A REAL KEY', encoding='utf-8')
+            secret.chmod(0o600)
+            code = (f'try:\n open({str(secret)!r},"rb").read(1)\n print("readable")\n'
+                    'except PermissionError:\n print("denied")')
+            self.assertEqual(await self.run_code(code, profile='network'), b'denied\n')
+
     async def test_cancellation_cleans_the_process_group(self):
         # Capture only the PIDs emitted by this test's own subprocess, via a Unix
         # socket because the sandbox forbids regular file writes (RLIMIT_FSIZE=0).
