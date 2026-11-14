@@ -74,6 +74,7 @@ function Editor({ tenant, canEdit, initial }: { tenant: string; canEdit: boolean
   const [id] = useState(() => initial?.id || crypto.randomUUID())
   const publication = useCommand()
   const [definition, setDefinition] = useState<Definition>(initial?.definition || { name: "", pages: 1, roles: ["Cliente"], fields: [] })
+  const [activeFieldId, setActiveFieldId] = useState(initial?.definition.fields[0]?.id || "")
   const [pdf, setPdf] = useState<string | null>(null)
   const [fileError, setFileError] = useState("")
   const [loadingFile, setLoadingFile] = useState(false)
@@ -86,6 +87,17 @@ function Editor({ tenant, canEdit, initial }: { tenant: string; canEdit: boolean
   const blocked = !canEdit || command.busy || command.uncertain || command.stale || loadingFile || publication.busy || publication.uncertain || publication.stale
   const dirty = !!pdf || JSON.stringify(definition) !== savedDefinition
   const changeField = (id: string, change: Partial<Field>) => setDefinition(value => ({ ...value, fields: value.fields.map(field => field.id === id ? { ...field, ...change } : field) }))
+  const activeFieldIndex = Math.max(0, definition.fields.findIndex(field => field.id === activeFieldId))
+  function addField() {
+    const id = crypto.randomUUID()
+    setDefinition(value => ({ ...value, fields: [...value.fields, { id, name: `campo_${value.fields.length + 1}`, kind: "text", role: value.roles[0], required: true, page: 1, x: 5, y: 5, width: 40, height: 5 }] }))
+    setActiveFieldId(id)
+  }
+  function removeField(id: string) {
+    const remaining = definition.fields.filter(field => field.id !== id)
+    setDefinition(value => ({ ...value, fields: value.fields.filter(field => field.id !== id) }))
+    setActiveFieldId(remaining[Math.min(activeFieldIndex, remaining.length - 1)]?.id || "")
+  }
   async function loadFile(file?: File) {
     setFileError("")
     if (!file) return
@@ -119,6 +131,7 @@ function Editor({ tenant, canEdit, initial }: { tenant: string; canEdit: boolean
     const index = Number(rawIndex)
     const field = definition.fields.find(field => field.id === fieldId)
     if (!field) return
+    setActiveFieldId(fieldId)
     changeField(fieldId, index === 0 ? position : { additionalAreas: field.additionalAreas?.map((area, i) => i === index - 1 ? { ...area, ...position } : area) })
   }
   return <form className="space-y-5" onSubmit={event => { event.preventDefault(); void save() }}>
@@ -134,9 +147,17 @@ function Editor({ tenant, canEdit, initial }: { tenant: string; canEdit: boolean
     {(pdf || revision) && <section className="form-section space-y-3"><h2 className="text-lg font-semibold">Documento e posição dos campos</h2><TemplateCanvas key={pdf || id} source={pdf || `/api/erp/contract-template-drafts/${id}/pdf`} fields={positioned} disabled={blocked} onPages={readPages} onMove={moveArea} /></section>}
     <fieldset disabled={blocked} className="form-section space-y-4">
       <h2 className="text-lg font-semibold">Campos e assinaturas</h2>
-      <p>Adicione um campo e posicione-o sobre o PDF. Para ajustes precisos, use os percentuais abaixo, medidos a partir do canto superior esquerdo da página.</p>
-      {definition.fields.map((field, index) => <fieldset key={field.id} className="space-y-3 rounded-xl border p-4">
-        <legend>Campo {index + 1}</legend>
+      <p>Escolha o campo que deseja editar. Todos os campos são preservados ao navegar e salvar. As posições são medidas a partir do canto superior esquerdo da página.</p>
+      {definition.fields.length > 0 && <div className="space-y-3">
+        <label className="block min-w-0">Campo em edição<select aria-label="Campo em edição" className={selectClass} value={definition.fields[activeFieldIndex].id} onChange={event => setActiveFieldId(event.target.value)}>{definition.fields.map((field, index) => <option key={field.id} value={field.id}>{sources[field.name] || field.name || "Sem nome"} • Campo {index + 1} • Página {field.page}</option>)}</select></label>
+        <nav aria-label="Navegação dos campos" className="flex flex-wrap items-center gap-3">
+          <Button type="button" variant="outline" disabled={activeFieldIndex === 0} onClick={() => setActiveFieldId(definition.fields[activeFieldIndex - 1].id)}>Campo anterior</Button>
+          <p aria-live="polite">Campo {activeFieldIndex + 1} de {definition.fields.length}</p>
+          <Button type="button" variant="outline" disabled={activeFieldIndex >= definition.fields.length - 1} onClick={() => setActiveFieldId(definition.fields[activeFieldIndex + 1].id)}>Próximo campo</Button>
+        </nav>
+      </div>}
+      {definition.fields.slice(activeFieldIndex, activeFieldIndex + 1).map(field => <fieldset key={field.id} className="space-y-3 rounded-xl border p-4">
+        <legend>Campo {activeFieldIndex + 1}</legend>
         <label className="block">Nome do campo<Input required maxLength={200} value={field.name} onChange={e => changeField(field.id, { name: e.target.value })} /></label>
         <label className="block">Dado do ERP<select aria-label="Dado do ERP" className={selectClass} value={Object.hasOwn(sources, field.name) ? field.name : ""} onChange={e => { if (e.target.value) changeField(field.id, { name: e.target.value }) }}><option value="">Preenchimento manual / assinatura</option>{Object.entries(sources).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select></label>
         <label className="block">Tipo<select aria-label="Tipo" className={selectClass} value={field.kind} onChange={e => changeField(field.id, { kind: e.target.value })}>{[["text", "Texto"], ["signature", "Assinatura"], ["initials", "Rubrica"], ["date", "Data"], ["number", "Número"]].map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select></label>
@@ -150,9 +171,9 @@ function Editor({ tenant, canEdit, initial }: { tenant: string; canEdit: boolean
         </fieldset>)}
         <Button type="button" variant="outline" disabled={(field.additionalAreas?.length || 0) >= 99} onClick={() => changeField(field.id, { additionalAreas: [...(field.additionalAreas || []), { page: Math.min(definition.pages, field.page + 1), x: field.x, y: field.y, width: field.width, height: field.height }] })}>Repetir campo em outra posição</Button>
         {field.kind !== "signature" && field.kind !== "initials" && <label className="block">Tamanho da fonte (pt)<Input type="number" min={6} max={72} step="any" value={field.fontSize ?? 12} onChange={e => changeField(field.id, { fontSize: Number(e.target.value) })} /></label>}
-        <Button type="button" variant="outline" onClick={() => setDefinition(value => ({ ...value, fields: value.fields.filter(item => item.id !== field.id) }))}>Remover campo {index + 1}</Button>
+        <Button type="button" variant="outline" onClick={() => removeField(field.id)}>Remover campo {activeFieldIndex + 1}</Button>
       </fieldset>)}
-      <Button type="button" variant="outline" disabled={definition.fields.length >= 200} onClick={() => setDefinition(value => ({ ...value, fields: [...value.fields, { id: crypto.randomUUID(), name: `campo_${value.fields.length + 1}`, kind: "text", role: value.roles[0], required: true, page: 1, x: 5, y: 5, width: 40, height: 5 }] }))}>Adicionar campo</Button>
+      <Button type="button" variant="outline" disabled={definition.fields.length >= 200} onClick={addField}>Adicionar campo</Button>
     </fieldset>
     {fileError && <p role="alert">{fileError}</p>}
     {command.error && <RequestError message={command.error} status={command.status} />}
