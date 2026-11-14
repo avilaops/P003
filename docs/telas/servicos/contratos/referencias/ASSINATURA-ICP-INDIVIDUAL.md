@@ -62,8 +62,11 @@ pessoais reais nem homologação do fluxo publicado.
 A [entrega verificada do núcleo](NUCLEO-ICP-ENTREGA-20261114.md) registra PR,
 commit integrado, CI, correções de revisão e todas as decisões e pendências.
 
-Continuam pendentes o serviço privado com isolamento e obtenção restrita de
-revogação, a política e congelamento no ERP, o workflow concorrente, a ponte
+O [serviço privado com isolamento e obtenção restrita de revogação](SERVICO-ICP-ENTREGA-20261114.md)
+foi integrado na PR 214, com validação Linux/Docker e fluxo sintético completo.
+Não foi publicado nem habilitado para novas assinaturas.
+
+Continuam pendentes a política e congelamento no ERP, o workflow concorrente, a ponte
 do portal, BFF/telas, o pacote final de todos os documentos e a homologação
 pessoal. A biblioteca por si só não habilita novas emissões ou convites.
 
