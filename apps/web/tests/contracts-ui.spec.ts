@@ -199,9 +199,48 @@ test("editor aceita campo 200 e impede campo 201", async ({ page, context }) => 
   const add = page.getByRole("button", { name: "Adicionar campo", exact: true })
   await expect(add).toBeEnabled({ timeout: 30000 })
   await add.click()
-  await expect(page.getByRole("textbox", { name: "Nome do campo", exact: true })).toHaveCount(200)
+  await expect(page.getByRole("textbox", { name: "Nome do campo", exact: true })).toHaveCount(1)
+  await expect(page.getByLabel("Campo em edição", { exact: true })).toHaveValue(/.+/)
+  await expect(page.getByText("Campo 200 de 200", { exact: true })).toBeVisible()
   await expect(add).toBeDisabled()
 })
+
+for (const width of [375, 768, 1024, 1440]) {
+  test(`editor de modelo grande mostra um campo por vez e preserva todos ao salvar • ${width}px`, async ({ page, context }, testInfo) => {
+    await page.setViewportSize({ width, height: 900 })
+    const id = "77777777-7777-4777-8777-777777777777"
+    const fields = Array.from({ length: 148 }, (_, i) => ({ id: `f${i}`, name: `campo_${i + 1}`, kind: "text", role: "Cliente", required: false, page: 1, x: 5, y: 5, width: 40, height: 5, ...(i === 0 ? { additionalAreas: [{ page: 1, x: 15, y: 35, width: 30, height: 5 }] } : {}) }))
+    templateDraft = { id, revision: 1, definition: { name: "Modelo de 148 campos", pages: 1, roles: ["Cliente"], fields } }
+    await context.addCookies([cookie()])
+    await page.goto(`/servicos/contratos/modelos/${id}`)
+    const name = page.getByLabel("Nome do campo", { exact: true })
+    await expect(name).toHaveCount(1)
+    await expect(page.getByText("Campo 1 de 148", { exact: true })).toBeVisible()
+    await expect(page.getByRole("button", { name: "Campo anterior", exact: true })).toBeDisabled()
+    await name.fill("Primeiro campo editado")
+    const next = page.getByRole("button", { name: "Próximo campo", exact: true })
+    if (width === 1024) { await next.focus(); await next.press("Enter") }
+    else await next.click()
+    await expect(name).toHaveValue("campo_2")
+    await page.getByLabel("Campo em edição", { exact: true }).selectOption("f147")
+    await expect(page.getByText("Campo 148 de 148", { exact: true })).toBeVisible()
+    await expect(page.getByRole("button", { name: "Próximo campo", exact: true })).toBeDisabled()
+    await name.fill("Último campo editado")
+    await page.getByLabel("Campo em edição", { exact: true }).selectOption("f0")
+    await expect(name).toHaveValue("Primeiro campo editado")
+    expect(await page.evaluate(() => document.documentElement.scrollHeight)).toBeLessThan(6000)
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width)
+    await page.getByRole("button", { name: "Salvar rascunho", exact: true }).click()
+    await expect(page.getByRole("status").filter({ hasText: "Rascunho salvo." })).toBeVisible()
+    expect(templateDraft!.definition).toMatchObject({ fields: fields.map((field, index) => ({ ...field, name: index === 0 ? "Primeiro campo editado" : index === 147 ? "Último campo editado" : field.name })) })
+    expect(templateSaves).toBe(1)
+    expect(templatePublications).toBe(0)
+    expect(sends).toBe(0)
+    expect(failures).toEqual([])
+    await page.getByLabel("Campo em edição", { exact: true }).scrollIntoViewIfNeeded()
+    await page.screenshot({ path: testInfo.outputPath("editor-campos.png") })
+  })
+}
 
 test("editor salva PDF e campos como rascunho e reabre sem enviar contrato", async ({ page, context }) => {
   await context.addCookies([cookie()])

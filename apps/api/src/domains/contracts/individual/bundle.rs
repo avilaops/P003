@@ -48,6 +48,13 @@ pub(super) struct VerifiedBundle {
     headers: BTreeMap<String, String>,
     document_binding: DocumentBinding,
 }
+#[cfg_attr(
+    not(test),
+    expect(
+        dead_code,
+        reason = "Proof accessors are consumed by transactional persistence in workflow plan task 3"
+    )
+)]
 impl VerifiedBundle {
     pub fn bytes(&self) -> &[u8] {
         &self.bytes

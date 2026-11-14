@@ -30,3 +30,9 @@ MAC externo, MAC interno, hashes de todas as partes, contexto, nonce, identidade
 ## Validação
 
 Os testes de transporte usam modelos construídos com HMAC e TLS sintéticos, servidor HTTPS local e Python padrão. Verificam interoperabilidade e comportamento de falhas; não substituem PDF real, certificados pessoais ou a homologação DocuSeal exigida em [Assinatura individual](ASSINATURA-ICP-INDIVIDUAL.md).
+
+## Código preparatório e lint de produção
+
+O cliente é configurável, mas ainda não tem chamador no fluxo operacional: o worker, as transações de avanço e as telas pertencem às tarefas seguintes do plano. Não existe ativação de assinatura individual nesta entrega.
+
+O lint declara somente os pontos ainda aguardando integração: a entrada `preflight` (que alcança `validate` e os codecs), a construção de `Input::Increment` pelo worker futuro e os acessores de `VerifiedBundle` destinados à persistência. As expectativas de `dead_code` têm motivo explícito, aplicam-se somente fora de testes e devem sair quando esses consumidores forem implementados. Não há supressão no módulo inteiro nem alteração do comando `clippy -D warnings`. O acesso de leitura ao corpo codificado fica exclusivo dos testes; a transferência de envio usa `take_body`.

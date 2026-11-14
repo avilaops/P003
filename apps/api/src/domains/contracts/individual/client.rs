@@ -77,6 +77,13 @@ impl ValidatorClient {
             deadline: Duration::from_secs(55),
         })
     }
+    #[cfg_attr(
+        not(test),
+        expect(
+            dead_code,
+            reason = "Preflight is consumed by workflow plan task 3; remove this expectation when connected"
+        )
+    )]
     pub(super) async fn preflight(
         &self,
         context: RequestContext,

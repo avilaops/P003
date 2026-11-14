@@ -35,6 +35,13 @@ pub(super) enum Input<'a> {
     Preflight {
         base: &'a [u8],
     },
+    #[cfg_attr(
+        not(test),
+        expect(
+            dead_code,
+            reason = "Increment is constructed by the upload worker in workflow plan task 3"
+        )
+    )]
     Increment {
         base: &'a [u8],
         parent: &'a [u8],
@@ -229,6 +236,7 @@ pub(super) fn encode(
 }
 
 impl EncodedRequest {
+    #[cfg(test)]
     pub fn body(&self) -> &[u8] {
         &self.body
     }
