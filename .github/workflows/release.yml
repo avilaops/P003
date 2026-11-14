@@ -212,7 +212,7 @@ jobs:
         \ images' --output \"$GITHUB_WORKSPACE/artifacts/timings/$GITHUB_JOB.jsonl\" -- bash --noprofile --norc -e -o pipefail \"$script_file\"\n"
     - name: Verify the public version after activation
       run: "script_file=$(mktemp)\ntrap 'rm -f -- \"$script_file\"' EXIT\ncat > \"$script_file\" <<'ERP_TIMED_1ea6e5c931ff1c26'\npython3 - <<'PY'\nimport json, os,\
-        \ urllib.request\nwith urllib.request.urlopen('https://erp.avilaops.com/api/health', timeout=20) as response:\n    value = json.load(response)\nassert value.get('ok')\
+        \ urllib.request\nrequest = urllib.request.Request('https://erp.avilaops.com/api/health', headers={'User-Agent': 'AvilaOps-ReleaseVerification/1.0'})\nwith urllib.request.urlopen(request, timeout=20) as response:\n    value = json.load(response)\nassert value.get('ok')\
         \ is True and value.get('commit') == os.environ['SOURCE_SHA'], 'Public release mismatch'\nprint('Public ERP revision verified: ' + value['commit'])\nPY\n\
         ERP_TIMED_1ea6e5c931ff1c26\npython3 \"$GITHUB_WORKSPACE/scripts/ci/timed.py\" --label 'release/deploy: Verify the public version after activation' --output\
         \ \"$GITHUB_WORKSPACE/artifacts/timings/$GITHUB_JOB.jsonl\" -- bash --noprofile --norc -e -o pipefail \"$script_file\"\n"
