@@ -54,7 +54,7 @@ fn checked_at(stamp: &str, expected: &Verification<'_>) -> Result<OffsetDateTime
             && bytes[10] == b'T'
             && bytes.last() == Some(&b'Z'),
     )?;
-    require(bytes[17..19].iter().all(u8::is_ascii_digit) && &bytes[17..19] < b"60")?;
+    require(bytes[17..19].iter().all(u8::is_ascii_digit) && &bytes[17..19] < b"60".as_slice())?;
     if bytes.len() == 27 {
         require(
             bytes[19] == b'.'

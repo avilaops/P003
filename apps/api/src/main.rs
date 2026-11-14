@@ -65,6 +65,7 @@ async fn run() -> anyhow::Result<()> {
         .with_assistant(domains::assistant::InferenceClient::from_env()?)
         .with_danfe(config.danfe)
         .with_contracts(config.contracts)
+        .with_contract_validator(config.contract_validator)
         .with_invitations(config.invitations);
     state = state.with_mail(config.mail);
     state.catalog_media = domains::catalog_publication::MediaGateway::from_env()?;

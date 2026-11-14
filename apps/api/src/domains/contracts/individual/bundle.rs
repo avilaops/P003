@@ -206,6 +206,32 @@ fn authenticate(
     media_type: &str,
     expected: &Verification<'_>,
 ) -> Result<BTreeMap<String, String>, WireError> {
+    let values = response_headers(headers, media_type)?;
+    require(
+        values
+            .get("content-length")
+            .is_some_and(|v| v == &body.len().to_string())
+            && values
+                .get("x-validation-response-sha256")
+                .is_some_and(|v| v == &sha256(body)),
+    )?;
+    expected.key.verify_response(
+        body,
+        values.get("x-validation-response-mac").ok_or(WireError)?,
+        expected.request,
+        expected.authentication,
+    )?;
+    REQUIRED_HEADERS
+        .into_iter()
+        .map(|name| Ok((name.into(), values.get(name).ok_or(WireError)?.clone())))
+        .collect()
+}
+
+/// Shape/budget check before body read; decode still authenticates before JSON.
+pub(super) fn response_headers(
+    headers: &[(String, String)],
+    media_type: &str,
+) -> Result<BTreeMap<String, String>, WireError> {
     require(headers.len() <= 32)?;
     let mut values = BTreeMap::new();
     let mut total = 0usize;
@@ -227,25 +253,18 @@ fn authenticate(
         )?;
     }
     require(!values.contains_key("transfer-encoding") && !values.contains_key("content-encoding"))?;
+    let length = values.get("content-length").ok_or(WireError)?;
+    let size = length.parse::<usize>().map_err(|_| WireError)?;
+    require(size > 0 && size <= MAX_BYTES && length == &size.to_string())?;
+    require(values.contains_key("x-validation-response-mac"))?;
     require(
         values.get("content-type").is_some_and(|v| v == media_type)
-            && values
-                .get("content-length")
-                .is_some_and(|v| v == &body.len().to_string())
+            && values.get("content-length").is_some_and(|v| v == length)
             && values
                 .get("x-validation-response-sha256")
-                .is_some_and(|v| is_sha256(v) && v == &sha256(body)),
+                .is_some_and(|v| is_sha256(v)),
     )?;
-    expected.key.verify_response(
-        body,
-        values.get("x-validation-response-mac").ok_or(WireError)?,
-        expected.request,
-        expected.authentication,
-    )?;
-    REQUIRED_HEADERS
-        .into_iter()
-        .map(|name| Ok((name.into(), values.get(name).ok_or(WireError)?.clone())))
-        .collect()
+    Ok(values)
 }
 
 #[cfg(test)]

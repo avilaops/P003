@@ -16,7 +16,7 @@ pub(super) const CONTENT_TYPE: &str =
 
 #[derive(Debug, thiserror::Error)]
 #[error("Resposta de validação indisponível ou incompatível")]
-pub(super) struct WireError;
+pub(crate) struct WireError;
 
 #[derive(Clone, Debug)]
 pub(super) struct RequestContext {

@@ -1,5 +1,7 @@
 //! Personal ICP workflow, separate from historical DocuSeal completion.
 mod bundle;
+pub(crate) mod client;
+mod client_config;
 #[cfg_attr(
     not(test),
     expect(
