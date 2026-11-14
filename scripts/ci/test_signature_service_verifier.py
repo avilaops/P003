@@ -64,6 +64,14 @@ class OwnedDockerCleanupTests(unittest.TestCase):
 
 
 class KernelProbeTests(unittest.TestCase):
+    def test_worker_mount_check_rejects_secret_sources_and_ancestor_mounts(self):
+        secret_root = Path('/fixture/secrets')
+        verifier.assert_worker_mounts({'Mounts': [{'Source': '/fixture/public', 'Destination': '/config/public'}]}, secret_root)
+        for details in ({}, {'Mounts': [{'Source': '/fixture/secrets', 'Destination': '/elsewhere'}]},
+                        {'Mounts': [{'Source': '/fixture', 'Destination': '/elsewhere'}]},
+                        {'Mounts': [{'Source': '/fixture/public', 'Destination': '/run/secrets/validator'}]}):
+            with self.assertRaises(ValueError): verifier.assert_worker_mounts(details, secret_root)
+
     def test_probe_is_fixed_and_does_not_inherit_environment_or_request_data(self):
         from types import ModuleType
         fake = ModuleType('contract_signature_service.jail')

@@ -73,6 +73,18 @@ def _mount(source, target, *, writable=False):
     return ['--mount', f'type=bind,src={source},dst={target}'+('' if writable else ',readonly')]
 
 
+def assert_worker_mounts(details, secret_root):
+    if not isinstance(details, dict) or type(details.get('Mounts')) is not list:
+        raise ValueError('worker_mount_metadata_missing')
+    secret_root = Path(secret_root).resolve()
+    for mount in details['Mounts']:
+        source = Path(mount['Source']).resolve()
+        target = mount['Destination']
+        if (target == '/run/secrets' or target.startswith('/run/secrets/')
+            or source.is_relative_to(secret_root) or secret_root.is_relative_to(source)):
+            raise ValueError('worker_has_secret_mount')
+
+
 def _limits(user):
     return ['--read-only', '--init', '--user', user, '--cap-drop', 'ALL',
             '--security-opt', 'no-new-privileges:true',
@@ -240,6 +252,7 @@ def verify_docker():
                 except (OSError, urllib.error.URLError):
                     if time.monotonic() >= deadline: raise
                 time.sleep(0.1)
+            assert_worker_mounts(json.loads(command(['docker', 'inspect', worker]))[0], secrets)
             probe = json.loads(command(['docker', 'exec', worker, '/opt/validator/bin/python',
                                        '-I', '/harness/runner.py', 'probe']))
             body, headers = _post(port, context.request, context, authenticator, tls)

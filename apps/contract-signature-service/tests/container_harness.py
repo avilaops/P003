@@ -88,7 +88,10 @@ def probe():
     import stat
     from contract_signature_service.worker import require_worker_isolation
     require_worker_isolation()
-    assert not Path('/run/secrets/validator/hmac.json').exists()
+    try:
+        with Path('/run/secrets/validator/hmac.json').open('rb') as source: source.read(1)
+    except (FileNotFoundError, PermissionError): pass
+    else: raise AssertionError('worker_can_read_gateway_secret')
     status = dict(line.split(':', 1) for line in Path('/proc/self/status').read_text().splitlines() if ':' in line)
     assert status['NoNewPrivs'].strip() == '1' and int(status['CapEff'].strip(), 16) == 0
     info = Path('/run/validator/validator.sock').stat()
