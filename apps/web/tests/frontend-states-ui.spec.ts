@@ -91,6 +91,7 @@ test("identidade da apresentação pública usa o nome do produto e o canonical 
   await expect(page.getByText(/Avila ERP|Ávila Ops/)).toHaveCount(0)
   await expect(page.getByText("01 • CADASTROS", { exact: true })).toBeVisible()
   await expect(page.locator('meta[name="robots"]')).toHaveAttribute("content", "index, follow")
+  await expect(page.locator('link[rel="canonical"]')).toHaveCount(1)
   await expect(page.locator('link[rel="canonical"]')).toHaveAttribute("href", origin + "/entrar")
   const sitemap = await page.request.get("/sitemap.xml")
   expect(sitemap.status()).toBe(200)
