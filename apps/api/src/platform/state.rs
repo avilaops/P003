@@ -19,11 +19,22 @@ pub struct AppState {
     pub certificates:
         Option<std::sync::Arc<crate::domains::fiscal::certificate_crypto::CertificateVault>>,
     pub contracts: Option<crate::domains::contracts::provider::Docuseal>,
+    pub contract_validator:
+        Option<std::sync::Arc<crate::domains::contracts::individual::client::ValidatorClient>>,
     pub assistant: Option<crate::domains::assistant::InferenceClient>,
     pub monitor: Option<crate::domains::fiscal::sefaz_client::Sefaz>,
 }
 
 impl AppState {
+    pub fn with_contract_validator(
+        mut self,
+        client: Option<
+            std::sync::Arc<crate::domains::contracts::individual::client::ValidatorClient>,
+        >,
+    ) -> Self {
+        self.contract_validator = client;
+        self
+    }
     pub fn new(database: PgPool, auth: AuthClient) -> Self {
         Self {
             catalog_media: None,
@@ -40,6 +51,7 @@ impl AppState {
             nfe_production_tenant_id: None,
             certificates: None,
             contracts: None,
+            contract_validator: None,
             assistant: None,
             monitor: None,
         }

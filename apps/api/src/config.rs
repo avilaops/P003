@@ -15,6 +15,8 @@ pub struct Config {
     pub mail: Option<crate::platform::mail::SmtpMailer>,
     pub danfe: Option<crate::domains::fiscal::danfe_client::DanfeClient>,
     pub contracts: Option<crate::domains::contracts::provider::Docuseal>,
+    pub contract_validator:
+        Option<std::sync::Arc<crate::domains::contracts::individual::client::ValidatorClient>>,
 }
 
 impl Config {
@@ -67,6 +69,8 @@ impl Config {
             mail: crate::platform::mail::SmtpMailer::from_env()?,
             danfe: danfe_configuration()?,
             contracts: crate::domains::contracts::provider::Docuseal::from_env()?,
+            contract_validator:
+                crate::domains::contracts::individual::client::ValidatorClient::from_env()?,
         })
     }
 }

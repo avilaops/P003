@@ -26,6 +26,7 @@ opentelemetry_sdk = { version = "=0.33.1", default-features = false, features = 
 opentelemetry-otlp = { version = "=0.33.1", default-features = false, features = ["trace", "http-proto", "reqwest-blocking-client", "reqwest-rustls"] }
 roxmltree = "=0.21.1"
 sha2 = "=0.10.9"
+hmac = "=0.12.1"
 anyhow.workspace = true
 axum.workspace = true
 reqwest.workspace = true

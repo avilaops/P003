@@ -1,5 +1,6 @@
 pub mod api;
 mod email;
+pub mod individual;
 mod model;
 mod package;
 pub mod provider;
