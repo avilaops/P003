@@ -16,7 +16,7 @@ export function validateReleaseInputs(input) {
   if (!/^[0-9]+$/.test(String(input.runId ?? "")) || !/^[1-9][0-9]*$/.test(String(input.runAttempt ?? ""))) {
     throw new Error("INVALID_RUN_ID");
   }
-  if (typeof input.repository !== "string" || input.repository.toLowerCase() !== "avilaops/erp-next") {
+  if (typeof input.repository !== "string" || input.repository.toLowerCase() !== "avilaops/p003") {
     throw new Error("REPOSITORY_MISMATCH");
   }
   for (const name of ["fiscal-engine", "fiscal-mcp", "api", "web"]) {

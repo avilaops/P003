@@ -8,7 +8,7 @@ import { evaluateRelease, inspectOpenApi, inspectValidation, validateReleaseInpu
 
 const sha = "a".repeat(40);
 const valid = {
-  repository: "avilaops/erp-next", sourceSha: sha, checkoutSha: sha,
+  repository: "avilaops/P003", sourceSha: sha, checkoutSha: sha,
   ref: "refs/heads/main", runId: "4000001", runAttempt: "1",
   jobs: Object.fromEntries(["fiscal-engine", "fiscal-mcp", "api", "web"].map(x => [x, { result: "success" }])),
 };
@@ -27,7 +27,7 @@ test("accepts promoted version tags while rejecting arbitrary tag names", () => 
 
 test("rejects source mismatch, non-main branch, wrong repo and failed jobs", () => {
   assert.doesNotThrow(() => validateReleaseInputs(valid));
-  assert.doesNotThrow(() => validateReleaseInputs({ ...valid, repository: "avilaops/ERP-Next" }));
+  assert.doesNotThrow(() => validateReleaseInputs({ ...valid, repository: "AvilaOps/p003" }));
   assert.throws(() => validateReleaseInputs({ ...valid, checkoutSha: "b".repeat(40) }), /SOURCE_SHA_MISMATCH/);
   assert.throws(() => validateReleaseInputs({ ...valid, ref: "refs/heads/feature" }), /NOT_MAIN_BRANCH/);
   assert.throws(() => validateReleaseInputs({ ...valid, repository: "unknown/repo" }), /REPOSITORY_MISMATCH/);
@@ -68,5 +68,12 @@ test("produces only measured checks and explicit unmeasured AI metrics", async (
     assert.equal(report.metrics.regressionsMeasured, null);
   } finally {
     await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("accepts only the canonical P003 repository after its rename", () => {
+  assert.doesNotThrow(() => validateReleaseInputs(valid));
+  for (const repository of ["avilaops/erp-next", "avilaops/P001", "another/P003", "avilaops/P003-extra", "avilaops/P003/"]) {
+    assert.throws(() => validateReleaseInputs({ ...valid, repository }), /REPOSITORY_MISMATCH/);
   }
 });
