@@ -113,6 +113,9 @@ class _PathRule(ctypes.Structure):
 def _paths(command):
     # Runtime libraries/packages, never an entire checkout, /run, /etc or /proc.
     paths = {Path(value): 12 for value in sys.path if value and Path(value).is_absolute()}
+    # CPython's site initialization reopens this exact file after exec, before
+    # importing any service module. Grant no read access to the enclosing venv.
+    paths[Path(sys.prefix)/'pyvenv.cfg'] = 4
     for name in ('stdlib', 'platstdlib', 'purelib', 'platlib'):
         paths[Path(sysconfig.get_path(name))] = 12
     for value in ('/lib', '/lib64', '/usr/lib', '/usr/local/lib', '/etc/ssl/certs', '/usr/share/zoneinfo'):

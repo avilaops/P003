@@ -1,5 +1,8 @@
 import errno
 import struct
+import sys
+import tempfile
+from pathlib import Path
 import unittest
 from unittest.mock import patch
 
@@ -30,6 +33,19 @@ class KernelJailPolicyTests(unittest.TestCase):
         with patch.object(self.api.sys, 'platform', 'win32'):
             with self.assertRaises(self.api.KernelJailError): self.api.kernel_abi()
         with self.assertRaises(self.api.KernelJailError): self.api.build_filter('unknown')
+
+    def test_reexec_can_read_exact_virtualenv_metadata_without_allowing_its_parent_directory(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            metadata = root/'pyvenv.cfg'
+            metadata.write_text('home = synthetic-runtime\n', encoding='utf-8')
+            public = root/'public'
+            public.mkdir()
+            with patch.object(self.api.sys, 'prefix', str(root)), \
+                 patch.dict(self.api.os.environ, {'VALIDATOR_CONFIG_ROOT': str(public)}):
+                paths = self.api._paths((sys.executable, '-I', '-c', 'print(1)'))
+            self.assertEqual(paths.get(metadata.resolve()), 4)
+            self.assertNotIn(root.resolve(), paths)
 
     def test_syscall_filter_covers_signal_memory_namespace_and_compatibility_interfaces(self):
         denied = 0x00050000 | errno.EPERM
