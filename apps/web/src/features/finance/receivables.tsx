@@ -1,5 +1,7 @@
 "use client"
 
+import { FinancialDocumentEmail } from "./financial-document-email"
+
 import { useProtectedReload } from "@/features/finance/use-protected-reload"
 
 import { OrderFinancePanel, ReceiptForm } from "./order-finance"
@@ -67,7 +69,8 @@ function ReceivableList() {
 }
 function ReceivableDetail({ id }: { id: string }) {
   const resource = useResource<Detail>(`/api/erp/receivables/${id}`)
-  const boundary = useProtectedReload(resource.reload)
+  const emailBoundary = useProtectedReload(resource.reload)
+  const boundary = useProtectedReload(emailBoundary.reload)
   const result = { ...resource, reload: boundary.reload }
   const command = useCommand()
   const [reference, setReference] = useState("")
@@ -79,7 +82,7 @@ function ReceivableDetail({ id }: { id: string }) {
   const cancelled = value?.data.status === "cancelled"
   const reversalId = selectedPaymentId || (paid ? value?.data.paymentId : null)
   const reversing = Boolean(reversalId)
-  const frozen = boundary.locked || command.busy || command.uncertain || command.stale
+  const frozen = emailBoundary.locked || boundary.locked || command.busy || command.uncertain || command.stale
   const activeReceipts = cancelled ? [] : value?.payments.filter(payment => payment.kind === "receipt" && !value.payments.some(other => other.reversesId === payment.id)) || []
   function clearForm() { setReference(""); setOccurredOn(""); setSelectedPaymentId("") }
   return <><PageHeader eyebrow="Financeiro" title="Conta a receber" description="Recebimentos manuais, parciais ou integrais. Estornar um recebimento recompõe o saldo e preserva o histórico. Não movimenta uma conta bancária." /><Link className={linkClass} href="/financeiro/contas-receber">Voltar às contas</Link>
@@ -87,8 +90,8 @@ function ReceivableDetail({ id }: { id: string }) {
       {notice && <p role="status">{notice}</p>}
       {result.loading ? <p role="status">Carregando conta…</p> : result.error ? <p role="alert"><RequestError message={result.error} status={result.status} /></p> : value && <>
         <h2 className="break-words font-semibold">{value.data.customerName}</h2>{installmentLabel(value.data) && <p className="text-sm font-medium">{installmentLabel(value.data)}</p>}<p>Valor: R$ {value.data.amount.replace(".", ",")}</p><p>Recebido declarado: R$ {value.data.receivedAmount.replace(".", ",")}</p><p>Saldo restante: R$ {value.data.outstandingAmount.replace(".", ",")}</p><p>Situação: {situation(value.data)}</p><p>Vencimento: {value.data.dueDate}</p><p className="break-all text-sm text-muted-foreground">Conta {id} · Revisão {value.data.revision}</p><Link className={linkClass} href={`/vendas/pedidos/${value.data.orderId}`}>Consultar pedido de origem</Link>
-        {!value.canEdit ? <p>Somente consulta.</p> : cancelled ? <p>Título cancelado. O histórico foi preservado.</p> : !reversing ? <ReceiptForm onReload={() => { setNotice(""); result.reload() }} reloadLabel="Recarregar conta" onLockChange={boundary.setPrimaryLocked} disabled={boundary.secondaryLocked || command.busy || command.uncertain || command.stale || result.loading} amountLabel="Valor declarado (vírgula ou ponto)" snapshot={value} etag={result.etag} onSaved={() => { setNotice("Registro confirmado no servidor."); result.reload() }} /> : <form className="space-y-4" onSubmit={async event => {
-          event.preventDefault(); if (boundary.isLocked()) return; setNotice("")
+        {!value.canEdit ? <p>Somente consulta.</p> : cancelled ? <p>Título cancelado. O histórico foi preservado.</p> : !reversing ? <ReceiptForm onReload={() => { setNotice(""); result.reload() }} reloadLabel="Recarregar conta" onLockChange={boundary.setPrimaryLocked} disabled={emailBoundary.locked || boundary.secondaryLocked || command.busy || command.uncertain || command.stale || result.loading} amountLabel="Valor declarado (vírgula ou ponto)" snapshot={value} etag={result.etag} onSaved={() => { setNotice("Registro confirmado no servidor."); result.reload() }} /> : <form className="space-y-4" onSubmit={async event => {
+          event.preventDefault(); if (boundary.isLocked() || emailBoundary.isLocked()) return; setNotice("")
           const body = { paymentId: reversalId, reason: reference, occurredOn }
           const response = await command.send<Detail>(`/api/erp/receivables/${id}/reverse-payment`, value.tenantId, body, result.etag)
           if (response) { setNotice("Registro confirmado no servidor."); clearForm(); result.reload() }
@@ -104,14 +107,15 @@ function ReceivableDetail({ id }: { id: string }) {
           {command.stale && <Button type="button" variant="outline" onClick={() => {
             if (window.confirm("Descartar o registro em edição e carregar a conta atual do servidor?")) { command.reset(); clearForm(); result.reload() }
           }}>Recarregar conta</Button>}
-          <Button className="h-auto max-w-full whitespace-normal" type="submit" disabled={boundary.locked || command.busy || command.stale || !result.etag}>{command.busy ? "Confirmando…" : command.uncertain ? "Repetir confirmação financeira" : "Confirmar estorno do recebimento"}</Button>
+          <Button className="h-auto max-w-full whitespace-normal" type="submit" disabled={emailBoundary.locked || boundary.locked || command.busy || command.stale || !result.etag}>{command.busy ? "Confirmando…" : command.uncertain ? "Repetir confirmação financeira" : "Confirmar estorno do recebimento"}</Button>
           {reversing && !paid && <Button type="button" variant="outline" disabled={frozen} onClick={() => { clearForm(); command.reset() }}>Voltar ao recebimento</Button>}
         </form>}
         <h3 className="font-medium">Histórico de recebimentos</h3>
         {!value.payments.length ? <p>Nenhum recebimento registrado.</p> : <ul className="space-y-3">{value.payments.map(payment => <li key={payment.id} className="min-w-0 space-y-2 rounded-xl border p-4"><p>{payment.kind === "receipt" ? "Recebimento declarado" : "Estorno"} · R$ {payment.amount.replace(".", ",")} · {payment.occurredOn}</p><p className="break-words">{payment.reference}</p><p className="break-all text-xs text-muted-foreground">ID {payment.id}{payment.reversesId ? ` · Estorna ${payment.reversesId}` : ""}</p>{value.canEdit && activeReceipts.some(active => active.id === payment.id) && <Button variant="outline" aria-label={`Estornar recebimento ${payment.id}`} disabled={frozen} onClick={() => { clearForm(); setSelectedPaymentId(payment.id); command.reset() }}>Estornar este recebimento</Button>}</li>)}</ul>}
-        <OrderFinancePanel key={`${id}:${value.data.revision}`} orderId={value.data.orderId} receivableId={id} allowReceipt={false} onLockChange={boundary.setSecondaryLocked} parentBusy={boundary.primaryLocked || command.busy || command.uncertain || command.stale || result.loading} />
+        <OrderFinancePanel key={`${id}:${value.data.revision}`} orderId={value.data.orderId} receivableId={id} allowReceipt={false} onLockChange={boundary.setSecondaryLocked} parentBusy={emailBoundary.locked || boundary.primaryLocked || command.busy || command.uncertain || command.stale || result.loading} />
       </>}
     </section>
+    {value && <FinancialDocumentEmail tenantId={value.tenantId} receivableId={id} disabled={boundary.locked || command.busy || command.uncertain || command.stale || result.loading || !!result.error || cancelled} onLockChange={emailBoundary.setPrimaryLocked} />}
   </>
 }
 

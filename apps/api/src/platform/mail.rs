@@ -30,6 +30,30 @@ pub struct MailAttachment {
 }
 
 impl SmtpMailer {
+    /// Only loopback transports can bypass TLS, exclusively in test builds.
+    #[cfg(test)]
+    pub(crate) fn loopback_test(port: u16) -> Self {
+        Self {
+            transport: Arc::new(
+                AsyncSmtpTransport::<Tokio1Executor>::builder_dangerous("127.0.0.1")
+                    .port(port)
+                    .timeout(Some(Duration::from_secs(3)))
+                    .build(),
+            ),
+            from: "ERP Test <erp@example.test>".into(),
+            settings: MailSettingsData {
+                enabled: true,
+                name: "Loopback test".into(),
+                host: "127.0.0.1".into(),
+                port,
+                security: SmtpSecurity::Starttls,
+                username: String::new(),
+                from_name: "ERP Test".into(),
+                from_address: "erp@example.test".into(),
+                password_set: false,
+            },
+        }
+    }
     pub fn from_env() -> anyhow::Result<Option<Self>> {
         let host = match env::var("SMTP_HOST")
             .ok()

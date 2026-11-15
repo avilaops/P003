@@ -6,6 +6,7 @@ New-Item -ItemType Directory -Path $harness -Force | Out-Null
 $renderer = (Join-Path $repository 'apps/api/src/domains/sales/order_document_pdf.rs').Replace('\','/')
 $packetRenderer = (Join-Path $repository 'apps/api/src/domains/contracts/package_document.rs').Replace('\','/')
 $packetOrder = (Join-Path $repository 'apps/api/src/domains/contracts/package_order.rs').Replace('\','/')
+$financeRenderer = (Join-Path $repository 'apps/api/src/domains/finance/document.rs').Replace('\','/')
 @'
 [package]
 name = "order-pdf-harness"
@@ -18,6 +19,9 @@ flate2 = "1"
 image = { version = "=0.25.10", default-features = false, features = ["png", "jpeg", "webp"] }
 base64 = "=0.22.1"
 serde_json = "1"
+serde = { version = "1", features = ["derive"] }
+uuid = { version = "1", features = ["serde"] }
+sha2 = "=0.10.9"
 [dev-dependencies]
 lopdf = { version = "=0.38.0", default-features = false }
 [lib]
@@ -37,6 +41,8 @@ pub mod domains {
 mod package_document;
 #[path = "$packetOrder"]
 mod package_order;
+#[path = "$financeRenderer"]
+mod finance_document;
 "@ | Set-Content -LiteralPath (Join-Path $harness 'lib.rs')
 $priorOutput = $env:ERP_ORDER_PDF_SAMPLE_DIR
 try {

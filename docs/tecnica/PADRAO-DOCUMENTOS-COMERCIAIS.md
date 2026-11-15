@@ -6,6 +6,8 @@ O padrão está aplicado ao PDF nativo dos pedidos, ao documento e à impressão
 
 Os emissores operacionais e seus limites estão no [mapa atual de relatórios](../relatorios/padrao-relatorios.md). Os envios existentes de pedidos, propostas e pacotes usam o SMTP central da plataforma. O pacote contratual envia pedido e comprovante de recebimento em PDF; anexos fiscais e contratos preservados mantêm seus bytes originais. A suíte `playwright.commercial-documents.config.ts` confere configuração SMTP global, encaminhamento autenticado, revisão, download e composição de mensagem usando servidores simulados.
 
+O complemento de envio financeiro oferece confirmação de destinatário, assunto e mensagem no detalhe do recebível e no relatório financeiro. A API gera o PDF do snapshot autorizado; revisão e hash impedem enviar dados diferentes dos conferidos. O relatório abrange até 100 títulos por fonte, sem filtros implícitos. O histórico distingue aceite pelo servidor SMTP, recusa e resultado incerto; aceite não comprova entrega na caixa do destinatário. Resultados incertos não são reenviados automaticamente. Enviar não altera o saldo nem registra recebimento.
+
 ## Implementações
 
 • `apps/web/src/components/documents/commercial-document.tsx`: `CommercialDocument` recebe título, identificação, emitente e conteúdo; `DocumentSection` fornece faixa e quadro. Controles de edição, aprovação e envio ficam fora do documento.

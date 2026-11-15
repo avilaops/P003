@@ -78,6 +78,8 @@ use crate::platform::{
         sales::order_document::get,
         crate::platform::mail_settings::get, crate::platform::mail_settings::put,
         finance::list, finance::get, finance::pay, finance::reverse,
+        finance::email::get_receivable, finance::email::send_receivable,
+        finance::email::get_report, finance::email::send_report,
         crate::domains::order_finance::get,
         crate::domains::supporting_documents::list,crate::domains::supporting_documents::attach,
         crate::domains::supporting_documents::download,

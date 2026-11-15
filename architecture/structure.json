@@ -46,8 +46,8 @@
     "pos": "Operação do PDV, sessões de caixa, fechamento e histórico, com autorização no backend."
   },
   "routeSurface": {
-    "count": 496,
-    "sha256": "61d062db4163a9b8750a2a216d0a075ee1b0474bf368b2b2ac51540bcba9ecbd"
+    "count": 498,
+    "sha256": "2b82de44c88bd9c85cd5b47098bbf7174dfa963b076a0d41c263aa268ce4e534"
   },
   "retiredPaths": [
     "apps/web/src/lib/erp-session.ts",
@@ -90,8 +90,8 @@
     "apps/api/src/platform/financial_settings.rs"
   ],
   "routeSurfaceReview": {
-    "previousPolicyCommit": "81db794acd64554992b478ced1973d3c5ff10034",
-    "reviewedMainCommit": "81db794acd64554992b478ced1973d3c5ff10034",
-    "changes": "3 rotas BFF adicionadas: resumo financeiro do pedido, documentos do pedido e download privado de documento. Sessão, empresa e permissões continuam verificadas; nenhum endereço removido."
+    "previousPolicyCommit": "510155f168effa39a619892b2a632a21fac83c9e",
+    "reviewedMainCommit": "510155f168effa39a619892b2a632a21fac83c9e",
+    "changes": "2 rotas BFF adicionadas para envio SMTP financeiro: recebível e relatório agregado. GET/POST preservam sessão, empresa, revisão, origem e chave de comando; consultas adicionais são recusadas. Nenhum endereço removido."
   }
 }

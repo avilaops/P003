@@ -7,6 +7,7 @@ Ampliação solicitada em 15/11/2026. Este mapa descreve o escopo do código em 
 | Pedido de venda e anexo de e-mail | PDF A4 vetorial do pedido | Revisão autorizada do pedido e seu snapshot comercial |
 | Proposta e anexo de e-mail | Documento comercial e impressão A4; HTML com o mesmo padrão | Versão consultada da proposta; valores registrados |
 | Financeiro | Visualização documental e impressão/PDF; CSV preservado | Até 100 títulos por fonte financeira; o documento explicita o recorte |
+| Envio financeiro por e-mail | Título/recebível e relatório com PDF nativo gerado no servidor | SMTP central; revisão e hash do snapshot conferidos antes do envio; relatório com até 100 registros de cada fonte |
 | Estoque | Visualização documental e impressão/PDF; CSV preservado | Página consultada de até 100 produtos, sem afirmar estoque integral |
 | Serviços | Visualização documental e impressão/PDF; CSV preservado | Até 100 ordens retornadas; indicadores derivados desse recorte |
 | Visão executiva e vendas | Visualização documental e impressão/PDF | Período consultado; contagens/saldos atuais distinguidos de série de pedidos |

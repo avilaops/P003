@@ -1,3 +1,5 @@
+mod document;
+pub mod email;
 pub mod settings;
 
 use super::{DomainChange, DomainError, authorized, db, decimal, fixed, record, response, sales};
