@@ -4,6 +4,8 @@ $repository = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../..'))
 $harness = Join-Path $env:TEMP 'erp-order-pdf-harness'
 New-Item -ItemType Directory -Path $harness -Force | Out-Null
 $renderer = (Join-Path $repository 'apps/api/src/domains/sales/order_document_pdf.rs').Replace('\','/')
+$packetRenderer = (Join-Path $repository 'apps/api/src/domains/contracts/package_document.rs').Replace('\','/')
+$packetOrder = (Join-Path $repository 'apps/api/src/domains/contracts/package_order.rs').Replace('\','/')
 @'
 [package]
 name = "order-pdf-harness"
@@ -15,12 +17,27 @@ ttf-parser = { version = "=0.25.1", default-features = false, features = ["std"]
 flate2 = "1"
 image = { version = "=0.25.10", default-features = false, features = ["png", "jpeg", "webp"] }
 base64 = "=0.22.1"
+serde_json = "1"
 [dev-dependencies]
 lopdf = { version = "=0.38.0", default-features = false }
 [lib]
 path = "lib.rs"
 '@ | Set-Content -LiteralPath (Join-Path $harness 'Cargo.toml')
-"#[allow(dead_code)]`n#[path = `"$renderer`"]`nmod pdf;" | Set-Content -LiteralPath (Join-Path $harness 'lib.rs')
+@"
+#![allow(dead_code)]
+pub mod domains {
+    pub mod sales {
+        pub mod order_document {
+            #[path = "$renderer"]
+            pub mod pdf;
+        }
+    }
+}
+#[path = "$packetRenderer"]
+mod package_document;
+#[path = "$packetOrder"]
+mod package_order;
+"@ | Set-Content -LiteralPath (Join-Path $harness 'lib.rs')
 $priorOutput = $env:ERP_ORDER_PDF_SAMPLE_DIR
 try {
     $env:ERP_ORDER_PDF_SAMPLE_DIR = [IO.Path]::GetFullPath($OutputDirectory)

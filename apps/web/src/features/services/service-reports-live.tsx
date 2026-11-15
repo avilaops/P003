@@ -1,4 +1,5 @@
 "use client";
+import { ReportActions, ReportDocument, useReportPreview } from "@/components/documents/report-document"
 import { PageTitle } from "@/components/workspace/page-title"
 
 import { useEffect, useMemo, useState } from "react";
@@ -35,6 +36,8 @@ function csvCell(value: string | number) {
 }
 
 export function ServiceReportsLive() {
+  const preview = useReportPreview()
+  const [tenantId, setTenantId] = useState<string>()
   const [orders, setOrders] = useState<ServiceOrder[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -46,6 +49,7 @@ export function ServiceReportsLive() {
       .then(async (response) => {
         const value = await response.json();
         if (!response.ok) throw new Error(value.title || "Relatório de serviços indisponível");
+        setTenantId(typeof value.tenantId === "string" ? value.tenantId : undefined);
         setOrders(Array.isArray(value.data) ? value.data : []);
         setError("");
       })
@@ -85,7 +89,7 @@ export function ServiceReportsLive() {
   }
 
   return (
-    <div className="mx-auto max-w-[1500px] px-4 pb-24 pt-8 lg:px-6">
+    <div data-report-workspace className="mx-auto max-w-[1500px] px-4 pb-24 pt-8 lg:px-6">
       <Link className="mb-5 inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground" href="/servicos">
         <ArrowLeft className="size-4" /> Voltar
       </Link>
@@ -95,7 +99,7 @@ export function ServiceReportsLive() {
           <PageTitle className="mt-2 text-3xl font-semibold tracking-tight">Relatórios de serviços</PageTitle>
           <p className="mt-3 max-w-3xl text-muted-foreground">Indicadores calculados a partir das ordens persistidas da empresa ativa.</p>
         </div>
-        <Button disabled={loading || !orders.length} variant="outline" onClick={exportCsv}><Download />Exportar CSV</Button>
+        <div className="flex flex-wrap gap-2"><ReportActions disabled={loading || Boolean(error) || !orders.length} open={preview.open} onToggle={preview.toggle} /><Button disabled={loading || Boolean(error) || !orders.length} variant="outline" onClick={exportCsv}><Download />Exportar CSV</Button></div>
       </header>
 
       {loading ? <p className="mt-6" role="status">Carregando ordens de serviço…</p> : error ? (
@@ -113,6 +117,7 @@ export function ServiceReportsLive() {
           <div className="divide-y divide-border">{orders.map((order) => <article className="grid gap-2 p-4 sm:grid-cols-[150px_minmax(0,1fr)_170px] sm:items-center" key={order.id}><strong className="text-sm text-primary">{order.protocol}</strong><div><h3 className="text-sm font-medium">{order.title}</h3><p className="text-sm text-muted-foreground">{money(order.laborCents)}</p></div><span className="w-fit rounded-full bg-muted px-2.5 py-1 text-xs">{statusLabel[order.status]}</span></article>)}</div>
         </section>
       </>}
+      {preview.open && !loading && !error && orders.length > 0 && <ReportDocument tenantId={tenantId} title="Relatórios de serviços" scope="Primeira página • até 100 registros retornados pela API. Indicadores calculados somente sobre as ordens incluídas." metrics={[["Ordens ativas", String(metrics.active)], ["Concluídas", String(metrics.completed)], ["Aguardando peça", String(metrics.awaitingParts)], ["Mão de obra", money(metrics.labor)]]} columns={["Protocolo", "Ordem", "Situação", "Mão de obra", "Atualização"]} rows={orders.map(order => [order.protocol, order.title, statusLabel[order.status], money(order.laborCents), order.updatedAt || "Não informada"])} />}
     </div>
   );
 }

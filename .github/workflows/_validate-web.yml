@@ -375,6 +375,10 @@ jobs:
 
         '
       if: matrix.shard == 2
+    - name: Commercial documents and central SMTP browser suite
+      if: matrix.shard == 2
+      run: |
+        python3 scripts/ci/timed.py --label 'web/commercial-documents-and-smtp' --output "artifacts/timings/$GITHUB_JOB.jsonl" -- pnpm --filter web exec playwright test --config playwright.commercial-documents.config.ts
     - name: Preserve browser reports and failure screenshots
       uses: actions/upload-artifact@v4
       if: always()

@@ -1,0 +1,8 @@
+.report-document-metrics { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.report-document-metrics dt { font-size: 12px; text-transform: uppercase; }
+.report-document-metrics dd { font-size: 14px; font-weight: 700; }
+@media print {
+  [data-report-workspace] > :not([data-report-preview]) { display: none !important; }
+  .report-document-controls, [data-report-preview] > [role="status"], [data-report-preview] > [role="alert"] { display: none !important; }
+  [data-report-preview] { margin: 0 !important; }
+}

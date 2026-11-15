@@ -8,7 +8,7 @@ use axum::{
 use serde_json::Value;
 
 #[path = "order_document_pdf.rs"]
-mod pdf;
+pub(crate) mod pdf;
 
 #[utoipa::path(get, path="/api/v1/orders/{id}/document", operation_id="download_order_document", tag="Sales", security(("bearerAuth"=[])), params(("id"=Uuid,Path),("X-Tenant-Id"=Uuid,Header),("If-Match"=String,Header)), responses((status=200,description="PDF A4 do pedido na revisão informada",content_type="application/pdf",body=Vec<u8>),(status=403,description="Sem permissão"),(status=412,description="Revisão divergente"),(status=428,description="Revisão obrigatória")))]
 pub async fn get(
@@ -112,7 +112,7 @@ fn primary<'a>(value: &'a Value, key: &str) -> Option<&'a Value> {
             .or_else(|| items.first())
     })
 }
-fn date(value: &str) -> String {
+pub(super) fn date(value: &str) -> String {
     let parts = value.split('-').collect::<Vec<_>>();
     if let [year, month, day] = parts.as_slice() {
         format!("{day}/{month}/{year}")
@@ -120,7 +120,7 @@ fn date(value: &str) -> String {
         value.into()
     }
 }
-fn decimal_br(value: &str, money: bool) -> String {
+pub(super) fn decimal_br(value: &str, money: bool) -> String {
     // Format recorded decimal strings; never calculate prices or invent tax components.
     let (whole, fraction) = value.split_once('.').unwrap_or((value, ""));
     let mut grouped = String::new();

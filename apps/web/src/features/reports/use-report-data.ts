@@ -11,6 +11,7 @@ export function useFinanceReport() {
   const error = receivables.error || payables.error
 
   return {
+    tenantId: receivables.value?.tenantId && receivables.value.tenantId === payables.value?.tenantId ? receivables.value.tenantId : undefined,
     receivables: received,
     payables: owed,
     metrics: financeMetrics(received, owed),

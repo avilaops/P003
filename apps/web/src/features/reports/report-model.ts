@@ -8,7 +8,7 @@ export type FinancialAccount = {
   dueDate: string
 }
 
-export type FinancialResult = { data: FinancialAccount[] }
+export type FinancialResult = { tenantId?: string; data: FinancialAccount[] }
 
 export type StockItem = {
   productId: string
@@ -21,7 +21,7 @@ export type StockItem = {
   available: string
 }
 
-export type StockResult = { data: StockItem[]; total: number; offset: number; limit: number }
+export type StockResult = { tenantId?: string; data: StockItem[]; total: number; offset: number; limit: number }
 
 export function decimal(value: string) {
   const parsed = Number(value)

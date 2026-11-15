@@ -1,4 +1,6 @@
 use serde_json::{Value, json};
+#[path = "package_order.rs"]
+mod document_order;
 use sqlx::{FromRow, Postgres, Transaction};
 use uuid::Uuid;
 
@@ -17,108 +19,8 @@ pub struct CustomerPackage {
     pub manifest: Value,
 }
 
-fn rtf_text(value: &str) -> String {
-    value
-        .chars()
-        .map(|character| match character {
-            '\\' => "\\\\".to_owned(),
-            '{' => "\\{".to_owned(),
-            '}' => "\\}".to_owned(),
-            '\n' => "\\par ".to_owned(),
-            character if character.is_ascii() => character.to_string(),
-            character => format!(r#"\\u{}?"#, character as i32),
-        })
-        .collect()
-}
-
-fn money(cents: i64) -> String {
-    format!("R$ {},{:02}", cents / 100, cents.abs() % 100)
-}
-
-fn order_document(snapshot: &Value) -> Vec<u8> {
-    let order = &snapshot["order"];
-    let mut lines = vec![
-        format!("PEDIDO {}", order["number"].as_str().unwrap_or("")),
-        format!(
-            "Empresa: {}",
-            snapshot["company"]["legalName"].as_str().unwrap_or("")
-        ),
-        format!(
-            "Cliente: {}",
-            snapshot["customer"]["name"].as_str().unwrap_or("")
-        ),
-        String::new(),
-        "Itens:".to_owned(),
-    ];
-    for item in snapshot["items"].as_array().into_iter().flatten() {
-        lines.push(format!(
-            "{} | {} {} | unitário {} | total {}",
-            item["sku"].as_str().unwrap_or(""),
-            item["quantity"].as_str().unwrap_or(""),
-            item["unit"].as_str().unwrap_or(""),
-            item["unitPrice"].as_str().unwrap_or(""),
-            item["amount"].as_str().unwrap_or(""),
-        ));
-    }
-    lines.push(String::new());
-    lines.push(format!("Total: {}", order["amount"].as_str().unwrap_or("")));
-    lines.push(format!(
-        "Vencimento: {}",
-        order["dueDate"].as_str().unwrap_or("")
-    ));
-    let terms = snapshot
-        .get("commercialTerms")
-        .filter(|value| value.is_object())
-        .unwrap_or(&snapshot["proposal"]);
-    for (field, label) in [
-        ("paymentTerms", "Pagamento"),
-        ("deliveryTerms", "Entrega"),
-        ("notes", "Observações"),
-    ] {
-        if let Some(value) = terms[field]
-            .as_str()
-            .filter(|value| !value.trim().is_empty())
-        {
-            lines.push(format!("{label}: {value}"));
-        }
-    }
-    let text = lines
-        .iter()
-        .map(|line| rtf_text(line))
-        .collect::<Vec<_>>()
-        .join("\\par ");
-    format!(r#"{{\rtf1\ansi\deff0 {{\fonttbl {{\f0 Arial;}}}}\f0\fs22 {text}\par }}"#).into_bytes()
-}
-
-fn payment_document(
-    snapshot: &Value,
-    amount_cents: i64,
-    method: &str,
-    reference: &str,
-    occurred_on: &str,
-) -> Vec<u8> {
-    let lines = [
-        "COMPROVANTE DE RECEBIMENTO".to_owned(),
-        format!(
-            "Pedido: {}",
-            snapshot["order"]["number"].as_str().unwrap_or("")
-        ),
-        format!(
-            "Cliente: {}",
-            snapshot["customer"]["name"].as_str().unwrap_or("")
-        ),
-        format!("Valor recebido: {}", money(amount_cents)),
-        format!("Forma de pagamento: {method}"),
-        format!("Referência: {reference}"),
-        format!("Data do recebimento: {occurred_on}"),
-    ];
-    let text = lines
-        .iter()
-        .map(|line| rtf_text(line))
-        .collect::<Vec<_>>()
-        .join("\\par ");
-    format!(r#"{{\rtf1\ansi\deff0 {{\fonttbl {{\f0 Arial;}}}}\f0\fs22 {text}\par }}"#).into_bytes()
-}
+#[path = "package_document.rs"]
+mod document;
 
 #[derive(FromRow)]
 struct PaymentTitle {
@@ -221,13 +123,15 @@ pub async fn build(
         },
         MailAttachment {
             filename: format!(
-                "pedido-{}.doc",
+                "pedido-{}.pdf",
                 contract.snapshot["order"]["number"]
                     .as_str()
                     .unwrap_or("pedido")
             ),
-            content_type: "application/msword".into(),
-            bytes: order_document(&contract.snapshot),
+            content_type: "application/pdf".into(),
+            bytes: document::order(&contract.snapshot).map_err(|_| {
+                DomainError::Conflict("Não foi possível gerar o PDF do pedido preservado")
+            })?,
         },
         MailAttachment {
             filename: format!("nfe-{}-serie-{}.xml", nfe_number, nfe_series),
@@ -266,28 +170,47 @@ pub async fn build(
         });
     }
     for (payment_id, amount, method, reference, occurred_on) in payment_lines {
-        let bytes = payment_document(
+        let bytes = document::payment(
             &contract.snapshot,
             amount,
             &method,
             &reference,
             &occurred_on,
-        );
-        let filename = format!("comprovante-pagamento-{}.doc", payment_id);
-        manifest.push(json!({"kind":"payment","filename":filename,"contentType":"application/msword","paymentId":payment_id,"amountCents":amount,"settlementTotalCents":order_amount,"titleCount":titles.len(),"sha256":super::model::digest(&bytes)}));
+        )
+        .map_err(|_| DomainError::Conflict("Não foi possível gerar o comprovante em PDF"))?;
+        let filename = format!("comprovante-pagamento-{}.pdf", payment_id);
+        manifest.push(json!({"kind":"payment","filename":filename,"contentType":"application/pdf","paymentId":payment_id,"amountCents":amount,"settlementTotalCents":order_amount,"titleCount":titles.len(),"sha256":super::model::digest(&bytes)}));
         attachments.push(MailAttachment {
             filename,
-            content_type: "application/msword".into(),
+            content_type: "application/pdf".into(),
             bytes,
         });
     }
 
+    // Preserve the association between each file and its audited metadata.
+    if attachments.len() != manifest.len() {
+        return Err(DomainError::Conflict(
+            "O pacote possui documentos inconsistentes",
+        ));
+    }
+    let mut parts = attachments
+        .into_iter()
+        .zip(manifest)
+        .map(|(attachment, entry)| {
+            let kind = entry["kind"].as_str().unwrap_or_default().to_owned();
+            ((attachment, entry), kind)
+        })
+        .collect::<Vec<_>>();
+    document_order::order(&mut parts);
+    let (attachments, manifest): (Vec<MailAttachment>, Vec<Value>) =
+        parts.into_iter().map(|(part, _)| part).unzip();
+
     let subject = format!(
-        "Pedido {} — documentos da sua compra",
+        "Pedido {} • documentos da sua compra",
         contract.snapshot["order"]["number"].as_str().unwrap_or("")
     );
     let body = format!(
-        "Olá, {}.\n\nSegue o pedido, o contrato, a NF-e autorizada e, quando quitado, o comprovante de pagamento.\n\nAtenciosamente,\n{}",
+        "Olá, {}.\n\nSeguem, nesta ordem: pedido, NF-e autorizada, comprovante de pagamento quando quitado e contrato. Outros documentos anexados ficam após o contrato.\n\nAtenciosamente,\n{}",
         contract.snapshot["customer"]["name"].as_str().unwrap_or(""),
         contract.snapshot["company"]["legalName"]
             .as_str()
@@ -333,57 +256,5 @@ mod tests {
         assert!(!fully_settled(&[title("paid", 200, 50)], 200));
         assert!(!fully_settled(&[], 200));
         assert!(fully_settled(&[title("paid", 200, 200)], 200));
-    }
-
-    #[test]
-    fn rtf_escapes_controls_and_keeps_unicode() {
-        let value = rtf_text(r#"Cliente {Ávila} \ contrato"#);
-        assert!(value.contains(r#"\{"#));
-        assert!(value.contains(r#"\}"#));
-        assert!(value.contains(r#"\u193?"#));
-        assert!(value.contains(r#"\\"#));
-    }
-
-    #[test]
-    fn order_document_preserves_checkout_terms_without_claiming_settlement() {
-        let checkout = crate::domains::sales::checkout_document::fixture();
-        let snapshot = json!({"order":{"number":"42","amount":"100.00","dueDate":"2027-01-01"},"company":{"legalName":"Empresa"},"customer":{"name":"Cliente"},"items":[],"commercialTerms":crate::domains::sales::checkout_document::terms(&checkout)});
-        let text = String::from_utf8(order_document(&snapshot)).unwrap();
-        assert!(text.contains("Parcela 2: R$ 14,99"));
-        assert!(text.contains("01/02/2027"));
-        assert!(text.contains("45 dias ap"));
-        assert!(text.contains("recebimento da entrada"));
-        assert!(text.contains("Entrega <combinada>"));
-    }
-
-    #[test]
-    fn order_document_contains_only_customer_facing_snapshot_data() {
-        let bytes = order_document(&json!({
-            "order": {"number":"PV-000042","amount":"123.45","dueDate":"2026-12-01"},
-            "company": {"legalName":"Ávila Equipamentos"},
-            "customer": {"name":"Cliente de teste"},
-            "items": [{"sku":"SKU-1","quantity":"2.000000","unit":"UN","unitPrice":"61.72","amount":"123.45"}],
-            "internalCost":"DO_NOT_SEND"
-        }));
-        let document = String::from_utf8(bytes).unwrap();
-        assert!(document.contains("PV-000042"));
-        assert!(document.contains("SKU-1"));
-        assert!(!document.contains("DO_NOT_SEND"));
-    }
-
-    #[test]
-    fn payment_document_has_receipt_identity_and_amount() {
-        let bytes = payment_document(
-            &json!({"order":{"number":"PV-000042"},"customer":{"name":"Cliente"}}),
-            12345,
-            "bank_transfer",
-            "TED-42",
-            "2026-11-06",
-        );
-        let document = String::from_utf8(bytes).unwrap();
-        assert!(document.contains("COMPROVANTE DE RECEBIMENTO"));
-        assert!(document.contains("PV-000042"));
-        assert!(document.contains("R$ 123,45"));
-        assert!(document.contains("TED-42"));
     }
 }
