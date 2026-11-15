@@ -12,7 +12,7 @@ const accounts = [{ id: cashId, code: "CX", name: "Caixa principal", accountType
 
 for (const width of [390, 1280]) test(`PDV registra pagamentos e troco e abre comprovante em ${width}px`, async ({ page, context }, info) => {
   await installFrontendFixture(context)
-  await page.route("**/api/erp/company", route => route.fulfill({ json: { tenantId: tenant, data: { state: "SP" } } }))
+  await page.route("**/api/erp/company", route => route.fulfill({ json: { tenantId: tenant, data: { state: "SP", legalName: "Empresa do PDV", taxId: "12345678000190" } } }))
   let current: typeof session | null = null
   let checkout: Record<string, unknown> | undefined
   let commands = 0
@@ -48,6 +48,14 @@ for (const width of [390, 1280]) test(`PDV registra pagamentos e troco e abre co
   await page.getByLabel("Valor do pagamento 2 (R$)", { exact: true }).fill("60,00")
   await page.getByRole("button", { name: "Concluir venda", exact: true }).click()
   await expect(page.getByRole("heading", { name: "Comprovante de venda", exact: true })).toBeVisible()
+  const receiptDocument = page.locator("[data-pos-receipt][data-commercial-document]")
+  await expect(receiptDocument).toContainText("Empresa do PDV")
+  await expect(receiptDocument.getByRole("heading", { name: "Pagamentos", exact: true })).toHaveCSS("background-color", "rgb(32, 32, 32)")
+  await page.emulateMedia({ media: "print" })
+  await expect(receiptDocument).toContainText("R$ 100,00")
+  await expect(page.getByRole("button", { name: "Concluir venda", exact: true })).toBeHidden()
+  if (info.project.use.browserName !== "webkit") await page.pdf({ path: info.outputPath(`pdv-${width}-padrao.pdf`), preferCSSPageSize: true, printBackground: true })
+  await page.emulateMedia({ media: "screen" })
   expect(commands).toBe(1)
   expect(checkout).toMatchObject({ expectedTotal: "100.00", items: [{ productId, quantity: "2.000000" }], payments: [{ method: "cash", amount: "40.00", tendered: "50.00" }, { method: "pix", amount: "60.00", accountId: bankId }] })
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
@@ -76,4 +84,23 @@ test("fechamento confere diferença e histórico preserva o caixa encerrado", as
   await expect(page.getByRole("cell", { name: "Fechado", exact: true })).toBeVisible()
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
   await page.screenshot({ path: info.outputPath("pos-history-mobile.png"), fullPage: true })
+})
+
+test("comprovante do PDV não renderiza antes de conferir o emitente", async ({ page, context }) => {
+  await installFrontendFixture(context)
+  let companyReads = 0
+  await page.route("**/api/erp/company", route => route.fulfill({ json: { tenantId: ++companyReads === 1 ? tenant : "other", data: { state: "SP", legalName: "Empresa sem vínculo" } } }))
+  await page.route("**/api/erp/financial-accounts?**", route => route.fulfill({ json: { tenantId: tenant, data: accounts, total: 2 } }))
+  await page.route("**/api/erp/pos/sessions/current?**", route => route.fulfill({ headers: { ETag: '"1"' }, json: { tenantId: tenant, canEdit: true, data: session } }))
+  await page.route("**/api/erp/pos/products?**", route => route.fulfill({ json: { tenantId: tenant, data: [{ id: productId, sku: "EQ-01", name: "Produto registrado", unit: "UN", unitPrice: "50.00", available: "10", pricingAvailable: true }], total: 1, offset: 0, limit: 15 } }))
+  await page.route(`**/api/erp/pos/sessions/${sessionId}/sales`, route => route.fulfill({ status: 201, headers: { ETag: '"2"' }, json: { tenantId: tenant, canEdit: true, session, data: { id: saleId, sessionId, revision: 1, status: "completed", total: "50.00", createdAt: "2026-11-09T12:10:00Z", items: [], payments: [{ method: "cash", amount: "50.00" }] } } }))
+  await page.goto("/vendas/pdv")
+  await page.getByRole("combobox", { name: "Destino", exact: true }).selectOption("SP")
+  await page.getByRole("button", { name: "Adicionar Produto registrado", exact: true }).click()
+  await page.getByLabel("Valor do pagamento 1 (R$)", { exact: true }).fill("50,00")
+  await page.getByLabel("Recebido em dinheiro 1 (R$)", { exact: true }).fill("50,00")
+  await page.getByRole("button", { name: "Concluir venda", exact: true }).click()
+  await expect(page.getByRole("alert").filter({ hasText: "conferir o emitente" })).toBeVisible()
+  await expect(page.getByRole("button", { name: "Imprimir comprovante", exact: true })).toBeDisabled()
+  await expect(page.locator("[data-pos-receipt]")).toHaveCount(0)
 })

@@ -11,6 +11,7 @@ As instruções de uso ficam nos [guias por tela](../README.md). Os contratos t�
 - [CONTRATOS-ACOES-P0](CONTRATOS-ACOES-P0.md)
 - [LANGFUSE](LANGFUSE.md)
 - [OPENAPI-CI](OPENAPI-CI.md)
+- [Padrão de documentos comerciais](PADRAO-DOCUMENTOS-COMERCIAIS.md)
 - [PLATFORM-TENANT-ADMINISTRATION](PLATFORM-TENANT-ADMINISTRATION.md)
 - [siscomex-local-evaluation](siscomex-local-evaluation.md)
 - [Planejamento das operações](PLANO-OPERACOES-ERP.mdx).

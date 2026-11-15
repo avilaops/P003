@@ -13,17 +13,18 @@ const HEIGHT: f32 = 841.8898;
 const LEFT: f32 = 42.0;
 const RIGHT: f32 = WIDTH - LEFT;
 const BOTTOM: f32 = 782.0;
-const INK: [f32; 3] = [0.12, 0.17, 0.23];
-const MUTED: [f32; 3] = [0.36, 0.41, 0.47];
-const ACCENT: [f32; 3] = [0.03, 0.38, 0.43];
-const PALE: [f32; 3] = [0.94, 0.96, 0.97];
-pub(super) struct Item {
+// Shared visual specification: docs/superpowers/specs/2026-11-15-commercial-document-standard.md.
+const INK: [f32; 3] = [0.125; 3];
+const MUTED: [f32; 3] = [0.384; 3];
+const RULE: [f32; 3] = [0.839; 3];
+const PALE: [f32; 3] = [0.957; 3];
+pub(crate) struct Item {
     pub description: Vec<String>,
     pub quantity: String,
     pub unit_price: String,
     pub amount: String,
 }
-pub(super) struct Document {
+pub(crate) struct Document {
     pub issuer_name: String,
     pub issuer_lines: Vec<String>,
     pub logo_data_url: String,
@@ -59,6 +60,9 @@ struct Page {
 }
 struct Layout<'a> {
     document: &'a Document,
+    title: &'a str,
+    total_label: &'a str,
+    order_details: bool,
     pages: Vec<Page>,
     y: f32,
     logo: bool,
@@ -145,36 +149,40 @@ impl Layout<'_> {
         });
     }
     fn page(&mut self, table: bool) {
-        let first = self.pages.is_empty();
         self.pages.push(Page::default());
-        self.band(LEFT, 29.0, RIGHT - LEFT, 3.0, ACCENT);
-        self.y = 51.0;
-        let start = if self.logo { 118.0 } else { LEFT };
-        for line in wrap(&self.document.issuer_name, RIGHT - start, 12.0, true) {
-            self.put(line, start, self.y, 12.0, true, INK);
-            self.y += 16.0;
+        self.y = 48.0;
+        let start = if self.logo { 148.0 } else { LEFT };
+        for line in wrap(&self.document.issuer_name, RIGHT - start, 10.0, true) {
+            self.put(line, start, self.y, 10.0, true, INK);
+            self.y += 14.0;
         }
-        for (index, line) in self.document.issuer_lines.iter().enumerate() {
-            if !first && index > 0 {
-                break;
-            }
+        if let Some(line) = self.document.issuer_lines.first() {
             for line in wrap(line, RIGHT - start, 8.0, false) {
                 self.put(line, start, self.y, 8.0, false, MUTED);
                 self.y += 11.0;
             }
         }
-        self.y = self.y.max(if self.logo { 105.0 } else { 84.0 }) + 14.0;
-        self.put("PEDIDO DE VENDA", LEFT, self.y, 8.0, true, ACCENT);
+        self.y = self.y.max(84.0);
+        self.band(LEFT, self.y, RIGHT - LEFT, 0.6, MUTED);
         self.y += 26.0;
-        self.put(&self.document.number, LEFT, self.y, 22.0, true, INK);
-        let status = format!(
-            "{} · Revisão {}",
-            self.document.status, self.document.revision
+        let title = self.title;
+        self.put(
+            title,
+            (WIDTH - measure(title, 16.0, true)) / 2.0,
+            self.y,
+            16.0,
+            true,
+            INK,
         );
+        let status = format!(
+            "{} • Revisão {} • {}",
+            self.document.number, self.document.revision, self.document.status
+        );
+        self.y += 18.0;
         self.put(
             &status,
-            RIGHT - measure(&status, 9.0, false),
-            self.y - 4.0,
+            (WIDTH - measure(&status, 9.0, false)) / 2.0,
+            self.y,
             9.0,
             false,
             MUTED,
@@ -190,38 +198,66 @@ impl Layout<'_> {
         }
     }
     fn heading(&mut self, title: &str) {
-        self.ensure(36.0, false);
+        self.ensure(60.0, false);
         self.y += 8.0;
-        self.put(title, LEFT, self.y, 10.0, true, ACCENT);
-        self.y += 18.0;
+        self.band(LEFT, self.y - 10.0, RIGHT - LEFT, 20.0, INK);
+        self.put(
+            title.to_uppercase(),
+            LEFT + 8.0,
+            self.y + 3.0,
+            9.0,
+            true,
+            [1.0; 3],
+        );
+        self.y += 24.0;
     }
-    fn paragraph(&mut self, value: &str, bold: bool) {
-        for line in wrap(value, RIGHT - LEFT, 9.0, bold) {
-            self.ensure(14.0, false);
-            self.put(line, LEFT, self.y, 9.0, bold, INK);
-            self.y += 13.0;
+    fn frame(&mut self, top: f32, bottom: f32) {
+        self.band(LEFT, top, 0.5, bottom - top, RULE);
+        self.band(RIGHT - 0.5, top, 0.5, bottom - top, RULE);
+        self.band(LEFT, bottom, RIGHT - LEFT, 0.5, RULE);
+    }
+    fn section(&mut self, title: &str, values: &[String]) {
+        self.heading(title);
+        let mut top = self.y - 14.0;
+        for (index, value) in values.iter().enumerate() {
+            let bold = index == 0 && matches!(title, "EMITENTE" | "CLIENTE");
+            for line in wrap(value, RIGHT - LEFT - 16.0, 9.0, bold) {
+                if self.y + 16.0 > BOTTOM {
+                    self.frame(top, self.y);
+                    self.page(false);
+                    self.heading(&format!("{title} • CONTINUAÇÃO"));
+                    top = self.y - 14.0;
+                }
+                self.put(line, LEFT + 8.0, self.y, 9.0, bold, INK);
+                self.y += 13.0;
+            }
         }
+        self.frame(top, self.y + 2.0);
+        self.y += 15.0;
     }
     fn table_header(&mut self) {
-        self.band(LEFT, self.y - 12.0, RIGHT - LEFT, 25.0, INK);
+        self.band(LEFT, self.y - 12.0, RIGHT - LEFT, 25.0, PALE);
         for (label, x) in [
-            ("ITEM / DESCRIÇÃO", LEFT + 8.0),
+            ("ITEM • DESCRIÇÃO", LEFT + 8.0),
             ("QTD.", 322.0),
             ("UNITÁRIO", 388.0),
             ("SUBTOTAL", 476.0),
         ] {
-            self.put(label, x, self.y + 3.0, 8.0, true, [1.0; 3]);
+            self.put(label, x, self.y + 3.0, 8.0, true, INK);
         }
         self.y += 26.0;
     }
     fn items(&mut self) {
-        self.ensure(65.0, false);
-        self.table_header();
+        if self.document.items.is_empty() {
+            self.ensure(90.0, false);
+            self.heading("ITENS DO PEDIDO");
+            self.table_header();
+        }
         for (index, item) in self.document.items.iter().enumerate() {
             let mut description = Vec::new();
             for (part, value) in item.description.iter().enumerate() {
                 let value = if part == 0 {
-                    format!("{:02} · {value}", index + 1)
+                    format!("{:02} • {value}", index + 1)
                 } else {
                     value.clone()
                 };
@@ -240,6 +276,13 @@ impl Layout<'_> {
                 .max(unit.len())
                 .max(amount.len());
             let height = count as f32 * 13.0 + 16.0;
+            if index == 0 {
+                // Reserve the band, column headers and first row together. Very
+                // long rows may continue, but always start below their title.
+                self.ensure(32.0 + 26.0 + height.min(500.0), false);
+                self.heading("ITENS DO PEDIDO");
+                self.table_header();
+            }
             if height < 500.0 {
                 self.ensure(height, true);
             }
@@ -270,22 +313,24 @@ impl Layout<'_> {
                 self.y += 13.0;
             }
             self.y += 7.0;
-            self.band(LEFT, self.y - 3.0, RIGHT - LEFT, 0.5, [0.85, 0.88, 0.90]);
+            self.band(LEFT, self.y - 3.0, RIGHT - LEFT, 0.5, RULE);
         }
     }
     fn finish(mut self) -> Vec<Page> {
         self.page(false);
-        self.heading("CLIENTE");
-        for (index, line) in self.document.customer_lines.iter().enumerate() {
-            self.paragraph(line, index == 0);
-        }
+        let mut issuer = vec![self.document.issuer_name.clone()];
+        issuer.extend(self.document.issuer_lines.clone());
+        self.section("EMITENTE", &issuer);
+        self.section("CLIENTE", &self.document.customer_lines);
         self.y += 12.0;
-        self.items();
+        if self.order_details {
+            self.items();
+        }
         self.ensure(84.0, false);
         self.y += 15.0;
         self.band(LEFT, self.y - 12.0, RIGHT - LEFT, 39.0, PALE);
         self.put(
-            "TOTAL DO PEDIDO",
+            self.total_label,
             LEFT + 12.0,
             self.y + 10.0,
             10.0,
@@ -301,17 +346,17 @@ impl Layout<'_> {
             INK,
         );
         self.y += 49.0;
-        self.paragraph(
-            &format!("Peso bruto total: {}", self.document.weight),
-            false,
-        );
-        self.paragraph(
-            &format!("Data prevista do pedido: {}", self.document.due),
-            false,
-        );
+        if self.order_details {
+            self.section(
+                "RESUMO DO PEDIDO",
+                &[
+                    format!("Peso bruto total: {}", self.document.weight),
+                    format!("Data prevista do pedido: {}", self.document.due),
+                ],
+            );
+        }
         for (title, value) in &self.document.sections {
-            self.heading(title);
-            self.paragraph(value, false);
+            self.section(title, std::slice::from_ref(value));
         }
         let count = self.pages.len();
         for (index, page) in self.pages.iter_mut().enumerate() {
@@ -320,11 +365,11 @@ impl Layout<'_> {
                 y: 800.0,
                 width: RIGHT - LEFT,
                 height: 0.6,
-                color: [0.85, 0.88, 0.90],
+                color: RULE,
             });
             page.texts.push(Text {
                 value: format!(
-                    "{} · Revisão {} · Documento comercial",
+                    "{} • Revisão {} • Documento comercial",
                     self.document.number, self.document.revision
                 ),
                 x: LEFT,
@@ -477,10 +522,22 @@ fn logo(raw: &str) -> Option<image::RgbImage> {
         },
     ))
 }
-pub(super) fn render(document: &Document) -> Result<Vec<u8>, std::io::Error> {
+pub(crate) fn render(document: &Document) -> Result<Vec<u8>, std::io::Error> {
+    render_with_labels(document, "PEDIDO DE VENDA", "TOTAL DO PEDIDO", true)
+}
+
+pub(crate) fn render_with_labels(
+    document: &Document,
+    title: &str,
+    total_label: &str,
+    order_details: bool,
+) -> Result<Vec<u8>, std::io::Error> {
     let logo = logo(&document.logo_data_url);
     let pages = Layout {
         document,
+        title,
+        total_label,
+        order_details,
         pages: Vec::new(),
         y: 0.0,
         logo: logo.is_some(),
@@ -492,8 +549,8 @@ pub(super) fn render(document: &Document) -> Result<Vec<u8>, std::io::Error> {
         .lang(TextStr("pt-BR"));
     pdf.document_info(Ref::new(3))
         .title(TextStr(&format!(
-            "Pedido {} · Revisão {}",
-            document.number, document.revision
+            "{} {} • Revisão {}",
+            title, document.number, document.revision
         )))
         .author(TextStr(&document.issuer_name))
         .creator(TextStr("ERP · Documento comercial"));
@@ -549,7 +606,7 @@ pub(super) fn render(document: &Document) -> Result<Vec<u8>, std::io::Error> {
             content.fill_nonzero();
         }
         if let Some(image) = &logo {
-            let scale = (60.0 / image.width() as f32).min(58.0 / image.height() as f32);
+            let scale = (90.0 / image.width() as f32).min(38.0 / image.height() as f32);
             let width = image.width() as f32 * scale;
             let height = image.height() as f32 * scale;
             content
@@ -588,10 +645,101 @@ mod tests {
         Document{issuer_name:"Ávila Equipamentos Ltda.".into(),issuer_lines:vec!["CNPJ: 00.000.000/0001-00".into(),"Rua da Indústria, 100 · São Paulo / SP · 01000-000".into(),"contato@example.test · (11) 3333-0000".into()],logo_data_url:String::new(),number:"PV-000004".into(),revision:3,status:"Rascunho".into(),due:"20/12/2026".into(),customer_lines:vec!["Academia São José · Confirmação".into(),"CPF/CNPJ: 000.000.000-00".into(),"Av. dos Ipês, 240 · Centro · São Paulo / SP".into(),"E-mail: compras@example.test · Telefone: (11) 99999-0000".into()],items:(0..count).map(|i|Item{description:vec![format!("Equipamento {} · Estação de musculação com proteção e regulagem",i+1),format!("Código: EQ-{:04}",i+1),"Estrutura: Azul petróleo · Estofado: Café · Tipo de anilheiro: Redondo".into()],quantity:"2 UN".into(),unit_price:"R$ 1.234,56".into(),amount:"R$ 2.469,12".into()}).collect(),total:"R$ 14.814,72".into(),weight:"1.263,5 kg".into(),sections:vec![("Pagamento previsto".into(),"Entrada prevista: R$ 70,01 · Pix · Na confirmação do pedido\nParcela 1: R$ 15,00 · Boleto · 01/01/2027\nParcela 2: R$ 14,99 · Boleto · 01/02/2027\nCondições previstas; não comprovam recebimento.".into()),("Entrega".into(),"Prazo de fabricação: 45 dias após o recebimento da entrada. Entrega a combinar.".into()),("Observações".into(),"Conferir acesso e dimensões do local antes da entrega.".into())]}
     }
     #[test]
+    fn item_section_title_stays_with_table_and_first_item_after_long_identification() {
+        for count in 1..40 {
+            let mut document = fixture(1);
+            document.customer_lines =
+                vec!["Identificação e endereço para conferência".into(); count];
+            let pages = Layout {
+                document: &document,
+                title: "PEDIDO DE VENDA",
+                total_label: "TOTAL DO PEDIDO",
+                order_details: true,
+                pages: Vec::new(),
+                y: 0.0,
+                logo: false,
+            }
+            .finish();
+            let page = pages
+                .iter()
+                .find(|page| {
+                    page.texts
+                        .iter()
+                        .any(|text| text.value == "ITENS DO PEDIDO")
+                })
+                .unwrap();
+            assert!(
+                page.texts
+                    .iter()
+                    .any(|text| text.value == "ITEM • DESCRIÇÃO"),
+                "orphan section title with {count} customer lines"
+            );
+            assert!(
+                page.texts.iter().any(|text| text.value.starts_with("01 •")),
+                "missing first row with {count} customer lines"
+            );
+        }
+    }
+    #[test]
+    fn contract_style_uses_monochrome_bands_and_boxed_identification() {
+        let document = fixture(1);
+        let pages = Layout {
+            document: &document,
+            title: "PEDIDO DE VENDA",
+            total_label: "TOTAL DO PEDIDO",
+            order_details: true,
+            pages: Vec::new(),
+            y: 0.0,
+            logo: false,
+        }
+        .finish();
+        let first = &pages[0];
+        for title in ["EMITENTE", "CLIENTE", "PAGAMENTO PREVISTO", "ENTREGA"] {
+            let (page, text) = pages
+                .iter()
+                .find_map(|page| {
+                    page.texts
+                        .iter()
+                        .find(|text| text.value == title)
+                        .map(|text| (page, text))
+                })
+                .unwrap();
+            assert!(
+                page.bands.iter().any(|band| {
+                    band.height >= 18.0
+                        && band.y < text.y
+                        && band.y + band.height > text.y
+                        && band.color == [0.125; 3]
+                }),
+                "missing contract section band: {title}"
+            );
+            assert_eq!(text.color, [1.0; 3]);
+        }
+        assert!(
+            first
+                .bands
+                .iter()
+                .any(|band| band.width <= 1.0 && band.height > 30.0),
+            "identification must be boxed"
+        );
+        for band in &first.bands {
+            assert_eq!(band.color[0], band.color[1]);
+            assert_eq!(band.color[1], band.color[2]);
+        }
+        let title = first
+            .texts
+            .iter()
+            .find(|text| text.value == "PEDIDO DE VENDA")
+            .unwrap();
+        assert!(
+            (title.x + measure(&title.value, title.size, true) / 2.0 - WIDTH / 2.0).abs() < 0.1
+        );
+    }
+    #[test]
     fn creates_a_parseable_a4_pdf_with_embedded_unicode_text() {
         let bytes = render(&fixture(1)).unwrap();
         let pdf = lopdf::Document::load_mem(&bytes).expect("valid server-generated PDF");
-        assert_eq!(pdf.get_pages().len(), 1);
+        assert!((1..=2).contains(&pdf.get_pages().len()));
         for page in pdf.get_pages().values() {
             let media = pdf
                 .get_dictionary(*page)
@@ -603,7 +751,9 @@ mod tests {
             assert!((media[2].as_float().unwrap() - WIDTH).abs() < 0.01);
             assert!((media[3].as_float().unwrap() - HEIGHT).abs() < 0.01);
         }
-        let text = pdf.extract_text(&[1]).unwrap();
+        let text = pdf
+            .extract_text(&pdf.get_pages().keys().copied().collect::<Vec<_>>())
+            .unwrap();
         for expected in [
             "São José · Confirmação",
             "Ávila Equipamentos",
@@ -643,6 +793,9 @@ mod tests {
             .push("AÇÃOSUPERLONGASEMESPAÇOS".repeat(120));
         let pages = Layout {
             document: &document,
+            title: "PEDIDO DE VENDA",
+            total_label: "TOTAL DO PEDIDO",
+            order_details: true,
             pages: Vec::new(),
             y: 0.0,
             logo: false,
@@ -687,6 +840,9 @@ mod tests {
         }
         let pages = Layout {
             document: &document,
+            title: "PEDIDO DE VENDA",
+            total_label: "TOTAL DO PEDIDO",
+            order_details: true,
             pages: Vec::new(),
             y: 0.0,
             logo: true,
@@ -697,7 +853,7 @@ mod tests {
             for text in page
                 .texts
                 .iter()
-                .filter(|text| text.bold && text.value.contains(" · ÁÉÍÓÚ"))
+                .filter(|text| text.bold && text.value.contains(" • ÁÉÍÓÚ"))
             {
                 let font = face(text.bold);
                 let bounds = text

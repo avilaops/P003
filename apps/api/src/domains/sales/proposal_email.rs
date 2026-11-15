@@ -141,17 +141,38 @@ fn escape(value: &str) -> String {
 }
 
 fn attachment(current: &ProposalSnapshot, company: &str, tax_id: &str) -> MailAttachment {
+    use super::super::order_document::{date, decimal_br};
     let data = &current.data;
+    let status = if data.expired {
+        "Expirada"
+    } else {
+        match data.status.as_str() {
+            "draft" => "Rascunho",
+            "sent" => "Enviada",
+            "accepted" => "Aceita",
+            "rejected" => "Rejeitada",
+            "cancelled" => "Cancelada",
+            "superseded" => "Substituída",
+            _ => "Não informado",
+        }
+    };
+    let identity = format!(
+        "Proposta {} • Versão {} • {status}",
+        data.number, data.version
+    );
     let mut html = format!(
-        "<!doctype html><html lang=\"pt-BR\"><meta charset=\"utf-8\"><title>Proposta {}</title><style>body{{font:14px Arial,sans-serif;margin:32px;color:#17202a}}table{{border-collapse:collapse;width:100%}}th,td{{padding:8px;border-bottom:1px solid #ddd;text-align:left}}.terms{{white-space:pre-wrap}}</style><body><h1>{}</h1><p>CNPJ/CPF: {}</p><h2>Proposta {} · versão {}</h2><p>Cliente: {} · CPF/CNPJ: {}</p><p>Validade: {}</p><table><thead><tr><th>Produto</th><th>Acabamento</th><th>Quantidade</th><th>Unitário (R$)</th><th>Total (R$)</th></tr></thead><tbody>",
+        "<!doctype html><html lang=\"pt-BR\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"><title>Proposta {}</title><style>{}</style></head><body><article data-commercial-document class=\"commercial-document\"><header class=\"commercial-document-header\"><p><strong>{}</strong></p><p>CPF/CNPJ: {}</p></header><div class=\"commercial-document-title\"><h1>Proposta comercial</h1><p>{}</p></div><section class=\"commercial-section\"><h2>Emitente</h2><div class=\"commercial-section-body\"><p>{}</p><p>CPF/CNPJ: {}</p></div></section><section class=\"commercial-section\"><h2>Cliente</h2><div class=\"commercial-section-body\"><p>{}</p><p>CPF/CNPJ: {}</p></div></section><section class=\"commercial-section\"><h2>Identificação</h2><div class=\"commercial-section-body\"><p>Emissão: {} • Validade: {}</p></div></section><section class=\"commercial-section\"><h2>Itens da proposta</h2><table class=\"commercial-document-table\"><thead><tr><th>Produto</th><th>Acabamento</th><th class=\"numeric\">Quantidade</th><th class=\"numeric\">Unitário</th><th class=\"numeric\">Total</th></tr></thead><tbody>",
         escape(&data.number),
+        include_str!("../../../assets/documents/commercial-document.css"),
         escape(company),
         escape(tax_id),
-        escape(&data.number),
-        data.version,
+        escape(&identity),
+        escape(company),
+        escape(tax_id),
         escape(&data.customer_name),
         escape(&data.customer_tax_id),
-        escape(&data.valid_until)
+        escape(&date(data.created_at.get(..10).unwrap_or(&data.created_at))),
+        escape(&date(&data.valid_until))
     );
     for item in &current.items {
         let finishes = [
@@ -171,10 +192,20 @@ fn attachment(current: &ProposalSnapshot, company: &str, tax_id: &str) -> MailAt
         .into_iter()
         .flatten()
         .collect::<Vec<_>>()
-        .join(" · ");
-        html.push_str(&format!("<tr><td>{}<br><small>{}</small></td><td>{}</td><td>{} {}</td><td>{}</td><td>{}</td></tr>", escape(&item.name), escape(&item.sku), escape(&finishes), escape(&item.quantity), escape(&item.unit), escape(&item.unit_price), escape(&item.amount)));
+        .join(" • ");
+        html.push_str(&format!("<tr><td>{}<br><small>{}</small></td><td>{}</td><td class=\"numeric\">{} {}</td><td class=\"numeric\">{}</td><td class=\"numeric\">{}</td></tr>", escape(&item.name), escape(&item.sku), escape(&finishes), escape(&decimal_br(&item.quantity, false)), escape(&item.unit), escape(&decimal_br(&item.unit_price, true)), escape(&decimal_br(&item.amount, true))));
     }
-    html.push_str(&format!("</tbody></table><p><strong>Total: R$ {}</strong></p><h3>Pagamento</h3><p class=\"terms\">{}</p><h3>Entrega</h3><p class=\"terms\">{}</p><h3>Observações</h3><p class=\"terms\">{}</p></body></html>", escape(&data.amount), escape(&data.payment_terms), escape(&data.delivery_terms), escape(&data.notes)));
+    html.push_str(&format!("</tbody></table></section><div class=\"commercial-document-total\"><strong>Total: {}</strong></div>", escape(&decimal_br(&data.amount, true))));
+    for (title, value) in [
+        ("Pagamento", &data.payment_terms),
+        ("Entrega", &data.delivery_terms),
+        ("Observações", &data.notes),
+    ] {
+        if !value.is_empty() {
+            html.push_str(&format!("<section class=\"commercial-section\"><h2>{title}</h2><div class=\"commercial-section-body\"><p class=\"terms\">{}</p></div></section>", escape(value)));
+        }
+    }
+    html.push_str(&format!("<footer class=\"commercial-document-footer\">{} • Documento comercial • ERP Next</footer></article></body></html>", escape(&identity)));
     MailAttachment {
         filename: format!("proposta-{}-v{}.html", data.number, data.version),
         content_type: "text/html; charset=utf-8".to_owned(),
@@ -424,11 +455,16 @@ mod tests {
         assert_eq!(file.filename, "proposta-17-v2.html");
         let html = String::from_utf8(file.bytes).unwrap();
         for expected in [
+            "data-commercial-document",
+            "commercial-document-title",
+            "commercial-section",
+            "Identificação",
+            "Rascunho",
             "Empresa &amp; Filhos",
             "04252011000110",
             "Cliente &lt;script&gt;",
-            "17.99",
-            "44.98",
+            "R$ 17,99",
+            "R$ 44,98",
             "À vista &amp; combinado",
             "Preto &amp; azul",
             "Braços: Apple Green &lt;swing&gt;",

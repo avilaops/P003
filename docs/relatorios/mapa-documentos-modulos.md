@@ -1,5 +1,7 @@
 # Mapa de relatórios, PDF e envio por e-mail
 
+Atualização de escopo em 15/11/2026: consulte o [padrão dos emissores existentes](padrao-relatorios.md). A matriz histórica abaixo não substitui a conferência do código atual nem comprova publicação em produção.
+
 Levantamento de código em 12/11/2026. Referência funcional: commit `76b2c4f`; ramo de trabalho `feat/corporate-order-documents-smtp-20261112`. **Este documento é um inventário e roteiro proposto, não uma declaração de funcionalidades entregues.** O PDF próprio do pedido e o SMTP global em Preferências estão em desenvolvimento neste ramo e não entram como concluídos na matriz.
 
 ## Escopo e critério de contagem

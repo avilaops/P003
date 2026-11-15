@@ -16,3 +16,8 @@ test("a escala aceita os tokens, tamanhos aprovados e dados de impressão", () =
 test("a apresentação pública permanece independente da escala interna", () => {
   assert.deepEqual(validateTypography(source("app/entrar/entrar.css", ".hero { font-size: 48px; }")), []);
 });
+
+test("o documento A4 tem escala editorial própria sem liberar CSS de telas", () => {
+  assert.deepEqual(validateTypography(source("components/documents/commercial-document.css", ".commercial-document-caption { font-size: 9px; }")), []);
+  assert.equal(validateTypography(source("components/documents/other.css", ".page { font-size: 9px; }")).length, 1);
+});

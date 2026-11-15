@@ -61,7 +61,7 @@ test("logo da empresa aparece na proposta e na impressão sem aceitar outra empr
   const image = page.locator("[data-proposal-document]").getByRole("img", { name: "Logo da empresa", exact: true })
   await expect(image).toHaveAttribute("src", logo)
   await expect.poll(() => image.evaluate(element => (element as HTMLImageElement).naturalWidth)).toBe(32)
-  await expect(page.locator(".proposal-issuer-name")).toHaveCSS("font-size", "18px")
+  await expect(page.locator(".proposal-issuer-name")).toHaveCSS("font-size", "13px")
   const bounds = await image.boundingBox()
   expect(bounds!.width / bounds!.height).toBeCloseTo(2)
   await page.emulateMedia({ media: "print" })
@@ -402,6 +402,44 @@ test("consulta não oferece decisões e impressão oculta os controles de opera�
   await expect(page.getByRole("button", { name: "Imprimir / salvar PDF", exact: true })).toBeHidden()
   await expect(page.getByLabel("Histórico de versões", { exact: true })).toBeHidden()
   await expect(page.getByText("Total: R$ 49,98", { exact: true })).toBeVisible()
+})
+
+test("documento segue o contrato com quadros monocromáticos e identificação na impressão", async ({ page }, info) => {
+  await page.route(`**/api/erp/proposals/${record}`, route => route.fulfill({ headers: { ETag: '\"1\"' }, json: detail() }))
+  await page.route("**/api/erp/company", route => route.fulfill({ json: { tenantId: tenant, data: { legalName: "Empresa & Filhos", taxId: "04252011000110", email: "contato@example.test" } } }))
+  await page.goto(`/vendas/propostas/${record}`)
+  const document = page.locator("[data-commercial-document]")
+  await expect(document).toBeVisible()
+  for (const title of ["Emitente", "Cliente", "Identificação", "Pagamento", "Entrega"]) {
+    const heading = document.getByRole("heading", { name: title, exact: true })
+    await expect(heading).toBeVisible()
+    await expect(heading).toHaveCSS("background-color", "rgb(32, 32, 32)")
+    await expect(heading).toHaveCSS("color", "rgb(255, 255, 255)")
+  }
+  await expect(document).toContainText("Empresa & Filhos")
+  await expect(document).toContainText("Cliente de teste")
+  await expect(document).toContainText("Versão 1 • Rascunho")
+  await expect(document.locator("footer")).toContainText("Proposta 1 • Versão 1")
+  await page.emulateMedia({ media: "print" })
+  await expect(document.getByRole("columnheader")).toHaveText(["Produto", "Quantidade", "Unitário", "Total"])
+  await expect(document).toHaveCSS("box-shadow", "none")
+  await page.screenshot({ path: info.outputPath("proposal-contract-standard.png"), fullPage: true })
+  if (test.info().project.use.browserName !== "webkit") await page.pdf({ path: info.outputPath("proposta-padrao-contrato.pdf"), preferCSSPageSize: true, printBackground: true })
+})
+
+test("proposta longa preserva todos os itens e condições no PDF padronizado", async ({ page, browserName }, info) => {
+  test.skip(browserName !== "chromium", "PDF do navegador disponível no Chromium")
+  const value = detail()
+  value.data.notes = "Conferir acesso e dimensões antes da entrega. FIM-DAS-CONDICOES"
+  value.items = Array.from({ length: 24 }, (_, index) => ({ ...item, productId: `33333333-3333-4333-8333-${String(index).padStart(12, "0")}`, sku: `EQ-${String(index + 1).padStart(4, "0")}`, name: `Equipamento ${index + 1} com descrição extensa e especificações de acabamento para conferência` }))
+  value.data.amount = "1199.52"
+  await page.route(`**/api/erp/proposals/${record}`, route => route.fulfill({ headers: { ETag: '\"1\"' }, json: value }))
+  await page.route(/\/api\/erp\/products\//, route => route.fulfill({ json: { tenantId: tenant, data: { id: route.request().url().split("/").at(-1), hasPhoto: false } } }))
+  await page.goto(`/vendas/propostas/${record}`)
+  const document = page.locator("[data-commercial-document]")
+  await expect(document).toContainText("EQ-0024")
+  await page.emulateMedia({ media: "print" })
+  await page.pdf({ path: info.outputPath("proposta-longa-padrao-contrato.pdf"), preferCSSPageSize: true, printBackground: true })
 })
 
 test("repetição após falha usa o mesmo comando e exige motivo para rejeição", async ({ page }) => {

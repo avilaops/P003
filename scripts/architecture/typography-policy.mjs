@@ -5,6 +5,8 @@ export function validateTypography(files) {
   const errors = [];
   for (const [name, source] of files) {
     if (!name.startsWith("apps/web/src/") || name.startsWith("apps/web/src/app/entrar/")) continue;
+    // A4 document typography follows the contract reference, independently of UI controls.
+    if (name === "apps/web/src/components/documents/commercial-document.css") continue;
     for (const [index, line] of source.split("\n").entries()) {
       // Public PageTitle fallback; internal headings override it in .erp-content.
       if (name.endsWith("app/workspace-ui.css") && line.startsWith(".workspace-page-title {")) continue;
