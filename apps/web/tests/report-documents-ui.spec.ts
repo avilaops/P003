@@ -109,4 +109,3 @@ for (const kind of ["produtos", "clientes"]) {
     await expect(page.getByRole("button", { name: "Imprimir / salvar PDF" })).toBeEnabled()
   })
 }
-
