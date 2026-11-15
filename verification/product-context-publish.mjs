@@ -51,7 +51,8 @@ export async function publishContext(context, { endpoint = defaultEndpoint, toke
   if (validateProductContext(context).length || context.selection.targetFlow !== null || typeof confirmPublication !== 'boolean') throw new ContextSyncError('INVALID_CONTEXT');
   if (confirmPublication && context.source.dirty) throw new ContextSyncError('DIRTY_PUBLICATION');
   const bytes = stableJson(context);
-  const body = stableJson({ context, confirmPublication });
+  // Transport whitespace is not part of the canonical context or its digest.
+  const body = JSON.stringify({ context, confirmPublication });
   if (Buffer.byteLength(body) > maximumBytes) throw new ContextSyncError('CONTEXT_TOO_LARGE');
   const requestId = contextImportRequestId(context.contentSha256, confirmPublication);
   const receiptUrl = new URL(url); receiptUrl.searchParams.set('requestId', requestId);

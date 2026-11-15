@@ -63,6 +63,7 @@ struct Layout<'a> {
     title: &'a str,
     total_label: &'a str,
     order_details: bool,
+    customer_title: &'a str,
     pages: Vec<Page>,
     y: f32,
     logo: bool,
@@ -321,7 +322,7 @@ impl Layout<'_> {
         let mut issuer = vec![self.document.issuer_name.clone()];
         issuer.extend(self.document.issuer_lines.clone());
         self.section("EMITENTE", &issuer);
-        self.section("CLIENTE", &self.document.customer_lines);
+        self.section(self.customer_title, &self.document.customer_lines);
         self.y += 12.0;
         if self.order_details {
             self.items();
@@ -532,12 +533,23 @@ pub(crate) fn render_with_labels(
     total_label: &str,
     order_details: bool,
 ) -> Result<Vec<u8>, std::io::Error> {
+    render_financial(document, title, total_label, order_details, "CLIENTE")
+}
+
+pub(crate) fn render_financial(
+    document: &Document,
+    title: &str,
+    total_label: &str,
+    order_details: bool,
+    customer_title: &str,
+) -> Result<Vec<u8>, std::io::Error> {
     let logo = logo(&document.logo_data_url);
     let pages = Layout {
         document,
         title,
         total_label,
         order_details,
+        customer_title,
         pages: Vec::new(),
         y: 0.0,
         logo: logo.is_some(),
@@ -655,6 +667,7 @@ mod tests {
                 title: "PEDIDO DE VENDA",
                 total_label: "TOTAL DO PEDIDO",
                 order_details: true,
+                customer_title: "CLIENTE",
                 pages: Vec::new(),
                 y: 0.0,
                 logo: false,
@@ -688,6 +701,7 @@ mod tests {
             title: "PEDIDO DE VENDA",
             total_label: "TOTAL DO PEDIDO",
             order_details: true,
+            customer_title: "CLIENTE",
             pages: Vec::new(),
             y: 0.0,
             logo: false,
@@ -796,6 +810,7 @@ mod tests {
             title: "PEDIDO DE VENDA",
             total_label: "TOTAL DO PEDIDO",
             order_details: true,
+            customer_title: "CLIENTE",
             pages: Vec::new(),
             y: 0.0,
             logo: false,
@@ -843,6 +858,7 @@ mod tests {
             title: "PEDIDO DE VENDA",
             total_label: "TOTAL DO PEDIDO",
             order_details: true,
+            customer_title: "CLIENTE",
             pages: Vec::new(),
             y: 0.0,
             logo: true,

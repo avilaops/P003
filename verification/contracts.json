@@ -1540,6 +1540,21 @@
         "additionalSources": [
           "docs/telas/vendas/pdv/README.md"
         ]
+      },
+      {
+        "id": "finance-document-email",
+        "title": "Envio de documentos financeiros por e-mail",
+        "goal": "Conferir e enviar título a receber ou relatório financeiro pelo SMTP central sem alterar registros contábeis.",
+        "kind": "product",
+        "actionGroups": [
+          "finance-document-email"
+        ],
+        "dependencies": [
+          "receivables",
+          "purchase_payment_chain",
+          "company_onboarding"
+        ],
+        "nextStep": "Validar confirmação, permissões, revisão/hash e recuperação de envio incerto nos dois contextos."
       }
     ]
   },
@@ -30702,7 +30717,7 @@
       "preconditions": [
         "Pedido da empresa, não cancelado, com revisão atual e permissão de gestão.",
         "Destinatário, assunto e mensagem válidos; SMTP configurado; sem entrega anterior uncertain.",
-        "Anexo HTML gerado do snapshot comercial no servidor."
+        "Anexo PDF gerado do snapshot comercial no servidor."
       ],
       "transition": {
         "from": "Pedido e histórico de envios",
@@ -31864,6 +31879,395 @@
       "ui": { "pages": ["/vendas/pedidos/[id]", "/servicos/contratos/[id]", "/financeiro/contas-receber/[id]"], "bff": { "method": "GET", "path": "/api/erp/orders/[id]/documents/[documentId]" }, "gap": null },
       "sources": ["apps/api/src/domains/supporting_documents.rs", "apps/web/src/app/api/erp/orders/[id]/documents/[documentId]/route.ts", "apps/web/src/features/finance/supporting-documents.tsx"],
       "verification": { "status": "not_verified_by_catalog", "criteria": ["interface", "request", "authorization", "domain", "persistence", "effects", "failure", "response"] }
+    },
+    {
+      "id": "get-api-v1-receivables-id-email",
+      "flow": "finance-document-email",
+      "status": "implemented",
+      "operation": {
+        "method": "GET",
+        "path": "/api/v1/receivables/{id}/email"
+      },
+      "actor": "active_tenant_member",
+      "permissions": [
+        "finance.receivables.read"
+      ],
+      "input": {
+        "headers": [
+          "Authorization",
+          "X-Tenant-Id"
+        ],
+        "pathParameters": [
+          "id"
+        ],
+        "query": null
+      },
+      "preconditions": [
+        "Empresa ativa e permissões financeiras do contexto; nenhum acesso comercial exigido.",
+        "Título pertencente à empresa; destinatário sugerido do cadastro preservado ou cliente.",
+        "Consulta disponibilidade SMTP, revisão/hash do documento e até 50 entregas sem escrita."
+      ],
+      "transition": {
+        "from": "Snapshot financeiro e histórico de envios",
+        "to": "Disponibilidade e histórico consultados sem mutação"
+      },
+      "effects": {
+        "writes": [],
+        "external": [],
+        "excludes": [
+          "Não registra pagamento, altera saldo ou revisão financeira, comprova conciliação ou garante entrega ao destinatário."
+        ]
+      },
+      "concurrency": {
+        "revision": false,
+        "idempotency": false,
+        "rule": "GET devolve ETag e hash, sem exigir comando ou revisão de entrada."
+      },
+      "response": {
+        "successStatuses": [
+          200
+        ],
+        "errorStatuses": [
+          401,
+          403,
+          404,
+          503
+        ],
+        "action": "Conferir envio de título a receber por e-mail"
+      },
+      "recovery": "Conferir empresa, permissões e configuração central antes de repetir.",
+      "ui": {
+        "pages": [
+          "/financeiro/contas-receber/[id]"
+        ],
+        "bff": {
+          "method": "GET",
+          "path": "/api/erp/receivables/[id]/email"
+        },
+        "gap": null
+      },
+      "sources": [
+        "apps/api/src/domains/finance/email.rs",
+        "apps/api/src/domains/finance/document.rs",
+        "apps/api/src/domains/finance.rs",
+        "migrations/202611150001_finance_document_email.sql",
+        "apps/web/src/app/api/erp/receivables/[id]/email/route.ts",
+        "apps/web/src/features/finance/financial-document-email.tsx",
+        "apps/web/src/features/finance/receivables.tsx"
+      ],
+      "verification": {
+        "status": "not_verified_by_catalog",
+        "criteria": [
+          "interface",
+          "request",
+          "authorization",
+          "domain",
+          "persistence",
+          "effects",
+          "failure",
+          "response"
+        ]
+      }
+    },
+    {
+      "id": "post-api-v1-receivables-id-email",
+      "flow": "finance-document-email",
+      "status": "implemented",
+      "operation": {
+        "method": "POST",
+        "path": "/api/v1/receivables/{id}/email"
+      },
+      "actor": "active_tenant_member",
+      "permissions": [
+        "finance.receivables.read",
+        "finance.receivables.manage"
+      ],
+      "input": {
+        "headers": [
+          "Authorization",
+          "X-Tenant-Id",
+          "If-Match",
+          "Idempotency-Key"
+        ],
+        "pathParameters": [
+          "id"
+        ],
+        "body": {
+          "source": "apps/api/src/domains/finance/email.rs",
+          "type": "FinanceEmailInput"
+        },
+        "query": null
+      },
+      "preconditions": [
+        "Empresa ativa e permissões financeiras do contexto; nenhum acesso comercial exigido.",
+        "Título pertencente à empresa; destinatário sugerido do cadastro preservado ou cliente.",
+        "If-Match e snapshotHash conferidos contra o snapshot atual, título não cancelado, SMTP central disponível e nenhum envio incerto no contexto.",
+        "PDF gerado exclusivamente no servidor; nenhum anexo, HTML ou URL aceito do navegador."
+      ],
+      "transition": {
+        "from": "Snapshot financeiro e histórico de envios",
+        "to": "Intenção e PDF preservados, resultado sent/failed/uncertain; saldos e recebimentos intactos"
+      },
+      "effects": {
+        "writes": [
+          "Snapshot, PDF, hashes, envelope e comando persistidos antes do SMTP; resultado e auditoria registrados depois."
+        ],
+        "external": [
+          "SMTP central com PDF do snapshot autorizado."
+        ],
+        "excludes": [
+          "Não registra pagamento, altera saldo ou revisão financeira, comprova conciliação ou garante entrega ao destinatário."
+        ]
+      },
+      "concurrency": {
+        "revision": true,
+        "idempotency": true,
+        "rule": "If-Match numérico e hash obrigatório; relatório usa revisão 1 mais hash de todas as fontes. Replay consulta recibo preservado antes de recapturar e nunca reenvia SMTP."
+      },
+      "response": {
+        "successStatuses": [
+          200
+        ],
+        "errorStatuses": [
+          400,
+          401,
+          403,
+          404,
+          409,
+          412,
+          422,
+          428,
+          503
+        ],
+        "action": "Enviar título a receber por e-mail"
+      },
+      "recovery": "412 exige nova conferência; 503 não grava intenção. Resultado incerto usa a mesma chave e mensagem; novo comando fica bloqueado.",
+      "ui": {
+        "pages": [
+          "/financeiro/contas-receber/[id]"
+        ],
+        "bff": {
+          "method": "POST",
+          "path": "/api/erp/receivables/[id]/email"
+        },
+        "gap": null
+      },
+      "sources": [
+        "apps/api/src/domains/finance/email.rs",
+        "apps/api/src/domains/finance/document.rs",
+        "apps/api/src/domains/finance.rs",
+        "migrations/202611150001_finance_document_email.sql",
+        "apps/web/src/app/api/erp/receivables/[id]/email/route.ts",
+        "apps/web/src/features/finance/financial-document-email.tsx",
+        "apps/web/src/features/finance/receivables.tsx"
+      ],
+      "verification": {
+        "status": "not_verified_by_catalog",
+        "criteria": [
+          "interface",
+          "request",
+          "authorization",
+          "domain",
+          "persistence",
+          "effects",
+          "failure",
+          "response"
+        ]
+      }
+    },
+    {
+      "id": "get-api-v1-financial-report-email",
+      "flow": "finance-document-email",
+      "status": "implemented",
+      "operation": {
+        "method": "GET",
+        "path": "/api/v1/financial-report/email"
+      },
+      "actor": "active_tenant_member",
+      "permissions": [
+        "finance.receivables.read",
+        "finance.payables.read"
+      ],
+      "input": {
+        "headers": [
+          "Authorization",
+          "X-Tenant-Id"
+        ],
+        "pathParameters": [],
+        "query": null
+      },
+      "preconditions": [
+        "Empresa ativa e permissões financeiras do contexto; nenhum acesso comercial exigido.",
+        "Captura única MVCC com os primeiros 100 títulos de cada fonte, ordenados por vencimento e ID.",
+        "Consulta disponibilidade SMTP, revisão/hash do documento e até 50 entregas sem escrita."
+      ],
+      "transition": {
+        "from": "Snapshot financeiro e histórico de envios",
+        "to": "Disponibilidade e histórico consultados sem mutação"
+      },
+      "effects": {
+        "writes": [],
+        "external": [],
+        "excludes": [
+          "Não registra pagamento, altera saldo ou revisão financeira, comprova conciliação ou garante entrega ao destinatário."
+        ]
+      },
+      "concurrency": {
+        "revision": false,
+        "idempotency": false,
+        "rule": "GET devolve ETag e hash, sem exigir comando ou revisão de entrada."
+      },
+      "response": {
+        "successStatuses": [
+          200
+        ],
+        "errorStatuses": [
+          401,
+          403,
+          404,
+          503
+        ],
+        "action": "Conferir envio de relatório financeiro por e-mail"
+      },
+      "recovery": "Conferir empresa, permissões e configuração central antes de repetir.",
+      "ui": {
+        "pages": [
+          "/relatorios/financeiro"
+        ],
+        "bff": {
+          "method": "GET",
+          "path": "/api/erp/financial-report/email"
+        },
+        "gap": null
+      },
+      "sources": [
+        "apps/api/src/domains/finance/email.rs",
+        "apps/api/src/domains/finance/document.rs",
+        "apps/api/src/domains/finance.rs",
+        "migrations/202611150001_finance_document_email.sql",
+        "apps/web/src/app/api/erp/financial-report/email/route.ts",
+        "apps/web/src/features/finance/financial-document-email.tsx",
+        "apps/web/src/features/reports/finance-report-live.tsx"
+      ],
+      "verification": {
+        "status": "not_verified_by_catalog",
+        "criteria": [
+          "interface",
+          "request",
+          "authorization",
+          "domain",
+          "persistence",
+          "effects",
+          "failure",
+          "response"
+        ]
+      }
+    },
+    {
+      "id": "post-api-v1-financial-report-email",
+      "flow": "finance-document-email",
+      "status": "implemented",
+      "operation": {
+        "method": "POST",
+        "path": "/api/v1/financial-report/email"
+      },
+      "actor": "active_tenant_member",
+      "permissions": [
+        "finance.receivables.read",
+        "finance.receivables.manage",
+        "finance.payables.read",
+        "finance.payables.manage"
+      ],
+      "input": {
+        "headers": [
+          "Authorization",
+          "X-Tenant-Id",
+          "If-Match",
+          "Idempotency-Key"
+        ],
+        "pathParameters": [],
+        "body": {
+          "source": "apps/api/src/domains/finance/email.rs",
+          "type": "FinanceEmailInput"
+        },
+        "query": null
+      },
+      "preconditions": [
+        "Empresa ativa e permissões financeiras do contexto; nenhum acesso comercial exigido.",
+        "Captura única MVCC com os primeiros 100 títulos de cada fonte, ordenados por vencimento e ID.",
+        "If-Match e snapshotHash conferidos contra o snapshot atual, título não cancelado, SMTP central disponível e nenhum envio incerto no contexto.",
+        "PDF gerado exclusivamente no servidor; nenhum anexo, HTML ou URL aceito do navegador."
+      ],
+      "transition": {
+        "from": "Snapshot financeiro e histórico de envios",
+        "to": "Intenção e PDF preservados, resultado sent/failed/uncertain; saldos e recebimentos intactos"
+      },
+      "effects": {
+        "writes": [
+          "Snapshot, PDF, hashes, envelope e comando persistidos antes do SMTP; resultado e auditoria registrados depois."
+        ],
+        "external": [
+          "SMTP central com PDF do snapshot autorizado."
+        ],
+        "excludes": [
+          "Não registra pagamento, altera saldo ou revisão financeira, comprova conciliação ou garante entrega ao destinatário."
+        ]
+      },
+      "concurrency": {
+        "revision": true,
+        "idempotency": true,
+        "rule": "If-Match numérico e hash obrigatório; relatório usa revisão 1 mais hash de todas as fontes. Replay consulta recibo preservado antes de recapturar e nunca reenvia SMTP."
+      },
+      "response": {
+        "successStatuses": [
+          200
+        ],
+        "errorStatuses": [
+          400,
+          401,
+          403,
+          404,
+          409,
+          412,
+          422,
+          428,
+          503
+        ],
+        "action": "Enviar relatório financeiro por e-mail"
+      },
+      "recovery": "412 exige nova conferência; 503 não grava intenção. Resultado incerto usa a mesma chave e mensagem; novo comando fica bloqueado.",
+      "ui": {
+        "pages": [
+          "/relatorios/financeiro"
+        ],
+        "bff": {
+          "method": "POST",
+          "path": "/api/erp/financial-report/email"
+        },
+        "gap": null
+      },
+      "sources": [
+        "apps/api/src/domains/finance/email.rs",
+        "apps/api/src/domains/finance/document.rs",
+        "apps/api/src/domains/finance.rs",
+        "migrations/202611150001_finance_document_email.sql",
+        "apps/web/src/app/api/erp/financial-report/email/route.ts",
+        "apps/web/src/features/finance/financial-document-email.tsx",
+        "apps/web/src/features/reports/finance-report-live.tsx"
+      ],
+      "verification": {
+        "status": "not_verified_by_catalog",
+        "criteria": [
+          "interface",
+          "request",
+          "authorization",
+          "domain",
+          "persistence",
+          "effects",
+          "failure",
+          "response"
+        ]
+      }
     }
   ],
   "actionsAppendix": [

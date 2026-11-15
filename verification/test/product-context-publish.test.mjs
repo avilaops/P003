@@ -30,6 +30,7 @@ async function api(t, options = {}) {
     // Decode across chunks so a split UTF-8 character remains intact.
     request.setEncoding('utf8');
     let body = ''; for await (const chunk of request) body += chunk;
+    if (options.maximumRequestBytes && Buffer.byteLength(body) > options.maximumRequestBytes) return reply(413, { error: 'request too large' });
     assert.deepEqual(JSON.parse(body), { context, confirmPublication: false });
     receipt = { requestId: contextImportRequestId(context.contentSha256, false), contentSha256: context.contentSha256,
       sourceCommit: context.source.commit, sourceDirty: false, revision: 1, importedAt: '2026-10-28T00:00:00.000Z', publication: { state: 'not_observed' }, execution: 'not_observed' };
@@ -45,6 +46,16 @@ test('a confirmed retry reads the same capture without another PUT', async t => 
   const server = await api(t);
   assert.equal((await publishContext(context, server)).reused, false);
   assert.equal((await publishContext(context, server)).reused, true);
+  assert.equal(server.writes(), 1);
+});
+
+test('the complete context crosses a one MiB gateway without changing canonical hashes', async t => {
+  const envelope = { context, confirmPublication: false };
+  assert.ok(Buffer.byteLength(stableJson(envelope)) > 1024 * 1024);
+  assert.ok(Buffer.byteLength(JSON.stringify(envelope)) < 1024 * 1024);
+  const server = await api(t, { maximumRequestBytes: 1024 * 1024 });
+  const result = await publishContext(context, server);
+  assert.equal(result.receipt.contentSha256, context.contentSha256);
   assert.equal(server.writes(), 1);
 });
 test('a lost PUT response is recovered by receipt and complete readback, without resubmitting', async t => {

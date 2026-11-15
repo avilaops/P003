@@ -37,6 +37,8 @@ mod emission_tests;
 #[cfg(test)]
 mod files_tests;
 #[cfg(test)]
+mod finance_email_tests;
+#[cfg(test)]
 mod financial_account_tests;
 #[cfg(test)]
 mod financial_settings_tests;
@@ -516,6 +518,14 @@ pub fn router(state: AppState) -> Router {
             post(financial_account_ledger::transfer),
         )
         .route("/api/v1/receivables/{id}", get(finance::get))
+        .route(
+            "/api/v1/receivables/{id}/email",
+            get(finance::email::get_receivable).post(finance::email::send_receivable),
+        )
+        .route(
+            "/api/v1/financial-report/email",
+            get(finance::email::get_report).post(finance::email::send_report),
+        )
         .route(
             "/api/v1/receivables/{id}/payments",
             axum::routing::post(finance::pay)
