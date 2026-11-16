@@ -35,6 +35,12 @@ FROM tenants tenant WHERE tenant.id=$1 AND tenant.status='active' AND (SELECT al
 UNION ALL
 SELECT tenant_id,permissions FROM membership_access WHERE NOT (SELECT allowed FROM platform_authority)`
 
+export async function reloadTenantPermissions(context: TenantContext) {
+  const row = (await context.client.query<{ tenant_id: string; permissions: string[] }>(authorizedAccessSql, [context.tenantId, context.authSubject])).rows[0]
+  if (!row) throw new Problem(403, "forbidden", "Acesso não autorizado para esta empresa")
+  context.permissions = row.permissions
+}
+
 export async function withTenantTransaction<T>(
   pool: DatabasePool,
   tenantId: string,

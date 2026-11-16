@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto"
 import type { FastifyInstance } from "fastify"
 import type { Pool } from "pg"
 import { commercialFixture } from "./commercial-fixture.js"
+import { verifyCommercialTables } from "./commercial-table-cases.js"
 
 export async function verifyCommercialMixed(app: FastifyInstance, seed: Pool, tenant: string, role: string) {
   const { parameters } = commercialFixture(), items = []
@@ -52,6 +53,7 @@ export async function verifyCommercialMixed(app: FastifyInstance, seed: Pool, te
   const quote = await app.inject({ method: "GET", url: `/api/v1/commercial/orders/${order}`, headers })
   assert.equal(quote.json().data.kind, "mixed")
   assert.equal(quote.json().director.policyGroups.length, 2)
+  await verifyCommercialTables(app, seed, tenant)
   await seed.query("UPDATE product_costs SET revision=2 WHERE tenant_id=$1 AND product_id=$2", [tenant, items[0]!.productId])
   const stale = await app.inject({ method: "POST", url: "/api/v1/commercial/mixed/simulate", headers, payload: input })
   assert.equal(stale.statusCode, 409, stale.body)

@@ -6,6 +6,7 @@ import { registerReportRoutes } from "./modules/reports/routes.js"
 import { registerCommercialApprovalRoutes } from "./modules/commercial/approvals.js"
 import { registerCommercialSimulation } from "./modules/commercial/simulation.js"
 import { registerCommercialConversion } from "./modules/commercial/conversion.js"
+import { registerCommercialTables } from "./modules/commercial/tables.js"
 import { registerOrderRoutes } from "./modules/orders/routes.js"
 import { registerPreferenceRoutes } from "./modules/preferences/routes.js"
 import { registerProductRoutes } from "./modules/products/routes.js"
@@ -54,6 +55,7 @@ export function buildApp(_dependencies: AppDependencies): FastifyInstance {
   registerCommercialApprovalRoutes(app, _dependencies)
   registerCommercialSimulation(app, _dependencies)
   registerCommercialConversion(app, _dependencies)
+  registerCommercialTables(app, _dependencies)
   registerOrderRoutes(app, _dependencies)
   registerPreferenceRoutes(app, _dependencies)
   registerProductRoutes(app, _dependencies)
