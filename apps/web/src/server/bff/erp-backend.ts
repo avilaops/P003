@@ -13,6 +13,8 @@ const routes: { module: MigratedModule; methods: readonly string[]; path: RegExp
   { module: "sales", methods: ["GET", "POST"], path: /^\/(?:orders|proposals|opportunities)$/ },
   { module: "sales", methods: ["GET", "PUT"], path: new RegExp(`^/(?:orders|proposals|opportunities)/${uuid}$`, "i") },
   { module: "sales", methods: ["POST"], path: new RegExp(`^/orders/${uuid}/(?:accept|confirm|cancel|complete)$`, "i") },
+  { module: "sales", methods: ["GET"], path: new RegExp(`^/orders/${uuid}/pricing$`, "i") },
+  { module: "sales", methods: ["POST"], path: new RegExp(`^/orders/${uuid}/pricing/approve$`, "i") },
   { module: "sales", methods: ["POST"], path: new RegExp(`^/proposals/${uuid}/(?:send|accept|reject|cancel|revise|convert|approve-order)$`, "i") },
   { module: "sales", methods: ["GET", "PUT"], path: /^\/commercial\/approval-settings$/ },
   { module: "sales", methods: ["GET"], path: new RegExp(`^/commercial/orders/${uuid}$`, "i") },

@@ -15,6 +15,10 @@ test("explicit migrated methods select TypeScript and rollback can target one mo
   assert.equal(selectErpBackend("PUT", "/preferences", rust, {}).origin, rust);
 });
 
+test("saved legacy pricing and its approval use the migrated sales backend", () => {
+  for (const [method, resource] of [["GET", `/orders/${id}/pricing`], ["POST", `/orders/${id}/pricing/approve`]]) assert.equal(selectErpBackend(method, resource, rust, environment).origin, typescript);
+});
+
 test("unmigrated routes and unsupported methods stay on their explicit Rust origin", () => {
   for (const [method, resource] of [["GET", `/orders/${id}/document`], ["POST", `/orders/${id}/email`], ["GET", `/proposals/${id}/email`], ["POST", "/fiscal/nfe"], ["GET", "/receivables"], ["GET", `/products/${id}/catalog`], ["GET", "/products/export"], ["POST", "/preferences"], ["DELETE", `/products/${id}`], ["GET", `/system/custom-reports/${id}`], ["GET", "/commercial/tables/unknown"], ["POST", `/orders/${id}/cancel-completed`]]) {
     assert.equal(selectErpBackend(method, resource, rust, environment).origin, rust, resource);

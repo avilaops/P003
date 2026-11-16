@@ -17,6 +17,7 @@ import { verifyCommercialSimulation } from "./commercial-simulation-cases.js"
 import { verifyCommercialMixed } from "./commercial-mixed-cases.js"
 import { verifyOpportunities } from "./opportunity-cases.js"
 import { verifyCommercialMetrics } from "./commercial-metric-cases.js"
+import { verifyLegacyPricing } from "./legacy-pricing-cases.js"
 import { startRustContractBackend } from "./rust-contract-backend.js"
 
 // Opt in with a disposable PostgreSQL administrator URL. The generated database
@@ -376,6 +377,7 @@ for (const backend of backends) test(`${backend}: PostgreSQL migrations and RLS 
     await verifyProposalCommands(app, seed, other, role)
     await verifyReports(app, seed, role)
     await verifyCommercialApprovals(app, seed, other, role)
+    await verifyLegacyPricing(app, seed, other, role)
     await verifyCommercialSimulation(app, seed, other, role)
     await verifyCommercialMixed(app, seed, other, role)
     await verifyOpportunities(app, seed, other, role)

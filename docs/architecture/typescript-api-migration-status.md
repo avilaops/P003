@@ -135,7 +135,7 @@ Testes unitários e PostgreSQL cobrem essas fronteiras. A revisão geral de prec
 
 Os testes reproduzem os valores dos cenários Rust, incluindo R$ 12.563,23 líquidos, R$ 1.633,22 de IPI e R$ 14.196,45 totais; preço com múltiplos produtos/quantidades, limite de total que não pode ser ultrapassado, prejuízo, entrada explícita zero e configurações inviáveis. PostgreSQL verifica a versão publicada, fontes válidas, margem oculta, estabilidade do digest, alteração da revisão de aprovação e fontes desatualizadas. O digest usa SHA-256 de JSON com chaves ordenadas, preservando a representação de inteiros e a estrutura usada por `serde_json::Value`.
 
-O endpoint de simulação não cria pedidos. A conversão separada está descrita a seguir; a tabela comercial de consulta ainda está pendente.
+O endpoint de simulação não cria pedidos. A conversão e a tabela comercial de consulta estão descritas nas próximas seções.
 
 ## Conversão da simulação e condições negociadas
 
@@ -206,3 +206,11 @@ Os dois projetos passaram. Conferem a tela de Vendas com o backend esperado, con
 O dispatcher do layout JSON prepara o serviço privado quando a configuração web já habilita módulos, sem alterar essa decisão do operador. Seleciona somente banco/Auth, força loopback e fixa a imagem no mesmo digest web. Módulos inválidos são recusados antes de regravar a configuração. O layout YAML oferece o perfil opcional `typescript` e um arquivo privado próprio, preservado nas releases seguintes. Os detalhes de ativação/retorno estão em `deploy/CI-CD.md`.
 
 O transformador JSON passou nos testes de ativação, desativação e separação de segredos. O parser real do Compose validou o YAML com configuração sintética, sem iniciar containers. Sete simulações completas do dispatcher dependem de Linux e foram ignoradas no Windows; a tentativa de usar WSL encontrou o serviço de virtualização indisponível. Essas simulações continuam obrigatórias no CI Linux. Não houve alteração do dispatcher instalado ou da configuração de produção.
+
+## Pedidos antigos • simulação preservada
+
+A revisão das chamadas em `order-detail-commercial.tsx` identificou `GET /api/v1/orders/{id}/pricing` e `POST /api/v1/orders/{id}/pricing/approve`, usados pelos pedidos antigos. Ambos foram portados e adicionados à seleção de Vendas no BFF.
+
+A consulta devolve o snapshot original sem recalcular a negociação. Margens privadas exigem simultaneamente gestão da empresa e alçada de diretor. Gestão da empresa permite aprovar uma exceção pendente sem conceder edição geral de pedidos; não concede, sozinha, acesso às margens. A aprovação conserva motivo normalizado, revisão, replay, auditoria/outbox e a transação original.
+
+A mesma matriz passou em Rust e TypeScript para consulta pública/privada, snapshot ausente, pedido inexistente, permissões, motivo inválido, concorrência idempotente, revisão antiga, falta de pendência, revogação antes do replay e rollback quando falha o outbox.
