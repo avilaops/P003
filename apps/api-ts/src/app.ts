@@ -1,6 +1,8 @@
 import Fastify, { type FastifyInstance } from "fastify"
 
 import { registerPartyRoutes } from "./modules/parties/routes.js"
+import { registerDashboardRoutes } from "./modules/dashboard/routes.js"
+import { registerReportRoutes } from "./modules/reports/routes.js"
 import { registerOrderRoutes } from "./modules/orders/routes.js"
 import { registerPreferenceRoutes } from "./modules/preferences/routes.js"
 import { registerProductRoutes } from "./modules/products/routes.js"
@@ -9,12 +11,22 @@ import { registerReferenceRoutes } from "./modules/reference-data/routes.js"
 import { registerRegistrationSettingsRoutes } from "./modules/registration-settings/routes.js"
 import { authenticateRequest, type AccessDependencies } from "./platform/access.js"
 import { Problem } from "./platform/problem.js"
-import { stringifyJson } from "./platform/json.js"
+import { parseJson, stringifyJson } from "./platform/json.js"
 
 export type AppDependencies = AccessDependencies
 
 export function buildApp(_dependencies: AppDependencies): FastifyInstance {
   const app = Fastify({ logger: false, bodyLimit: 65_536 })
+  const validateJson = app.getDefaultJsonParser("error", "error")
+  app.removeContentTypeParser("application/json")
+  app.addContentTypeParser("application/json", { parseAs: "string" }, (request, body, done) => {
+    // Retain Fastify's JSON/prototype validation, then read exact integer tokens.
+    validateJson(request, String(body), error => {
+      if (error) return done(error)
+      try { done(null, parseJson(String(body))) }
+      catch { done(new Problem(422, "invalid_input", "JSON inválido ou campos desconhecidos")) }
+    })
+  })
   app.setReplySerializer(stringifyJson)
   app.addHook("onRequest", async request => {
     if (request.routeOptions.url?.startsWith("/api/v1/")) await authenticateRequest(request, _dependencies)
@@ -34,6 +46,8 @@ export function buildApp(_dependencies: AppDependencies): FastifyInstance {
       .send(problem.toJSON())
   })
   registerPartyRoutes(app, _dependencies)
+  registerDashboardRoutes(app, _dependencies)
+  registerReportRoutes(app, _dependencies)
   registerOrderRoutes(app, _dependencies)
   registerPreferenceRoutes(app, _dependencies)
   registerProductRoutes(app, _dependencies)

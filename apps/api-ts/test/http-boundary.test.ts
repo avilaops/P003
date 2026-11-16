@@ -13,9 +13,14 @@ test("API authentication precedes body parsing and valid requests authenticate o
   assert.equal(malformed.headers["content-type"], "application/problem+json; charset=utf-8")
   assert.equal(calls, 1)
   assert.equal(connections, 0)
+  for (const payload of ['{"__proto__":{}}', '{"constructor":{"prototype":{}}}', '{"productPageSize":1e400}']) {
+    const invalid = await app.inject({ method: "PUT", url: "/api/v1/preferences", headers: { authorization: "Bearer valid", "content-type": "application/json", "if-match": '"1"' }, payload })
+    assert.equal(invalid.statusCode, 422, invalid.body)
+  }
+  assert.equal(connections, 0)
   const noTenant = await app.inject({ method: "GET", url: "/api/v1/preferences", headers: { authorization: "Bearer valid" } })
   assert.equal(noTenant.statusCode, 400, noTenant.body)
-  assert.equal(calls, 2, "Pre-authenticated requests must not repeat userinfo lookup in the handler")
+  assert.equal(calls, 5, "Pre-authenticated requests must not repeat userinfo lookup in the handler")
   assert.equal((await app.inject({ method: "GET", url: "/health/live" })).statusCode, 200)
   await app.close()
 })

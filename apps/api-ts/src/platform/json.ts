@@ -12,7 +12,16 @@ export function stringifyJson(value: unknown): string {
 }
 
 export function parseJson(value: string): any {
-  return exactJson.parse(value, (_key, item, context) => typeof item === "number" && Number.isInteger(item) && !Number.isSafeInteger(item) && context.source && /^-?\d+$/.test(context.source) ? BigInt(context.source) : item)
+  return exactJson.parse(value, (_key, item, context) => {
+    if (typeof item !== "number") return item
+    if (!Number.isFinite(item)) throw new SyntaxError("JSON number out of range")
+    if (Number.isInteger(item) && !Number.isSafeInteger(item) && context.source && /^-?\d+$/.test(context.source)) {
+      const exact = BigInt(context.source)
+      // serde_json retains signed i64 and unsigned u64; larger numbers use f64.
+      return exact >= -9223372036854775808n && exact <= 18446744073709551615n ? exact : item
+    }
+    return item
+  })
 }
 
 // PostgreSQL JSONB reorders object keys. Compare JSON values, not insertion order;

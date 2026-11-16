@@ -21,4 +21,7 @@ test("JSON and replay preserve integer tokens beyond the JS safe range", () => {
   assert.equal(stringifyJson(parseJson(raw)), raw)
   assert.equal(sameJson(parseJson(raw), { input: { name: "Registro" }, revision: 9007199254740993n }), true)
   assert.equal(sameJson(parseJson(raw), { input: { name: "Registro" }, revision: 9007199254740992n }), false)
+  assert.equal(parseJson("18446744073709551615"), 18446744073709551615n)
+  assert.equal(typeof parseJson("18446744073709551616"), "number")
+  assert.throws(() => parseJson("1e400"), SyntaxError)
 })
