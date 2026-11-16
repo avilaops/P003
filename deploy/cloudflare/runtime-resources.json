@@ -15,7 +15,8 @@
       "ERP_AUTH_VERIFIED": "false",
       "POSTGRES_ALLOWED_HOST": "",
       "DATABASE_MAX_CONNECTIONS": "5",
-      "ERP_BACKGROUND_WORKERS_ENABLED": "false"
+      "ERP_BACKGROUND_WORKERS_ENABLED": "false",
+      "ERP_TYPESCRIPT_MODULES": ""
     },
     "observability": {
       "enabled": true,
@@ -38,6 +39,7 @@
     "inactivity_timeout_ms": 120000,
     "public_port": 3000,
     "private_api_port": 8080,
+    "private_typescript_api_port": 8081,
     "dockerfile": "runtime.Dockerfile"
   },
   "required_secret_names": [

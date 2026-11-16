@@ -9,7 +9,7 @@ const session = uri(`export const currentSession=async()=>({tenantId:"${tenant}"
 const source = readFileSync(new URL("../src/server/bff/erp-proxy.ts", import.meta.url), "utf8")
   .replace('import "server-only"', "")
   .replace('"@/server/auth/erp-session"', JSON.stringify(session))
-  .replace('"@/server/bff/erp-backend"', JSON.stringify(new URL("../src/server/bff/erp-backend.ts", import.meta.url).href))
+  .replace('"@/server/bff/erp-backend"', JSON.stringify(new URL("./helpers/erp-backend-module.mjs", import.meta.url).href))
   .replace('"@/lib/api/local-fiscal-origin"', JSON.stringify(new URL("../src/lib/api/local-fiscal-origin.ts", import.meta.url).href));
 const { forwardErp } = await import(uri(ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } }).outputText));
 

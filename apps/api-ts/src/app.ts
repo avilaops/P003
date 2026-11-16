@@ -38,6 +38,14 @@ export function buildApp(_dependencies: AppDependencies): FastifyInstance {
     if (request.routeOptions.url?.startsWith("/api/v1/")) await authenticateRequest(request, _dependencies)
   })
   app.get("/health/live", async () => ({ status: "ok" }))
+  app.get("/health/ready", async (_request, reply) => {
+    const client = await _dependencies.pool.connect().catch(() => undefined)
+    reply.header("cache-control", "no-store")
+    if (!client) return reply.code(503).send({ status: "unavailable" })
+    try { await client.query("SELECT 1"); return { status: "ready" } }
+    catch { return reply.code(503).send({ status: "unavailable" }) }
+    finally { client.release() }
+  })
   app.setErrorHandler((error, request, reply) => {
     const databaseCode = typeof error === "object" && error !== null && "code" in error ? String(error.code) : ""
     const problem = error instanceof Problem ? error

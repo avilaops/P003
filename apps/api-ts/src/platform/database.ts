@@ -91,7 +91,7 @@ export class PgClientAdapter implements DatabaseClient {
 export class PostgresPool implements DatabasePool {
   private readonly pool: Pool
   constructor(databaseUrl: string, maximumConnections: number) {
-    this.pool = new Pool({ connectionString: databaseUrl, max: maximumConnections })
+    this.pool = new Pool({ connectionString: databaseUrl, max: maximumConnections, connectionTimeoutMillis: 5000 })
   }
   async connect(): Promise<DatabaseClient> {
     return new PgClientAdapter(await this.pool.connect())

@@ -17,6 +17,15 @@ const API_KEYS = [
 const WEB_KEYS = ['AUTH_ISSUER', 'ERP_WEB_ORIGIN', 'ERP_AUTH_CLIENT_ID',
   'ERP_AUTH_CLIENT_SECRET', 'ERP_SESSION_SECRET', 'ERP_DEFAULT_TENANT_ID', 'ERP_FISCAL_API_URL'];
 const SYSTEM_KEYS = ['PATH', 'HOME', 'LANG', 'LC_ALL', 'TZ', 'SSL_CERT_FILE', 'SSL_CERT_DIR'];
+const TYPESCRIPT_KEYS = ['DATABASE_URL', 'DATABASE_MAX_CONNECTIONS', 'AUTH_ISSUER', 'AUTH_USERINFO_URL'];
+
+function typescriptModules(env) {
+  const raw = (env.ERP_TYPESCRIPT_MODULES || '').trim();
+  const modules = raw ? raw.split(',').map(value => value.trim()) : [];
+  if (modules.some(value => !['preferences', 'registrations', 'sales', 'reports'].includes(value))
+    || new Set(modules).size !== modules.length) throw Error('Invalid TypeScript modules');
+  return modules.join(',');
+}
 
 function select(env, keys) {
   return Object.fromEntries(keys.filter(key => typeof env[key] === 'string' && env[key] !== '')
@@ -25,13 +34,18 @@ function select(env, keys) {
 
 export function childEnvironments(env) {
   const common = select(env, SYSTEM_KEYS);
+  const modules = typescriptModules(env);
   return {
     api: { ...common, ...select(env, API_KEYS), API_BIND_ADDRESS: '127.0.0.1:8080',
       DATABASE_MAX_CONNECTIONS: env.DATABASE_MAX_CONNECTIONS || '5',
       ERP_BACKGROUND_WORKERS_ENABLED: env.ERP_BACKGROUND_WORKERS_ENABLED || 'false' },
+    ...(modules ? { apiTs: { ...common, ...select(env, TYPESCRIPT_KEYS), NODE_ENV: 'production',
+      API_TS_HOST: '127.0.0.1', API_TS_PORT: '8081',
+      DATABASE_MAX_CONNECTIONS: env.DATABASE_MAX_CONNECTIONS || '5' } } : {}),
     web: { ...common, ...select(env, WEB_KEYS), NODE_ENV: 'production',
       NEXT_TELEMETRY_DISABLED: '1', HOSTNAME: '0.0.0.0', PORT: '3000',
-      ERP_API_URL: 'http://127.0.0.1:8080' },
+      ERP_API_URL: 'http://127.0.0.1:8080', ERP_TYPESCRIPT_MODULES: modules,
+      ...(modules ? { ERP_TYPESCRIPT_API_URL: 'http://127.0.0.1:8081' } : {}) },
   };
 }
 
@@ -72,7 +86,7 @@ export function runtimeConfiguration(env) {
       || !['true', 'false'].includes(env.ERP_BACKGROUND_WORKERS_ENABLED || 'false')) return null;
     const processes = childEnvironments(env);
     return { sourceSha: env.ERP_SOURCE_SHA, processes,
-      containerEnvironment: { ...processes.api, ...processes.web } };
+      containerEnvironment: { ...processes.api, ...processes.apiTs, ...processes.web } };
   } catch {
     return null;
   }

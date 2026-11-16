@@ -11,11 +11,11 @@ O objetivo continua sendo migrar Preferências, Cadastros, Vendas e Relatórios 
 | Fundação | Auth, empresa, permissões e transação com contexto RLS; escritas bloqueiam empresa antes de carregar permissões; administrador explícito por auth_subject | Testes de plataforma; role real sem bypass de RLS; revogação de permissão durante espera; administrador sem vínculo e revogação da concessão | Revisão final com os demais contratos |
 | Preferências | GET e PUT com revisão i64 exata e verificação de titular antes da revisão | Testes HTTP e PostgreSQL: gravações sucessivas/concorrentes, owner key, auditoria, isolamento e limites i64 | Revisão final dos demais erros HTTP e dados persistidos |
 | Cadastros | Listas, detalhes e comandos de parties, products e referências; configurações cadastrais; schemas e regras de clientes/produtos portados; envelopes/eventos/vínculos dos catálogos alinhados | Testes HTTP; escritas reais e concorrência; clientes com complementos/documento vinculado; produtos com foto, opcionais, legado, configurações e estoque; hierarquia dos catálogos | Revisão final dos contratos e integração geral de Cadastros |
-| Vendas | Pedidos/propostas; aprovações; tabelas; simulação/conversão simples/mista; checkout; funil e métricas comerciais | Testes HTTP e PostgreSQL com migrations/RLS; cenários Rust, fontes/rateio, concorrência, snapshots/permissões, vínculo do funil, métricas e rollback | Conferir rotas legadas usadas pelas telas e executar a matriz HTTP equivalente Rust/TypeScript e revisão final |
+| Vendas | Pedidos/propostas; aprovações; tabelas; simulação/conversão simples/mista; checkout; funil e métricas comerciais | Mesma matriz HTTP executada em Rust e TypeScript com migrations/RLS, concorrência, snapshots/permissões e rollback | Conferir rotas legadas usadas pelas telas e revisão final |
 | Relatórios | Painel operacional e lista/criação/alteração de definições de relatórios personalizados | PostgreSQL/RLS com períodos, indicadores financeiros, permissões, visibilidade, fontes/colunas/filtros, revisões concorrentes e rollback | Revisão final de contratos e integração BFF/runtime |
-| BFF e runtime | Pendente | Pendente | Seleção explícita por rota, ausência de retry de comandos, runtime e rollback |
+| BFF e runtime | Seleção por módulo e método/recurso; pacote de produção; processo privado opcional e saúde das duas APIs | 178 testes de modelo web, 98 testes de edge/runtime, tipos web/API, pacote isolado e build web | Navegador integrado, deploy Compose, ativação e retorno em ambiente real |
 
-Os registros anteriores que chamaram Cadastros de concluído se basearam em testes limitados e não provam paridade completa. Esta matriz substitui essa classificação. Nenhuma rota foi liberada no BFF.
+Os registros anteriores que chamaram Cadastros de concluído se basearam em testes limitados e não provam paridade completa. Esta matriz substitui essa classificação. As rotas elegíveis estão configuráveis no BFF; a ativação de produção permanece desabilitada.
 
 ## Teste integrado de Vendas
 
@@ -183,4 +183,14 @@ O proxy do navegador seleciona o backend antes do envio, usando uma lista explí
 
 O proxy conserva sessão, empresa, corpo sem reserializar números, `If-Match`, `Idempotency-Key`, ETag e identificação da resposta. Cada operação faz uma única chamada. Perda de resposta ou erro do backend não provoca nova tentativa em Rust. Para retornar um módulo, remova seu nome da configuração e reinicie/reimplante o BFF. As duas implementações compartilham PostgreSQL, revisões e comandos salvos.
 
-Testes de seleção e do proxy real verificam as quatro famílias, rollback de Vendas, cabeçalhos/JSON, conflito, falha após envio, configuração ausente e permanência de rotas não migradas em Rust. A regressão dos proxies existentes também passou. A ativação de produção continua pendente da preparação do processo TypeScript no runtime.
+Testes de seleção e do proxy real verificam as quatro famílias, rollback de Vendas, cabeçalhos/JSON, conflito, falha após envio, configuração ausente e permanência de rotas não migradas em Rust. A regressão dos proxies existentes também passou. O processo TypeScript foi preparado no runtime conforme descrito a seguir; a ativação de produção continua pendente.
+
+## Runtime privado e empacotamento
+
+O build de produção compila somente o código da API para `dist/server.js` e produz um pacote com dependências de execução, incluído na imagem web existente da mesma release. Não acrescenta um novo registro de imagem ao manifesto. Um teste inicia o pacote isolado, sem `tsx`, com configuração sintética e banco indisponível; a API responde liveness 200 e readiness 503.
+
+O runtime Cloudflare inicia TypeScript em loopback8081 somente quando houver módulos habilitados. Passa somente banco/Auth; mantém segredos de sessão, SMTP e Fiscal fora desse processo. O supervisor aguarda readiness real de Rust e TypeScript antes de iniciar a interface e encerra os demais processos quando um falha. A saúde pública exige todas as APIs habilitadas. As configurações do inventário continuam desativadas por padrão.
+
+O produtor web empacota o artefato validado e o produtor API executa a matriz compartilhada durante a validação completa. Testes locais verificaram isolamento das variáveis, espera por prontidão, falha/encerramento dos processos e saúde pública. A integração no deploy Compose existente, a validação por navegador e a ativação real continuam pendentes.
+
+O build web passou após gerar o OpenAPI do checkout e os tipos de rotas Next. Na primeira execução, após compilação/tipos/prerenderização, o Next interrompeu o comando com um alerta de segurança da versão instalada. A repetição concluiu com código zero. Nenhuma atualização de dependência foi realizada nesta etapa; a recomendação de atualização de segurança precisa continuar registrada separadamente.

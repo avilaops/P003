@@ -15,7 +15,7 @@ async function proxyFor(tenantId) {
   const fiscalSource = readFileSync(new URL("../src/lib/api/local-fiscal-origin.ts", import.meta.url), "utf8");
   const fiscalModule = "data:text/javascript;base64," + Buffer.from(ts.transpileModule(fiscalSource, { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } }).outputText).toString("base64");
   const source = readFileSync(new URL("../src/server/bff/erp-proxy.ts", import.meta.url), "utf8")
-    .replace('import "server-only"', "").replace('"@/server/bff/erp-backend"', JSON.stringify(new URL("../src/server/bff/erp-backend.ts", import.meta.url).href))
+    .replace('import "server-only"', "").replace('"@/server/bff/erp-backend"', JSON.stringify(new URL("./helpers/erp-backend-module.mjs", import.meta.url).href))
     .replace('"@/lib/api/local-fiscal-origin"', JSON.stringify(fiscalModule))
     .replace('"@/server/auth/erp-session"', JSON.stringify(sessionModule));
   const compiled = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } }).outputText;

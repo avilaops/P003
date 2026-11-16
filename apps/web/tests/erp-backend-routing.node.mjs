@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { selectErpBackend } from "../src/server/bff/erp-backend.ts";
+import { selectErpBackend } from "./helpers/erp-backend-module.mjs";
 
 const rust = "http://127.0.0.1:8080", typescript = "http://127.0.0.1:8081";
 const environment = { ERP_TYPESCRIPT_API_URL: typescript, ERP_TYPESCRIPT_MODULES: "preferences,registrations,sales,reports" };

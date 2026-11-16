@@ -55,10 +55,10 @@
 - Produces: `withTenantTransaction(context, callback)`
 - Produces: identidade autenticada e conjunto de permissões por requisição
 
-- [ ] Escrever testes falhos para autenticação, empresa, permissão, rollback e limpeza do contexto RLS.
-- [ ] Implementar a fundação mínima e `/health/live`.
-- [ ] Executar `pnpm --filter api-ts test` e confirmar PASS.
-- [ ] Commit `feat(api-ts): add tenant-safe TypeScript foundation`.
+- [x] Escrever testes falhos para autenticação, empresa, permissão, rollback e limpeza do contexto RLS.
+- [x] Implementar a fundação mínima e `/health/live`.
+- [x] Executar `pnpm --filter api-ts test` e confirmar PASS.
+- [x] Commit `feat(api-ts): add tenant-safe TypeScript foundation`.
 
 ### Task 2: Preferências
 
@@ -72,10 +72,10 @@
 - Produces: `GET /api/v1/preferences`
 - Produces: `PUT /api/v1/preferences`
 
-- [ ] Escrever testes de contrato falhos para defaults, owner key, validação, ETag, 409, 412 e auditoria.
-- [ ] Implementar leitura e escrita compatíveis com Rust.
-- [ ] Executar testes TypeScript e contratos de Preferências.
-- [ ] Commit `feat(api-ts): migrate preferences`.
+- [x] Escrever testes de contrato falhos para defaults, owner key, validação, ETag, 409, 412 e auditoria.
+- [x] Implementar leitura e escrita compatíveis com Rust.
+- [x] Executar testes TypeScript e contratos de Preferências.
+- [x] Commit `feat(api-ts): migrate preferences`.
 
 ### Task 3: Cadastros
 
@@ -88,10 +88,10 @@
 **Interfaces:**
 - Produces: contratos de `parties`, `products`, categorias, grupos, etiquetas e configurações cadastrais usadas pelas telas.
 
-- [ ] Escrever matriz de contrato falha para lista, detalhe, criação, atualização, filtros, paginação e isolamento.
-- [ ] Migrar queries e comandos sem alterar JSON ou códigos HTTP.
-- [ ] Executar testes TypeScript e contratos de Cadastros.
-- [ ] Commit `feat(api-ts): migrate registrations`.
+- [x] Escrever matriz de contrato falha para lista, detalhe, criação, atualização, filtros, paginação e isolamento.
+- [x] Migrar queries e comandos sem alterar JSON ou códigos HTTP.
+- [x] Executar testes TypeScript e contratos de Cadastros.
+- [x] Commit `feat(api-ts): migrate registrations`.
 
 ### Task 4: Vendas
 
@@ -104,10 +104,10 @@
 **Interfaces:**
 - Produces: listas, detalhes e comandos de pedidos e propostas usados pelas telas de Vendas.
 
-- [ ] Escrever matriz de contrato falha para contagens, ordenação, CRUD, revisões, idempotência e transições.
-- [ ] Migrar consultas e comandos preservando auditoria e outbox.
-- [ ] Executar testes TypeScript e contratos de Vendas.
-- [ ] Commit `feat(api-ts): migrate sales`.
+- [x] Escrever matriz de contrato falha para contagens, ordenação, CRUD, revisões, idempotência e transições.
+- [x] Migrar consultas e comandos preservando auditoria e outbox.
+- [x] Executar testes TypeScript e contratos de Vendas.
+- [x] Commit `feat(api-ts): migrate sales`.
 
 ### Task 5: Relatórios
 
@@ -120,10 +120,10 @@
 - Produces: `GET /api/v1/dashboard`
 - Produces: CRUD de `/api/v1/system/custom-reports`
 
-- [ ] Escrever testes falhos para períodos, permissões, datasets permitidos, revisão e isolamento.
-- [ ] Migrar painel e relatórios personalizados.
-- [ ] Executar testes TypeScript e contratos de Relatórios.
-- [ ] Commit `feat(api-ts): migrate reports`.
+- [x] Escrever testes falhos para períodos, permissões, datasets permitidos, revisão e isolamento.
+- [x] Migrar painel e relatórios personalizados.
+- [x] Executar testes TypeScript e contratos de Relatórios.
+- [x] Commit `feat(api-ts): migrate reports`.
 
 ### Task 6: Roteamento gradual no BFF
 
@@ -136,10 +136,10 @@
 - Consumes: lista de rotas comprovadamente migradas.
 - Produces: escolha determinística entre `ERP_TYPESCRIPT_API_URL` e `ERP_API_URL`.
 
-- [ ] Escrever testes falhos de seleção, indisponibilidade e ausência de retry.
-- [ ] Implementar roteamento explícito e ativação por variável.
-- [ ] Executar testes web e contratos gerais.
-- [ ] Commit `feat(web): route migrated modules to TypeScript API`.
+- [x] Escrever testes falhos de seleção, indisponibilidade e ausência de retry.
+- [x] Implementar roteamento explícito e ativação por variável.
+- [x] Executar testes web e contratos gerais.
+- [x] Commit `feat(web): route migrated modules to TypeScript API`.
 
 ### Task 7: Runtime e verificação integrada
 
@@ -153,8 +153,18 @@
 **Interfaces:**
 - Produces: processo `api-ts` privado e configuração de rollback para Rust.
 
-- [ ] Escrever testes falhos do supervisor e separação de segredos.
-- [ ] Adicionar API TypeScript ao runtime sem expor PostgreSQL ao web.
-- [ ] Executar `pnpm test:cloudflare`, `pnpm test:verification`, testes TypeScript e build web.
-- [ ] Revisar diff, segurança e documentação.
-- [ ] Commit `chore(runtime): activate gradual TypeScript API migration`.
+- [x] Escrever testes falhos do supervisor e separação de segredos.
+- [x] Adicionar API TypeScript ao runtime sem expor PostgreSQL ao web.
+- [x] Executar `pnpm test:cloudflare`, `pnpm test:verification`, testes TypeScript e build web.
+- [x] Revisar diff, segurança e documentação.
+- [x] Commit `chore(runtime): activate gradual TypeScript API migration`.
+
+## Liberação • trabalho restante
+
+As tarefas acima preparam o código e a verificação local. Não representam ativação de produção.
+
+- [ ] Conferir as chamadas legadas ainda usadas pelas telas do escopo e registrar a cobertura final.
+- [ ] Testar o BFF no Next real pelo navegador com os módulos habilitados e o retorno explícito a Rust.
+- [ ] Integrar o processo privado ao deploy Compose existente, preservando os manifestos e segredos.
+- [ ] Validar a implantação candidata e ativar gradualmente os módulos.
+- [ ] Comprovar retorno por módulo e operação real antes de retirar rotas Rust equivalentes.
