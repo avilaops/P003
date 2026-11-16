@@ -63,6 +63,8 @@ test("reference writes require command and revision headers and preserve optimis
   const created = await app.inject({ method: "POST", url: "/api/v1/product-categories", headers, payload })
   assert.equal(created.statusCode, 201, created.body)
   assert.equal(created.headers.etag, '"1"')
+  assert.equal(created.json().tenantId, tenant)
+  assert.equal(created.json().data.code, "FORCA")
   const updated = await app.inject({ method: "PUT", url: `/api/v1/product-categories/${id}`, headers: { ...headers, "if-match": '"1"' }, payload: { ...payload, name: "Força livre" } })
   assert.equal(updated.statusCode, 200, updated.body)
   assert.equal(updated.headers.etag, '"2"')

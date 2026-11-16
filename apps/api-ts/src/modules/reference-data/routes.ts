@@ -4,30 +4,30 @@ import type { FastifyInstance } from "fastify"
 import { z } from "zod"
 
 import type { AppDependencies } from "../../app.js"
-import { authorizeRequest, requirePermission } from "../../platform/access.js"
+import { authorizeRequest, requirePermission, type AuthorizedContext } from "../../platform/access.js"
 import { Problem } from "../../platform/problem.js"
 import { sameJson } from "../../platform/json.js"
 import { integer, parseListQuery } from "../registrations/query.js"
 
 const definitions = {
-  "product-categories": { table: "product_categories", read: "catalog.categories.read", manage: "catalog.categories.manage", extras: ["parent_id", "sort_order"] },
-  "product-groups": { table: "product_groups", read: "catalog.products.read", manage: "catalog.products.manage", extras: [] },
-  "tag-groups": { table: "tag_groups", read: "catalog.products.read", manage: "catalog.products.manage", extras: [] },
-  tags: { table: "tags", read: "catalog.products.read", manage: "catalog.products.manage", extras: ["group_id"] },
+  "product-categories": { table: "product_categories", event: "product_category", read: "catalog.categories.read", manage: "catalog.categories.manage", extras: ["parent_id", "sort_order"] },
+  "product-groups": { table: "product_groups", event: "product_group", read: "catalog.products.read", manage: "catalog.products.manage", extras: [] },
+  "tag-groups": { table: "tag_groups", event: "tag_group", read: "catalog.products.read", manage: "catalog.products.manage", extras: [] },
+  tags: { table: "tags", event: "tag", read: "catalog.products.read", manage: "catalog.products.manage", extras: ["group_id"] },
 } as const
 
 const baseInput = z.object({
-  code: z.string().trim().min(1).max(80).regex(/^[A-Za-z0-9._/-]+$/).transform(value => value.toUpperCase()),
-  name: z.string().trim().min(1).max(200),
+  code: z.string().trim().min(1).max(40).regex(/^[A-Za-z0-9][A-Za-z0-9._/-]*$/).transform(value => value.toUpperCase()),
+  name: z.string().trim().refine(value => [...value].length > 0 && [...value].length <= 200 && !/\p{Cc}/u.test(value)),
   status: z.enum(["active", "archived"]),
-  notes: z.string().trim().max(2000).nullable(),
+  notes: z.string().trim().refine(value => [...value].length <= 1000 && !/\p{Cc}/u.test(value)).nullable().optional().transform(value => value || null),
 }).strict()
 
 const inputSchemas = {
-  "product-categories": baseInput.extend({ parentId: z.string().uuid().nullable(), sortOrder: z.number().int().min(0).max(1_000_000) }).strict(),
+  "product-categories": baseInput.extend({ parentId: z.string().uuid().nullable().optional().default(null), sortOrder: z.number().int().min(0).max(999_999) }).strict(),
   "product-groups": baseInput,
   "tag-groups": baseInput,
-  tags: baseInput.extend({ groupId: z.string().uuid().nullable() }).strict(),
+  tags: baseInput.extend({ groupId: z.string().uuid().nullable().optional().default(null) }).strict(),
 } as const
 
 function singleHeader(value: string | string[] | undefined) {
@@ -43,9 +43,9 @@ function commandKey(value: string | string[] | undefined) {
 
 function expectedRevision(value: string | string[] | undefined) {
   if (value === undefined) throw new Problem(428, "revision_required", "Recarregue o cadastro antes de salvar")
-  const match = /^"([1-9][0-9]*)"$/.exec(singleHeader(value) ?? "")
+  const match = /^"([0-9]+)"$/.exec(singleHeader(value) ?? "")
   const parsed = match?.[1] ? Number(match[1]) : Number.NaN
-  if (!Number.isSafeInteger(parsed)) throw new Problem(400, "invalid_revision", "Revisão inválida")
+  if (!Number.isSafeInteger(parsed) || parsed <= 0) throw new Problem(400, "invalid_revision", "Revisão inválida")
   return parsed
 }
 
@@ -55,6 +55,34 @@ function output(row: Record<string, unknown>, extras: readonly string[]) {
   if (extras.includes("sort_order")) value.sortOrder = integer(row.sort_order)
   if (extras.includes("group_id")) value.groupId = row.group_id
   return value
+}
+
+function revisionOf(snapshot: Record<string, unknown>) { return String((snapshot.data as Record<string, unknown>).revision) }
+
+async function validateRelations(context: AuthorizedContext, resource: string, id: string, input: Record<string, unknown>) {
+  const { client, tenantId } = context
+  if (resource === "product-categories") {
+    if (input.parentId) {
+      const parent = await client.query("SELECT status FROM product_categories WHERE tenant_id=$1 AND id=$2", [tenantId, input.parentId])
+      if (!parent.rows[0]) throw new Problem(409, "domain_conflict", "Categoria superior não pertence a esta empresa")
+      if (input.status === "active" && parent.rows[0].status !== "active") throw new Problem(409, "domain_conflict", "Categoria ativa exige categoria superior ativa")
+      const cycle = await client.query<{ exists: boolean }>("WITH RECURSIVE ancestors AS (SELECT id,parent_id FROM product_categories WHERE tenant_id=$1 AND id=$2 UNION SELECT p.id,p.parent_id FROM product_categories p JOIN ancestors a ON p.id=a.parent_id WHERE p.tenant_id=$1) SELECT EXISTS(SELECT 1 FROM ancestors WHERE id=$3) AS exists", [tenantId, input.parentId, id])
+      if (cycle.rows[0]?.exists) throw new Problem(409, "domain_conflict", "A categoria superior criaria um ciclo")
+    }
+    if (input.status === "archived") {
+      const children = await client.query<{ exists: boolean }>("SELECT EXISTS(SELECT 1 FROM product_categories WHERE tenant_id=$1 AND parent_id=$2 AND status='active') AS exists", [tenantId, id])
+      if (children.rows[0]?.exists) throw new Problem(409, "domain_conflict", "Arquive ou mova as subcategorias ativas antes da categoria superior")
+    }
+  }
+  if (resource === "tags" && input.groupId) {
+    const group = await client.query("SELECT status FROM tag_groups WHERE tenant_id=$1 AND id=$2", [tenantId, input.groupId])
+    if (!group.rows[0]) throw new Problem(409, "domain_conflict", "Grupo de tags não pertence a esta empresa")
+    if (input.status === "active" && group.rows[0].status !== "active") throw new Problem(409, "domain_conflict", "Tag ativa exige grupo ativo")
+  }
+  if (resource === "tag-groups" && input.status === "archived") {
+    const active = await client.query<{ exists: boolean }>("SELECT EXISTS(SELECT 1 FROM tags WHERE tenant_id=$1 AND group_id=$2 AND status='active') AS exists", [tenantId, id])
+    if (active.rows[0]?.exists) throw new Problem(409, "domain_conflict", "Arquive ou mova as tags ativas antes do grupo")
+  }
 }
 
 export function registerReferenceRoutes(app: FastifyInstance, dependencies: AppDependencies) {
@@ -83,41 +111,45 @@ export function registerReferenceRoutes(app: FastifyInstance, dependencies: AppD
         requirePermission(context, definition.read)
         const row = await load(context.client, context.tenantId, request.params.id)
         if (!row) throw new Problem(404, "not_found", "Registro não encontrado nesta empresa")
-        return output(row, definition.extras)
+        return { tenantId: context.tenantId, canEdit: context.permissions.includes(definition.manage), data: output(row, definition.extras) }
       })
-      return reply.header("cache-control", "no-store").header("etag", `"${String(data.revision)}"`).send(data)
+      return reply.header("cache-control", "no-store").header("etag", `"${revisionOf(data)}"`).send(data)
     })
 
     app.post(`/api/v1/${resource}`, async (request, reply) => {
       const key = commandKey(request.headers["idempotency-key"])
       const parsed = schema.safeParse(request.body)
       if (!parsed.success) throw new Problem(422, "invalid_input", "Cadastro inválido ou campos desconhecidos")
-      const scope = `${resource}.create`
+      const scope = `${definition.event}.created`
+      const commandRequest = { id: null, revision: null, input: parsed.data }
       const data = await authorizeRequest(request, dependencies, async context => {
         requirePermission(context, definition.manage)
         requirePermission(context, definition.read)
         const replay = await context.client.query<{ scope: string; request: unknown; result: Record<string, unknown> }>("SELECT scope,request,result FROM domain_commands WHERE tenant_id=$1 AND auth_subject=$2 AND command_key=$3", [context.tenantId, context.identity.subject, key])
         if (replay.rows[0]) {
-          if (replay.rows[0].scope !== scope || !sameJson(replay.rows[0].request, parsed.data)) throw new Problem(409, "domain_conflict", "Esta chave de idempotência já foi usada com outros dados")
+          if (replay.rows[0].scope !== scope || !sameJson(replay.rows[0].request, commandRequest)) throw new Problem(409, "domain_conflict", "Esta chave de idempotência já foi usada com outros dados")
           return { value: replay.rows[0].result, replayed: true }
         }
         await context.client.query("SELECT id FROM tenants WHERE id=$1 FOR UPDATE", [context.tenantId])
         const recordId = randomUUID()
         const values = parsed.data as Record<string, unknown>
+        await validateRelations(context, resource, recordId, values)
         const extras = definition.extras
-        const columns = ["id", "tenant_id", "code", "name", "status", "notes", ...extras]
+        const columns = ["id", "tenant_id", "code", "name", "status", "notes", "revision", ...extras]
         const extraValues = extras.map(column => values[column === "parent_id" ? "parentId" : column === "sort_order" ? "sortOrder" : "groupId"])
-        const parameters = [recordId, context.tenantId, values.code, values.name, values.status, values.notes, ...extraValues]
+        const parameters = [recordId, context.tenantId, values.code, values.name, values.status, values.notes, 1, ...extraValues]
         await context.client.query(`INSERT INTO ${definition.table}(${columns.join(",")}) VALUES(${parameters.map((_, index) => `$${index + 1}`).join(",")})`, parameters)
         const row = await load(context.client, context.tenantId, recordId)
         if (!row) throw new Problem(500, "persistence_error", "Não foi possível carregar o cadastro criado")
-        const result = output(row, definition.extras)
-        await context.client.query("INSERT INTO audit_log(tenant_id,identity_id,action,entity_type,entity_id,request_id,details) SELECT $1,id,$3,$4,$5,$6,$7 FROM identities WHERE auth_subject=$2", [context.tenantId, context.identity.subject, `${resource}.created`, resource, recordId, singleHeader(request.headers["x-request-id"]) ?? null, { id: recordId }])
-        await context.client.query("INSERT INTO outbox_events(tenant_id,aggregate_type,aggregate_id,event_type,payload) VALUES($1,$2,$3,$4,$5)", [context.tenantId, resource, recordId, `${resource}.created`, { id: recordId }])
-        await context.client.query("INSERT INTO domain_commands(tenant_id,auth_subject,command_key,scope,request,result) VALUES($1,$2,$3,$4,$5,$6)", [context.tenantId, context.identity.subject, key, scope, parsed.data, result])
+        const result = { tenantId: context.tenantId, canEdit: true, data: output(row, definition.extras) }
+        const details = { revision: 1, previousRevision: null, status: parsed.data.status }
+        await context.client.query("INSERT INTO audit_log(tenant_id,identity_id,action,entity_type,entity_id,request_id,details) SELECT $1,id,$3,$4,$5,$6,$7 FROM identities WHERE auth_subject=$2", [context.tenantId, context.identity.subject, scope, definition.table, recordId, singleHeader(request.headers["x-request-id"]) ?? null, details])
+        await context.client.query("INSERT INTO outbox_events(tenant_id,aggregate_type,aggregate_id,event_type,payload) VALUES($1,$2,$3,$4,$5)", [context.tenantId, definition.table, recordId, scope, details])
+        await context.client.query("INSERT INTO domain_commands(tenant_id,auth_subject,command_key,scope,request,result) VALUES($1,$2,$3,$4,$5,$6)", [context.tenantId, context.identity.subject, key, scope, commandRequest, result])
         return { value: result, replayed: false }
       })
-      return reply.code(data.replayed ? 200 : 201).header("cache-control", "no-store").header("etag", `"${String(data.value.revision)}"`).header("idempotency-replayed", String(data.replayed)).send(data.value)
+      if (data.replayed) reply.header("idempotency-replayed", "true")
+      return reply.code(201).header("cache-control", "no-store").header("etag", `"${revisionOf(data.value)}"`).send(data.value)
     })
 
     app.put<{ Params: { id: string } }>(`/api/v1/${resource}/:id`, async (request, reply) => {
@@ -126,12 +158,12 @@ export function registerReferenceRoutes(app: FastifyInstance, dependencies: AppD
       const parsed = schema.safeParse(request.body)
       if (!z.string().uuid().safeParse(request.params.id).success) throw new Problem(404, "not_found", "Registro não encontrado nesta empresa")
       if (!parsed.success) throw new Problem(422, "invalid_input", "Cadastro inválido ou campos desconhecidos")
-      const scope = `${resource}.update`
+      const scope = `${definition.event}.updated`
       const data = await authorizeRequest(request, dependencies, async context => {
         requirePermission(context, definition.manage)
         requirePermission(context, definition.read)
         const replay = await context.client.query<{ scope: string; request: unknown; result: Record<string, unknown> }>("SELECT scope,request,result FROM domain_commands WHERE tenant_id=$1 AND auth_subject=$2 AND command_key=$3", [context.tenantId, context.identity.subject, key])
-        const commandRequest = { id: request.params.id, revision: expected, ...parsed.data }
+        const commandRequest = { id: request.params.id, revision: expected, input: parsed.data }
         if (replay.rows[0]) {
           if (replay.rows[0].scope !== scope || !sameJson(replay.rows[0].request, commandRequest)) throw new Problem(409, "domain_conflict", "Esta chave de idempotência já foi usada com outros dados")
           return { value: replay.rows[0].result, replayed: true }
@@ -141,19 +173,22 @@ export function registerReferenceRoutes(app: FastifyInstance, dependencies: AppD
         if (!current) throw new Problem(404, "not_found", "Registro não encontrado nesta empresa")
         if (integer(current.revision) !== expected) throw new Problem(412, "revision_conflict", "O cadastro foi alterado por outra pessoa")
         const values = parsed.data as Record<string, unknown>
+        await validateRelations(context, resource, request.params.id, values)
         const assignments = ["code", "name", "status", "notes", ...definition.extras]
         const updateValues = assignments.map(column => values[column === "parent_id" ? "parentId" : column === "sort_order" ? "sortOrder" : column === "group_id" ? "groupId" : column])
         const updated = await context.client.query(`UPDATE ${definition.table} SET ${assignments.map((column, index) => `${column}=$${index + 3}`).join(",")},revision=revision+1,updated_at=now() WHERE tenant_id=$1 AND id=$2 AND revision=$${updateValues.length + 3} RETURNING 1 AS affected`, [context.tenantId, request.params.id, ...updateValues, expected])
         if (!updated.rows[0]) throw new Problem(412, "revision_conflict", "O cadastro foi alterado por outra pessoa")
         const row = await load(context.client, context.tenantId, request.params.id)
         if (!row) throw new Problem(404, "not_found", "Registro não encontrado nesta empresa")
-        const result = output(row, definition.extras)
-        await context.client.query("INSERT INTO audit_log(tenant_id,identity_id,action,entity_type,entity_id,request_id,details) SELECT $1,id,$3,$4,$5,$6,$7 FROM identities WHERE auth_subject=$2", [context.tenantId, context.identity.subject, `${resource}.updated`, resource, request.params.id, singleHeader(request.headers["x-request-id"]) ?? null, { id: request.params.id }])
-        await context.client.query("INSERT INTO outbox_events(tenant_id,aggregate_type,aggregate_id,event_type,payload) VALUES($1,$2,$3,$4,$5)", [context.tenantId, resource, request.params.id, `${resource}.updated`, { id: request.params.id }])
+        const result = { tenantId: context.tenantId, canEdit: true, data: output(row, definition.extras) }
+        const details = { revision: expected + 1, previousRevision: expected, status: parsed.data.status }
+        await context.client.query("INSERT INTO audit_log(tenant_id,identity_id,action,entity_type,entity_id,request_id,details) SELECT $1,id,$3,$4,$5,$6,$7 FROM identities WHERE auth_subject=$2", [context.tenantId, context.identity.subject, scope, definition.table, request.params.id, singleHeader(request.headers["x-request-id"]) ?? null, details])
+        await context.client.query("INSERT INTO outbox_events(tenant_id,aggregate_type,aggregate_id,event_type,payload) VALUES($1,$2,$3,$4,$5)", [context.tenantId, definition.table, request.params.id, scope, details])
         await context.client.query("INSERT INTO domain_commands(tenant_id,auth_subject,command_key,scope,request,result) VALUES($1,$2,$3,$4,$5,$6)", [context.tenantId, context.identity.subject, key, scope, commandRequest, result])
         return { value: result, replayed: false }
       })
-      return reply.header("cache-control", "no-store").header("etag", `"${String(data.value.revision)}"`).header("idempotency-replayed", String(data.replayed)).send(data.value)
+      if (data.replayed) reply.header("idempotency-replayed", "true")
+      return reply.header("cache-control", "no-store").header("etag", `"${revisionOf(data.value)}"`).send(data.value)
     })
   }
 }

@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto"
 import { readdir, readFile } from "node:fs/promises"
 import test from "node:test"
 import { Pool } from "pg"
+import type { LightMyRequestResponse } from "fastify"
 
 import { buildApp } from "../src/app.js"
 import type { DatabasePool } from "../src/platform/database.js"
@@ -143,6 +144,69 @@ test("PostgreSQL migrations and RLS support sales detail queries and tenant isol
     assert.equal(untouchedSettings.statusCode, 200, untouchedSettings.body)
     assert.equal(untouchedSettings.headers.etag, '"1"')
     assert.deepEqual(untouchedSettings.json().data, { requireEmail: false, requirePhone: false })
+    const refs = new Map<string, string>()
+    await seed.query(`GRANT INSERT ON outbox_events TO ${role}`)
+    for (const [resource, input] of [
+      ["product-categories", { code: "FORCA", name: "Força", status: "active", notes: null, parentId: null, sortOrder: 1 }],
+      ["product-groups", { code: "GRUPO", name: "Grupo", status: "active", notes: null }],
+      ["tag-groups", { code: "CORES", name: "Cores", status: "active", notes: null }],
+      ["tags", { code: "PRETO", name: "Preto", status: "active", notes: null, groupId: null }],
+    ] as const) {
+      const commandKey = randomUUID()
+      const created: LightMyRequestResponse = await app.inject({ method: "POST", url: `/api/v1/${resource}`, headers: { ...operatorHeaders, "idempotency-key": commandKey }, payload: input })
+      assert.equal(created.statusCode, 201, created.body)
+      assert.equal(created.json().tenantId, other)
+      assert.equal(created.json().canEdit, true)
+      const referenceId = created.json().data.id as string
+      refs.set(resource, referenceId)
+      const replayed: LightMyRequestResponse = await app.inject({ method: "POST", url: `/api/v1/${resource}`, headers: { ...operatorHeaders, "idempotency-key": commandKey }, payload: input })
+      assert.equal(replayed.statusCode, 201, replayed.body)
+      assert.equal(replayed.headers["idempotency-replayed"], "true")
+      assert.deepEqual(replayed.json(), created.json())
+      const detail: LightMyRequestResponse = await app.inject({ method: "GET", url: `/api/v1/${resource}/${referenceId}`, headers: operatorHeaders })
+      assert.deepEqual(detail.json(), created.json())
+      const updateKey = randomUUID()
+      const changed: LightMyRequestResponse = await app.inject({ method: "PUT", url: `/api/v1/${resource}/${referenceId}`, headers: { ...operatorHeaders, "idempotency-key": updateKey, "if-match": '"1"' }, payload: { ...input, name: "Atualizado" } })
+      assert.equal(changed.statusCode, 200, changed.body)
+      assert.equal(changed.headers.etag, '"2"')
+      const repeated: LightMyRequestResponse = await app.inject({ method: "PUT", url: `/api/v1/${resource}/${referenceId}`, headers: { ...operatorHeaders, "idempotency-key": updateKey, "if-match": '"1"' }, payload: { ...input, name: "Atualizado" } })
+      assert.equal(repeated.statusCode, 200, repeated.body)
+      assert.equal(repeated.headers["idempotency-replayed"], "true")
+      assert.deepEqual(repeated.json(), changed.json())
+      const collection: LightMyRequestResponse = await app.inject({ method: "GET", url: `/api/v1/${resource}?category_id=${refs.get("product-categories")!}&limit=1`, headers: operatorHeaders })
+      assert.equal(collection.statusCode, 200, collection.body)
+      assert.equal(collection.json().data[0].id, referenceId)
+      const storedCommand = await seed.query("SELECT scope,request FROM domain_commands WHERE command_key=$1", [commandKey])
+      assert.deepEqual(storedCommand.rows[0], { scope: `${resource === "product-categories" ? "product_category" : resource === "product-groups" ? "product_group" : resource === "tag-groups" ? "tag_group" : "tag"}.created`, request: { id: null, revision: null, input } })
+    }
+    const categoryId = refs.get("product-categories")!
+    const selfParent = await app.inject({ method: "PUT", url: `/api/v1/product-categories/${categoryId}`, headers: { ...operatorHeaders, "idempotency-key": randomUUID(), "if-match": '"2"' }, payload: { code: "FORCA", name: "Força", status: "active", parentId: categoryId, sortOrder: 1 } })
+    assert.equal(selfParent.statusCode, 409, selfParent.body)
+    const refWrite = (resource: string, payload: Record<string, unknown>, referenceId?: string, revision = 1) => app!.inject({ method: referenceId ? "PUT" : "POST", url: `/api/v1/${resource}${referenceId ? `/${referenceId}` : ""}`, headers: { ...operatorHeaders, "idempotency-key": randomUUID(), ...(referenceId ? { "if-match": `"${revision}"` } : {}) }, payload })
+    const parentInput = { code: "FORCA", name: "Força", status: "active", parentId: null, sortOrder: 1 }
+    const child = await refWrite("product-categories", { ...parentInput, code: "FILHA", parentId: categoryId })
+    assert.equal(child.statusCode, 201, child.body)
+    const childId = child.json().data.id as string
+    assert.equal((await refWrite("product-categories", { ...parentInput, parentId: childId }, categoryId, 2)).statusCode, 409)
+    assert.equal((await refWrite("product-categories", { ...parentInput, status: "archived" }, categoryId, 2)).statusCode, 409)
+    assert.equal((await refWrite("product-categories", { ...parentInput, code: "FILHA", parentId: categoryId, status: "archived" }, childId)).statusCode, 200)
+    assert.equal((await refWrite("product-categories", { ...parentInput, status: "archived" }, categoryId, 2)).statusCode, 200)
+    assert.equal((await refWrite("product-categories", { ...parentInput, code: "OUTRA", parentId: categoryId })).statusCode, 409)
+    const groupId = refs.get("tag-groups")!
+    const tagInput = { code: "AZUL", name: "Azul", status: "active", groupId }
+    const linked = await refWrite("tags", tagInput)
+    assert.equal(linked.statusCode, 201, linked.body)
+    const groupInput = { code: "CORES", name: "Cores", status: "archived" }
+    assert.equal((await refWrite("tag-groups", groupInput, groupId, 2)).statusCode, 409)
+    assert.equal((await refWrite("tags", { ...tagInput, status: "archived" }, linked.json().data.id as string)).statusCode, 200)
+    assert.equal((await refWrite("tag-groups", groupInput, groupId, 2)).statusCode, 200)
+    assert.equal((await refWrite("tags", { ...tagInput, code: "VERDE" })).statusCode, 409)
+    const foreignGroup = randomUUID()
+    await seed.query("INSERT INTO tag_groups(id,tenant_id,code,name,status,revision) VALUES($1,$2,'EXTERNO','Externo','active',1)", [foreignGroup, tenant])
+    assert.equal((await refWrite("tags", { ...tagInput, code: "EXTERNA", groupId: foreignGroup })).statusCode, 409)
+    const referenceEvents = await seed.query("SELECT action,entity_type,details FROM audit_log WHERE entity_id=$1 ORDER BY occurred_at", [categoryId])
+    assert.deepEqual(referenceEvents.rows[0], { action: "product_category.created", entity_type: "product_categories", details: { revision: 1, previousRevision: null, status: "active" } })
+    assert.equal(referenceEvents.rows.length, 3, "Rejected hierarchy commands must not create audit entries")
     await seed.query("UPDATE platform_administrators SET active=false WHERE auth_subject='operator'")
     assert.equal((await app.inject({ method: "GET", url: `/api/v1/orders/${foreignOrder}`, headers: operatorHeaders })).statusCode, 403)
     // A manage grant alone does not imply the read grant required by Rust writes.
