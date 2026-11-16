@@ -195,6 +195,8 @@ O produtor web empacota o artefato validado e o produtor API executa a matriz co
 
 O build web passou após gerar o OpenAPI do checkout e os tipos de rotas Next. Na primeira execução, após compilação/tipos/prerenderização, o Next interrompeu o comando com um alerta de segurança da versão instalada. A repetição concluiu com código zero. Nenhuma atualização de dependência foi realizada nesta etapa; a recomendação de atualização de segurança precisa continuar registrada separadamente.
 
+O alerta reapareceu na verificação posterior. A auditoria e o [aviso oficial GHSA-mfr8-8qww-v76h](https://github.com/vercel/next.js/security/advisories/GHSA-mfr8-8qww-v76h) confirmaram a correção em 16.4.5. Next, `@next/mdx` e `eslint-config-next` foram atualizados juntos de 16.4.3 para 16.4.5, com lockfile regenerado. A nova auditoria não aponta esse aviso em Next; o build e os 179 testes de modelo passaram. O lint terminou sem erros, com oito avisos existentes. Isso não representa resolução dos demais avisos de dependências do monorepo.
+
 ## Navegador e BFF Next real
 
 `playwright.api-migration.config.ts` inicia dois servidores Next do build de produção: um com os quatro módulos habilitados e outro com retorno explícito a Rust. Ambos usam cookies de sessão cifrados e backends HTTP locais controlados, sem interceptar as chamadas do navegador ao BFF. A matriz PostgreSQL real permanece a verificação separada das regras de negócio.
