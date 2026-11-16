@@ -95,6 +95,8 @@ mod proposal_actions_tests;
 #[cfg(test)]
 mod proposal_tests;
 #[cfg(test)]
+mod sales_list_queries_tests;
+#[cfg(test)]
 mod purchase_chain_tests;
 #[cfg(test)]
 mod received_nfe_tests;
