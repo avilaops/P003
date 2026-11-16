@@ -135,6 +135,8 @@ pub struct OrderSummary {
     pub amount: String,
     pub status: String,
     pub revision: i64,
+    pub updated_at: String,
+    pub pricing_origin: bool,
 }
 #[derive(FromRow, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
@@ -185,6 +187,18 @@ pub struct SalesOrderQuery {
     pub limit: Option<u32>,
     /// Busca por nome do cliente, CPF/CNPJ ou identificação do pedido.
     pub q: Option<String>,
+    /// Situação do pedido: draft, accepted, confirmed, completed ou cancelled.
+    pub status: Option<String>,
+    /// Ordenação decrescente; created mantém o comportamento padrão.
+    pub sort: Option<SalesListSort>,
+}
+
+#[derive(Default, Deserialize, ToSchema)]
+#[serde(rename_all = "lowercase")]
+pub enum SalesListSort {
+    #[default]
+    Created,
+    Updated,
 }
 #[derive(Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
@@ -277,18 +291,17 @@ async fn load(
     id: Uuid,
     can_edit: bool,
 ) -> Result<OrderSnapshot, DomainError> {
-    let data=sqlx::query_as::<_,OrderSummary>("SELECT id,number::text AS number,customer_id,customer_name,customer_tax_id,due_date::text AS due_date,(amount_cents::numeric/100)::numeric(16,2)::text AS amount,status,revision FROM sales_orders WHERE tenant_id=$1 AND id=$2")
-        .bind(tenant).bind(id).fetch_optional(&mut **tx).await.map_err(db)?.ok_or(DomainError::NotFound)?;
+    let data =
+        sqlx::query_as::<_, OrderSummary>(&format!("{ORDER_SUMMARY} WHERE tenant_id=$1 AND id=$2"))
+            .bind(tenant)
+            .bind(id)
+            .fetch_optional(&mut **tx)
+            .await
+            .map_err(db)?
+            .ok_or(DomainError::NotFound)?;
     let items=sqlx::query_as::<_,OrderLine>("SELECT product_id,sku,name,unit,(quantity_micros::numeric/1000000)::numeric(19,6)::text AS quantity,(price_cents::numeric/100)::numeric(16,2)::text AS unit_price,(amount_cents::numeric/100)::numeric(16,2)::text AS amount,structure_color,swing_arm_color,plate_holder_color,plate_holder_type,upholstery_color,(SELECT c.weight FROM product_catalog_profiles c WHERE c.tenant_id=sales_order_lines.tenant_id AND c.product_id=sales_order_lines.product_id) AS equipment_weight FROM sales_order_lines WHERE tenant_id=$1 AND order_id=$2 ORDER BY line_number")
         .bind(tenant).bind(id).fetch_all(&mut **tx).await.map_err(db)?;
-    let pricing_origin: bool = sqlx::query_scalar(
-        "SELECT EXISTS(SELECT 1 FROM order_pricing_snapshots WHERE tenant_id=$1 AND order_id=$2) OR EXISTS(SELECT 1 FROM commercial_order_quotes WHERE tenant_id=$1 AND order_id=$2)",
-    )
-    .bind(tenant)
-    .bind(id)
-    .fetch_one(&mut **tx)
-    .await
-    .map_err(db)?;
+    let pricing_origin = data.pricing_origin;
     Ok(OrderSnapshot {
         tenant_id: tenant,
         can_edit,
@@ -298,6 +311,8 @@ async fn load(
         checkout: checkout::load(tx, tenant, id).await?,
     })
 }
+
+const ORDER_SUMMARY: &str = "SELECT id,number::text AS number,customer_id,customer_name,customer_tax_id,due_date::text AS due_date,(amount_cents::numeric/100)::numeric(16,2)::text AS amount,status,revision,to_json(updated_at)#>>'{}' AS updated_at,(EXISTS(SELECT 1 FROM order_pricing_snapshots s WHERE s.tenant_id=sales_orders.tenant_id AND s.order_id=sales_orders.id) OR EXISTS(SELECT 1 FROM commercial_order_quotes q WHERE q.tenant_id=sales_orders.tenant_id AND q.order_id=sales_orders.id)) AS pricing_origin FROM sales_orders";
 
 #[utoipa::path(get,path="/api/v1/orders",tag="Sales",security(("bearerAuth"=[])),params(SalesOrderQuery,("X-Tenant-Id"=Uuid,Header)),responses((status=200,body=OrderList),(status=403,description="Sem permissão"),(status=422,description="Filtros inválidos")))]
 pub async fn list(
@@ -311,6 +326,23 @@ pub async fn list(
         offset: query.offset,
         limit: query.limit,
     })?;
+    let status = query.status.unwrap_or_default();
+    if ![
+        "",
+        "draft",
+        "accepted",
+        "confirmed",
+        "completed",
+        "cancelled",
+    ]
+    .contains(&status.as_str())
+    {
+        return Err(DomainError::Invalid("Situação inválida"));
+    }
+    let order = match query.sort.unwrap_or_default() {
+        SalesListSort::Created => "sales_orders.created_at DESC,sales_orders.id DESC",
+        SalesListSort::Updated => "sales_orders.updated_at DESC,sales_orders.id DESC",
+    };
     let search = query.q.unwrap_or_default();
     let search = search.trim();
     if search.chars().count() > 160 || search.chars().any(char::is_control) {
@@ -340,14 +372,26 @@ pub async fn list(
         .parse::<i64>()
         .ok()
         .filter(|number| *number > 0);
-    let filter = "WHERE tenant_id=$1 AND ($2='' OR strpos(lower(customer_name),lower($2))>0 OR strpos(id::text,lower($2))>0 OR ($3<>'' AND strpos(customer_tax_id,$3)>0) OR number=$4)";
-    let data=sqlx::query_as::<_,OrderSummary>(&format!("SELECT id,number::text AS number,customer_id,customer_name,customer_tax_id,due_date::text AS due_date,(amount_cents::numeric/100)::numeric(16,2)::text AS amount,status,revision FROM sales_orders {filter} ORDER BY created_at DESC,id DESC LIMIT $5 OFFSET $6"))
-        .bind(tenant).bind(search).bind(&tax_id).bind(number).bind(i64::from(limit)).bind(i64::from(offset)).fetch_all(&mut *tx).await.map_err(db)?;
+    let filter = "WHERE tenant_id=$1 AND ($2='' OR strpos(lower(customer_name),lower($2))>0 OR strpos(id::text,lower($2))>0 OR ($3<>'' AND strpos(customer_tax_id,$3)>0) OR number=$4) AND ($5='' OR status=$5)";
+    let data = sqlx::query_as::<_, OrderSummary>(&format!(
+        "{ORDER_SUMMARY} {filter} ORDER BY {order} LIMIT $6 OFFSET $7"
+    ))
+    .bind(tenant)
+    .bind(search)
+    .bind(&tax_id)
+    .bind(number)
+    .bind(&status)
+    .bind(i64::from(limit))
+    .bind(i64::from(offset))
+    .fetch_all(&mut *tx)
+    .await
+    .map_err(db)?;
     let total = sqlx::query_scalar(&format!("SELECT count(*) FROM sales_orders {filter}"))
         .bind(tenant)
         .bind(search)
         .bind(tax_id)
         .bind(number)
+        .bind(status)
         .fetch_one(&mut *tx)
         .await
         .map_err(db)?;

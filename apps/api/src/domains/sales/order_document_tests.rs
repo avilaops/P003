@@ -16,6 +16,8 @@ fn order() -> OrderSnapshot {
             amount: "44.98".into(),
             status: "draft".into(),
             revision: 7,
+            updated_at: "2026-11-16T12:00:00Z".into(),
+            pricing_origin: true,
         },
         items: vec![OrderLine {
             product_id: Uuid::nil(),
