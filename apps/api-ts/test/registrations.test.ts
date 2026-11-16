@@ -70,3 +70,32 @@ test("reference writes require command and revision headers and preserve optimis
   assert.equal(stale.statusCode, 412)
   assert.equal(writes, 2)
 })
+
+test("party detail and commands preserve the Rust snapshot, idempotency and revision contract", async () => {
+  let revision = 1, exists = false, writes = 0
+  const row = () => ({ id, revision: String(revision), person_type: "juridica", legal_name: "Cliente", trade_name: null, tax_id: "04252011000110", email: "cliente@example.test", phone: null, is_customer: true, is_supplier: false, status: "active", fiscal: null, addresses: [], contacts: [] })
+  const client: DatabaseClient = { async query<T extends Record<string, unknown>>(sql: string) {
+    if (sql.includes("FROM tenants tenant")) return { rows: [{ tenant_id: tenant, permissions: ["catalog.parties.read", "catalog.parties.manage"] }] as unknown as T[] }
+    if (sql.includes("FROM domain_commands")) return { rows: [] as T[] }
+    if (sql.startsWith("SELECT id,revision,person_type")) return { rows: exists ? [row()] as unknown as T[] : [] as T[] }
+    if (sql.startsWith("INSERT INTO parties")) { exists = true; writes += 1 }
+    if (sql.startsWith("UPDATE parties")) { revision += 1; writes += 1 }
+    return { rows: [] as T[] }
+  }, release() {} }
+  const app = buildApp({ pool: { async connect() { return client } }, userinfoUrl: "http://auth.test/oauth/userinfo", fetchAuth: async () => Response.json({ sub: "subject-1", email: "user@example.test" }) })
+  const headers = { authorization: "Bearer valid", "x-tenant-id": tenant }
+  const input = { personType: "juridica", legalName: "Cliente", tradeName: null, taxId: "04.252.011/0001-10", email: "cliente@example.test", phone: null, isCustomer: true, isSupplier: false, status: "active" }
+  const created = await app.inject({ method: "POST", url: "/api/v1/parties", headers: { ...headers, "idempotency-key": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb" }, payload: input })
+  assert.equal(created.statusCode, 201, created.body)
+  assert.equal(created.headers.etag, '"1"')
+  assert.equal(created.json().data.taxId, "04252011000110")
+  const detail = await app.inject({ method: "GET", url: `/api/v1/parties/${id}`, headers })
+  assert.equal(detail.statusCode, 200, detail.body)
+  assert.equal(detail.json().tenantId, tenant)
+  const updated = await app.inject({ method: "PUT", url: `/api/v1/parties/${id}`, headers: { ...headers, "if-match": '"1"' }, payload: { ...input, legalName: "Cliente atualizado" } })
+  assert.equal(updated.statusCode, 200, updated.body)
+  assert.equal(updated.headers.etag, '"2"')
+  const stale = await app.inject({ method: "PUT", url: `/api/v1/parties/${id}`, headers: { ...headers, "if-match": '"1"' }, payload: input })
+  assert.equal(stale.statusCode, 412)
+  assert.equal(writes, 2)
+})
