@@ -1,7 +1,8 @@
 /* Shared workspace geometry. Public pages retain their own art direction. */
 /* Scope typography to authenticated pages, including menus rendered in portals. */
 body:has(.erp-workspace) {
-  --workspace-font-title: 18px;
+  --workspace-font-title: clamp(28px, 2.4vw, 32px);
+  --workspace-font-section: 18px;
   --workspace-font-body: 14px;
   --workspace-font-auxiliary: 12px;
   --text-xs: var(--workspace-font-auxiliary);
@@ -10,9 +11,9 @@ body:has(.erp-workspace) {
   --text-sm--line-height: 22px;
   --text-base: var(--workspace-font-body);
   --text-base--line-height: 22px;
-  --text-lg: var(--workspace-font-title);
+  --text-lg: var(--workspace-font-section);
   --text-lg--line-height: 26px;
-  --text-xl: var(--workspace-font-title);
+  --text-xl: 20px;
   --text-xl--line-height: 26px;
   --text-2xl: var(--workspace-font-title);
   --text-2xl--line-height: 26px;
@@ -21,7 +22,7 @@ body:has(.erp-workspace) {
   --text-4xl: var(--workspace-font-title);
   --text-4xl--line-height: 26px;
   --font-weight-bold: 600;
-  font-family: var(--font-geist-sans), system-ui, sans-serif;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   font-size: var(--workspace-font-body);
   line-height: 22px;
 }
@@ -37,8 +38,9 @@ body:has(.erp-workspace) {
   line-height: 22px;
 }
 
-.erp-content :is(h1, h2), .erp-content .workspace-page-title { font-size: var(--workspace-font-title); font-weight: 600; line-height: 26px; letter-spacing: -.01em; }
-.erp-content h3 { font-size: var(--workspace-font-body); font-weight: 600; line-height: 22px; letter-spacing: normal; }
+.erp-content h1, .erp-content .workspace-page-title { font-size: var(--workspace-font-title); font-weight: 600; line-height: 1.2; letter-spacing: -.025em; }
+.erp-content h2 { font-size: var(--workspace-font-section); font-weight: 600; line-height: 1.4; letter-spacing: -.01em; }
+.erp-content h3 { font-size: 16px; font-weight: 600; line-height: 22px; letter-spacing: normal; }
 .erp-content :is(strong, b) { font-weight: 600; }
 .erp-content :is(small, [role=status]) { font-size: var(--workspace-font-auxiliary); line-height: 18px; }
 .erp-content :where(.form-section) { box-shadow: none; }
@@ -61,7 +63,7 @@ body:has(.erp-workspace) {
 .erp-content :where(input, select, textarea)[aria-invalid=true] { border-color: var(--destructive); }
 .erp-content :where(table) { width: 100%; border-collapse: collapse; font-size: 14px; font-variant-numeric: tabular-nums; }
 .erp-content :where(thead) { background: var(--muted); color: var(--muted-foreground); }
-.erp-content :where(th) { padding: 12px 16px; font-size: 12px; font-weight: 600; text-transform: none; letter-spacing: 0; }
+.erp-content :where(th) { padding: 12px 16px; font-size: 13px; font-weight: 600; text-transform: none; letter-spacing: 0; }
 .erp-content tbody th[scope=row] { font-size: var(--workspace-font-body); font-weight: 500; }
 .erp-content :where(td) { padding: 14px 16px; }
 .erp-content :where(tbody tr) { border-bottom: 1px solid var(--border); }
@@ -100,7 +102,7 @@ body:has(.erp-workspace) {
 .erp-content .erp-page-back { margin-bottom: 12px; }
 .erp-content .form-actions { top: auto; }
 .erp-content .erp-content-note { padding: 20px 24px; margin-block: 24px; border: 1px solid var(--border); border-radius: 12px; color: var(--muted-foreground); }
-.erp-content .erp-content-note h2 { margin: 0 0 8px; color: var(--foreground); font-size: var(--workspace-font-title); }
+.erp-content .erp-content-note h2 { margin: 0 0 8px; color: var(--foreground); font-size: var(--workspace-font-section); }
 .erp-content .erp-content-note p { margin: 0; font-size: var(--workspace-font-body); line-height: 22px; }
 @media (max-width: 639px) {
   .erp-workspace .erp-content { padding: 12px 12px max(24px, env(safe-area-inset-bottom)); }

@@ -9,14 +9,14 @@ export function PageHeader({ eyebrow, title, description, breadcrumbs, back, act
   return (
     <header className="erp-page-header mb-8">
       {back && <GuardedLink href={back.href} className="erp-page-back"><ArrowLeft aria-hidden="true" className="size-4" />{back.label}</GuardedLink>}
-      {breadcrumbs?.length ? <nav aria-label="Caminho de navegação" className="mb-2 text-sm font-medium text-primary">
+      {breadcrumbs?.length ? <nav aria-label="Caminho de navegação" className="mb-2 text-sm font-medium text-muted-foreground">
         <ol className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
           {breadcrumbs.map((item, index) => <li key={`${item.label}:${index}`} className="flex min-w-0 items-center gap-2">
-            {index > 0 && <span aria-hidden="true" className="text-muted-foreground">/</span>}
+            {index > 0 && <span aria-hidden="true" className="text-muted-foreground">•</span>}
             {item.href ? <GuardedLink className="break-words underline-offset-4 hover:underline" href={item.href} aria-current={index === breadcrumbs.length - 1 ? "page" : undefined}>{item.label}</GuardedLink> : <span className="break-words" aria-current={index === breadcrumbs.length - 1 ? "page" : undefined}>{item.label}</span>}
           </li>)}
         </ol>
-      </nav> : eyebrow ? <p className="mb-2 text-sm font-medium text-primary">{eyebrow}</p> : null}
+      </nav> : eyebrow ? <p className="mb-2 text-sm font-medium text-muted-foreground">{eyebrow}</p> : null}
       <div className="flex min-w-0 flex-wrap items-start justify-between gap-3"><PageTitle>{title}</PageTitle>{actions && <div className="flex min-w-0 max-w-full flex-wrap gap-2 [&>a]:max-w-full [&>a]:whitespace-normal [&>button]:max-w-full [&>button]:whitespace-normal">{actions}</div>}</div>
       {description && <p className="mt-3 max-w-2xl text-sm text-muted-foreground">{description}</p>}
     </header>

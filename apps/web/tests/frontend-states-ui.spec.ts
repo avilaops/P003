@@ -156,7 +156,7 @@ test("funcionalidade sem integração não monta dados ou operações fictícias
   await expect(page.locator("main button")).toHaveCount(0)
   await expect(page.locator("main").getByText(/R\$|Academia Horizonte|PV-1048/)).toHaveCount(0)
   await expect(page.getByRole("navigation", { name: "Operações disponíveis" })).toBeVisible()
-  await expect(page.getByRole("link", { name: "Suas empresas", exact: true })).toBeEnabled()
+  await expect(page.getByRole("link", { name: /^Suas empresas •/ })).toBeEnabled()
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
   await page.screenshot({ path: testInfo.outputPath("indisponivel-mobile.png"), fullPage: true })
 })

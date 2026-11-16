@@ -1,0 +1,52 @@
+.sales-overview { min-width: 0; }
+.sales-overview .erp-page-header { margin-bottom: 24px; padding-bottom: 0; border: 0; }
+.sales-overview .erp-page-header nav { color: var(--muted-foreground); font-weight: 400; }
+.sales-create-order { display: inline-flex; align-items: stretch; }
+.sales-summary { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin-bottom: 24px; }
+.sales-summary-card { display: flex; flex-direction: column; align-items: start; gap: 8px; min-height: 124px; padding: 20px; border: 1px solid var(--border); border-radius: 12px; background: var(--card); }
+.sales-summary-link { position: relative; display: flex; flex: 1; flex-direction: column; width: 100%; gap: 8px; border-radius: 4px; font-size: 14px; }
+.sales-summary-link:focus-visible { outline: 2px solid var(--ring); outline-offset: 6px; }
+.sales-summary-link:hover .sales-summary-arrow { color: var(--primary); }
+.sales-summary-number { font-size: 30px; font-weight: 600; line-height: 36px; letter-spacing: -.025em; }
+.sales-summary-arrow { position: absolute; right: 0; top: 0; color: var(--muted-foreground); font-size: 20px; }
+.sales-summary-placeholder { display: block; width: 52px; height: 36px; border-radius: 5px; background: var(--muted); }
+.sales-recent-panels { display: grid; min-width: 0; gap: 24px; }
+.sales-recent-panel { min-width: 0; border: 1px solid var(--border); border-radius: 12px; background: var(--card); overflow: hidden; }
+.sales-panel-heading { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; padding: 18px 20px; border-bottom: 1px solid var(--border); }
+.sales-panel-heading h2 { margin: 0; }
+.sales-panel-state, .sales-recent-loading { display: flex; min-height: 144px; flex-direction: column; align-items: start; gap: 16px; padding: 24px 20px; }
+.sales-recent-loading { min-height: 220px; color: var(--muted-foreground); }
+.sales-recent-table { width: 100%; table-layout: fixed; }
+.sales-recent-table :is(td, th) { padding: 12px 16px; }
+.sales-recent-table th { background: var(--muted); color: var(--muted-foreground); }
+.sales-recent-table td { vertical-align: middle; }
+.sales-record-identity { width: 120px; overflow-wrap: anywhere; }
+.sales-customer-column { width: 30%; }
+.sales-customer-name { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
+.sales-value-column { width: 164px; text-align: right; white-space: nowrap; }
+.sales-action-column { width: 96px; text-align: right; }
+.sales-record-action { display: inline-flex; min-height: 44px; align-items: center; justify-content: center; padding: 6px 10px; border: 1px solid var(--border); border-radius: 8px; font-weight: 500; background: var(--card); }
+.sales-record-action:hover { background: var(--muted); }
+.sales-record-action:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+.sales-mobile-customer, .sales-mobile-status, .sales-mobile-date { display: none; }
+@media (max-width: 1199px) { .sales-date-column { display: none; } .sales-mobile-date { display: block; margin-top: 6px; color: var(--muted-foreground); font-size: 12px; } }
+@media (max-width: 760px) {
+  .sales-recent-table :is(td, th) { padding: 12px 10px; }
+  .sales-customer-column, .sales-status-column { display: none; }
+  .sales-mobile-customer { display: block; overflow-wrap: anywhere; margin-top: 6px; font-size: 13px; }
+  .sales-mobile-status { display: block; margin-top: 8px; }
+  .sales-recent-table thead { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
+  .sales-recent-table tbody { display: block; }
+  .sales-recent-table tbody tr { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; }
+  .sales-record-identity { grid-column: 1 / -1; }
+  .sales-value-column { width: auto; text-align: right; font-size: 14px; overflow-wrap: anywhere; white-space: normal; }
+  .sales-action-column { width: auto; }
+  .sales-record-identity { width: auto; }
+}
+@media (max-width: 420px) {
+  .sales-summary { grid-template-columns: minmax(0, 1fr); gap: 12px; }
+  .sales-summary-card { min-height: 104px; padding: 16px; }
+  .sales-panel-heading { padding: 16px 12px; }
+  .sales-recent-table :is(td, th) { padding: 10px 6px; }
+  .sales-record-action { padding-inline: 10px; font-size: 13px; }
+}

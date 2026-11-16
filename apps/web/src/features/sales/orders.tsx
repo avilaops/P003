@@ -3,8 +3,7 @@
 import { useProtectedReload } from "@/features/finance/use-protected-reload"
 
 import { OrderFinancePanel } from "@/features/finance/order-finance"
-import { Pagination } from "@/components/workspace/pagination"
-import { DataTable } from "@/components/workspace/data-table"
+import { SalesRecordList } from "./sales-record-list"
 
 import { erpFetch } from "@/lib/api/client"
 
@@ -18,7 +17,6 @@ import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useEffect, useId, useRef, useState } from "react"
 import { PageHeader } from "@/components/page-header"
-import { PageTitle } from "@/components/workspace/page-title"
 import { Button, buttonVariants } from "@/components/ui/button"
 import { SearchInput } from "@/components/search-input"
 import { Input } from "@/components/ui/input"
@@ -137,47 +135,7 @@ export function Orders({ id, create = false, edit = false }: { id?: string; crea
 }
 
 function OrderList() {
-  const [search, setSearch] = useState("")
-  const [query, setQuery] = useState({ q: "", offset: 0 })
-  const params = new URLSearchParams({ offset: String(query.offset), limit: "25" })
-  if (query.q) params.set("q", query.q)
-  const result = useResource<Listing>(`/api/erp/orders?${params}`)
-  return <><div className="mb-4 flex flex-wrap items-center justify-between gap-3"><PageTitle>Pedidos de venda</PageTitle><div className="flex flex-wrap gap-2">{result.value && <Link className={buttonVariants({ variant: "outline" })} href="/vendas/tabela-precos">Tabela de preços</Link>}{result.value?.canEdit && <>
-    <Link className={buttonVariants({ variant: "outline" })} href="/vendas/pedidos/novo?modo=catalogo">Pedido pelo catálogo</Link>
-    <Link className={buttonVariants()} href="/vendas/pedidos/novo">Novo pedido</Link>
-  </>}</div></div>
-    <section className="min-w-0 space-y-3" aria-label="Pedidos de venda">
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <form className="flex min-w-0 flex-1 basis-full flex-wrap items-end gap-2 sm:basis-0" role="search" aria-label="Pesquisar pedidos" onSubmit={event => {
-          event.preventDefault()
-          const q = search.trim()
-          if (q === query.q && query.offset === 0) result.reload()
-          else setQuery({ q, offset: 0 })
-        }}>
-          <label className="grid min-w-0 flex-1 basis-full gap-2 sm:basis-0">Buscar pedidos<SearchInput onSearch={q => setQuery({ q: q.trim(), offset: 0 })} type="search" name="q" maxLength={160} placeholder="Número do pedido, cliente ou CPF/CNPJ" value={search} onChange={event => setSearch(event.target.value)} /></label>
-          <Button type="submit" disabled={result.loading}>Pesquisar</Button>
-          {(search || query.q) && <Button type="button" variant="outline" onClick={() => { setSearch(""); setQuery({ q: "", offset: 0 }) }}>Limpar</Button>}
-        </form>
-      </div>
-      {result.loading ? <p role="status">Carregando pedidos…</p> : result.error ? <div role="alert"><p><RequestError message={result.error} status={result.status} /></p><Button onClick={result.reload}>Tentar novamente</Button></div> : <>
-        <p role="status" className="text-sm text-muted-foreground">{result.value?.total || 0} pedido(s){query.q && " encontrado(s)"}</p>
-        {result.value?.data.length ? <div className="workspace-list-scroll" role="region" aria-label="Lista de pedidos" tabIndex={0}>
-          <DataTable className="table-fixed text-left text-sm sm:table-auto">
-            <caption className="sr-only">Pedidos de venda</caption>
-            <thead className="bg-muted/50"><tr><th scope="col" className="hidden p-3 sm:table-cell">Pedido</th><th scope="col" className="w-[60%] p-2 sm:w-auto sm:p-3">Cliente</th><th scope="col" className="hidden p-3 sm:table-cell">Situação</th><th scope="col" className="hidden p-3 lg:table-cell">Vencimento</th><th scope="col" className="w-[40%] p-2 text-right sm:w-auto sm:p-3">Valor</th></tr></thead>
-            <tbody>{result.value.data.map(order => <tr className="border-t hover:bg-muted/30" key={order.id}>
-              <td className="hidden whitespace-nowrap p-3 sm:table-cell"><Link className={linkClass} href={`/vendas/pedidos/${order.id}`}>{orderNumber(order.number)}</Link></td>
-              <td className="min-w-0 p-2 align-top sm:p-3"><Link className={`${linkClass} line-clamp-2 break-words [overflow-wrap:anywhere] sm:line-clamp-none`} title={order.customerName} href={`/vendas/pedidos/${order.id}`}>{order.customerName}</Link><span className="hidden text-xs text-muted-foreground sm:block">{order.customerTaxId}</span><div className="mt-1 flex flex-wrap gap-x-2 text-xs text-muted-foreground sm:hidden"><Link className="underline underline-offset-2" href={`/vendas/pedidos/${order.id}`}>{orderNumber(order.number)}</Link><span>{labels[order.status] || order.status}</span></div><p className="mt-1 text-xs text-muted-foreground lg:hidden">Vence {order.dueDate ? order.dueDate.split("-").reverse().join("/") : "—"}</p></td>
-              <td className="hidden whitespace-nowrap p-3 sm:table-cell">{labels[order.status] || order.status}</td>
-              <td className="hidden whitespace-nowrap p-3 lg:table-cell">{order.dueDate ? order.dueDate.split("-").reverse().join("/") : "Não informado"}</td>
-              <td className="whitespace-nowrap p-2 text-right align-top tabular-nums sm:p-3">{commercialMoney(order.amount)}</td>
-            </tr>)}</tbody>
-          </DataTable>
-        </div> : <p>{query.q ? "Nenhum pedido encontrado para esta pesquisa." : "Nenhum pedido cadastrado."}</p>}
-        <Pagination offset={query.offset} pageSize={25} total={result.value?.total || 0} maxOffset={100000} onOffsetChange={offset => setQuery(value => ({ ...value, offset }))} />
-      </>}
-    </section>
-  </>
+  return <SalesRecordList kind="pedidos" labels={labels} />
 }
 
 function OrderEditor({ id }: { id?: string }) {

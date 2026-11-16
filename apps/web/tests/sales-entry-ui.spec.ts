@@ -19,9 +19,11 @@ for (const width of [320, 390, 430, 1366, 1440]) test(`novo pedido parte da nego
   page.on("request", request => { if (request.url().includes("/api/erp/") && request.method() !== "GET") writes++ })
   for (const entry of ["/vendas", "/vendas/pedidos"]) {
     await page.goto(entry)
-    const start = page.getByRole("link", { name: "Novo pedido", exact: true })
+    const start = page.getByRole("link", { name: "Novo pedido", exact: true }).first()
     await expect(start).toHaveAttribute("href", "/vendas/pedidos/novo")
-    await expect(page.getByRole("link", { name: "Pedido pelo catálogo", exact: true })).toHaveAttribute("href", "/vendas/pedidos/novo?modo=catalogo")
+    await page.getByRole("button", { name: "Mais opções de novo pedido", exact: true }).click()
+    await expect(page.getByRole("menuitem", { name: "Pedido pelo catálogo", exact: true })).toHaveAttribute("href", "/vendas/pedidos/novo?modo=catalogo")
+    await page.keyboard.press("Escape")
     await expect(page.getByRole("link", { name: "Tabela de preços", exact: true })).toHaveAttribute("href", "/vendas/tabela-precos")
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
     await start.focus()
@@ -40,5 +42,6 @@ test("consulta oferece tabela sem habilitar criação de pedidos", async ({ page
     await expect(page.getByRole("link", { name: "Tabela de preços", exact: true })).toBeVisible()
     await expect(page.getByRole("link", { name: "Novo pedido", exact: true })).toHaveCount(0)
     await expect(page.getByRole("link", { name: "Pedido pelo catálogo", exact: true })).toHaveCount(0)
+    await expect(page.getByRole("button", { name: "Mais opções de novo pedido", exact: true })).toHaveCount(0)
   }
 })

@@ -81,7 +81,7 @@ test("resumo sai da área do teclado e navegação preserva o preenchimento", as
   await expect(quick).toBeVisible()
   await addEquipment(page)
   page.once("dialog", dialog => dialog.dismiss())
-  await page.getByRole("link", { name: "Suas empresas", exact: true }).click()
+  await page.getByRole("link", { name: /^Suas empresas •/ }).click()
   await expect(page).toHaveURL(/\/vendas\/pedidos\/novo$/)
   await expect(page.getByLabel("Quantidade de Mesa flexora", { exact: true })).toHaveValue("1")
 })

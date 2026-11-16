@@ -17,7 +17,7 @@ test("cabeçalho cabe em 320 px sem perder os acessos", async ({ page }) => {
   await page.goto("/")
   await expect(page.getByRole("button", { name: "Sair", exact: true })).toBeVisible()
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(320)
-  await page.getByRole("link", { name: "Suas empresas", exact: true }).click({ trial: true })
+  await page.getByRole("link", { name: /^Suas empresas •/ }).click({ trial: true })
   await page.getByRole("button", { name: "Buscar no ERP", exact: true }).click()
   await expect(page.getByRole("dialog")).toBeVisible()
 })
