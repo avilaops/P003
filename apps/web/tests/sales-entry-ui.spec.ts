@@ -1,8 +1,10 @@
+import { installEmptyNationalTable } from "./helpers/empty-national-table"
 import { expect, test } from "@playwright/test"
 import { installFrontendFixture, tenant } from "./helpers/frontend-fixture"
 
 test.beforeEach(async ({ context, page, baseURL }) => {
   await installFrontendFixture(context, baseURL)
+  await installEmptyNationalTable(page)
   await page.route(/\/api\/erp\/(orders|proposals)\?/, route => route.fulfill({ json: { tenantId: tenant, data: [], total: 0, canEdit: true } }))
   await page.route("**/api/erp/me", route => route.fulfill({ json: { tenant: { id: tenant }, permissions: ["sales.orders.read", "sales.orders.manage"] } }))
   await page.route("**/api/erp/commercial/tables/imported", route => route.fulfill({ json: {

@@ -28,13 +28,14 @@ type Props = {
   onDestinationChange: (state: string) => void; onTaxpayerChange: (value: boolean) => void
   onBusyChange: (value: boolean) => void; onUncertainChange: (value: boolean) => void
   onProgressChange?: (value: { issues: OrderIssue[]; addressState: string }) => void
+  onProposalNameChange?: (name: string) => void
 }
 type ConfirmedCustomer = { id: string; tenantId: string; etag: string; party: OrderCustomerParty }
 const selectClass = "h-9 min-h-9 w-full min-w-0 rounded-lg border bg-background px-2"
 const addressFields: OrderCustomerField[] = ["postalCode", "state", "city", "street", "number", "district", "complement", "municipalityCode"]
 const required = <span aria-hidden="true"> *</span>
 
-export function OrderCustomerForm({ ref, tenantId, disabled, canManage, onDirty, onDestinationChange, onTaxpayerChange, onBusyChange, onUncertainChange, onProgressChange }: Props) {
+export function OrderCustomerForm({ ref, tenantId, disabled, canManage, onDirty, onDestinationChange, onTaxpayerChange, onBusyChange, onUncertainChange, onProgressChange, onProposalNameChange }: Props) {
   const region = useRef<HTMLElement>(null)
   const searchRegion = useRef<HTMLDivElement>(null)
   const issueId = useId()
@@ -87,6 +88,11 @@ export function OrderCustomerForm({ ref, tenantId, disabled, canManage, onDirty,
     setError("A empresa mudou. Selecione o cliente desta empresa."); setFocusField(null); setAttempted(false); setEditorOpen(false); setSearchOpen(true); setUncertain(false); setConflict(false)
     lookupGenerated.current = {}; setCepRevision(0); setCepMessage(""); setDocumentEdited(false)
   }, [tenantId])
+  // Presentation snapshot only • unlike read(), this never validates, focuses or saves.
+  useEffect(() => {
+    const resolved = !loading && (!requestedId || confirmed.current?.id === requestedId)
+    onProposalNameChange?.(resolved ? currentDraft.current.legalName.trim() : "")
+  }, [draft.legalName, loading, requestedId, tenantId, onProposalNameChange])
   useEffect(() => {
     if (!focusField) return
     const frame = requestAnimationFrame(() => {

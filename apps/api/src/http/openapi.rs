@@ -32,6 +32,7 @@ use crate::platform::{
         crate::domains::finance::settings::get, crate::domains::finance::settings::put,
         sales::settings::get, sales::settings::put,
         sales::negotiation::table, sales::negotiation::simulate, sales::negotiation::convert,
+        sales::mixed::simulate, sales::mixed::convert,
         sales::negotiation::quote, sales::negotiation::decision,
         sales::metrics::orders, sales::metrics::commissions,
         sales::opportunities::list, sales::opportunities::get, sales::opportunities::create, sales::opportunities::update,
@@ -406,8 +407,10 @@ mod tests {
     #[test]
     fn contract_contains_only_implemented_resources_and_company_preconditions() {
         let doc = serde_json::to_value(ApiDoc::openapi()).unwrap();
-        assert_eq!(doc["paths"].as_object().unwrap().len(), 250);
+        assert_eq!(doc["paths"].as_object().unwrap().len(), 252);
         for (path, method) in [
+            ("/api/v1/commercial/mixed/simulate", "post"),
+            ("/api/v1/commercial/mixed/orders", "post"),
             ("/api/v1/fiscal/outgoing-imports", "get"),
             ("/api/v1/fiscal/outgoing-imports/import", "post"),
             ("/api/v1/fiscal/outgoing-imports/{id}/xml", "get"),

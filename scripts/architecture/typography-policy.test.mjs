@@ -21,3 +21,9 @@ test("o documento A4 tem escala editorial própria sem liberar CSS de telas", ()
   assert.deepEqual(validateTypography(source("components/documents/commercial-document.css", ".commercial-document-caption { font-size: 9px; }")), []);
   assert.equal(validateTypography(source("components/documents/other.css", ".page { font-size: 9px; }")).length, 1);
 });
+
+test("o título de pedido segue a referência aprovada sem liberar outros seletores", () => {
+  assert.deepEqual(validateTypography(source("features/sales/order-proposal-actions.css", ".erp-content .order-proposal-heading h1 { font-size: 32px; }")), []);
+  assert.equal(validateTypography(source("features/sales/order-proposal-actions.css", ".other { font-size: 32px; }")).length, 1);
+  assert.equal(validateTypography(source("features/other.css", ".erp-content .order-proposal-heading h1 { font-size: 32px; }")).length, 1);
+});

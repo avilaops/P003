@@ -32,7 +32,7 @@ const DIRECTOR: &str = "sales.approvals.director";
 const APPROVE: &str = "sales.approvals.manage";
 const POLICY: &str = "platform.company.manage";
 
-async fn allowed(
+pub(super) async fn allowed(
     tx: &mut Transaction<'_, Postgres>,
     tenant: Uuid,
     identity: &AuthenticatedIdentity,
@@ -122,7 +122,7 @@ pub(super) async fn require_unquoted(
     Ok(())
 }
 
-async fn rules(
+pub(super) async fn rules(
     tx: &mut Transaction<'_, Postgres>,
     tenant: Uuid,
 ) -> Result<(i64, ApprovalRules), DomainError> {

@@ -17,6 +17,7 @@ import "./order-payment-mobile.css"
 type Row = CheckoutRow
 const rowSignature = (rows: Row[]) => JSON.stringify(rows.map(row => [row.paymentMethodId, row.dueOn, row.amount]))
 export type CheckoutHandle = { read: () => CheckoutInput; focus: (field: string) => void }
+export type CheckoutProposalSnapshot = { paymentTerms: string; deliveryTerms: string }
 const selectClass = "h-9 min-h-9 w-full min-w-0 rounded-lg border bg-background px-2"
 const textareaClass = "min-h-16 w-full rounded-lg border bg-background p-2"
 
@@ -39,7 +40,7 @@ function CustomerDetails({ id, tenantId }: { id: string; tenantId: string }) {
   </div>
 }
 
-export function CommercialCheckout({ ref, customerId, tenantId, methods, totalCents, entryCents, entryRaw, onEntryChange, dueDate, onDueDateChange, onDirty, disabled, renderOrder, freightField, deliveryMethodNote, onProgressChange }: { ref?: Ref<CheckoutHandle>; customerId?: string; tenantId: string; methods: PaymentMethod[]; totalCents: number | null; entryCents: number | null; entryRaw: string; onEntryChange: (raw: string) => void; dueDate: string; onDueDateChange: (date: string) => void; onDirty: () => void; disabled: boolean; renderOrder?: (parts: { payment: ReactNode; delivery: ReactNode }) => ReactNode; freightField?: ReactNode; deliveryMethodNote?: string; onProgressChange?: (issues: OrderIssue[]) => void }) {
+export function CommercialCheckout({ ref, customerId, tenantId, methods, totalCents, entryCents, entryRaw, onEntryChange, dueDate, onDueDateChange, onDirty, disabled, renderOrder, freightField, deliveryMethodNote, onProgressChange, onProposalChange }: { ref?: Ref<CheckoutHandle>; customerId?: string; tenantId: string; methods: PaymentMethod[]; totalCents: number | null; entryCents: number | null; entryRaw: string; onEntryChange: (raw: string) => void; dueDate: string; onDueDateChange: (date: string) => void; onDirty: () => void; disabled: boolean; renderOrder?: (parts: { payment: ReactNode; delivery: ReactNode }) => ReactNode; freightField?: ReactNode; deliveryMethodNote?: string; onProgressChange?: (issues: OrderIssue[]) => void; onProposalChange?: (snapshot: CheckoutProposalSnapshot) => void }) {
   const form = useRef<HTMLDivElement>(null)
   const issueId = useId()
   const [issue, setIssue] = useState<{ field: string; message: string; focus?: boolean } | null>(null)
@@ -66,6 +67,25 @@ export function CommercialCheckout({ ref, customerId, tenantId, methods, totalCe
   const paymentKey = `${totalCents}:${entryCents}`
   const balance = totalCents !== null && entryCents !== null ? totalCents - entryCents : null
   const rowsTotal = rows.reduce((sum, row) => sum + (parseAmount(row.amount) ?? 0), 0)
+  const methodName = (id: string) => methods.find(method => method.id === id)?.name || "forma não definida"
+  const displayDate = (date: string) => date ? date.split("-").reverse().join("/") : "vencimento não definido"
+  // Read-only presentation of current edits, including incomplete plans • no read()/fail().
+  const proposalSignature = JSON.stringify({
+    paymentTerms: [
+      entryCents === 0 ? "Sem entrada." : `Entrada: ${entryCents === null ? "valor a calcular" : money(entryCents)} • ${methodName(entryMethod)} • ${entryDate ? displayDate(entryDate) : "vencimento na geração das parcelas"}.`,
+      `Saldo: ${balance === null ? "valor a calcular" : money(balance)} • ${methodName(balanceMethod)}.`,
+      ...rows.map((row, index) => `Parcela ${index + 1}: ${parseAmount(row.amount) === null ? "valor a conferir" : money(parseAmount(row.amount)!)} • ${displayDate(row.dueOn)} • ${methodName(row.paymentMethodId)}.`),
+      ...(rows.length && (rows.some(row => parseAmount(row.amount) === null) || rowsTotal !== balance) ? ["Parcelas em conferência • a soma atual não corresponde ao saldo da proposta."] : !rows.length && balance !== null && balance > 0 ? ["Parcelas do saldo ainda não geradas."] : []),
+      ...(paymentNotes.trim() ? [`Observações: ${paymentNotes.trim()}`] : []),
+    ].join("\n"),
+    deliveryTerms: [
+      manufacturing.trim() ? /^\d{1,4}$/.test(manufacturing) && Number(manufacturing) > 0 ? `Prazo de fabricação: ${Number(manufacturing)} dias ${manufacturingUnit === "business" ? "úteis" : "corridos"}${entryCents !== null && entryCents > 0 ? ", contado após o pagamento da entrada" : ""}.` : "Prazo de fabricação a conferir." : "Prazo de fabricação não informado.",
+      ...(deliveryNotes.trim() ? [deliveryNotes.trim()] : []),
+    ].join("\n"),
+  } satisfies CheckoutProposalSnapshot)
+  const proposalCallback = useRef(onProposalChange)
+  useEffect(() => { proposalCallback.current = onProposalChange }, [onProposalChange])
+  useEffect(() => { proposalCallback.current?.(JSON.parse(proposalSignature)) }, [proposalSignature])
   const validation = validateCheckout({ orderMode: !!renderOrder, methods, totalCents, entryCents, entryRaw: renderOrder ? entryRaw : undefined, invalidPercent: invalidPercentForEntry === paymentKey, entryMethod, entryDate, balanceMethod, rows, manufacturing, manufacturingUnit, registration, deliveryNotes, deliveryMethodNote, paymentNotes, notes })
   const progressSignature = JSON.stringify(validation.issues)
   const progressCallback = useRef(onProgressChange)

@@ -9,7 +9,7 @@ if (!server) throw new Error("Commercial document tests require the base web ser
 export default defineConfig({
   ...base,
   metadata: { ...base.metadata, scope: "Commercial document downloads and central SMTP" },
-  testMatch: ["platform-mail-ui.spec.ts", "order-document-ui.spec.ts", "order-email-ui.spec.ts", "finance-email-bff.spec.ts", "finance-email-ui.spec.ts"],
+  testMatch: ["platform-mail-ui.spec.ts", "order-document-ui.spec.ts", "order-email-ui.spec.ts", "finance-email-bff.spec.ts", "finance-email-ui.spec.ts", "mixed-order-bff.spec.ts"],
   use: { ...base.use, baseURL: origin, browserName: "chromium" },
   webServer: {
     ...server,

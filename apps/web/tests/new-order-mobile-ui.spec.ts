@@ -1,6 +1,7 @@
+import { installEmptyNationalTable } from "./helpers/empty-national-table"
 import { expect, test, type Page } from "@playwright/test"
 import { installFrontendFixture, tenant, record } from "./helpers/frontend-fixture"
-import type { SimulationInput } from "../src/features/sales/negotiation-types"
+import type { MixedSimulationInput } from "../src/features/sales/negotiation-types"
 import type { CheckoutInput } from "../src/features/sales/commercial-payment-model"
 
 const product = "33333333-3333-4333-8333-333333333333"
@@ -9,18 +10,22 @@ const pix = "66666666-6666-4666-8666-666666666666"
 const boleto = "77777777-7777-4777-8777-777777777777"
 const customerId = "44444444-4444-4444-8444-444444444444"
 async function fixture(page: Page, options: { authority?: string; limit?: number; approval?: boolean; failure?: boolean } = {}) {
+  await installEmptyNationalTable(page, options.authority || "seller")
   await page.route("**/api/erp/me", route => route.fulfill({ json: { tenant: { id: tenant, legalName: "LUDUS EQUIPAMENTOS PARA MUSCULACAO LTDA" }, permissions: ["sales.orders.read", "sales.orders.manage", "catalog.parties.read", "catalog.parties.manage", "catalog.products.read"] } }))
   await page.route(/\/api\/erp\/parties\?/, route => route.fulfill({ json: { tenantId: tenant, canEdit: true, data: [], total: 0 } }))
   await page.route(/\/api\/erp\/commercial\/tables\/imported(?:\?.*)?$/, route => route.fulfill({ json: { tenantId: tenant, line: "imported", authority: options.authority || "seller", canManage: false, canCreateOrder: true, paymentMethods: [{ id: pix, name: "PIX", kind: "pix" }, { id: boleto, name: "Boleto", kind: "boleto" }], data: { id: version, version: 6, publishedAt: "2026-11-12T12:00:00Z", originState: "SP", freeDiscountBps: 2000, minimumDownPaymentBps: 7000, destinations: [{ state: "SP", taxpayer: false, maxOwnDiscountBps: options.limit ?? 2000 }], items: [{ productId: product, name: "Mesa flexora", sku: "LD-B001", unit: "UN", ipiBps: 1300, priceWithoutIpiCents: 100000, priceWithIpiCents: 113000, available: true }] } } }))
   await page.route(`**/api/erp/products/${product}`, route => route.fulfill({ json: { tenantId: tenant, data: { id: product, name: "Mesa flexora", sku: "LD-B001", structureColors: [], upholsteryColors: [], upholsteryConfigurable: false, hasPhoto: false, weight: "25.5" } } }))
   await page.route(`**/api/erp/products/${product}/catalog`, route => route.fulfill({ json: { tenantId: tenant, data: { weight: "25.5" } } }))
-  await page.route("**/api/erp/commercial/simulate", route => {
+  await page.route("**/api/erp/commercial/mixed/simulate", route => {
     if (options.failure) return route.fulfill({ status: 503, json: { title: "Preço temporariamente indisponível" } })
-    const input = route.request().postDataJSON() as SimulationInput
+    const input = route.request().postDataJSON() as MixedSimulationInput
+    expect(input).not.toHaveProperty("line")
+    expect(input).not.toHaveProperty("versionId")
+    expect(input.items).toEqual([expect.objectContaining({ productId: product, line: "imported", versionId: version })])
     const qty = input.items[0].quantity
     const unit = input.discount.kind === "total" ? Math.round(input.discount.value / qty / 1.13) : Math.round(100000 * (10000 - input.discount.value) / 10000)
     const net = unit * qty, ipi = Math.ceil(unit * .13) * qty, total = net + ipi
-    return route.fulfill({ json: { tenantId: tenant, version: 6, digest: "a".repeat(64), sale: { calculatorVersion: "mobile-fixture", items: [{ productId: product, name: "Mesa flexora", sku: "LD-B001", quantity: qty, tableUnitCents: 100000, netCents: net, ipiCents: ipi, totalCents: total }], tableTotalCents: 100000 * qty, discountCents: 100000 * qty - net, discountBps: Math.round((100000 * qty - net) / (100000 * qty) * 10000), netSaleCents: net, ipiBps: 1300, ipiCents: ipi, totalCents: total, freeDiscountBps: 2000, minimumDownPaymentBps: 7000, minimumDownPaymentCents: Math.ceil(total * .7), downPaymentCents: input.downPaymentCents ?? Math.ceil(total * .7), freightCents: input.freightCents, approvalReasons: options.approval ? ["desconto-acima-do-livre"] : [] }, director: null } })
+    return route.fulfill({ json: { tenantId: tenant, version: 6, digest: "a".repeat(64), sale: { calculatorVersion: "mobile-fixture", items: [{ line: input.items[0].line, versionId: input.items[0].versionId, productId: product, name: "Mesa flexora", sku: "LD-B001", quantity: qty, tableUnitCents: 100000, netCents: net, ipiCents: ipi, totalCents: total }], tableTotalCents: 100000 * qty, discountCents: 100000 * qty - net, discountBps: Math.round((100000 * qty - net) / (100000 * qty) * 10000), netSaleCents: net, ipiBps: 1300, ipiCents: ipi, totalCents: total, freeDiscountBps: 2000, minimumDownPaymentBps: 7000, minimumDownPaymentCents: Math.ceil(total * .7), downPaymentCents: input.downPaymentCents ?? Math.ceil(total * .7), freightCents: input.freightCents, approvalReasons: options.approval ? ["desconto-acima-do-livre"] : [] }, director: null } })
   })
 }
 async function addEquipment(page: Page) {
@@ -42,7 +47,7 @@ for (const theme of ["light", "dark"]) test(`pendências explicam salvar e levam
   await page.addInitScript(theme => localStorage.setItem("erp-theme", theme), theme)
   await fixture(page)
   const writes: string[] = []
-  page.on("request", request => { if (request.method() !== "GET" && /\/api\/erp\/(parties|commercial\/orders)(?:\?|$)/.test(request.url())) writes.push(request.url()) })
+  page.on("request", request => { if (request.method() !== "GET" && /\/api\/erp\/(parties|commercial\/(?:mixed\/)?orders)(?:\?|$)/.test(request.url())) writes.push(request.url()) })
   await page.goto("/vendas/pedidos/novo")
   await expect(page.getByRole("heading", { name: "Novo pedido", exact: true })).toBeVisible({ timeout: 20000 })
   await expect(page.getByRole("navigation", { name: "Seções do pedido" })).toBeVisible({ timeout: 20000 })
@@ -158,9 +163,9 @@ test("atalhos preservam desconto, frete e total sem confundir teto com aprovaç�
 
 for (const person of ["cpf", "cnpj"] as const) test(`cliente novo ${person}, outra UF e pagamento integral salvam com número`, async ({ page }, info) => {
   await fixture(page)
-  const partyWrites: object[] = [], orders: { checkout: CheckoutInput; simulation: SimulationInput }[] = []
+  const partyWrites: object[] = [], orders: { checkout: CheckoutInput; simulation: MixedSimulationInput }[] = []
   await page.route("**/api/erp/parties", route => { const body = route.request().postDataJSON(); partyWrites.push(body); return route.fulfill({ status: 201, headers: { ETag: '"1"' }, json: { tenantId: tenant, canEdit: true, data: { ...body, id: customerId, revision: 1 } } }) })
-  await page.route("**/api/erp/commercial/orders", route => { orders.push(route.request().postDataJSON()); return route.fulfill({ status: 201, headers: { ETag: '"1"' }, json: { tenantId: tenant, id: record } }) })
+  await page.route("**/api/erp/commercial/mixed/orders", route => { orders.push(route.request().postDataJSON()); return route.fulfill({ status: 201, headers: { ETag: '"1"' }, json: { tenantId: tenant, id: record } }) })
   await page.route(`**/api/erp/orders/${record}`, route => route.fulfill({ headers: { ETag: '"1"' }, json: { tenantId: tenant, canEdit: true, pricingOrigin: true, data: { id: record, revision: 1, number: "129", status: "draft", customerId, customerName: "Cliente mobile", customerTaxId: person === "cpf" ? "52998224725" : "11222333000181", dueDate: "2026-12-12", amount: "1130.00" }, checkout: { ...orders[0].checkout, confirmationCreatesReceivables: true, entry: { ...orders[0].checkout.entry, amountCents: 113000, paymentMethod: { id: pix, name: "PIX", modality: "pix" } }, installments: [], customer: { legalName: "Cliente mobile", taxId: person === "cpf" ? "52998224725" : "11222333000181", addresses: [], contacts: [] } }, items: [] } }))
   await page.goto("/vendas/pedidos/novo")
   await addEquipment(page)
@@ -190,6 +195,9 @@ for (const person of ["cpf", "cnpj"] as const) test(`cliente novo ${person}, out
   await expect(page).toHaveURL(new RegExp("/vendas/pedidos/" + record), { timeout: 30000 })
   expect(partyWrites).toHaveLength(1); expect(orders).toHaveLength(1)
   expect(orders[0].simulation.destinationState).toBe("RJ")
+  expect(orders[0].simulation).not.toHaveProperty("line")
+  expect(orders[0].simulation).not.toHaveProperty("versionId")
+  expect(orders[0].simulation.items).toEqual([expect.objectContaining({ productId: product, quantity: 1, line: "imported", versionId: version })])
   expect(orders[0].checkout.installments).toEqual([])
   expect(orders[0].checkout.deliveryNotes).toContain("retirada pelo cliente")
   await expect(page.getByRole("heading", { name: "PV-000129", exact: true })).toBeVisible()

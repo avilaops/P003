@@ -24,6 +24,8 @@ pub(crate) mod checkout_document;
 mod component_selection_tests;
 mod equipment_weight;
 pub mod metrics;
+pub mod mixed;
+mod mixed_model;
 pub mod negotiation;
 pub mod negotiation_model;
 #[cfg(test)]

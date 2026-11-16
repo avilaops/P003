@@ -12,6 +12,8 @@ export function validateTypography(files) {
       if (name.endsWith("app/workspace-ui.css") && line.startsWith(".workspace-page-title {")) continue;
       for (const match of line.matchAll(/font-size:\s*([^;}]+)/g)) {
         const size = match[1].trim();
+        // User-selected order reference • only this heading has the larger display size.
+        if (name === "apps/web/src/features/sales/order-proposal-actions.css" && line.startsWith(".erp-content .order-proposal-heading h1 {") && size === "32px") continue;
         if (/^var\(--workspace-font-(title|body|auxiliary)\)$/.test(size)) continue;
         if (/^\d+px$/.test(size) && approvedSizes.has(Number.parseFloat(size))) continue;
         errors.push(`Tipografia fora da escala 18/14/12: ${name}:${index + 1}: ${size}`);

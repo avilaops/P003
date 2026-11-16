@@ -18,7 +18,7 @@ export async function forwardErp(request: Request, resource: string) {
   const metricResource = request.method === "GET" && /^\/commercial\/metrics\/(?:orders|commissions)$/.test(resource)
   const commercialTableResource = request.method === "GET" && /^\/commercial\/tables\/(?:imported|national)$/.test(resource)
   const negotiationResource = metricResource || request.method === "GET" && /^\/commercial\/(?:tables\/(?:imported|national)|orders\/[a-f0-9-]{36}|approval-settings)$/.test(resource)
-    || request.method === "POST" && /^\/commercial\/(?:simulate|orders|orders\/[a-f0-9-]{36}\/decision)$/.test(resource)
+    || request.method === "POST" && /^\/commercial\/(?:(?:mixed\/)?(?:simulate|orders)|orders\/[a-f0-9-]{36}\/decision)$/.test(resource)
     || request.method === "PUT" && resource === "/commercial/approval-settings"
   if (resource.startsWith("/commercial/") && (!negotiationResource || !metricResource && !commercialTableResource && new URL(request.url).search)) return Response.json({ title: "Recurso comercial inválido" }, { status: 400 })
   const warrantyResource = request.method === "GET" && /^\/warranty-(?:cases(?:\/[a-f0-9-]{36})?|service-orders)$/.test(resource)

@@ -1,0 +1,15 @@
+.order-proposal-heading { min-width: 0; }
+.erp-content .order-proposal-heading h1 { font-size: 32px; line-height: 1.1; font-weight: 800; letter-spacing: -.02em; text-transform: uppercase; }
+.order-proposal-heading-bar { display: grid; gap: 16px; padding-bottom: 20px; border-bottom: 1px solid var(--border); }
+.order-proposal-heading-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.order-proposal-status { display: inline-flex; align-items: center; min-height: 32px; padding: 4px 12px; border: 1px solid var(--border); border-radius: 999px; background: var(--muted); color: var(--muted-foreground); font-size: 14px; font-weight: 600; }
+.order-proposal-status[data-released="true"] { background: #ecfdf5; border-color: #a7f3d0; color: #065f46; }
+.order-proposal-totals > div { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px; padding: 5px 0; border-bottom: 1px solid var(--document-rule); }
+.order-proposal-totals dd { font-weight: 700; font-variant-numeric: tabular-nums; }
+@media print {
+  body:has([data-order-proposal-preview]) .erp-content > :not(:has([data-order-proposal-preview])) { display: none !important; }
+  body:has([data-order-proposal-preview]) .erp-content :has([data-order-proposal-preview]) > :not(:has([data-order-proposal-preview])):not([data-order-proposal-preview]) { display: none !important; }
+  [data-order-proposal-preview] > :not([data-commercial-document]) { display: none !important; }
+  body:has([data-order-proposal-preview]) .erp-content :has([data-order-proposal-preview]) { display: block !important; margin: 0 !important; padding: 0 !important; border: 0 !important; width: 100%; max-width: none; }
+  [data-order-proposal-preview] { margin: 0 !important; padding: 0 !important; }
+}

@@ -1,7 +1,8 @@
+import { installEmptyNationalTable } from "./helpers/empty-national-table"
 import { expect, test, type Page } from "@playwright/test"
 import { installFrontendFixture, tenant, record } from "./helpers/frontend-fixture"
 import type { CheckoutInput } from "../src/features/sales/commercial-payment-model"
-import type { SimulationInput } from "../src/features/sales/negotiation-types"
+import type { MixedSimulationInput } from "../src/features/sales/negotiation-types"
 
 const product = "33333333-3333-4333-8333-333333333333"
 const version = "55555555-5555-4555-8555-555555555555"
@@ -10,6 +11,7 @@ const boleto = "77777777-7777-4777-8777-777777777777"
 const equipment = { productId: product, name: "Mesa flexora", sku: "LD-B001", unit: "UN", ipiBps: 1300, priceWithoutIpiCents: 100000, priceWithIpiCents: 113000, available: true }
 
 async function fixture(page: Page) {
+  await installEmptyNationalTable(page)
   await page.route("**/api/erp/me", route => route.fulfill({ json: { tenant: { id: tenant }, permissions: ["sales.orders.read", "sales.orders.manage", "catalog.parties.read", "catalog.parties.manage", "catalog.products.read"] } }))
   await page.route(/\/api\/erp\/orders\?/, route => route.fulfill({ headers: { ETag: '"1"' }, json: { tenantId: tenant, canEdit: true, data: [], total: 0 } }))
   await page.route(/\/api\/erp\/parties\?/, route => route.fulfill({ json: { tenantId: tenant, canEdit: true, data: [], total: 0 } }))
@@ -32,7 +34,7 @@ for (const { width, theme } of [{ width: 390, theme: "light" }, { width: 640, th
   const errors: string[] = []
   page.on("pageerror", error => errors.push(error.message))
   page.on("console", message => { if (message.type() === "error") errors.push(message.text()) })
-  page.on("request", request => { if (request.method() !== "GET" && /\/api\/erp\/(parties|orders|commercial\/orders)(?:\?|$)/.test(request.url())) writes.push(request.url()) })
+  page.on("request", request => { if (request.method() !== "GET" && /\/api\/erp\/(parties|orders|commercial\/(?:mixed\/)?orders)(?:\?|$)/.test(request.url())) writes.push(request.url()) })
   await page.goto("/vendas/pedidos/novo")
   await expect(page.getByRole("heading", { name: "Novo pedido", exact: true })).toBeVisible()
   await expect(page.getByRole("heading", { name: "Equipamentos", exact: true })).toBeVisible()
@@ -61,15 +63,18 @@ for (const uncertainty of ["unavailable", "foreignTenant", "authRetry", "custome
   const customerId = "44444444-4444-4444-8444-444444444444"
   const existing = uncertainty === "existing"
   const partyWrites: { body: Record<string, unknown>; key: string }[] = []
-  const orderWrites: { body: { customerId: string; digest: string; simulation: SimulationInput; dueDate: string; checkout: CheckoutInput }; key: string }[] = []
-  const saleFor = (input: SimulationInput) => {
+  const orderWrites: { body: { customerId: string; digest: string; simulation: MixedSimulationInput; dueDate: string; checkout: CheckoutInput }; key: string }[] = []
+  const saleFor = (input: MixedSimulationInput) => {
     const qty = input.items[0].quantity
     const unit = Math.round(100000 * (10000 - input.discount.value) / 10000)
     const net = unit * qty, ipi = Math.ceil(unit * 1300 / 10000) * qty, total = net + ipi
-    return { calculatorVersion: "new-order-browser-fixture", items: [{ productId: product, name: equipment.name, sku: equipment.sku, quantity: qty, tableUnitCents: 100000, netCents: net, ipiCents: ipi, totalCents: total }], tableTotalCents: 100000 * qty, discountCents: 100000 * qty - net, discountBps: input.discount.value, netSaleCents: net, ipiBps: 1300, ipiCents: ipi, totalCents: total, freeDiscountBps: 2000, minimumDownPaymentBps: 7000, minimumDownPaymentCents: Math.ceil(total * .7), downPaymentCents: input.downPaymentCents ?? Math.ceil(total * .7), freightCents: input.freightCents, approvalReasons: [] }
+    return { calculatorVersion: "new-order-browser-fixture", items: [{ line: input.items[0].line, versionId: input.items[0].versionId, productId: product, name: equipment.name, sku: equipment.sku, quantity: qty, tableUnitCents: 100000, netCents: net, ipiCents: ipi, totalCents: total }], tableTotalCents: 100000 * qty, discountCents: 100000 * qty - net, discountBps: input.discount.value, netSaleCents: net, ipiBps: 1300, ipiCents: ipi, totalCents: total, freeDiscountBps: 2000, minimumDownPaymentBps: 7000, minimumDownPaymentCents: Math.ceil(total * .7), downPaymentCents: input.downPaymentCents ?? Math.ceil(total * .7), freightCents: input.freightCents, approvalReasons: [] }
   }
-  await page.route("**/api/erp/commercial/simulate", route => {
-    const input = route.request().postDataJSON() as SimulationInput
+  await page.route("**/api/erp/commercial/mixed/simulate", route => {
+    const input = route.request().postDataJSON() as MixedSimulationInput
+    expect(input).not.toHaveProperty("line")
+    expect(input).not.toHaveProperty("versionId")
+    expect(input.items).toEqual([expect.objectContaining({ productId: product, line: "imported", versionId: version })])
     return route.fulfill({ json: { tenantId: tenant, version: 41, digest: "a".repeat(64), sale: saleFor(input), director: null } })
   })
   await page.route("**/api/erp/registry-lookups", route => {
@@ -82,7 +87,7 @@ for (const uncertainty of ["unavailable", "foreignTenant", "authRetry", "custome
     if (uncertainty === "customerUnavailable" && partyWrites.length === 1) return route.fulfill({ status: 503, json: { title: "Cadastro com confirmação pendente na fixture" } })
     return route.fulfill({ status: 201, headers: { ETag: '"1"' }, json: { tenantId: tenant, canEdit: true, data: { ...body, id: customerId, revision: 1 } } })
   })
-  await page.route("**/api/erp/commercial/orders", route => {
+  await page.route("**/api/erp/commercial/mixed/orders", route => {
     orderWrites.push({ body: route.request().postDataJSON(), key: route.request().headers()["idempotency-key"] })
     if (orderWrites.length === 1 && ["unavailable", "authRetry"].includes(uncertainty)) return route.fulfill({ status: 503, json: { title: "Confirmação pendente na fixture" } })
     if (orderWrites.length === 1 && uncertainty === "foreignTenant") return route.fulfill({ status: 201, headers: { ETag: '"1"' }, json: { tenantId: "99999999-9999-4999-8999-999999999999", id: record } })
@@ -178,6 +183,9 @@ for (const uncertainty of ["unavailable", "foreignTenant", "authRetry", "custome
   expect(orderWrites).toHaveLength(existing || uncertainty === "customerUnavailable" ? 1 : uncertainty === "authRetry" ? 3 : 2)
   for (const repeated of orderWrites.slice(1)) expect(repeated).toEqual(orderWrites[0])
   expect(orderWrites[0].body.customerId).toBe(customerId)
+  expect(orderWrites[0].body.simulation).not.toHaveProperty("line")
+  expect(orderWrites[0].body.simulation).not.toHaveProperty("versionId")
+  expect(orderWrites[0].body.simulation.items).toEqual([expect.objectContaining({ productId: product, quantity: 2, line: "imported", versionId: version })])
   expect(orderWrites[0].body.checkout.stateRegistration).toBe("ISENTO")
   expect(orderWrites[0].body.checkout.manufacturingDays).toBe(45)
   expect(orderWrites[0].body.checkout.deliveryNotes).toContain("45 dias úteis")
@@ -190,8 +198,11 @@ for (const uncertainty of ["unavailable", "foreignTenant", "authRetry", "custome
 
 test("normalizar quantidade e desconto preserva um cálculo equivalente", async ({ page }) => {
   await fixture(page)
-  await page.route("**/api/erp/commercial/simulate", route => {
-    const input = route.request().postDataJSON() as SimulationInput
+  await page.route("**/api/erp/commercial/mixed/simulate", route => {
+    const input = route.request().postDataJSON() as MixedSimulationInput
+    expect(input).not.toHaveProperty("line")
+    expect(input).not.toHaveProperty("versionId")
+    expect(input.items).toEqual([expect.objectContaining({ productId: product, line: "imported", versionId: version })])
     const total = input.items[0].quantity * 113000
     return route.fulfill({ json: { tenantId: tenant, version: 41, digest: "a".repeat(64), director: null, sale: { calculatorVersion: "normalization-fixture", items: [], tableTotalCents: total, discountCents: 0, discountBps: 0, netSaleCents: total, ipiBps: 0, ipiCents: 0, totalCents: total, freeDiscountBps: 2000, minimumDownPaymentBps: 7000, minimumDownPaymentCents: Math.ceil(total * .7), downPaymentCents: Math.ceil(total * .7), freightCents: 0, approvalReasons: [] } } })
   })
