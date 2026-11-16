@@ -4,6 +4,8 @@ Atualizado em 16/11/2026 na branch `feat/api-typescript-migration`.
 
 O objetivo continua sendo migrar Preferências, Cadastros, Vendas e Relatórios para `apps/api-ts`, com contratos HTTP compatíveis e roteamento gradual no BFF. A implementação ainda não está pronta para ativação em produção.
 
+O inventário de métodos, rotas, chamadas do frontend e dependências mantidas na Rust está em [Cobertura da migração](typescript-api-route-coverage.md). A revisão independente concluiu a análise do escopo e confirmou o fechamento do achado de revogação no commit `ac5cf072`; a preparação de código pode seguir para os gates de liberação.
+
 ## Estado verificado
 
 | Área | Implementação atual | Verificação disponível | Trabalho restante |
@@ -229,7 +231,7 @@ A API conserva `X-Request-Id` recebido ou gera um UUID antes de autenticar. A re
 
 A revisão independente identificou permissões antigas na projeção privada das duas rotas de simulação: a requisição podia aguardar `FOR SHARE` enquanto uma transação administrativa revogava a alçada. O contexto agora recarrega as permissões antes de incluir `director`, como os `allowed()` da implementação Rust. Quando somente gestão da empresa ou alçada de diretor é revogada, a resposta continua 200 com `director: null` e a mesma cotação pública.
 
-Um teste PostgreSQL observa a espera real em `pg_stat_activity`, revoga cada uma das duas permissões separadamente e libera o bloqueio. Os quatro casos passaram nas duas APIs. O teste falhou antes da correção TypeScript, demonstrando a diferença real. A revisão não identificou outro achado Critical ou Important na cobertura examinada; a confirmação da correção precede a liberação.
+Um teste PostgreSQL observa a espera real em `pg_stat_activity`, revoga cada uma das duas permissões separadamente e libera o bloqueio. Os quatro casos passaram nas duas APIs. O teste falhou antes da correção TypeScript, demonstrando a diferença real. A revisão não identificou outro achado Critical ou Important na cobertura examinada e confirmou o fechamento da correção.
 
 ## Revisão no GitHub
 
