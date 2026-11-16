@@ -3,6 +3,7 @@ import Fastify, { type FastifyInstance } from "fastify"
 import { registerPartyRoutes } from "./modules/parties/routes.js"
 import { registerDashboardRoutes } from "./modules/dashboard/routes.js"
 import { registerReportRoutes } from "./modules/reports/routes.js"
+import { registerCommercialApprovalRoutes } from "./modules/commercial/approvals.js"
 import { registerOrderRoutes } from "./modules/orders/routes.js"
 import { registerPreferenceRoutes } from "./modules/preferences/routes.js"
 import { registerProductRoutes } from "./modules/products/routes.js"
@@ -48,6 +49,7 @@ export function buildApp(_dependencies: AppDependencies): FastifyInstance {
   registerPartyRoutes(app, _dependencies)
   registerDashboardRoutes(app, _dependencies)
   registerReportRoutes(app, _dependencies)
+  registerCommercialApprovalRoutes(app, _dependencies)
   registerOrderRoutes(app, _dependencies)
   registerPreferenceRoutes(app, _dependencies)
   registerProductRoutes(app, _dependencies)
