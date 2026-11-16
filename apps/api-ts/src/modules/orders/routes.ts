@@ -8,11 +8,13 @@ import { integer } from "../registrations/query.js"
 import { orderSummary, queryInput } from "../sales/shared.js"
 import { loadOrder, summary } from "./snapshot.js"
 import { registerOrderCommands } from "./commands.js"
+import { registerOrderTransitions } from "./transitions.js"
 
 
 
 export function registerOrderRoutes(app: FastifyInstance, dependencies: AppDependencies) {
   registerOrderCommands(app, dependencies)
+  registerOrderTransitions(app, dependencies)
   app.get<{ Params: { id: string } }>("/api/v1/orders/:id", async (request, reply) => {
     const body = await authorizeRequest(request, dependencies, async context => {
       requirePermission(context, "sales.orders.read")
