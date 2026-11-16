@@ -207,6 +207,39 @@ test("PostgreSQL migrations and RLS support sales detail queries and tenant isol
     const referenceEvents = await seed.query("SELECT action,entity_type,details FROM audit_log WHERE entity_id=$1 ORDER BY occurred_at", [categoryId])
     assert.deepEqual(referenceEvents.rows[0], { action: "product_category.created", entity_type: "product_categories", details: { revision: 1, previousRevision: null, status: "active" } })
     assert.equal(referenceEvents.rows.length, 3, "Rejected hierarchy commands must not create audit entries")
+    const settingsChanged = await app.inject({ method: "PUT", url: settingsUrl, headers: { ...operatorHeaders, "if-match": '"2"' }, payload: { requireEmail: true, requirePhone: true } })
+    assert.equal(settingsChanged.statusCode, 200, settingsChanged.body)
+    const richParty = { ...partyInput, isSupplier: true, phone: "11999999999", fiscal: { taxpayerIndicator: "1", stateRegistration: "12345" }, addresses: [{ label: " Entrega ", postalCode: "01001-000", state: "sp", municipalityCode: "3550308", city: "São Paulo", street: "Praça", number: "1", district: "Centro", primary: true }], contacts: [{ name: " Maria ", email: "maria@example.test", primary: true }] }
+    for (const missingContact of [{ ...richParty, email: null }, { ...richParty, phone: null }]) {
+      const rejected: LightMyRequestResponse = await app.inject({ method: "POST", url: "/api/v1/parties", headers: { ...operatorHeaders, "idempotency-key": randomUUID() }, payload: missingContact })
+      assert.equal(rejected.statusCode, 422, rejected.body)
+    }
+    const savedParty = await app.inject({ method: "POST", url: "/api/v1/parties", headers: { ...operatorHeaders, "idempotency-key": randomUUID() }, payload: richParty })
+    assert.equal(savedParty.statusCode, 201, savedParty.body)
+    const savedId = savedParty.json().data.id as string
+    const savedData = savedParty.json().data
+    assert.equal(savedData.addresses[0].postalCode, "01001000")
+    assert.equal(savedData.contacts[0].name, "Maria")
+    const updateInput = { ...partyInput, phone: richParty.phone, isSupplier: true }
+    // Omission preserves metadata, explicit null clears fiscal, [] clears collections.
+    const { addresses: _addresses, contacts: _contacts, ...withoutComplements } = updateInput
+    const preserved = await app.inject({ method: "PUT", url: `/api/v1/parties/${savedId}`, headers: { ...operatorHeaders, "if-match": '"1"' }, payload: withoutComplements })
+    assert.equal(preserved.statusCode, 200, preserved.body)
+    assert.deepEqual(preserved.json().data.addresses, savedData.addresses)
+    assert.deepEqual(preserved.json().data.contacts, savedData.contacts)
+    assert.deepEqual(preserved.json().data.fiscal, savedData.fiscal)
+    await seed.query("INSERT INTO sales_orders(id,tenant_id,customer_id,customer_name,customer_tax_id,due_date,amount_cents,status) VALUES($1,$2,$3,'Cliente novo','04252011000110','2027-01-01',10000,'draft')", [randomUUID(), other, savedId])
+    const linkedDocument = await app.inject({ method: "PUT", url: `/api/v1/parties/${savedId}`, headers: { ...operatorHeaders, "if-match": '"2"' }, payload: { ...withoutComplements, taxId: "11222333000181" } })
+    assert.equal(linkedDocument.statusCode, 409, linkedDocument.body)
+    const clearing = await app.inject({ method: "PUT", url: `/api/v1/parties/${savedId}`, headers: { ...operatorHeaders, "if-match": '"2"' }, payload: { ...withoutComplements, fiscal: null, addresses: [], contacts: [] } })
+    assert.equal(clearing.statusCode, 200, clearing.body)
+    assert.deepEqual(clearing.json().data.addresses, [])
+    assert.deepEqual(clearing.json().data.contacts, [])
+    assert.equal(clearing.json().data.fiscal, null)
+    const partyEvents = await seed.query("SELECT payload FROM outbox_events WHERE aggregate_id=$1 ORDER BY occurred_at", [savedId])
+    assert.deepEqual(partyEvents.rows[0].payload, { revision: 1, isCustomer: true, isSupplier: true })
+    assert.deepEqual(partyEvents.rows[1].payload, { previousRevision: 1, revision: 2, isCustomer: true, isSupplier: true })
+    assert.equal(partyEvents.rows.length, 3)
     await seed.query("UPDATE platform_administrators SET active=false WHERE auth_subject='operator'")
     assert.equal((await app.inject({ method: "GET", url: `/api/v1/orders/${foreignOrder}`, headers: operatorHeaders })).statusCode, 403)
     // A manage grant alone does not imply the read grant required by Rust writes.

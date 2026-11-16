@@ -10,7 +10,7 @@ O objetivo continua sendo migrar Preferências, Cadastros, Vendas e Relatórios 
 | --- | --- | --- | --- |
 | Fundação | Auth, empresa, permissões e transação com contexto RLS; escritas bloqueiam empresa antes de carregar permissões; administrador explícito por auth_subject | Testes de plataforma; role real sem bypass de RLS; revogação de permissão durante espera; administrador sem vínculo e revogação da concessão | Revisão final com os demais contratos |
 | Preferências | GET e PUT com revisão | Testes com adaptador de banco simulado | Contrato integrado com PostgreSQL e revisão de paridade |
-| Cadastros | Listas, detalhes e comandos de parties, products e referências; replay por igualdade estrutural de JSON; configurações cadastrais; escritas exigem leitura e gestão; envelopes, eventos e vínculos dos catálogos auxiliares alinhados ao Rust | Testes HTTP; escritas reais de parties/products; configurações concorrentes; CRUD/replay/listas dos quatro catálogos e conflitos de hierarquia/grupos em PostgreSQL | Validação completa dos clientes/produtos, aplicação de todas as configurações nos comandos e revisão final de paridade |
+| Cadastros | Listas, detalhes e comandos de parties, products e referências; configurações cadastrais; validação/complementos/regras de clientes portados; envelopes/eventos/vínculos dos catálogos alinhados | Testes HTTP; escritas reais de parties/products; clientes com exigências de contato, complementos omitidos/nulos/vazios e documento vinculado; CRUD/replay e hierarquia dos quatro catálogos | Validação completa dos produtos, aplicação das configurações de produtos e revisão final de paridade |
 | Vendas | Listas e detalhes de pedidos e propostas; checkout e versões históricas | Testes HTTP e integração PostgreSQL com migrations completas e RLS | Comandos, transições e consultas comerciais |
 | Relatórios | Pendente | Pendente | Painel e CRUD de relatórios personalizados |
 | BFF e runtime | Pendente | Pendente | Seleção explícita por rota, ausência de retry de comandos, runtime e rollback |
@@ -46,6 +46,14 @@ Categorias de produtos, grupos de produtos, grupos de etiquetas e etiquetas usam
 Os escopos persistidos em `domain_commands` usam os nomes Rust (`product_category.created`, `product_group.created`, `tag_group.created`, `tag.created` e os equivalentes `.updated`). A requisição persistida usa `{id,revision,input}` e o resultado armazena o snapshot completo. Auditoria e outbox conservam o nome da tabela como tipo de entidade e apenas revisão, revisão anterior e status nos detalhes.
 
 A integração verifica criação, detalhe, listagem, alteração e replay para os quatro catálogos, incluindo compatibilidade do formato persistido do comando. Também verifica ciclos de categorias, bloqueio de arquivamento com filhos ativos, grupos de etiquetas ativos/arquivados e vínculos de outra empresa. Esses testes não substituem a revisão ainda pendente dos comandos de clientes e produtos.
+
+## Clientes e fornecedores
+
+O schema de `parties` preserva a distinção entre omissão e limpeza explícita de dados fiscais, endereços e contatos. Textos opcionais vazios normalizam para `null`; endereço e contato admitem no máximo dez registros e apenas um principal. CEP, UF, código IBGE, CPF/CNPJ e inscrição estadual seguem as validações da implementação Rust, inclusive a diferença entre validação de e-mail principal e de contato.
+
+Criação e alteração consultam `registration_settings` para aplicar as exigências de e-mail e telefone. O replay de uma criação idempotente conserva o resultado original antes de aplicar configurações posteriores. Alterações de documento ou tipo de pessoa são bloqueadas com 409 quando o cadastro já está vinculado a pedido de venda ou compra. Auditoria e outbox incluem revisão e papéis de cliente/fornecedor, sem dados pessoais nos detalhes.
+
+Os testes de schema e PostgreSQL verificam normalização, preservação/limpeza de complementos, exigências de contato, documento vinculado, conflito de revisão, idempotência e metadados do outbox. Isso não declara concluída a revisão integral das rotas de Cadastros.
 
 ## Critério de liberação
 
