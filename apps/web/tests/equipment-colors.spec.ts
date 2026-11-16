@@ -1,3 +1,4 @@
+import { chooseCatalogColor } from "./helpers/choose-catalog-color"
 import { expect, test, type BrowserContext } from "@playwright/test"
 import { createCipheriv, createHash, randomBytes, randomUUID } from "node:crypto"
 
@@ -66,8 +67,8 @@ test("cores do equipamento são escolhidas, persistidas e preservadas após alte
   await productChoice.click()
   await expect(page.getByRole("group", { name: `Item do pedido: ${name}`, exact: true }).locator("img")).toBeVisible()
   await page.getByLabel("Vencimento da conta a receber").fill("2026-11-27")
-  await page.getByLabel(`Cor da estrutura de ${name}`, { exact: true }).selectOption("Branco")
-  await page.getByLabel(`Cor do estofado de ${name}`, { exact: true }).selectOption("Vermelho")
+  await chooseCatalogColor(page, `Cor da estrutura de ${name}`, "Branco")
+  await chooseCatalogColor(page, `Cor do estofado de ${name}`, "Vermelho")
   await page.getByLabel(`Cor dos anilheiros de ${name}`, { exact: true }).selectOption("Azul")
   await page.getByLabel(`Tipo de anilheiro de ${name}`, { exact: true }).selectOption("Olímpico")
   await page.setViewportSize({ width: 320, height: 844 })
@@ -101,8 +102,8 @@ test("cores do equipamento são escolhidas, persistidas e preservadas após alte
   const changeColors = await context.request.put(`/api/erp/products/${productId}`, { headers: { ...headers, "If-Match": revised.headers().etag }, data: { ...oldClientInput, structureColors: ["Preto fosco"], upholsteryColors: ["Preto"], plateHolderColors: ["Preto"], plateHolderTypes: ["Standard"] } })
   expect(changeColors.status()).toBe(200)
   await page.getByRole("link", { name: "Editar rascunho", exact: true }).click()
-  await expect(page.getByLabel(`Cor da estrutura de ${name}`, { exact: true })).toHaveValue("Branco")
-  await expect(page.getByLabel(`Cor do estofado de ${name}`, { exact: true })).toHaveValue("Vermelho")
+  await expect(page.getByRole("combobox", { name: `Cor da estrutura de ${name}`, exact: true })).toContainText("Branco")
+  await expect(page.getByRole("combobox", { name: `Cor do estofado de ${name}`, exact: true })).toContainText("Vermelho")
   await expect(page.getByLabel(`Cor dos anilheiros de ${name}`, { exact: true })).toHaveValue("Azul")
   await expect(page.getByLabel(`Tipo de anilheiro de ${name}`, { exact: true })).toHaveValue("Olímpico")
   await page.getByLabel(`Quantidade de ${name}`, { exact: true }).fill("2")

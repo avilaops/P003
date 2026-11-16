@@ -44,11 +44,15 @@ export function catalogPaletteFor(reference: unknown): CatalogPalette | undefine
 }
 
 export function catalogColorPhoto(value: string, reference?: CatalogPalette, part: CatalogFinishPart = "structure") {
-  const palette = getCatalogFinishPalette(reference)
-  if (!palette) return undefined
   const normalized = key(value, part)
+  const pro = getCatalogFinishPalette("dhz-hammerforce-pro")!
+  const sourceReference = reference === "dhz-combined"
+    ? [...pro[part].standard, ...pro[part].special].some(name => key(name, part) === normalized) ? "dhz-hammerforce-pro" : "dhz-sforce"
+    : reference
+  const palette = getCatalogFinishPalette(sourceReference)
+  if (!palette) return undefined
   if (![...palette[part].standard, ...palette[part].special].some(name => key(name, part) === normalized)) return undefined
-  const photos = reference === "dhz-sforce" ? sforcePhotos : proPhotos
+  const photos = sourceReference === "dhz-sforce" ? sforcePhotos : proPhotos
   const photo = photos.find(photo => key(photo.name, part) === normalized)
   return photo ? { ...photo, asset: palette.source.asset, sourceWidth: 1245, sourceHeight: 1759 } : undefined
 }

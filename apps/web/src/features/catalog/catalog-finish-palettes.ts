@@ -1,4 +1,4 @@
-export type CatalogFinishPalette = "dhz-hammerforce-pro" | "dhz-sforce"
+export type CatalogFinishPalette = "dhz-hammerforce-pro" | "dhz-sforce" | "dhz-combined"
 export type CatalogFinishPart = "structure" | "swingArm" | "upholstery"
 type FinishOptions = { readonly standard: readonly string[]; readonly special: readonly string[] }
 export type CatalogFinishDefinition = Record<CatalogFinishPart, FinishOptions> & {
@@ -19,10 +19,23 @@ const palettes: Record<CatalogFinishPalette, CatalogFinishDefinition> = {
   swingArm: { standard: ["Piano Black", "Graphite Black", "Light Grey", "Performance Red", "Hermès Orange", "Apple Green", "Ocean Blue"], special: ["Titanium Grey"] },
   upholstery: { standard: ["Black", "Saddle Brown", "Reddish Brown", "Khaki", "Mocha"], special: [] },
  },
+ // Explicit business configuration • not a palette claimed by Cable Motion.
+ "dhz-combined": {
+  source: { title: "HammerForce Pro", asset: "/catalog/dhz-hammerforce-pro-original-colors.jpeg", pdfPage: 51, printedPage: 101 },
+  structure: { standard: ["Piano Black", "Matte Graphite Black", "Light Grey", "Performance Red", "Titanium Grey"], special: [] },
+  swingArm: { standard: ["Piano Black", "Matte Graphite Black", "Light Grey", "Performance Red", "Hermès Orange", "Apple Green", "Ocean Blue"], special: ["Titanium Grey"] },
+  upholstery: { standard: ["Black", "Saddle Brown", "Reddish Brown", "Mocha", "Khaki"], special: [] },
+ },
 }
 
 export function getCatalogFinishPalette(value?: string | null): CatalogFinishDefinition | undefined {
  return value && Object.hasOwn(palettes, value) ? palettes[value as CatalogFinishPalette] : undefined
+}
+
+export function catalogPaletteSources(value?: string | null) {
+ if (value === "dhz-combined") return [palettes["dhz-hammerforce-pro"].source, palettes["dhz-sforce"].source]
+ const palette = getCatalogFinishPalette(value)
+ return palette ? [palette.source] : []
 }
 
 function colorKey(value: string, part: CatalogFinishPart) {

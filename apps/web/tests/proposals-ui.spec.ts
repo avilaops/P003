@@ -1,3 +1,4 @@
+import { chooseCatalogColor } from "./helpers/choose-catalog-color"
 import { expect, test } from "@playwright/test"
 import { installFrontendFixture, tenant, record } from "./helpers/frontend-fixture"
 
@@ -277,10 +278,10 @@ test("acabamentos ficam recolhidos e preservam escolhas registradas e preço bra
   await page.goto(`/vendas/propostas/${record}/editar`)
   const finishes = page.locator("details").filter({ has: page.locator("summary").filter({ hasText: "Acabamentos" }) })
   await expect(finishes).not.toHaveAttribute("open", "")
-  await expect(page.getByLabel(`Estrutura de ${item.name}`, { exact: true })).toBeHidden()
+  await expect(page.getByRole("combobox", { name: `Estrutura de ${item.name}`, exact: true })).toBeHidden()
   await finishes.locator("summary").click()
-  await expect(page.getByLabel(`Estrutura de ${item.name}`, { exact: true })).toHaveValue("Preto")
-  await expect(page.getByLabel(`Estofado de ${item.name}`, { exact: true })).toHaveValue("Azul registrado")
+  await expect(page.getByRole("combobox", { name: `Estrutura de ${item.name}`, exact: true })).toContainText("Preto")
+  await expect(page.getByRole("combobox", { name: `Estofado de ${item.name}`, exact: true })).toContainText("Azul registrado")
   const plateHolder = page.getByLabel(`Tipo de anilheiro de ${item.name}`, { exact: true })
   await expect(plateHolder.getByRole("option")).toHaveText(["Não se aplica", "Standard", "Olímpico"])
   await expect(plateHolder).toHaveValue("")
@@ -296,7 +297,7 @@ test("acabamentos ficam recolhidos e preservam escolhas registradas e preço bra
   await expect(price).toHaveAttribute("readonly", "")
   await expect(price).not.toBeEditable()
   await page.getByLabel("Condições de pagamento", { exact: true }).fill("Condição preservada")
-  await page.getByLabel(`Estrutura de ${item.name}`, { exact: true }).selectOption("Cinza")
+  await chooseCatalogColor(page, `Estrutura de ${item.name}`, "Cinza")
   await expect(price).toHaveValue("22.468,09")
   await expect(page.getByLabel("Condições de pagamento", { exact: true })).toHaveValue("Condição preservada")
   expect(saved).toBeUndefined()
@@ -335,7 +336,7 @@ test("acabamento obrigatório recolhido abre na validação antes de confirmar a
   await expect(finishes).not.toHaveAttribute("open", "")
   await page.getByRole("button", { name: "Salvar proposta", exact: true }).click()
   await expect(finishes).toHaveAttribute("open", "")
-  const structure = page.getByLabel(`Estrutura de ${item.name}`, { exact: true })
+  const structure = page.getByRole("combobox", { name: `Estrutura de ${item.name}`, exact: true })
   await expect(structure).toBeFocused()
   expect(saved).toBeUndefined()
   await structure.selectOption("Preto")

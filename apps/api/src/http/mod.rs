@@ -87,6 +87,8 @@ mod preferences_tests;
 #[cfg(test)]
 mod price_lists_tests;
 #[cfg(test)]
+mod product_price_revision_tests;
+#[cfg(test)]
 mod production_tests;
 #[cfg(test)]
 mod proposal_actions_tests;

@@ -1,3 +1,4 @@
+import { chooseCatalogColor } from "./helpers/choose-catalog-color"
 import { expect, test, type BrowserContext } from "@playwright/test"
 import { createCipheriv, createHash, randomBytes, randomUUID } from "node:crypto"
 
@@ -37,8 +38,8 @@ test("propostas reais persistem no BFF, preservam versões e geram somente um pe
   await page.getByRole("button", { name: /Selecionar Equipamento da proposta/ }).click()
   await page.getByLabel("Preço unitário de Equipamento da proposta", { exact: true }).fill("100,00")
   await page.getByLabel("Quantidade de Equipamento da proposta", { exact: true }).fill("2")
-  await page.getByLabel("Estrutura de Equipamento da proposta", { exact: true }).selectOption("Preto")
-  await page.getByLabel("Estofado de Equipamento da proposta", { exact: true }).selectOption("Azul")
+  await chooseCatalogColor(page, "Estrutura de Equipamento da proposta", "Preto")
+  await chooseCatalogColor(page, "Estofado de Equipamento da proposta", "Azul")
   await page.getByLabel("Validade da proposta", { exact: true }).fill("2100-01-01")
   await page.getByLabel("Condições de pagamento", { exact: true }).fill("À vista")
   await page.getByLabel("Condições de entrega", { exact: true }).fill("Retirada pelo cliente")

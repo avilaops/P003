@@ -35,7 +35,7 @@ async fn call(
     (status, serde_json::from_slice(&raw).unwrap())
 }
 
-async fn seed(admin: &PgPool) -> (Uuid, Vec<Uuid>, Uuid) {
+pub(super) async fn seed(admin: &PgPool) -> (Uuid, Vec<Uuid>, Uuid) {
     let tenant = Uuid::parse_str(TENANT).unwrap();
     let version = Uuid::now_v7();
     let products = vec![Uuid::now_v7(), Uuid::now_v7()];

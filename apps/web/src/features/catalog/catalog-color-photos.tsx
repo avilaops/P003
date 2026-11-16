@@ -1,54 +1,31 @@
 "use client"
 
+import { useId } from "react"
+import { Popover } from "@base-ui/react/popover"
+import { ChevronDown } from "lucide-react"
 import { catalogColorPhoto, type CatalogPalette } from "./catalog-color-photo-model"
-import { catalogFinishGroups, getCatalogFinishPalette, type CatalogFinishPart } from "./catalog-finish-palettes"
+import { catalogFinishGroups, catalogPaletteSources, type CatalogFinishPart } from "./catalog-finish-palettes"
+import { CatalogColorPicker, CatalogColorSwatch, colorGroupTitles } from "./catalog-color-picker"
 
 type CatalogColorPhotosProps = {
-  label: string
-  options?: readonly string[]
-  value?: string
-  onChange?: (value: string) => void
-  disabled?: boolean
-  palette?: CatalogPalette
-  part: CatalogFinishPart
-  readOnly?: boolean
-  showSource?: boolean
+  label: string; options?: readonly string[]; value?: string; onChange?: (value: string) => void
+  disabled?: boolean; palette?: CatalogPalette; part: CatalogFinishPart; readOnly?: boolean; showSource?: boolean
 }
 
 export function CatalogPaletteReference({ palette }: { palette?: CatalogPalette }) {
-  const source = getCatalogFinishPalette(palette)?.source
-  return source ? <a className="text-xs text-muted-foreground underline underline-offset-2" href={source.asset} target="_blank" rel="noreferrer">Ver paleta original e combinações · {source.title}, {source.printedPage ? `pág. ${source.printedPage}` : `PDF pág. ${source.pdfPage}`}</a> : null
+  const sources = catalogPaletteSources(palette)
+  return sources.length ? <div className="flex flex-wrap gap-x-2 gap-y-1 text-xs text-muted-foreground">{sources.map((source, index) => <span key={source.asset}>{index > 0 && <span aria-hidden="true">• </span>}<a className="underline underline-offset-2" href={source.asset} target="_blank" rel="noreferrer">Ver paleta original e combinações • {source.title}, {source.printedPage ? `pág. ${source.printedPage}` : `PDF pág. ${source.pdfPage}`}</a></span>)}</div> : null
 }
 
-export function CatalogColorPhotos({ label, options, value, onChange, disabled, palette, part, readOnly = false, showSource = true }: CatalogColorPhotosProps) {
+/** Read-only catalog information stays compact; the complete original list lives in a portal. */
+export function CatalogColorPhotos({ label, options, value = "", onChange, disabled, palette, part, readOnly = false, showSource = true }: CatalogColorPhotosProps) {
+  const id = useId()
   const names = [...new Set(options ?? [])]
   if (!names.length) return null
   const groups = catalogFinishGroups(palette, part, names)
   const hasPhotos = names.some(name => catalogColorPhoto(name, palette, part))
   return <div className="min-w-0 space-y-2" role="group" aria-label={`${label}: ${hasPhotos ? "fotos do catálogo DHZ" : "opções de acabamento"}`}>
-    {([["standard", "Padrão"], ["special", "Especiais do catálogo"], ["other", "Outras opções cadastradas"]] as const).map(([group, title]) => groups[group].length > 0 && <div key={group} className="min-w-0 space-y-1.5">
-      {(group === "special" || group === "other" && hasPhotos || group === "standard" && groups.special.length > 0) && <p className="text-xs font-medium text-muted-foreground">{title}</p>}
-      <div className="flex flex-wrap gap-1.5">
-      {groups[group].map(option => {
-        const photo = catalogColorPhoto(option, palette, part)
-        const scale = photo ? 46 / photo.width : 1
-        const content = <>
-          {photo && <span aria-hidden="true" className="flex h-9 items-center"><span className="block shrink-0 rounded-sm" style={{
-            width: 46,
-            height: photo.height * scale,
-            backgroundImage: `url("${photo.asset}")`,
-            backgroundRepeat: "no-repeat",
-            backgroundSize: `${photo.sourceWidth * scale}px ${photo.sourceHeight * scale}px`,
-            backgroundPosition: `${-photo.x * scale}px ${-photo.y * scale}px`,
-          }} /></span>}
-          <span className="w-full break-words">{option}</span>
-        </>
-        const cardClass = `${photo ? "w-18 px-0 py-1" : "min-h-11 min-w-14 max-w-36 px-2 py-1"} flex shrink-0 flex-col items-center justify-center gap-1 rounded-md border text-center text-xs leading-tight`
-        return readOnly ? <div key={option} className={cardClass}>{content}</div> : <button key={option} type="button" disabled={disabled || !onChange} aria-pressed={value === option} onClick={() => onChange?.(option)} title={option}
-          className={`${cardClass} focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-50 ${value === option ? "border-primary ring-1 ring-primary" : "border-border hover:border-primary"}`}>{content}</button>
-      })}
-      </div>
-    </div>)}
+    {readOnly ? <Popover.Root><Popover.Trigger disabled={disabled} aria-label={`Ver opções de ${label}`} className="catalog-color-trigger"><CatalogColorSwatch name={names[0]} palette={palette} part={part} /><span className="catalog-color-name">{names.length} opções • ver cores</span><ChevronDown aria-hidden="true" className="size-4 shrink-0" /></Popover.Trigger><Popover.Portal><Popover.Positioner align="start" sideOffset={4} collisionPadding={12} className="catalog-color-positioner"><Popover.Popup aria-label={`Cores de ${label}`} className="catalog-color-popup"><div role="list" aria-label={`Opções de ${label}`} tabIndex={0} className="catalog-color-list">{(["standard", "special", "other"] as const).map(group => groups[group].length > 0 && <div key={group} role="presentation"><p className="catalog-color-group-label">{colorGroupTitles[group]}</p>{groups[group].map(name => <div role="listitem" key={name} className="catalog-color-readonly-row"><CatalogColorSwatch name={name} palette={palette} part={part} /><span className="catalog-color-name">{name}</span></div>)}</div>)}</div></Popover.Popup></Popover.Positioner></Popover.Portal></Popover.Root> : <CatalogColorPicker id={id} label={label} options={names} value={value} onChange={next => onChange?.(next)} disabled={disabled || !onChange} placeholder="Escolha uma cor" palette={palette} part={part} />}
     {showSource && hasPhotos && <CatalogPaletteReference palette={palette} />}
   </div>
 }

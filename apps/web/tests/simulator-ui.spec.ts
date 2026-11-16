@@ -1,3 +1,4 @@
+import { chooseCatalogColor } from "./helpers/choose-catalog-color"
 import { expect, test } from "@playwright/test"
 import { installFrontendFixture, tenant } from "./helpers/frontend-fixture"
 import { fieldGroups, states, type Parameters } from "../src/features/commercial-settings/commercial-parameters"
@@ -155,7 +156,7 @@ test("gestão vê composição, limites e entrada; comando incerto conserva chav
   await page.getByRole("button", { name: "Selecionar Cliente de teste", exact: true }).click()
   await page.getByLabel("Vencimento da conta a receber", { exact: true }).fill("2026-12-30")
   await page.locator("summary").filter({ hasText: `Acabamentos de ${equipment.name}` }).click()
-  await page.getByLabel(`Cor da estrutura de ${equipment.name}`, { exact: true }).selectOption("Preto")
+  await chooseCatalogColor(page, `Cor da estrutura de ${equipment.name}`, "Preto")
   await expect(page.getByLabel(`Cor dos anilheiros de ${equipment.name}`, { exact: true })).toHaveCount(0)
   await page.getByLabel(`Tipo de anilheiro de ${equipment.name}`, { exact: true }).selectOption("Olímpico")
   await expect(page.getByRole("region", { name: "Resultado da simulação" })).toHaveCount(0)

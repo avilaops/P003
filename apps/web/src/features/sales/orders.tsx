@@ -23,7 +23,8 @@ import { Button, buttonVariants } from "@/components/ui/button"
 import { SearchInput } from "@/components/search-input"
 import { Input } from "@/components/ui/input"
 import { ProductThumbnail } from "@/features/catalog/product-thumbnail"
-import { CatalogColorPhotos, CatalogPaletteReference } from "@/features/catalog/catalog-color-photos"
+import { CatalogPaletteReference } from "@/features/catalog/catalog-color-photos"
+import { CatalogColorPicker } from "@/features/catalog/catalog-color-picker"
 import { catalogPaletteFor, type CatalogPalette } from "@/features/catalog/catalog-color-photo-model"
 import type { CatalogFinishPart } from "@/features/catalog/catalog-finish-palettes"
 import { quantity, useCommand, useResource } from "../../hooks/use-operation"
@@ -76,12 +77,7 @@ export function ColorChoice({ label, options = [], value, onChange, catalog, pal
   if (!choices.length && !value) return null
   return <div className="grid min-w-0 gap-2 text-sm">
     <label htmlFor={id}>{label}</label>
-    <select id={id} className="min-h-10 w-full min-w-0 rounded-lg border border-input bg-background px-3" value={value} required={choices.length > 0 && !optional} disabled={loading || !choices.length && !value} onChange={event => onChange(event.target.value)}>
-      <option value="">{optional ? "Manter sem seleção" : choices.length ? (catalog?.field === "plateHolderTypes" ? "Escolha um tipo" : "Escolha uma cor") : "Sem opções cadastradas"}</option>
-      {value && !choices.includes(value) && <option value={value}>{value} · seleção registrada</option>}
-      {choices.map(color => <option key={color} value={color}>{color}</option>)}
-    </select>
-    <CatalogColorPhotos label={label} options={choices} value={value} onChange={onChange} disabled={loading} palette={refreshed === null ? palette : refreshedPalette} part={part} showSource={false} />
+    <CatalogColorPicker id={id} label={label} options={choices} value={value} onChange={onChange} required={choices.length > 0 && !optional} disabled={loading || !choices.length && !value} placeholder={optional ? "Manter sem seleção" : choices.length ? (catalog?.field === "plateHolderTypes" ? "Escolha um tipo" : "Escolha uma cor") : "Sem opções cadastradas"} palette={refreshed === null ? palette : refreshedPalette} part={part} />
     {catalog && !choices.length && <div className="flex flex-wrap items-center gap-3">
       <Link className={linkClass} href={`/cadastros/produtos/${catalog.productId}/editar#product-colors`} target="_blank" rel="noopener noreferrer" aria-label={`Cadastrar opções de ${label} (nova aba)`}>Cadastrar opções</Link>
       <Button type="button" variant="outline" disabled={loading} aria-label={`Atualizar opções de ${label}`} onClick={() => void refresh()}>{loading ? "Atualizando…" : "Atualizar opções"}</Button>

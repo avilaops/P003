@@ -1,3 +1,4 @@
+import { chooseCatalogColor } from "./helpers/choose-catalog-color"
 import { expect, test, type Page } from "@playwright/test"
 import { installFrontendFixture, tenant, record } from "./helpers/frontend-fixture"
 
@@ -51,7 +52,7 @@ for (const width of [320, 390, 430, 1366, 1440]) test(`tabela nacional até pedi
   const back = page.getByRole("link", { name: "Tabela de preços", exact: true })
   await expect(back).toHaveAttribute("href", listing)
   await page.locator("summary").filter({ hasText: `Acabamentos de ${name}` }).click()
-  await page.getByLabel(`Cor da estrutura de ${name}`, { exact: true }).selectOption("Preto")
+  await chooseCatalogColor(page, `Cor da estrutura de ${name}`, "Preto")
   await page.getByLabel(`Tipo de anilheiro de ${name}`, { exact: true }).selectOption("Olímpico")
   await page.getByLabel("Desconto (%)", { exact: true }).fill("10")
   await page.getByRole("button", { name: "Simular", exact: true }).click()
@@ -77,24 +78,24 @@ test("peso do simulador respeita quantidade inteira digitada com zero inicial", 
 })
 
 test("atualiza tabela obsoleta sem perder cliente, vencimento ou acabamentos", async ({ page }) => {
-  let tableReads = 0
-  let refreshFailed = false
+  let publication: "initial" | "stale" | "failed" | "refreshed" = "initial"
   const nextVersion = "77777777-7777-4777-8777-777777777777"
   await page.route("**/api/erp/commercial/tables/imported", route => {
-    tableReads++
-    if (tableReads > 1 && !refreshFailed) { refreshFailed = true; return route.fulfill({ status: 503, json: { title: "Publicação temporariamente indisponível" } }) }
-    return route.fulfill({ json: { tenantId: tenant, line: "imported", canManage: false, data: { ...table, id: tableReads > 1 ? nextVersion : version, version: tableReads > 1 ? 7 : 6 } } })
+    // Fail the explicit stale-table refresh, independently of development mount reads.
+    if (publication === "stale") { publication = "failed"; return route.fulfill({ status: 503, json: { title: "Publicação temporariamente indisponível" } }) }
+    if (publication === "failed") publication = "refreshed"
+    return route.fulfill({ json: { tenantId: tenant, line: "imported", canManage: false, data: { ...table, id: publication === "refreshed" ? nextVersion : version, version: publication === "refreshed" ? 7 : 6 } } })
   })
   const simulations: Record<string, unknown>[] = []
   await page.route("**/api/erp/commercial/simulate", route => {
     const input = route.request().postDataJSON(); simulations.push(input)
-    return route.fulfill({ json: { tenantId: tenant, version: tableReads > 1 ? 7 : 6, digest: "a".repeat(64), sale: sale(), director: null } })
+    return route.fulfill({ json: { tenantId: tenant, version: publication === "refreshed" ? 7 : 6, digest: "a".repeat(64), sale: sale(), director: null } })
   })
-  await page.route("**/api/erp/commercial/orders", route => route.fulfill({ status: 412, json: { title: "A tabela mudou. Simule novamente." } }))
+  await page.route("**/api/erp/commercial/orders", route => { publication = "stale"; return route.fulfill({ status: 412, json: { title: "A tabela mudou. Simule novamente." } }) })
   await page.goto(`/vendas/simulador?produto=${product}`)
   await chooseCustomer(page)
   await page.locator("summary").filter({ hasText: `Acabamentos de ${name}` }).click()
-  await page.getByLabel(`Cor da estrutura de ${name}`, { exact: true }).selectOption("Preto")
+  await chooseCatalogColor(page, `Cor da estrutura de ${name}`, "Preto")
   await page.getByRole("button", { name: "Simular", exact: true }).click()
   await page.getByRole("button", { name: "Criar pedido com estas condições", exact: true }).click()
   await expect(page.getByRole("alert").filter({ hasText: "A tabela mudou" })).toBeVisible()
@@ -104,7 +105,7 @@ test("atualiza tabela obsoleta sem perder cliente, vencimento ou acabamentos", a
   await page.getByRole("button", { name: "Atualizar tabela e simular novamente", exact: true }).click()
   await expect(page.getByText("Cliente selecionado: Academia de teste", { exact: true })).toBeVisible()
   await expect(page.getByLabel("Vencimento da conta a receber", { exact: true })).toHaveValue("2026-12-30")
-  await expect(page.getByLabel(`Cor da estrutura de ${name}`, { exact: true })).toHaveValue("Preto")
+  await expect(page.getByRole("combobox", { name: `Cor da estrutura de ${name}`, exact: true })).toContainText("Preto")
   await page.getByRole("button", { name: "Simular", exact: true }).click()
   expect(simulations.at(-1)).toMatchObject({ versionId: nextVersion, items: [{ productId: product, structureColor: "Preto" }] })
 })
