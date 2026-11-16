@@ -1,5 +1,6 @@
 import Fastify, { type FastifyInstance } from "fastify"
 
+import { registerPreferenceRoutes } from "./modules/preferences/routes.js"
 import type { AccessDependencies } from "./platform/access.js"
 import { Problem } from "./platform/problem.js"
 
@@ -18,5 +19,6 @@ export function buildApp(_dependencies: AppDependencies): FastifyInstance {
       .header("cache-control", "no-store")
       .send(problem.toJSON())
   })
+  registerPreferenceRoutes(app, _dependencies)
   return app
 }
