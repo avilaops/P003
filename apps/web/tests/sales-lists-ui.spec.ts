@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test"
 import { installFrontendFixture, tenant, record } from "./helpers/frontend-fixture"
+import type { Schema } from "../src/lib/api/types"
 
 test.beforeEach(async ({ context }) => installFrontendFixture(context))
 for (const kind of ["pedidos", "propostas"] as const) {
@@ -56,15 +57,18 @@ test("menu de novo pedido fecha com Escape, restaura foco e fecha ao clicar fora
   await expect(trigger).toBeFocused()
   await trigger.click()
   await expect(item).toBeVisible()
-  await page.getByRole("heading", { name: "Pedidos de venda", exact: true }).click()
+  // A modal menu's dismissal layer receives the outside pointer event.
+  const heading = (await page.getByRole("heading", { name: "Pedidos de venda", exact: true }).boundingBox())!
+  await page.mouse.click(heading.x + heading.width / 2, heading.y + heading.height / 2)
   await expect(item).toBeHidden()
 })
 
 test("retorno do detalhe preserva busca, situação, página e rolagem da empresa", async ({ page }) => {
-  const rows = Array.from({ length: 25 }, (_, index) => ({ id: index === 24 ? record : `${record.slice(0, -2)}${String(index).padStart(2, "0")}`, number: String(index + 1), customerName: `Cliente ${index + 1}`, status: "draft", amount: "100.00" }))
+  const rows = Array.from({ length: 25 }, (_, index) => ({ id: index === 24 ? record : `${record.slice(0, -2)}${String(index).padStart(2, "0")}`, number: String(index + 1), customerId: record, customerName: `Cliente ${index + 1}`, customerTaxId: "52998224725", status: "draft", amount: "100.00", dueDate: "2026-12-30", pricingOrigin: false, revision: 1, updatedAt: "2026-11-16T12:00:00Z" } satisfies Schema<"OrderSummary">))
+  const detail = { tenantId: tenant, canEdit: false, pricingOrigin: false, data: rows[24], items: [] } satisfies Schema<"OrderSnapshot">
   await page.route("**/api/erp/orders?**", route => route.fulfill({ json: { tenantId: tenant, canEdit: false, total: 75, data: rows } }))
-  await page.route(`**/api/erp/orders/${record}?**`, route => route.fulfill({ json: { tenantId: tenant, canEdit: false, data: { ...rows[24], revision: 1 }, items: [] } }))
-  await page.route(`**/api/erp/orders/${record}`, route => route.fulfill({ json: { tenantId: tenant, canEdit: false, data: { ...rows[24], revision: 1 }, items: [] } }))
+  await page.route(`**/api/erp/orders/${record}?**`, route => route.fulfill({ json: detail }))
+  await page.route(`**/api/erp/orders/${record}`, route => route.fulfill({ json: detail }))
   const list = "/vendas/pedidos?q=Cliente&status=draft&offset=25"
   await page.setViewportSize({ width: 390, height: 600 })
   await page.goto(list)

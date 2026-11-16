@@ -235,4 +235,6 @@ Um teste PostgreSQL observa a espera real em `pg_stat_activity`, revoga cada uma
 
 ## Revisão no GitHub
 
-O [PR #229](https://github.com/avilaops/P003/pull/229) reúne a implementação em rascunho. A verificação TypeScript/PostgreSQL e a matriz Rust/TypeScript são obrigatórias também na validação de PR, sem depender de `inputs.full` e sem permitir omitir a URL de testes. A preparação do código e o PR não representam ativação em produção.
+O [PR #229](https://github.com/avilaops/P003/pull/229) foi integrado à `main` em `8ce8444daf5dd3a4dca3ba9fafe6939b3b18636d`, após CI e revisão. A verificação TypeScript/PostgreSQL e a matriz Rust/TypeScript são obrigatórias também na validação de PR, sem depender de `inputs.full` e sem permitir omitir a URL de testes. A integração não representa ativação em produção.
+
+A [primeira execução de release](https://github.com/avilaops/P003/actions/runs/43976847209) passou nos gates de API, banco, contratos, build web e no primeiro shard de navegador. O segundo shard encontrou quatro falhas e bloqueou a implantação. A investigação confirmou um erro de concordância na mensagem de propostas vazias, uma fixture de detalhe sem `dueDate` obrigatório, um clique de teste interceptado pela camada modal do menu e espaçamento móvel que excedia a altura validada no Chrome Linux. A correção conserva as verificações de filtros, recuperação de erro, Escape/foco, clique externo, retorno/rolagem e altura máxima. A fixture de detalhe agora é conferida pelos tipos OpenAPI. A ativação de produção continua pendente de nova release validada.
