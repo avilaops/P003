@@ -427,7 +427,12 @@ test("acabamentos podem ser recarregados sem perder a negociação", async ({ co
   const attemptsBeforeRetry = attempts
   catalogAvailable = true
   await retryFinishes.click()
-  await expect(page.getByLabel(`Cor da estrutura de ${name}`, { exact: true }).getByRole("option", { name: "Preto", exact: true })).toHaveCount(1)
+  const structure = page.getByRole("combobox", { name: `Cor da estrutura de ${name}`, exact: true })
+  await structure.click()
+  const colors = page.getByRole("listbox", { name: `Cor da estrutura de ${name}`, exact: true })
+  await expect(colors.getByRole("option", { name: "Preto", exact: true })).toHaveCount(1)
+  await colors.getByRole("option", { name: "Preto", exact: true }).click()
+  await expect(structure).toContainText("Preto")
   await expect(page.getByLabel(`Quantidade de ${name}`, { exact: true })).toHaveValue("2")
   await expect(page.getByLabel(`Tipo de anilheiro de ${name}`, { exact: true })).toHaveValue("Olímpico")
   await expect(page.getByText(/Cliente selecionado: Academia Horizonte LTDA/)).toBeVisible()
