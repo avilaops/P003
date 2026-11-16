@@ -40,3 +40,33 @@ test("registration lists preserve tenant, permissions, pagination and public fie
   const invalid = await app.inject({ method: "GET", url: "/api/v1/products?limit=101", headers })
   assert.equal(invalid.statusCode, 422)
 })
+
+test("reference writes require command and revision headers and preserve optimistic updates", async () => {
+  let revision = 1
+  let exists = false
+  let writes = 0
+  const client: DatabaseClient = {
+    async query<T extends Record<string, unknown>>(sql: string, values: readonly unknown[] = []) {
+      if (sql.includes("FROM tenants tenant")) return { rows: [{ tenant_id: tenant, permissions: ["catalog.categories.read", "catalog.categories.manage"] }] as unknown as T[] }
+      if (sql.includes("FROM domain_commands")) return { rows: [] as T[] }
+      if (sql.startsWith("SELECT id,revision,code")) return { rows: exists ? [{ id, revision: String(revision), code: "FORCA", name: values.length ? "Força" : "Força", status: "active", notes: null, parent_id: null, sort_order: 10 }] as unknown as T[] : [] as T[] }
+      if (sql.startsWith("INSERT INTO product_categories")) { exists = true; writes += 1 }
+      if (sql.startsWith("UPDATE product_categories")) { revision += 1; writes += 1; return { rows: [{ affected: 1 }] as unknown as T[] } }
+      return { rows: [] as T[] }
+    }, release() {},
+  }
+  const pool: DatabasePool = { async connect() { return client } }
+  const app = buildApp({ pool, userinfoUrl: "http://auth.test/oauth/userinfo", fetchAuth: async () => Response.json({ sub: "subject-1", email: "user@example.test" }) })
+  const headers = { authorization: "Bearer valid", "x-tenant-id": tenant, "idempotency-key": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb" }
+  const payload = { code: "FORCA", name: "Força", status: "active", notes: null, parentId: null, sortOrder: 10 }
+
+  const created = await app.inject({ method: "POST", url: "/api/v1/product-categories", headers, payload })
+  assert.equal(created.statusCode, 201, created.body)
+  assert.equal(created.headers.etag, '"1"')
+  const updated = await app.inject({ method: "PUT", url: `/api/v1/product-categories/${id}`, headers: { ...headers, "if-match": '"1"' }, payload: { ...payload, name: "Força livre" } })
+  assert.equal(updated.statusCode, 200, updated.body)
+  assert.equal(updated.headers.etag, '"2"')
+  const stale = await app.inject({ method: "PUT", url: `/api/v1/product-categories/${id}`, headers: { ...headers, "if-match": '"1"' }, payload })
+  assert.equal(stale.statusCode, 412)
+  assert.equal(writes, 2)
+})
