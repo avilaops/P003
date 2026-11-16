@@ -1,7 +1,7 @@
 import assert from "node:assert/strict"
 import test from "node:test"
 import { parseRevision, nextRevision, revisionValue } from "../src/platform/revision.js"
-import { parseJson, stringifyJson, sameJson } from "../src/platform/json.js"
+import { canonicalJson, parseJson, stringifyJson, sameJson } from "../src/platform/json.js"
 import { Problem } from "../src/platform/problem.js"
 
 test("revision preconditions preserve positive signed i64 without rounding", () => {
@@ -24,4 +24,5 @@ test("JSON and replay preserve integer tokens beyond the JS safe range", () => {
   assert.equal(parseJson("18446744073709551615"), 18446744073709551615n)
   assert.equal(typeof parseJson("18446744073709551616"), "number")
   assert.throws(() => parseJson("1e400"), SyntaxError)
+  assert.equal(canonicalJson({ z: 0, a: { b: 9007199254740993n, a: ["ç"], omitted: undefined } }), '{"a":{"a":["ç"],"b":9007199254740993},"z":0}')
 })

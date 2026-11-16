@@ -29,3 +29,14 @@ export function parseJson(value: string): any {
 export function sameJson(left: unknown, right: unknown): boolean {
   return isDeepStrictEqual(parseJson(stringifyJson(left)), parseJson(stringifyJson(right)))
 }
+
+// serde_json::Value maps use sorted keys by default. Digests must remain
+// compatible with Rust when requests cross the gradual migration boundary.
+export function canonicalJson(value: unknown): string {
+  const sort = (item: unknown): unknown => {
+    if (Array.isArray(item)) return item.map(sort)
+    if (item !== null && typeof item === "object") return Object.fromEntries(Object.entries(item).sort(([left], [right]) => left < right ? -1 : left > right ? 1 : 0).map(([key, child]) => [key, sort(child)]))
+    return item
+  }
+  return stringifyJson(sort(value))
+}

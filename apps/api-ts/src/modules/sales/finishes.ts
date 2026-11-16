@@ -11,6 +11,10 @@ export function selectColor(requested: string | undefined, available: string[], 
   if (selected === previous) return selected
   return available.find(value => value.toLowerCase() === selected.toLowerCase()) ?? invalid("A cor escolhida não está disponível neste produto; atualize as opções antes de salvar")
 }
+export function selectPlateHolderType(requested: string | undefined, previous?: string): string | null {
+  const selected = requested?.trim()
+  return !selected || selected.toLowerCase() === "não se aplica" ? null : selected.toLowerCase() === "standard" ? "Standard" : selected.toLowerCase() === "olímpico" ? "Olímpico" : selected === previous ? selected : invalid("Tipo de anilheiro deve ser Standard, Olímpico ou Não se aplica")
+}
 export function selectFinishes(item: FinishInput, product: SaleProduct, saved?: SavedFinishes) {
   const previous = (key: keyof SavedFinishes) => typeof saved?.[key] === "string" ? saved[key] as string : undefined
   const structure = selectColor(item.structureColor ?? undefined, product.structure_colors, previous("structureColor"))
@@ -19,8 +23,7 @@ export function selectFinishes(item: FinishInput, product: SaleProduct, saved?: 
   if (item.plateHolderColor !== undefined && item.armColor !== undefined && lowerAscii(item.plateHolderColor) !== lowerAscii(item.armColor)) invalid("Informe a cor dos anilheiros apenas em plateHolderColor")
   const requestedHolder = (item.plateHolderColor ?? item.armColor)?.trim()
   const holderColor = requestedHolder ? selectColor(requestedHolder, product.plate_holder_colors, previous("plateHolderColor")) : null
-  const requestedType = item.plateHolderType?.trim()
-  const holderType = !requestedType || requestedType.toLowerCase() === "não se aplica" ? null : requestedType.toLowerCase() === "standard" ? "Standard" : requestedType.toLowerCase() === "olímpico" ? "Olímpico" : requestedType === previous("plateHolderType") ? requestedType : invalid("Tipo de anilheiro deve ser Standard, Olímpico ou Não se aplica")
+  const holderType = selectPlateHolderType(item.plateHolderType, previous("plateHolderType"))
   let upholstery: string | null
   if (product.upholstery_configurable) upholstery = selectColor(item.upholsteryColor ?? undefined, product.upholstery_colors, previous("upholsteryColor"))
   else if (item.upholsteryColor == null) upholstery = previous("upholsteryColor") ?? null

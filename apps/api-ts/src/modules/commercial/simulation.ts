@@ -1,0 +1,21 @@
+import type { FastifyInstance } from "fastify"
+import type { AppDependencies } from "../../app.js"
+import { authorizeRequest, requirePermission } from "../../platform/access.js"
+import { Problem } from "../../platform/problem.js"
+import { negotiationInputSchema } from "./negotiation-model.js"
+import { prepareNegotiation } from "./prepare.js"
+
+export function registerCommercialSimulation(app: FastifyInstance, dependencies: AppDependencies) {
+  app.post("/api/v1/commercial/simulate", async (request, reply) => {
+    const body = await authorizeRequest(request, dependencies, async context => {
+      requirePermission(context, "sales.orders.read")
+      await context.client.query("SELECT id FROM tenants WHERE id=$1 FOR SHARE", [context.tenantId])
+      const parsed = negotiationInputSchema.safeParse(request.body)
+      if (!parsed.success) throw new Problem(422, "invalid_input", "Simulação inválida ou campos desconhecidos")
+      const prepared = await prepareNegotiation(context, parsed.data)
+      const director = context.permissions.includes("platform.company.manage") && context.permissions.includes("sales.approvals.director") ? prepared.director : null
+      return { tenantId: context.tenantId, version: prepared.version, digest: prepared.digest, sale: prepared.sale, director }
+    }, false)
+    return reply.header("cache-control", "no-store").send(body)
+  })
+}

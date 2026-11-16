@@ -32,6 +32,7 @@ export async function authorizeRequest<T>(
   request: RequestLike,
   dependencies: AccessDependencies,
   operation: (context: AuthorizedContext) => Promise<T>,
+  write = request.method !== undefined && !["GET", "HEAD", "OPTIONS"].includes(request.method.toUpperCase()),
 ): Promise<T> {
   const identity = await authenticateRequest(request, dependencies)
   const rawTenant = singleHeader(request.headers["x-tenant-id"])
@@ -41,7 +42,7 @@ export async function authorizeRequest<T>(
   }
   return withTenantTransaction(dependencies.pool, rawTenant.toLowerCase(), identity.subject, context =>
     operation({ ...context, identity }),
-    request.method !== undefined && !["GET", "HEAD", "OPTIONS"].includes(request.method.toUpperCase()),
+    write,
   )
 }
 
