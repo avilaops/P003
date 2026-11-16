@@ -32,6 +32,7 @@ export async function withTenantTransaction<T>(
   tenantId: string,
   authSubject: string,
   operation: (context: TenantContext) => Promise<T>,
+  write = false,
 ): Promise<T> {
   if (!tenantSchema.safeParse(tenantId).success) {
     throw new Problem(400, "invalid_tenant", "Identificador da empresa inválido")
@@ -43,6 +44,8 @@ export async function withTenantTransaction<T>(
       "SELECT set_config('app.tenant_id',$1,true),set_config('app.auth_subject',$2,true)",
       [tenantId, authSubject],
     )
+    // Match Rust's lock order: serialize writes, then read current rights.
+    if (write) await client.query("SELECT id FROM tenants WHERE id=$1 FOR UPDATE", [tenantId])
     const access = await client.query<{ tenant_id: string; permissions: string[] }>(accessSql, [tenantId, authSubject])
     const row = access.rows[0]
     if (!row) throw new Problem(403, "forbidden", "Acesso não autorizado para esta empresa")

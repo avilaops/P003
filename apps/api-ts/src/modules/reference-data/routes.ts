@@ -6,6 +6,7 @@ import { z } from "zod"
 import type { AppDependencies } from "../../app.js"
 import { authorizeRequest, requirePermission } from "../../platform/access.js"
 import { Problem } from "../../platform/problem.js"
+import { sameJson } from "../../platform/json.js"
 import { integer, parseListQuery } from "../registrations/query.js"
 
 const definitions = {
@@ -96,7 +97,7 @@ export function registerReferenceRoutes(app: FastifyInstance, dependencies: AppD
         requirePermission(context, definition.manage)
         const replay = await context.client.query<{ scope: string; request: unknown; result: Record<string, unknown> }>("SELECT scope,request,result FROM domain_commands WHERE tenant_id=$1 AND auth_subject=$2 AND command_key=$3", [context.tenantId, context.identity.subject, key])
         if (replay.rows[0]) {
-          if (replay.rows[0].scope !== scope || JSON.stringify(replay.rows[0].request) !== JSON.stringify(parsed.data)) throw new Problem(409, "domain_conflict", "Esta chave de idempotência já foi usada com outros dados")
+          if (replay.rows[0].scope !== scope || !sameJson(replay.rows[0].request, parsed.data)) throw new Problem(409, "domain_conflict", "Esta chave de idempotência já foi usada com outros dados")
           return { value: replay.rows[0].result, replayed: true }
         }
         await context.client.query("SELECT id FROM tenants WHERE id=$1 FOR UPDATE", [context.tenantId])
@@ -130,7 +131,7 @@ export function registerReferenceRoutes(app: FastifyInstance, dependencies: AppD
         const replay = await context.client.query<{ scope: string; request: unknown; result: Record<string, unknown> }>("SELECT scope,request,result FROM domain_commands WHERE tenant_id=$1 AND auth_subject=$2 AND command_key=$3", [context.tenantId, context.identity.subject, key])
         const commandRequest = { id: request.params.id, revision: expected, ...parsed.data }
         if (replay.rows[0]) {
-          if (replay.rows[0].scope !== scope || JSON.stringify(replay.rows[0].request) !== JSON.stringify(commandRequest)) throw new Problem(409, "domain_conflict", "Esta chave de idempotência já foi usada com outros dados")
+          if (replay.rows[0].scope !== scope || !sameJson(replay.rows[0].request, commandRequest)) throw new Problem(409, "domain_conflict", "Esta chave de idempotência já foi usada com outros dados")
           return { value: replay.rows[0].result, replayed: true }
         }
         await context.client.query("SELECT id FROM tenants WHERE id=$1 FOR UPDATE", [context.tenantId])

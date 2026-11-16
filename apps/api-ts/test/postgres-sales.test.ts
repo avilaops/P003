@@ -16,6 +16,7 @@ test("PostgreSQL migrations and RLS support sales detail queries and tenant isol
   await admin.query(`CREATE DATABASE ${database}`)
   url.pathname = `/${database}`
   const seed = new Pool({ connectionString: url.toString() })
+  const apiConnections = new Pool({ connectionString: url.toString() })
   let app: ReturnType<typeof buildApp> | undefined
   try {
     const directory = new URL("../../../migrations/", import.meta.url)
@@ -44,7 +45,7 @@ test("PostgreSQL migrations and RLS support sales detail queries and tenant isol
       await proposalSeed.query("COMMIT")
     } finally { proposalSeed.release() }
     const pool: DatabasePool = { async connect() {
-      const client = await seed.connect()
+      const client = await apiConnections.connect()
       await client.query(`SET ROLE ${role}`)
       return { async query<T extends Record<string, unknown>>(sql: string, values: readonly unknown[] = []) { const result = await client.query<T>(sql, [...values]); return { rows: result.rows } }, release() { client.release() } }
     } }
@@ -65,8 +66,65 @@ test("PostgreSQL migrations and RLS support sales detail queries and tenant isol
     const list = await app.inject({ method: "GET", url: "/api/v1/orders?sort=updated", headers })
     assert.equal(list.statusCode, 200, list.body)
     assert.equal(list.json().total, 1)
+    await seed.query(`GRANT INSERT,UPDATE ON ALL TABLES IN SCHEMA public TO ${role}`)
+    await seed.query("INSERT INTO role_permissions(role_id,permission_code) VALUES($1,'catalog.parties.read'),($1,'catalog.parties.manage')", [readerRole])
+    const partyInput = { personType: "juridica", legalName: "Cliente novo", tradeName: null, taxId: "04252011000110", email: "client@example.test", phone: null, isCustomer: true, isSupplier: false, status: "active", addresses: [], contacts: [] }
+    const key = randomUUID()
+    const creates = await Promise.all([1, 2].map(() => app!.inject({ method: "POST", url: "/api/v1/parties", headers: { ...headers, "idempotency-key": key }, payload: partyInput })))
+    for (const response of creates) assert.equal(response.statusCode, 201, response.body)
+    assert.deepEqual(creates[0]!.json(), creates[1]!.json(), "Concurrent idempotent requests must return the same snapshot")
+    const partyId = creates[0]!.json().data.id as string
+    const edits = await Promise.all(["Nome A", "Nome B"].map(legalName => app!.inject({ method: "PUT", url: `/api/v1/parties/${partyId}`, headers: { ...headers, "if-match": '"1"' }, payload: { ...partyInput, legalName } })))
+    assert.deepEqual(edits.map(response => response.statusCode).sort(), [200, 412], "Only one editor may consume a revision")
+    const evidence = await seed.query("SELECT (SELECT count(*)::int FROM audit_log WHERE entity_id=$1) AS audits,(SELECT count(*)::int FROM outbox_events WHERE aggregate_id=$1) AS events,(SELECT count(*)::int FROM domain_commands WHERE command_key=$2) AS commands", [partyId, key])
+    assert.deepEqual(evidence.rows[0], { audits: 2, events: 2, commands: 1 })
+    const changedReplay = await app.inject({ method: "POST", url: "/api/v1/parties", headers: { ...headers, "idempotency-key": key }, payload: { ...partyInput, legalName: "Outros dados" } })
+    assert.equal(changedReplay.statusCode, 409, changedReplay.body)
+    // Access revocation commits while a request waits for the tenant write lock.
+    const accessChange = await seed.connect()
+    let waiting: Promise<{ statusCode: number }> | undefined
+    try {
+      await accessChange.query("BEGIN")
+      await accessChange.query("SELECT id FROM tenants WHERE id=$1 FOR UPDATE", [tenant])
+      waiting = app.inject({ method: "PUT", url: `/api/v1/parties/${partyId}`, headers: { ...headers, "if-match": '"2"' }, payload: partyInput })
+      // Start the thenable request before polling PostgreSQL for its lock wait.
+      const pending = Promise.resolve(waiting)
+      const deadline = Date.now() + 5000
+      let observed = false
+      while (Date.now() < deadline) {
+        const state = await seed.query("SELECT EXISTS(SELECT 1 FROM pg_stat_activity WHERE datname=current_database() AND wait_event_type='Lock' AND query='SELECT id FROM tenants WHERE id=$1 FOR UPDATE') AS waiting")
+        if (state.rows[0].waiting) { observed = true; break }
+        await new Promise(resolve => setTimeout(resolve, 20))
+      }
+      assert.ok(observed, "The command must wait for the same tenant lock as access management")
+      await accessChange.query("DELETE FROM role_permissions WHERE role_id=$1 AND permission_code='catalog.parties.manage'", [readerRole])
+      await accessChange.query("COMMIT")
+      assert.equal((await pending).statusCode, 403, "Rights must be reloaded after waiting for the lock")
+    } finally {
+      await accessChange.query("ROLLBACK")
+      accessChange.release()
+      if (waiting) await waiting
+    }
+    await seed.query("INSERT INTO role_permissions(role_id,permission_code) VALUES($1,'catalog.parties.manage'),($1,'catalog.products.read'),($1,'catalog.products.manage')", [readerRole])
+    const productInput = { sku: "NEW-PRODUCT", name: "Produto concorrente", unit: "UN", ncm: null, cest: null, basePrice: "1234.56", status: "active" }
+    const productKey = randomUUID()
+    const products = await Promise.all([1, 2].map(() => app!.inject({ method: "POST", url: "/api/v1/products", headers: { ...headers, "idempotency-key": productKey }, payload: productInput })))
+    for (const response of products) assert.equal(response.statusCode, 201, response.body)
+    assert.deepEqual(products[0]!.json(), products[1]!.json())
+    const productId = products[0]!.json().data.id as string
+    assert.equal(products[0]!.json().data.basePrice, "1234.56")
+    const productEdits = await Promise.all(["Produto A", "Produto B"].map(name => app!.inject({ method: "PUT", url: `/api/v1/products/${productId}`, headers: { ...headers, "if-match": '"1"' }, payload: { ...productInput, name } })))
+    assert.deepEqual(productEdits.map(response => response.statusCode).sort(), [200, 412])
+    // An outbox failure after INSERT must undo the party, audit and command too.
+    await seed.query(`REVOKE INSERT ON outbox_events FROM ${role}`)
+    const rollbackKey = randomUUID()
+    const failed = await app.inject({ method: "POST", url: "/api/v1/parties", headers: { ...headers, "idempotency-key": rollbackKey }, payload: { ...partyInput, legalName: "Rollback", taxId: "11222333000181" } })
+    assert.equal(failed.statusCode, 500, failed.body)
+    const rolledBack = await seed.query("SELECT (SELECT count(*)::int FROM parties WHERE tenant_id=$1 AND legal_name='Rollback') AS parties,(SELECT count(*)::int FROM domain_commands WHERE command_key=$2) AS commands", [tenant, rollbackKey])
+    assert.deepEqual(rolledBack.rows[0], { parties: 0, commands: 0 })
   } finally {
     await app?.close()
+    await apiConnections.end()
     await seed.end()
     await admin.query(`DROP DATABASE ${database}`)
     await admin.query(`DROP ROLE IF EXISTS ${role}`)

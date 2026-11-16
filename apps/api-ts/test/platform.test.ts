@@ -74,3 +74,16 @@ test("request authorization validates identity and tenant before acquiring a dat
   )
   assert.equal(connections, 0)
 })
+
+test("write authorization locks the tenant before loading current permissions", async () => {
+  const events: string[] = []
+  const client: DatabaseClient = { async query<T extends Record<string, unknown>>(sql: string) {
+    events.push(sql)
+    if (sql.includes("FROM tenants tenant")) return { rows: [{ tenant_id: tenant, permissions: [] }] as unknown as T[] }
+    return { rows: [] as T[] }
+  }, release() {} }
+  await authorizeRequest({ method: "PUT", headers: { authorization: "Bearer valid", "x-tenant-id": tenant } }, { pool: { async connect() { return client } }, userinfoUrl: "http://auth.test/userinfo", fetchAuth: async () => Response.json({ sub: "subject-1", email: "user@example.test" }) }, async () => { events.push("OPERATION") })
+  const lock = events.findIndex(sql => sql === "SELECT id FROM tenants WHERE id=$1 FOR UPDATE")
+  const rights = events.findIndex(sql => sql.includes("FROM tenants tenant"))
+  assert.ok(lock >= 0 && lock < rights && rights < events.indexOf("OPERATION"))
+})

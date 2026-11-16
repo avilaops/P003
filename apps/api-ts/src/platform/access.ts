@@ -4,7 +4,7 @@ import { authenticate, type AuthenticatedIdentity } from "./auth.js"
 import { withTenantTransaction, type DatabasePool, type TenantContext } from "./database.js"
 import { Problem } from "./problem.js"
 
-type RequestLike = { headers: Record<string, string | string[] | undefined> }
+type RequestLike = { method?: string; headers: Record<string, string | string[] | undefined> }
 
 export type AccessDependencies = {
   pool: DatabasePool
@@ -36,6 +36,7 @@ export async function authorizeRequest<T>(
   }
   return withTenantTransaction(dependencies.pool, rawTenant, identity.subject, context =>
     operation({ ...context, identity }),
+    request.method !== undefined && !["GET", "HEAD", "OPTIONS"].includes(request.method.toUpperCase()),
   )
 }
 

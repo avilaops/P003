@@ -4,6 +4,7 @@ import { z } from "zod"
 import type { AppDependencies } from "../../app.js"
 import { authorizeRequest, requirePermission } from "../../platform/access.js"
 import { Problem } from "../../platform/problem.js"
+import { sameJson } from "../../platform/json.js"
 import { integer, parseListQuery } from "../registrations/query.js"
 
 const partyQuerySchema = z.strictObject({
@@ -83,9 +84,9 @@ export function registerPartyRoutes(app: FastifyInstance, dependencies: AppDepen
     const body = await authorizeRequest(request, dependencies, async context => {
       requirePermission(context, "catalog.parties.manage")
       const replay = await context.client.query<{ scope: string; request: unknown; result: Record<string, unknown> }>("SELECT scope,request,result FROM domain_commands WHERE tenant_id=$1 AND auth_subject=$2 AND command_key=$3", [context.tenantId, context.identity.subject, key])
-      if (replay.rows[0]) { if (replay.rows[0].scope !== "party.create" || JSON.stringify(replay.rows[0].request) !== JSON.stringify(parsed.data)) throw new Problem(409, "domain_conflict", "Esta chave de idempotência já foi usada com outros dados"); return replay.rows[0].result }
+      if (replay.rows[0]) { if (replay.rows[0].scope !== "party.create" || !sameJson(replay.rows[0].request, parsed.data)) throw new Problem(409, "domain_conflict", "Esta chave de idempotência já foi usada com outros dados"); return replay.rows[0].result }
       const id = randomUUID(), input = parsed.data
-      await context.client.query("INSERT INTO parties(id,tenant_id,person_type,legal_name,trade_name,tax_id,email,phone,is_customer,is_supplier,status,addresses,contacts,fiscal) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)", [id, context.tenantId, input.personType, input.legalName, input.tradeName, input.taxId, input.email, input.phone, input.isCustomer, input.isSupplier, input.status, input.addresses ?? [], input.contacts ?? [], input.fiscal ?? null])
+      await context.client.query("INSERT INTO parties(id,tenant_id,person_type,legal_name,trade_name,tax_id,email,phone,is_customer,is_supplier,status,addresses,contacts,fiscal) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)", [id, context.tenantId, input.personType, input.legalName, input.tradeName, input.taxId, input.email, input.phone, input.isCustomer, input.isSupplier, input.status, JSON.stringify(input.addresses ?? []), JSON.stringify(input.contacts ?? []), input.fiscal ?? null])
       const loaded = await context.client.query(`SELECT ${projection} FROM parties WHERE tenant_id=$1 AND id=$2`, [context.tenantId, id])
       const result = { tenantId: context.tenantId, canEdit: true, data: party(loaded.rows[0]!) }
       await context.client.query("INSERT INTO audit_log(tenant_id,identity_id,action,entity_type,entity_id,request_id,details) SELECT $1,id,'party.created','party',$3,$4,$5 FROM identities WHERE auth_subject=$2", [context.tenantId, context.identity.subject, id, header(request.headers["x-request-id"]) ?? null, { revision: 1, isCustomer: input.isCustomer, isSupplier: input.isSupplier }])
@@ -107,7 +108,7 @@ export function registerPartyRoutes(app: FastifyInstance, dependencies: AppDepen
       if (integer(previous.rows[0].revision) !== expected) throw new Problem(412, "revision_conflict", "O cadastro foi alterado por outra pessoa")
       const old = party(previous.rows[0]), input = parsed.data, next = expected + 1
       const addresses = input.addresses ?? old.addresses, contacts = input.contacts ?? old.contacts, fiscal = Object.hasOwn(input, "fiscal") ? input.fiscal ?? null : old.fiscal
-      await context.client.query("UPDATE parties SET person_type=$3,legal_name=$4,trade_name=$5,tax_id=$6,email=$7,phone=$8,is_customer=$9,is_supplier=$10,status=$11,revision=$12,addresses=$13,contacts=$14,fiscal=$15,updated_at=now() WHERE tenant_id=$1 AND id=$2 AND revision=$16", [context.tenantId, request.params.id, input.personType, input.legalName, input.tradeName, input.taxId, input.email, input.phone, input.isCustomer, input.isSupplier, input.status, next, addresses, contacts, fiscal, expected])
+      await context.client.query("UPDATE parties SET person_type=$3,legal_name=$4,trade_name=$5,tax_id=$6,email=$7,phone=$8,is_customer=$9,is_supplier=$10,status=$11,revision=$12,addresses=$13,contacts=$14,fiscal=$15,updated_at=now() WHERE tenant_id=$1 AND id=$2 AND revision=$16", [context.tenantId, request.params.id, input.personType, input.legalName, input.tradeName, input.taxId, input.email, input.phone, input.isCustomer, input.isSupplier, input.status, next, JSON.stringify(addresses), JSON.stringify(contacts), fiscal, expected])
       const loaded = await context.client.query(`SELECT ${projection} FROM parties WHERE tenant_id=$1 AND id=$2`, [context.tenantId, request.params.id])
       await context.client.query("INSERT INTO audit_log(tenant_id,identity_id,action,entity_type,entity_id,request_id,details) SELECT $1,id,'party.updated','party',$3,$4,$5 FROM identities WHERE auth_subject=$2", [context.tenantId, context.identity.subject, request.params.id, header(request.headers["x-request-id"]) ?? null, { previousRevision: expected, revision: next }])
       await context.client.query("INSERT INTO outbox_events(tenant_id,aggregate_type,aggregate_id,event_type,payload) VALUES($1,'party',$2,'party.updated',$3)", [context.tenantId, request.params.id, { previousRevision: expected, revision: next }])

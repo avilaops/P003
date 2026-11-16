@@ -4,6 +4,7 @@ import { z } from "zod"
 import type { AppDependencies } from "../../app.js"
 import { authorizeRequest, requirePermission } from "../../platform/access.js"
 import { Problem } from "../../platform/problem.js"
+import { sameJson } from "../../platform/json.js"
 import { integer } from "../registrations/query.js"
 
 const querySchema = z.strictObject({
@@ -90,7 +91,7 @@ export function registerProductRoutes(app: FastifyInstance, dependencies: AppDep
       requirePermission(context, "catalog.products.manage")
       const input = parsed.data, requestData = normalized(input)
       const replay = await context.client.query<{ scope: string; request: unknown; result: Record<string, unknown> }>("SELECT scope,request,result FROM domain_commands WHERE tenant_id=$1 AND auth_subject=$2 AND command_key=$3", [context.tenantId, context.identity.subject, key])
-      if (replay.rows[0]) { if (replay.rows[0].scope !== "product.create" || JSON.stringify(replay.rows[0].request) !== JSON.stringify(requestData)) throw new Problem(409, "domain_conflict", "Esta chave de idempotência já foi usada com outros dados"); return replay.rows[0].result }
+      if (replay.rows[0]) { if (replay.rows[0].scope !== "product.create" || !sameJson(replay.rows[0].request, requestData)) throw new Problem(409, "domain_conflict", "Esta chave de idempotência já foi usada com outros dados"); return replay.rows[0].result }
       await validateSettings(context, input)
       const id = randomUUID(), data = materialize(input)
       await validateCategory(context, data.categoryId)

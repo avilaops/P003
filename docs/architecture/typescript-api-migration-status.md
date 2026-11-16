@@ -8,9 +8,9 @@ O objetivo continua sendo migrar Preferências, Cadastros, Vendas e Relatórios 
 
 | Área | Implementação atual | Verificação disponível | Trabalho restante |
 | --- | --- | --- | --- |
-| Fundação | Auth, empresa, permissões e transação com contexto RLS | Testes de plataforma; role real sem bypass de RLS nas leituras de Vendas | Paridade de administrador da plataforma; serialização e rechecagem de permissões nas escritas |
+| Fundação | Auth, empresa, permissões e transação com contexto RLS; escritas bloqueiam empresa antes de carregar permissões | Testes de plataforma; role real sem bypass de RLS; revogação de permissão durante espera do comando | Paridade de administrador da plataforma |
 | Preferências | GET e PUT com revisão | Testes com adaptador de banco simulado | Contrato integrado com PostgreSQL e revisão de paridade |
-| Cadastros | Listas, detalhes e comandos de parties, products e referências | Testes HTTP com banco simulado | Concorrência, replay com JSONB, validação completa, envelopes das referências, configurações cadastrais e testes reais de escrita |
+| Cadastros | Listas, detalhes e comandos de parties, products e referências; replay por igualdade estrutural de JSON | Testes HTTP; escritas reais de parties/products com criação concorrente idempotente, revisão concorrente, auditoria/outbox e rollback | Validação completa, regras de acesso por operação, envelopes das referências, configurações cadastrais e integração dos catálogos auxiliares |
 | Vendas | Listas e detalhes de pedidos e propostas; checkout e versões históricas | Testes HTTP e integração PostgreSQL com migrations completas e RLS | Comandos, transições e consultas comerciais |
 | Relatórios | Pendente | Pendente | Painel e CRUD de relatórios personalizados |
 | BFF e runtime | Pendente | Pendente | Seleção explícita por rota, ausência de retry de comandos, runtime e rollback |
@@ -21,7 +21,7 @@ Os registros anteriores que chamaram Cadastros de concluído se basearam em test
 
 O arquivo `apps/api-ts/test/postgres-sales.test.ts` cria um banco descartável, aplica todos os arquivos SQL de `migrations` em ordem e consulta através de uma role `NOLOGIN NOSUPERUSER NOBYPASSRLS`. A conexão administrativa serve apenas à preparação e limpeza do teste. A API acessa os dados com a role restrita.
 
-O teste verifica itens, checkout salvo, proposta por versão, listagem, permissões de consulta e isolamento entre empresas. Cada execução remove exclusivamente o banco e a role de nomes aleatórios que ela própria criou.
+O teste verifica itens, checkout salvo, proposta por versão, listagem, permissões de consulta e isolamento entre empresas. Também concede permissões específicas para testar escritas reais de parties/products: duas criações com a mesma chave retornam o mesmo snapshot, duas alterações da mesma revisão retornam 200 e 412, dados divergentes na chave retornam 409, e auditoria/outbox não se duplicam. Uma revogação de permissão enquanto o comando aguarda a empresa bloqueada resulta em 403. A falha induzida do outbox desfaz a criação e não registra o comando. Cada execução remove exclusivamente o banco e a role de nomes aleatórios que ela própria criou.
 
 Execução em PowerShell com PostgreSQL local descartável:
 
