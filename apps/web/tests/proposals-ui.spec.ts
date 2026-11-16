@@ -339,7 +339,7 @@ test("acabamento obrigatório recolhido abre na validação antes de confirmar a
   const structure = page.getByRole("combobox", { name: `Estrutura de ${item.name}`, exact: true })
   await expect(structure).toBeFocused()
   expect(saved).toBeUndefined()
-  await structure.selectOption("Preto")
+  await chooseCatalogColor(page, `Estrutura de ${item.name}`, "Preto")
   await page.getByRole("button", { name: "Salvar proposta", exact: true }).click()
   await expect.poll(() => saved).toMatchObject({ items: [{ structureColor: "Preto" }] })
 })
