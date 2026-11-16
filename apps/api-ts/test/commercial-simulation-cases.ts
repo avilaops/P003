@@ -3,8 +3,9 @@ import { randomUUID } from "node:crypto"
 import type { FastifyInstance } from "fastify"
 import type { Pool } from "pg"
 import { commercialFixture } from "./commercial-fixture.js"
+import { verifyCommercialConversion } from "./commercial-conversion-cases.js"
 
-export async function verifyCommercialSimulation(app: FastifyInstance, seed: Pool, tenant: string) {
+export async function verifyCommercialSimulation(app: FastifyInstance, seed: Pool, tenant: string, role: string) {
   const { parameters, input } = commercialFixture(), product = randomUUID(), version = randomUUID()
   await seed.query("INSERT INTO products(id,tenant_id,sku,name,unit,price_cents,status) VALUES($1,$2,'SIMULATOR','Simulador','UN',1256323,'active')", [product, tenant])
   await seed.query("INSERT INTO product_costs(tenant_id,product_id,product_line,purchase_cost_cents,tax_credit_bps,packaging_cents,revision) VALUES($1,$2,'national',530606,2780,0,1)", [tenant, product])
@@ -32,6 +33,7 @@ export async function verifyCommercialSimulation(app: FastifyInstance, seed: Poo
   const changedRules = await simulate()
   assert.equal(changedRules.statusCode, 200, changedRules.body)
   assert.notEqual(changedRules.json().digest, response.json().digest, "The digest includes the approval revision even when totals stay equal")
+  await verifyCommercialConversion(app, seed, tenant, input, changedRules.json().digest, role)
   await seed.query("UPDATE product_costs SET revision=2 WHERE tenant_id=$1 AND product_id=$2", [tenant, product])
   assert.equal((await simulate()).statusCode, 409)
   await seed.query("UPDATE product_costs SET revision=1 WHERE tenant_id=$1 AND product_id=$2", [tenant, product])

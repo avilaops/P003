@@ -371,7 +371,7 @@ test("PostgreSQL migrations and RLS preserve registration and sales workflows ac
     await verifyProposalCommands(app, seed, other, role)
     await verifyReports(app, seed, role)
     await verifyCommercialApprovals(app, seed, other, role)
-    await verifyCommercialSimulation(app, seed, other)
+    await verifyCommercialSimulation(app, seed, other, role)
     await seed.query("UPDATE platform_administrators SET active=false WHERE auth_subject='operator'")
     assert.equal((await app.inject({ method: "GET", url: `/api/v1/orders/${foreignOrder}`, headers: operatorHeaders })).statusCode, 403)
     // A manage grant alone does not imply the read grant required by Rust writes.

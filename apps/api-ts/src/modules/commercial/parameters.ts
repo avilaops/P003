@@ -1,9 +1,9 @@
 import { z } from "zod"
 import { Problem } from "../../platform/problem.js"
+import { unsigned32, unsigned64 } from "../../platform/numbers.js"
+export { unsigned32, unsigned64 } from "../../platform/numbers.js"
 
 export const STATES = ["AC", "AL", "AM", "AP", "BA", "CE", "DF", "ES", "GO", "MA", "MG", "MS", "MT", "PA", "PB", "PE", "PI", "PR", "RJ", "RN", "RO", "RR", "RS", "SC", "SE", "SP", "TO"] as const
-export const unsigned32 = z.number().int().min(0).max(4294967295)
-export const unsigned64 = z.union([z.number().int().min(0).max(Number.MAX_SAFE_INTEGER), z.bigint().min(0n).max(18446744073709551615n)])
 const rateSchema = z.strictObject({ state: z.string(), internalBps: unsigned32, fcpBps: unsigned32, outgoingBps: unsigned32.nullable().default(null) })
 export const parametersSchema = z.strictObject({
   originState: z.string(), netMarginBps: unsigned32, freeDiscountBps: unsigned32, costSafetyBps: unsigned32, minimumDownPaymentBps: unsigned32, proposalValidityDays: unsigned32,
