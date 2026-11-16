@@ -79,7 +79,7 @@ test("navegação responsiva preserva espaço, rota ativa e foco em pedidos", as
   const errors: string[] = []
   page.on("pageerror", error => errors.push(error.message))
   await page.route(/\/api\/erp\/me$/, route => route.fulfill({ json: {
-    tenant: { id: "11111111-1111-4111-8111-111111111111", legalName: "Ávila Operações" }, permissions: [],
+    tenant: { id: "11111111-1111-4111-8111-111111111111", legalName: "Ávila Operações LTDA", tradeName: "Ávila Operações" }, permissions: [],
   } }))
   await page.route(/\/api\/erp\/orders\?/, route => route.fulfill({ json: {
     tenantId: "11111111-1111-4111-8111-111111111111", canEdit: false, total: 1,
@@ -97,8 +97,10 @@ test("navegação responsiva preserva espaço, rota ativa e foco em pedidos", as
       await page.screenshot({ animations: "disabled", path: info.outputPath(`orders-${width}.png`) })
       const sales = sidebar.getByRole("button", { name: "Vendas", exact: true })
       await expect(sales).toHaveAttribute("data-active", "true")
-      await expect(sales.locator(".erp-module-copy small")).toHaveText("Pedidos de venda")
-      await expect(page.getByRole("link", { name: "Suas empresas", exact: true })).toContainText("Ávila Operações")
+      await expect(sales.locator(".erp-module-copy small")).toHaveCount(0)
+      await expect(sidebar.locator(".erp-module-list")).toHaveCSS("border-top-width", "0px")
+      await expect(page.getByRole("link", { name: /^Suas empresas •/ })).toContainText("Ávila Operações")
+      await expect(page.getByRole("link", { name: /^Suas empresas •/ })).toHaveAccessibleName("Suas empresas • Ávila Operações • Ávila Operações LTDA • Trocar empresa")
       await sales.focus()
       await page.keyboard.press("Tab")
       await page.keyboard.press("Shift+Tab")
@@ -188,12 +190,12 @@ test("tipografia interna preserva a escala e evita zoom automático nos campos m
     await page.setViewportSize({ width, height: 950 })
     await page.goto("/preferencias?categoria=sistema")
     const main = page.locator("main")
-    await expect(main.getByRole("heading", { name: "Preferências", exact: true })).toHaveCSS("font-size", "18px")
+    await expect(main.getByRole("heading", { name: "Preferências", exact: true })).toHaveCSS("font-size", width === 390 ? "28px" : "32px")
     await expect(page.locator("#preference-category-title")).toHaveCSS("font-size", "18px")
     await expect(page.locator("#preference-options a").first()).toHaveCSS("font-size", "14px")
     await expect(page.locator("#preference-options .text-xs").first()).toHaveCSS("font-size", "12px")
     await expect(main.getByRole("searchbox")).toHaveCSS("font-size", width === 390 ? "18px" : "14px")
-    await expect(main).toHaveCSS("font-family", /geist/i)
+    await expect(main).toHaveCSS("font-family", /system-ui/i)
     await page.screenshot({ path: info.outputPath(`typography-preferences-${width}.png`), fullPage: true })
     await page.goto("/cadastros/funcionarios")
     await expect(main.getByRole("heading", { name: "Funcionários", exact: true })).toHaveCount(0)
@@ -202,7 +204,7 @@ test("tipografia interna preserva a escala e evita zoom automático nos campos m
     await expect(main.getByRole("textbox")).toHaveCSS("font-size", width === 390 ? "18px" : "14px")
     await page.screenshot({ path: info.outputPath(`typography-staff-${width}.png`), fullPage: true })
     await page.goto("/cadastros/funcionarios/novo")
-    await expect(main.getByRole("heading", { name: "Novo cadastro", exact: true })).toHaveCSS("font-size", "18px")
+    await expect(main.getByRole("heading", { name: "Novo cadastro", exact: true })).toHaveCSS("font-size", width === 390 ? "28px" : "32px")
     await expect(main.locator(".erp-page-header > p").last()).toHaveCSS("font-size", "14px")
   }
 })
@@ -402,6 +404,8 @@ test("cabeçalho cabe na janela e navegação compacta oferece os módulos em te
   for (const width of [320, 390, 768, 930, 1280, 1440, 1599, 1600, 1749]) {
     await page.setViewportSize({ width, height: 950 })
     await expect(page.getByRole("button", { name: "Sair", exact: true })).toBeVisible()
+    await expect(page.locator(".erp-company-link strong")).toBeVisible()
+    if (width === 320) await expect(page.locator(".erp-company-link small")).toHaveText("Empresa ativa")
     const desktop = page.getByRole("navigation", { name: "Módulos do ERP", exact: true })
     const compact = page.getByRole("button", { name: "Abrir menu", exact: true })
     if (width < 900) { await expect(desktop).toBeHidden(); await expect(compact).toBeVisible() }
@@ -519,4 +523,29 @@ test("busca rápida do menu móvel encontra destinos sem acentos e registra a p�
   await expect(search).toHaveValue("")
   await drawer.getByText("Recentes", { exact: true }).click()
   await expect(drawer.locator('a[href="/vendas/pedidos"]')).toBeVisible()
+})
+
+
+test("aparência da conta usa Sistema por padrão e preserva escolhas explícitas", async ({ page }) => {
+  await page.emulateMedia({ colorScheme: "dark" })
+  await page.goto("/preferencias")
+  await page.evaluate(() => localStorage.removeItem("erp-theme"))
+  await page.reload()
+  await expect(page.locator("html")).toHaveClass(/dark/)
+  const trigger = page.getByRole("button", { name: "Conta • Aparência", exact: true })
+  await trigger.focus()
+  await page.keyboard.press("Enter")
+  await expect(page.getByRole("menuitemradio", { name: "Sistema", exact: true })).toHaveAttribute("aria-checked", "true")
+  await page.keyboard.press("Escape")
+  await expect(trigger).toBeFocused()
+  for (const [name, value] of [["Claro", "light"], ["Escuro", "dark"], ["Ávila", "avila"], ["Sistema", "system"]]) {
+    await trigger.click()
+    await page.getByRole("menuitemradio", { name, exact: true }).click()
+    await expect.poll(() => page.evaluate(() => localStorage.getItem("erp-theme"))).toBe(value)
+    await page.reload()
+    await expect(page.locator("html")).toHaveClass(value === "dark" || value === "system" ? /dark/ : /^(?!.*dark)/)
+    if (value === "avila") await expect(page.locator("html")).toHaveClass(/avila-theme/)
+  }
+  await page.emulateMedia({ colorScheme: "light" })
+  await expect(page.locator("html")).not.toHaveClass(/dark/)
 })

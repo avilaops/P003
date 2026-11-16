@@ -34,9 +34,10 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html
       lang="pt-BR"
+      suppressHydrationWarning
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <body><Script id="erp-history-guard" strategy="beforeInteractive">{`if(!window.__erpHistoryBootstrapped){window.__erpHistoryBootstrapped=true;window.addEventListener('popstate',function(event){if(window.__erpHistoryGuard)window.__erpHistoryGuard(event)},true)}`}</Script><ThemeProvider><AppShell>{children}</AppShell></ThemeProvider></body>
+      <body><Script id="erp-theme-init" strategy="beforeInteractive">{`try{var t=localStorage.getItem('erp-theme');document.documentElement.classList.toggle('dark',t==='dark'||(t!=='light'&&t!=='avila'&&matchMedia('(prefers-color-scheme: dark)').matches));document.documentElement.classList.toggle('avila-theme',t==='avila')}catch{document.documentElement.classList.toggle('dark',matchMedia('(prefers-color-scheme: dark)').matches)}`}</Script><Script id="erp-history-guard" strategy="beforeInteractive">{`if(!window.__erpHistoryBootstrapped){window.__erpHistoryBootstrapped=true;window.addEventListener('popstate',function(event){if(window.__erpHistoryGuard)window.__erpHistoryGuard(event)},true)}`}</Script><ThemeProvider><AppShell>{children}</AppShell></ThemeProvider></body>
     </html>
   );
 }

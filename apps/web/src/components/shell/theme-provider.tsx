@@ -6,7 +6,7 @@ type Theme = "light" | "dark" | "system" | "avila";
 
 function getTheme(): Theme {
   const stored = window.localStorage.getItem("erp-theme");
-  return stored === "dark" || stored === "system" || stored === "avila" ? stored : "light";
+  return stored === "light" || stored === "dark" || stored === "avila" ? stored : "system";
 }
 
 function subscribe(listener: () => void) {
@@ -24,7 +24,7 @@ function setTheme(theme: Theme) {
 }
 
 function getServerTheme(): Theme {
-  return "light";
+  return "system";
 }
 
 export function useTheme() {

@@ -93,6 +93,19 @@ jobs:
         -- bash --noprofile --norc -e -o pipefail "$script_file"
 
         '
+    - uses: pnpm/action-setup@v4
+    - uses: actions/setup-node@v4
+      with:
+        node-version: 24
+        cache: pnpm
+    - name: Verify TypeScript API and shared Rust HTTP contracts
+      env:
+        API_TS_TEST_ADMIN_URL: postgres://postgres:ci_isolated_only@127.0.0.1:5432/postgres
+      run: |
+        python3 scripts/ci/timed.py --label 'api/typescript-install' --output "artifacts/timings/$GITHUB_JOB.jsonl" -- pnpm install --frozen-lockfile --prefer-offline
+        python3 scripts/ci/timed.py --label 'api/typescript-typecheck' --output "artifacts/timings/$GITHUB_JOB.jsonl" -- pnpm --filter api-ts typecheck
+        python3 scripts/ci/timed.py --label 'api/typescript-tests' --output "artifacts/timings/$GITHUB_JOB.jsonl" -- pnpm --filter api-ts test
+        python3 scripts/ci/timed.py --label 'api/rust-typescript-contracts' --output "artifacts/timings/$GITHUB_JOB.jsonl" -- pnpm --filter api-ts test:contracts
     - uses: actions/upload-artifact@v4
       with:
         name: erp-openapi-${{ inputs.source_sha }}-${{ github.run_attempt }}

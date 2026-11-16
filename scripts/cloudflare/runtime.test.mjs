@@ -10,8 +10,8 @@ const IMAGE = `registry.cloudflare.com/account/erp-runtime@sha256:${'b'.repeat(6
 const environment = () => ({
   RUNTIME_MODE: 'application', ERP_SOURCE_SHA: SHA, ERP_ACTIVATION_SOURCE_SHA: SHA,
   ERP_RECOVERY_VERIFIED: 'true', ERP_AUTH_VERIFIED: 'true',
-  SUPABASE_PROJECT_REF: 'abcdefghijklmnopqrst',
-  DATABASE_URL: 'postgresql://erp_next_app:secret@db.abcdefghijklmnopqrst.supabase.co:5432/postgres?sslmode=verify-full',
+  POSTGRES_ALLOWED_HOST: 'postgres.internal.example',
+  DATABASE_URL: 'postgresql://erp_next_app:secret@postgres.internal.example:5432/postgres?sslmode=verify-full',
   AUTH_ISSUER: 'https://auth.example.invalid', AUTH_USERINFO_URL: 'https://auth.example.invalid/oauth/userinfo',
   ERP_WEB_ORIGIN: 'https://erp.example.invalid', ERP_AUTH_CLIENT_ID: 'erp',
   ERP_AUTH_CLIENT_SECRET: 'client-secret', ERP_SESSION_SECRET: 's'.repeat(40),
@@ -27,14 +27,16 @@ test('activation requires exact source, recovered data, auth and safe database i
     { DATABASE_URL: environment().DATABASE_URL.replace('verify-full', 'disable') },
     { DATABASE_URL: environment().DATABASE_URL + '&sslrootcert=system' },
     { DATABASE_URL: environment().DATABASE_URL.replace(':5432/', ':6543/') },
-    { DATABASE_URL: environment().DATABASE_URL.replace('.supabase.co', '.supabase.co.evil.invalid') },
+    { DATABASE_URL: environment().DATABASE_URL.replace('postgres.internal.example', 'evil.postgres.internal.example') },
+    { DATABASE_URL: environment().DATABASE_URL.replace('postgres.internal.example', 'postgres.internal.example.evil.invalid') },
+    { POSTGRES_ALLOWED_HOST: 'POSTGRES.internal.example' },
     { ERP_SESSION_SECRET: 'short' }, { AUTH_ISSUER: 'http://auth.example.invalid' },
     { ERP_WEB_ORIGIN: 'https://erp.example.invalid/subpath' },
   ]) assert.equal(runtimeConfiguration({ ...environment(), ...change }), null);
 });
 
 test('only required runtime secrets reach each process, with private loopback API', () => {
-  const env = { ...environment(), DATABASE_MIGRATION_URL: 'ADMIN', SUPABASE_SERVICE_ROLE_KEY: 'PRIVILEGED',
+  const env = { ...environment(), DATABASE_MIGRATION_URL: 'ADMIN', POSTGRES_ADMIN_PASSWORD: 'PRIVILEGED',
     CLOUDFLARE_API_TOKEN: 'CF', NODE_OPTIONS: '--inspect=0.0.0.0', SMTP_PASSWORD: 'MAIL',
     ERP_API_URL: 'https://wrong.invalid', API_BIND_ADDRESS: '0.0.0.0:9999' };
   const split = childEnvironments(env);
@@ -46,7 +48,7 @@ test('only required runtime secrets reach each process, with private loopback AP
   assert.equal(split.api.ERP_SESSION_SECRET, undefined);
   assert.equal(split.web.DATABASE_URL, undefined);
   for (const part of Object.values(split)) for (const key of ['DATABASE_MIGRATION_URL',
-    'SUPABASE_SERVICE_ROLE_KEY', 'CLOUDFLARE_API_TOKEN', 'NODE_OPTIONS']) assert.equal(part[key], undefined);
+    'POSTGRES_ADMIN_PASSWORD', 'CLOUDFLARE_API_TOKEN', 'NODE_OPTIONS']) assert.equal(part[key], undefined);
 });
 
 function fixture(overrides = {}) {
@@ -190,7 +192,7 @@ test('aborted requests never dispatch a business command', async () => {
   assert.equal(f.starts.length, 0);
 });
 
-function supervisorFixture(fetchImpl = async () => Response.json({ status: 'ready' })) {
+function supervisorFixture(fetchImpl = async () => Response.json({ status: 'ready' }), overrides = {}) {
   const children = [], launches = [];
   function spawnProcess(command, args, options) {
     const child = new EventEmitter();
@@ -199,7 +201,7 @@ function supervisorFixture(fetchImpl = async () => Response.json({ status: 'read
     children.push(child); launches.push({ command, args, options });
     return child;
   }
-  const supervisor = startSupervisor({ env: environment(), spawnProcess, fetchImpl,
+  const supervisor = startSupervisor({ env: { ...environment(), ...overrides }, spawnProcess, fetchImpl,
     sleep: async () => {}, attempts: 2, shutdownMs: 20 });
   return { supervisor, children, launches };
 }
@@ -240,6 +242,42 @@ test('graceful shutdown stops both processes without restart or migration', asyn
   await f.supervisor.ready;
   f.supervisor.stop();
   assert.equal(await f.supervisor.done, 0);
+  assert.equal(f.launches.length, 2);
+  assert.ok(f.children.every(child => child.kills.length === 1));
+});
+
+test('enabled TypeScript modules receive an isolated private API process without web secrets', () => {
+  const env = { ...environment(), ERP_TYPESCRIPT_MODULES: 'preferences,sales', SMTP_PASSWORD: 'MAIL', ERP_CERT_KEY: 'CERT', ERP_TYPESCRIPT_API_URL: 'https://wrong.invalid' };
+  const config = runtimeConfiguration(env);
+  assert.ok(config);
+  assert.equal(config.processes.apiTs.API_TS_HOST, '127.0.0.1');
+  assert.equal(config.processes.apiTs.API_TS_PORT, '8081');
+  assert.equal(config.processes.apiTs.DATABASE_URL, env.DATABASE_URL);
+  assert.equal(config.processes.apiTs.AUTH_USERINFO_URL, env.AUTH_USERINFO_URL);
+  for (const key of ['SMTP_PASSWORD', 'ERP_CERT_KEY', 'ERP_SESSION_SECRET', 'ERP_AUTH_CLIENT_SECRET']) assert.equal(config.processes.apiTs[key], undefined);
+  assert.equal(config.processes.web.ERP_TYPESCRIPT_API_URL, 'http://127.0.0.1:8081');
+  assert.equal(config.processes.web.ERP_TYPESCRIPT_MODULES, 'preferences,sales');
+  for (const modules of ['unknown', 'sales,sales', 'sales,']) assert.equal(runtimeConfiguration({ ...env, ERP_TYPESCRIPT_MODULES: modules }), null);
+});
+
+test('supervisor waits for both private APIs before starting web and stops all on TS failure', async () => {
+  const probes = [];
+  const f = supervisorFixture(async url => { probes.push(url); return Response.json({ status: 'ready' }); }, { ERP_TYPESCRIPT_MODULES: 'sales' });
+  await f.supervisor.ready;
+  assert.equal(f.launches.length, 3);
+  assert.deepEqual(f.launches[1].args, ['apps/api-ts/dist/server.js']);
+  assert.deepEqual(f.launches[2].args, ['apps/web/server.js']);
+  assert.ok(probes.includes('http://127.0.0.1:8081/health/ready'));
+  f.children[1].emit('exit', 1, null);
+  assert.equal(await f.supervisor.done, 1);
+  assert.deepEqual(f.children[0].kills, ['SIGTERM']);
+  assert.deepEqual(f.children[2].kills, ['SIGTERM']);
+});
+
+test('unready TypeScript API prevents web startup and stops both API processes', async () => {
+  const f = supervisorFixture(async url => Response.json({ status: url.includes(':8080/') ? 'ready' : 'unavailable' }), { ERP_TYPESCRIPT_MODULES: 'sales' });
+  await assert.rejects(f.supervisor.ready);
+  assert.equal(await f.supervisor.done, 1);
   assert.equal(f.launches.length, 2);
   assert.ok(f.children.every(child => child.kills.length === 1));
 });

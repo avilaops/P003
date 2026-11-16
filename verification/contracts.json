@@ -11437,7 +11437,6 @@
       "recovery": "Repetir leitura; falha não é apresentada como ausência de regras.",
       "ui": {
         "pages": [
-          "/preferencias/vendas",
           "/vendas/pedidos/novo",
           "/vendas/pedidos/[id]"
         ],
@@ -11449,7 +11448,6 @@
       },
       "sources": [
         "apps/api/src/domains/sales/settings.rs",
-        "apps/web/src/features/sales/settings/sales-settings.tsx",
         "apps/web/src/features/sales/orders.tsx"
       ],
       "verification": {
@@ -11532,20 +11530,17 @@
       },
       "recovery": "Preservar edição e recarregar antes de repetir uma gravação incerta.",
       "ui": {
-        "pages": [
-          "/preferencias/vendas"
-        ],
+        "pages": [],
         "bff": {
           "method": "PUT",
           "path": "/api/erp/sales-settings"
         },
-        "gap": null
+        "gap": "A tela de configurações de vendas foi removida por decisão do produto; a API permanece implementada, mas não há edição visual publicada."
       },
       "sources": [
         "apps/api/src/domains/sales/settings.rs",
         "apps/api/src/domains/sales.rs",
-        "migrations/202611010008_sales_settings.sql",
-        "apps/web/src/features/sales/settings/sales-settings.tsx"
+        "migrations/202611010008_sales_settings.sql"
       ],
       "verification": {
         "status": "not_verified_by_catalog",

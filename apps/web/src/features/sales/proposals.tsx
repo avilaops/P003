@@ -1,7 +1,6 @@
 "use client"
 
-import { Pagination } from "@/components/workspace/pagination"
-import { DataTable } from "@/components/workspace/data-table"
+import { SalesRecordList } from "./sales-record-list"
 
 import Link from "next/link"
 import { useRouter } from "next/navigation"
@@ -9,8 +8,7 @@ import { useEffect, useId, useState, type ComponentProps } from "react"
 import { ProductThumbnail } from "@/features/catalog/product-thumbnail"
 import { PageHeader } from "@/components/page-header"
 import { useNavigationGuard } from "@/components/shell/navigation-guard"
-import { Button, buttonVariants } from "@/components/ui/button"
-import { SearchInput } from "@/components/search-input"
+import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { RequestError } from "@/components/feedback/session-recovery"
 import { erpFetch } from "@/lib/api/client"
@@ -45,41 +43,7 @@ export function Proposals({ id, create = false, edit = false }: { id?: string; c
 }
 
 function ProposalList() {
-  const statusId = useId()
-  const [query, setQuery] = useState({ q: "", status: "", offset: 0 })
-  const params = new URLSearchParams({ q: query.q, status: query.status, offset: String(query.offset), limit: "25" })
-  const result = useResource<Listing>(`/api/erp/proposals?${params}`)
-  return <>
-    <div className="mb-4 flex flex-wrap justify-end gap-3">
-      {result.value?.canEdit && <Link className={buttonVariants({ size: "sm" })} href="/vendas/propostas/novo">Nova proposta</Link>}
-    </div>
-    <section className="min-w-0 space-y-3 text-sm" aria-label="Propostas comerciais">
-      <form role="search" aria-label="Pesquisar propostas" className="grid min-w-0 items-end gap-3 sm:grid-cols-[minmax(0,1fr)_12rem_auto]" onSubmit={event => { event.preventDefault(); const data = new FormData(event.currentTarget); setQuery({ q: String(data.get("q") || ""), status: String(data.get("status") || ""), offset: 0 }) }}>
-        <label className="grid min-w-0 gap-1.5 text-xs font-medium">Cliente ou número<SearchInput className="h-9 text-sm" onSearch={(q, form) => setQuery({ q, status: form ? String(new FormData(form).get("status") || "") : query.status, offset: 0 })} name="q" maxLength={160} /></label>
-        <label className="grid min-w-0 gap-1.5 text-xs font-medium" htmlFor={statusId}>Situação<select id={statusId} aria-label="Situação" name="status" className="h-9 w-full min-w-0 rounded-lg border border-input bg-background px-3 text-sm font-normal"><option value="">Todas</option>{Object.entries(labels).filter(([key]) => key !== "superseded").map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select></label>
-        <Button type="submit" className="h-9">Pesquisar propostas</Button>
-      </form>
-      {result.loading ? <p role="status">Carregando propostas…</p> : result.error ? <div role="alert"><RequestError message={result.error} status={result.status} /><Button variant="outline" size="sm" onClick={result.reload}>Tentar novamente</Button></div> : <>
-        <p role="status" className="text-sm text-muted-foreground">{result.value?.total || 0} proposta(s)</p>
-        {result.value?.data.length ? <div className="max-w-full rounded-lg border" role="region" aria-label="Lista de propostas" tabIndex={0}>
-          <DataTable className="table-fixed sm:table-auto">
-            <caption className="sr-only">Propostas comerciais</caption>
-            <thead className="bg-muted/50"><tr>
-              <th scope="col" className="p-2 sm:p-3">Cliente</th><th scope="col" className="hidden p-3 sm:table-cell">Situação</th><th scope="col" className="hidden p-3 text-right sm:table-cell">Versão</th><th scope="col" className="hidden p-3 sm:table-cell">Validade</th><th scope="col" className="w-32 p-2 text-right sm:w-auto sm:p-3">Valor</th>
-            </tr></thead>
-            <tbody>{result.value.data.map(item => <tr className="border-t hover:bg-muted/30" key={item.id}>
-              <td className="min-w-0 p-2 align-top sm:p-3"><Link className={`${linkClass} line-clamp-2 break-words [overflow-wrap:anywhere]`} title={item.customerName} href={`/vendas/propostas/${item.id}`}>{item.customerName}</Link><div className="mt-1 space-y-0.5 text-xs text-muted-foreground sm:hidden"><p className="flex flex-wrap gap-x-2"><span>{labels[item.expired ? "expired" : item.status] || item.status}</span><span>v{item.version}</span></p><p>Validade: <span>{item.validUntil ? item.validUntil.split("-").reverse().join("/") : "Não informada"}</span></p></div></td>
-              <td className="hidden whitespace-nowrap p-3 sm:table-cell">{labels[item.expired ? "expired" : item.status] || item.status}</td>
-              <td className="hidden whitespace-nowrap p-3 text-right tabular-nums sm:table-cell">{item.version}</td>
-              <td className="hidden whitespace-nowrap p-3 sm:table-cell">{item.validUntil ? item.validUntil.split("-").reverse().join("/") : "Não informado"}</td>
-              <td className="p-2 text-right align-top tabular-nums [overflow-wrap:anywhere] sm:whitespace-nowrap sm:p-3">{money(item.amount)}</td>
-            </tr>)}</tbody>
-          </DataTable>
-        </div> : <p>Nenhuma proposta encontrada para estes filtros.</p>}
-        <Pagination offset={query.offset} pageSize={25} total={result.value?.total || 0} onOffsetChange={offset => setQuery(value => ({ ...value, offset }))} />
-      </>}
-    </section>
-  </>
+  return <SalesRecordList kind="propostas" labels={labels} />
 }
 
 function ProposalEditor({ id }: { id?: string }) {

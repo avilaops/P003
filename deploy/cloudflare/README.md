@@ -9,24 +9,32 @@ its worker modules/settings, SQLite-backed Durable Object namespace and native
 `durable_object` scheduling-policy image map to the current deployment API. No
 runtime has been deployed and the existing edge remains in maintenance.
 
-The runtime keeps Rust/SQLx and Next.js in one stateless Linux Container. The API
-listens only on127.0.0.1:8080; web listens on3000 and connects to the API through
-loopback. PostgreSQL is external. The supervisor starts the API, waits for actual
-readiness, then starts web. It does not run migrations. A process failure stops
-its sibling; SIGTERM shuts both down, with a bounded kill deadline. Per-process
+The runtime keeps Rust/SQLx, Next.js and the optional TypeScript API in one stateless Linux Container. Rust
+listens only on127.0.0.1:8080; TypeScript uses127.0.0.1:8081; web listens on3000 and connects through
+loopback. PostgreSQL is external. The supervisor starts the required APIs, waits for actual
+database readiness from each, then starts web. It does not run migrations. A process failure stops
+the other processes; SIGTERM shuts them down, with a bounded kill deadline. Per-process
 allowlists keep database/SMTP credentials out of web and the session secret out
-of the API. Migration/admin credentials and arbitrary operator environment never
+of both APIs. The TypeScript API receives database/Auth configuration only, without SMTP, fiscal or signing secrets. Migration/admin credentials and arbitrary operator environment never
 enter the Container through this runtime bridge.
 
 The native scheduling policy uses a custom 0.25 vCPU / 1024 MiB / 2000 MB
 instance, not the legacy `basic` name. The Worker checks `/api/health` on web
-port3000; that route probes the private API over loopback. Business requests
+port3000; that route probes every enabled private API over loopback. Business requests
 use the Container's HTTP transport once, with public host/protocol metadata
-set from the verified ERP origin. API port8080 is never exposed for readiness.
+set from the verified ERP origin. API ports8080/8081 are never exposed for readiness.
+
+`ERP_TYPESCRIPT_MODULES` defaults to empty. Set a comma-separated subset of
+`preferences,registrations,sales,reports` after the shared contract and deployment gates pass.
+The runtime forces the private TypeScript origin; it does not accept an operator-supplied remote override.
+Remove a module and restart/redeploy to route it back to Rust before the next command.
+The BFF never retries a failed command against another backend. With no enabled module,
+the TypeScript process is not started. Both APIs use the same restricted PostgreSQL role;
+budget the sum of their connection pools when enabling modules.
 
 Build `runtime.Dockerfile` from validated API/web **digest** inputs from the same
 release, not mutable tags. The web image contributes Node and its standalone
-output; the existing API image retains its native/TLS/ICP dependencies. No build
+output plus the compiled production-only TypeScript package; the existing API image retains its native/TLS/ICP dependencies. The web producer verifies the package can start without `tsx` and fails readiness without a database. The API producer runs the same PostgreSQL/RLS contract matrix against Rust and TypeScript before release. No build
 or durable business state belongs on a runtime instance. The native Container API
 requires a Workers Paid account; preparing this source does not activate a plan.
 
@@ -57,9 +65,9 @@ The runtime fails closed unless RUNTIME_MODE=application, the exact source and
 activation SHA match, recovered-data and auth prerequisites are explicitly
 verified, and required credentials/configuration validate. These operator flags
 record prerequisites; they do not themselves recover data or validate a server.
-The PostgreSQL URL must identify the selected Supabase project and use strict
-TLS/direct or session mode. The managed preflight must separately verify the
-role's actual permissions; a username check is not a privilege audit.
+The PostgreSQL URL must match `POSTGRES_ALLOWED_HOST` exactly and use strict
+TLS with `sslmode=verify-full`. The managed preflight must separately verify
+the role's actual permissions; a username check is not a privilege audit.
 
 Background workers default off in this inactive declaration. Before activation,
 review payroll/fiscal schedules, choose their real execution strategy and set
@@ -74,7 +82,8 @@ private documents and backups are never attached to the public edge. A runtime
 bridge does not transfer the API's existing bytea documents to R2: preserve them
 until a separate hash-verified storage migration can be completed with the data.
 
-See `../supabase/README.md` for managed database checks and the full restore test.
+See `../../docs/architecture/postgresql-operacional.md` for managed database checks,
+backup and the full restore test.
 
 This Worker serves public Next.js build assets from private R2 storage while the
 ERP application is unavailable. Dynamic requests return an honest `503` with

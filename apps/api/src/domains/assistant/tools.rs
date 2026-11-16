@@ -216,6 +216,7 @@ pub(super) async fn execute(
                     offset: Some(0),
                     limit: Some(5),
                     q: None,
+                    ..Default::default()
                 })),
             )
             .await?;

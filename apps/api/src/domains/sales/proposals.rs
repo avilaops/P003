@@ -97,6 +97,7 @@ pub struct ProposalSummary {
     order_id: Option<Uuid>,
     is_current: bool,
     created_at: String,
+    updated_at: String,
     sent_at: Option<String>,
     decided_at: Option<String>,
     decided_by: Option<String>,
@@ -153,9 +154,11 @@ pub struct ProposalQuery {
     limit: Option<u32>,
     q: Option<String>,
     status: Option<String>,
+    /// Ordenação decrescente; created mantém o comportamento padrão.
+    sort: Option<super::SalesListSort>,
 }
 
-const SUMMARY: &str = "SELECT p.id,p.number::text AS number,v.version,p.revision,v.customer_id,v.customer_name,v.customer_tax_id,v.valid_until::text AS valid_until,v.payment_terms,v.delivery_terms,v.notes,(v.amount_cents::numeric/100)::numeric(16,2)::text AS amount,v.status,(v.status='sent' AND v.valid_until < (CURRENT_TIMESTAMP AT TIME ZONE 'America/Sao_Paulo')::date) AS expired,p.order_id,(v.version=p.current_version) AS is_current,v.created_at::text AS created_at,v.sent_at::text AS sent_at,v.decided_at::text AS decided_at,v.decided_by,v.decision_reason FROM sales_proposals p JOIN sales_proposal_versions v ON v.tenant_id=p.tenant_id AND v.proposal_id=p.id";
+const SUMMARY: &str = "SELECT p.id,p.number::text AS number,v.version,p.revision,v.customer_id,v.customer_name,v.customer_tax_id,v.valid_until::text AS valid_until,v.payment_terms,v.delivery_terms,v.notes,(v.amount_cents::numeric/100)::numeric(16,2)::text AS amount,v.status,(v.status='sent' AND v.valid_until < (CURRENT_TIMESTAMP AT TIME ZONE 'America/Sao_Paulo')::date) AS expired,p.order_id,(v.version=p.current_version) AS is_current,v.created_at::text AS created_at,to_json(p.updated_at)#>>'{}' AS updated_at,v.sent_at::text AS sent_at,v.decided_at::text AS decided_at,v.decided_by,v.decision_reason FROM sales_proposals p JOIN sales_proposal_versions v ON v.tenant_id=p.tenant_id AND v.proposal_id=p.id";
 
 async fn load(
     tx: &mut Transaction<'_, Postgres>,
@@ -218,6 +221,10 @@ pub async fn list(
     })?;
     let search = rules::text(query.q.as_deref().unwrap_or(""), 160, false)?;
     let status = query.status.unwrap_or_default();
+    let order = match query.sort.unwrap_or_default() {
+        super::SalesListSort::Created => "p.created_at DESC,p.id DESC",
+        super::SalesListSort::Updated => "p.updated_at DESC,p.id DESC",
+    };
     if ![
         "",
         "draft",
@@ -242,7 +249,7 @@ pub async fn list(
     .await
     .map_err(db)?;
     let data = sqlx::query_as::<_, ProposalSummary>(&format!(
-        "{SUMMARY}{filter} ORDER BY p.created_at DESC,p.id DESC LIMIT $4 OFFSET $5"
+        "{SUMMARY}{filter} ORDER BY {order} LIMIT $4 OFFSET $5"
     ))
     .bind(tenant)
     .bind(search)

@@ -1,5 +1,6 @@
 import "server-only"
 import { fiscalApiOrigin } from "@/lib/api/local-fiscal-origin"
+import { selectErpBackend } from "@/server/bff/erp-backend"
 
 import { currentIdentitySession, currentSession, erpConfiguration } from "@/server/auth/erp-session"
 
@@ -56,7 +57,7 @@ export async function forwardErp(request: Request, resource: string) {
     || (simulatorQuote || simulatorCreate || orderPricingApprove) && request.method === "POST"
   const proposalCollection = resource === "/proposals"
   const proposalDetail = /^\/proposals\/[a-f0-9-]{36}$/i.test(resource)
-  const proposalAction = /^\/proposals\/[a-f0-9-]{36}\/(?:send|accept|reject|cancel|revise|convert)$/i.test(resource)
+  const proposalAction = /^\/proposals\/[a-f0-9-]{36}\/(?:send|accept|reject|cancel|revise|convert|approve-order)$/i.test(resource)
   const proposalResource = proposalCollection || proposalDetail || proposalAction
   if (proposalResource && !(proposalCollection ? ["GET", "POST"] : proposalDetail ? ["GET", "PUT"] : ["POST"]).includes(request.method)) return Response.json({ title: "Método inválido" }, { status: 405 })
   const salesSettingsResource = /^\/registration-settings\/(products|parties|contact-types|tax-profiles)$/.test(resource) && ["GET", "PUT"].includes(request.method) || ["/sales-settings", "/inventory-settings", "/purchase-settings"].includes(resource) && ["GET", "PUT"].includes(request.method)
@@ -120,7 +121,11 @@ export async function forwardErp(request: Request, resource: string) {
     if (etag) headers.set("If-Match", etag)
     const commandKey = request.headers.get("idempotency-key")
     if (commandKey) headers.set("Idempotency-Key", commandKey)
-    const api = fiscalApiOrigin(resource, config.api, process.env.ERP_FISCAL_API_URL, process.env.NODE_ENV)
+    const selected = selectErpBackend(request.method, resource, config.api, {
+      ERP_TYPESCRIPT_API_URL: process.env.ERP_TYPESCRIPT_API_URL,
+      ERP_TYPESCRIPT_MODULES: process.env.ERP_TYPESCRIPT_MODULES,
+    })
+    const api = selected.backend === "typescript" ? selected.origin : fiscalApiOrigin(resource, selected.origin, process.env.ERP_FISCAL_API_URL, process.env.NODE_ENV)
     const upstream = new URL(`${api}/api/v1${resource}`)
     if (opportunityResource) {
       const query = new URL(request.url).searchParams
@@ -155,7 +160,7 @@ export async function forwardErp(request: Request, resource: string) {
     }
     if (proposalResource) {
       const query = new URL(request.url).searchParams
-      const allowed = request.method !== "GET" ? [] : proposalCollection ? ["q", "status", "offset", "limit"] : proposalDetail ? ["version"] : []
+      const allowed = request.method !== "GET" ? [] : proposalCollection ? ["q", "status", "sort", "offset", "limit"] : proposalDetail ? ["version"] : []
       for (const [key, value] of query) {
         if (!allowed.includes(key) || query.getAll(key).length !== 1) return Response.json({ title: "Filtro inválido" }, { status: 400 })
         upstream.searchParams.set(key, value)
@@ -192,7 +197,7 @@ export async function forwardErp(request: Request, resource: string) {
     }
     if (dashboardResource || auditResource || resource === "/system/files" || referenceCollection || purchaseResource || financialAccountEntriesResource || inventoryCountResource && (resource === "/inventory-counts") || ["/staff", "/products", "/products/export", "/stock", "/stock/movements", "/parties", "/orders", "/receivables"].includes(resource)) {
       const query = new URL(request.url).searchParams
-      const allowed = dashboardResource ? ["period"] : auditResource ? ["q", "action", "entity", "startDate", "endDate", "before"] : resource === "/system/files" ? ["q", "origin", "status", "offset", "limit"] : purchaseResource ? purchaseCollection ? ["offset", "limit"] : [] : financialAccountEntriesResource ? ["accountId", "offset", "limit"] : inventoryCountResource ? ["offset", "limit"] : resource === "/stock/movements" ? ["productId", "offset", "limit"] : resource === "/products/export" ? ["q", "status"] : ["/parties", "/staff"].includes(resource) ? ["q", "status", "role", "offset", "limit"] : resource === "/orders" ? ["q", "offset", "limit"] : resource === "/receivables" ? ["offset", "limit"] : ["q", "status", "offset", "limit"]
+      const allowed = dashboardResource ? ["period"] : auditResource ? ["q", "action", "entity", "startDate", "endDate", "before"] : resource === "/system/files" ? ["q", "origin", "status", "offset", "limit"] : purchaseResource ? purchaseCollection ? ["offset", "limit"] : [] : financialAccountEntriesResource ? ["accountId", "offset", "limit"] : inventoryCountResource ? ["offset", "limit"] : resource === "/stock/movements" ? ["productId", "offset", "limit"] : resource === "/products/export" ? ["q", "status"] : ["/parties", "/staff"].includes(resource) ? ["q", "status", "role", "offset", "limit"] : resource === "/orders" ? ["q", "status", "sort", "offset", "limit"] : resource === "/receivables" ? ["offset", "limit"] : ["q", "status", "offset", "limit"]
       if (resource === "/products") allowed.push("category_id")
       for (const [key, value] of query) {
         if (!allowed.includes(key) || query.getAll(key).length !== 1) return Response.json({ title: "Filtro inválido" }, { status: 400 })

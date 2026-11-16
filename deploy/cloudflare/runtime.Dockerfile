@@ -18,6 +18,6 @@ WORKDIR /app
 USER 10001
 ENV API_BIND_ADDRESS=127.0.0.1:8080 PORT=3000 HOSTNAME=0.0.0.0 NODE_ENV=production NEXT_TELEMETRY_DISABLED=1
 EXPOSE 3000
-HEALTHCHECK --interval=15s --timeout=5s --start-period=45s CMD /usr/local/bin/node -e "Promise.all([fetch('http://127.0.0.1:8080/health/ready'),fetch('http://127.0.0.1:3000/entrar')]).then(rs=>process.exit(rs.every(r=>r.ok)?0:1)).catch(()=>process.exit(1))"
+HEALTHCHECK --interval=15s --timeout=5s --start-period=45s CMD /usr/local/bin/node -e "Promise.all([fetch('http://127.0.0.1:3000/api/health'),fetch('http://127.0.0.1:3000/entrar')]).then(rs=>process.exit(rs.every(r=>r.ok)?0:1)).catch(()=>process.exit(1))"
 ENTRYPOINT ["/usr/local/bin/node", "/app/runtime/runtime-supervisor.mjs"]
 CMD []

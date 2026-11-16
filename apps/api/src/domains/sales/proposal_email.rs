@@ -430,6 +430,7 @@ mod tests {
                 order_id: None,
                 is_current: true,
                 created_at: "2026-11-08".into(),
+                updated_at: "2026-11-16T12:00:00Z".into(),
                 sent_at: None,
                 decided_at: None,
                 decided_by: None,

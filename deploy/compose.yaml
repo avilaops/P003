@@ -16,6 +16,34 @@ services:
       - "127.0.0.1:3140:3000"
     security_opt: [no-new-privileges:true]
     cap_drop: [ALL]
+  api-ts:
+    image: ${ERP_WEB_IMAGE:?CI image required}
+    profiles: [typescript]
+    command: [node, apps/api-ts/dist/server.js]
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options: {max-size: "10m", max-file: "3"}
+    env_file:
+      - path: api-ts.env
+        required: false
+    environment:
+      NODE_ENV: production
+      API_TS_HOST: 127.0.0.1
+      API_TS_PORT: "8081"
+    network_mode: service:api
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: [CMD, node, -e, "fetch('http://127.0.0.1:8081/health/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      start_period: 30s
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
+    mem_limit: 384m
+    pids_limit: 128
   web:
     image: ${ERP_WEB_IMAGE:?CI image required}
     restart: unless-stopped

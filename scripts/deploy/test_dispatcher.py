@@ -40,6 +40,50 @@ class ArchiveTests(unittest.TestCase):
                 self.assertFalse((Path(directory).parent / 'escape').exists())
 
 
+class TypeScriptComposeTests(unittest.TestCase):
+    def test_generated_config_preserves_activation_and_limits_private_api_secrets(self):
+        import sys
+        code = re.search(r'python3 - "\$release/compose.json" "\$source_sha" <<\'PY\'\n([\s\S]*?)\nPY', (DEPLOY / 'production-deploy.sh').read_text())[1]
+        for modules in ('', 'preferences,sales', 'unknown', 'sales,sales', 'sales,'):
+            with self.subTest(modules=modules), tempfile.TemporaryDirectory() as directory:
+                path = Path(directory) / 'compose.json'
+                config = {'services': {
+                    'api': {'image': 'rust', 'environment': {'DATABASE_URL': 'postgresql://app:fixture@db/test', 'AUTH_USERINFO_URL': 'https://auth.test/oauth/userinfo', 'SMTP_PASSWORD': 'MAIL', 'ERP_CERT_KEY': 'CERT', 'ERP_FISCAL_ENGINE_TOKEN': 'fixture-token-with-at-least-24-characters'}},
+                    'web': {'image': 'web', 'environment': {'AUTH_ISSUER': 'https://auth.test', 'ERP_SESSION_SECRET': 'SESSION', 'ERP_TYPESCRIPT_MODULES': modules}},
+                    'fiscal-engine': {'image': 'fiscal', 'environment': {}, 'healthcheck': {}},
+                }}
+                original = json.dumps(config)
+                path.write_text(original)
+                result = subprocess.run([sys.executable, '-c', code, str(path), A], capture_output=True, text=True)
+                if modules in ('unknown', 'sales,sales', 'sales,'):
+                    self.assertNotEqual(result.returncode, 0)
+                    self.assertEqual(path.read_text(), original)
+                    continue
+                self.assertEqual(result.returncode, 0, result.stderr)
+                services = json.loads(path.read_text())['services']
+                self.assertEqual(services['web']['environment']['ERP_TYPESCRIPT_MODULES'], modules)
+                if not modules:
+                    self.assertNotIn('api-ts', services)
+                    continue
+                api = services['api-ts']
+                self.assertEqual(api['image'], 'erp-next-web:sha-' + A)
+                self.assertEqual(api['network_mode'], 'service:api')
+                self.assertNotIn('ports', api)
+                self.assertEqual(api['environment']['API_TS_HOST'], '127.0.0.1')
+                self.assertEqual(api['environment']['AUTH_ISSUER'], 'https://auth.test')
+                self.assertEqual(api['environment']['DATABASE_URL'], config['services']['api']['environment']['DATABASE_URL'])
+                for key in ('SMTP_PASSWORD', 'ERP_CERT_KEY', 'ERP_SESSION_SECRET', 'ERP_FISCAL_ENGINE_TOKEN'):
+                    self.assertNotIn(key, api['environment'])
+                self.assertEqual(services['web']['environment']['ERP_TYPESCRIPT_API_URL'], 'http://127.0.0.1:8081')
+                services['web']['environment']['ERP_TYPESCRIPT_MODULES'] = ''
+                path.write_text(json.dumps({'services': services}))
+                replay = subprocess.run([sys.executable, '-c', code, str(path), A], capture_output=True, text=True)
+                self.assertEqual(replay.returncode, 0, replay.stderr)
+                restored = json.loads(path.read_text())['services']
+                self.assertEqual(restored['web']['environment']['ERP_TYPESCRIPT_MODULES'], '')
+                self.assertIn('api-ts', restored, 'Traffic rollback can preserve the optional process without replaying a command')
+
+
 FAKE_DOCKER = r'''#!/usr/bin/env python3
 import hashlib,json,os,sys
 from pathlib import Path

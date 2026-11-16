@@ -115,6 +115,8 @@ mod sales_acceptance_tests;
 #[cfg(test)]
 mod sales_checkout_tests;
 #[cfg(test)]
+mod sales_list_queries_tests;
+#[cfg(test)]
 mod sales_settings_tests;
 #[cfg(test)]
 mod simulator_tests;
