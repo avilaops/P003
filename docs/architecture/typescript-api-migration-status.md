@@ -10,7 +10,7 @@ O objetivo continua sendo migrar Preferências, Cadastros, Vendas e Relatórios 
 | --- | --- | --- | --- |
 | Fundação | Auth, empresa, permissões e transação com contexto RLS; escritas bloqueiam empresa antes de carregar permissões; administrador explícito por auth_subject | Testes de plataforma; role real sem bypass de RLS; revogação de permissão durante espera; administrador sem vínculo e revogação da concessão | Revisão final com os demais contratos |
 | Preferências | GET e PUT com revisão | Testes com adaptador de banco simulado | Contrato integrado com PostgreSQL e revisão de paridade |
-| Cadastros | Listas, detalhes e comandos de parties, products e referências; configurações cadastrais; validação/complementos/regras de clientes portados; envelopes/eventos/vínculos dos catálogos alinhados | Testes HTTP; escritas reais de parties/products; clientes com exigências de contato, complementos omitidos/nulos/vazios e documento vinculado; CRUD/replay e hierarquia dos quatro catálogos | Validação completa dos produtos, aplicação das configurações de produtos e revisão final de paridade |
+| Cadastros | Listas, detalhes e comandos de parties, products e referências; configurações cadastrais; schemas e regras de clientes/produtos portados; envelopes/eventos/vínculos dos catálogos alinhados | Testes HTTP; escritas reais e concorrência; clientes com complementos/documento vinculado; produtos com foto, opcionais, legado, configurações e estoque; hierarquia dos catálogos | Revisão final dos contratos e integração geral de Cadastros |
 | Vendas | Listas e detalhes de pedidos e propostas; checkout e versões históricas | Testes HTTP e integração PostgreSQL com migrations completas e RLS | Comandos, transições e consultas comerciais |
 | Relatórios | Pendente | Pendente | Painel e CRUD de relatórios personalizados |
 | BFF e runtime | Pendente | Pendente | Seleção explícita por rota, ausência de retry de comandos, runtime e rollback |
@@ -54,6 +54,16 @@ O schema de `parties` preserva a distinção entre omissão e limpeza explícita
 Criação e alteração consultam `registration_settings` para aplicar as exigências de e-mail e telefone. O replay de uma criação idempotente conserva o resultado original antes de aplicar configurações posteriores. Alterações de documento ou tipo de pessoa são bloqueadas com 409 quando o cadastro já está vinculado a pedido de venda ou compra. Auditoria e outbox incluem revisão e papéis de cliente/fornecedor, sem dados pessoais nos detalhes.
 
 Os testes de schema e PostgreSQL verificam normalização, preservação/limpeza de complementos, exigências de contato, documento vinculado, conflito de revisão, idempotência e metadados do outbox. Isso não declara concluída a revisão integral das rotas de Cadastros.
+
+## Produtos
+
+O schema de produtos normaliza aliases antes da gravação e do replay, conforme o Rust: `armColors` representa cores dos anilheiros, e `plateHolderType` alimenta `plateHolderTypes`. Campos antigos e novos podem coexistir quando concordam. O preço exige exatamente duas casas decimais, sem arredondamento ou zeros extras à esquerda.
+
+Campos opcionais nulos ou omitidos preservam o valor na edição. Categoria e foto são removidas por string vazia; arrays vazios removem opções. A resposta omite opcionais ausentes e conserva o fallback de anilheiros legados. Categoria previamente vinculada e posteriormente arquivada pode ser mantida na edição; a troca de categoria exige uma categoria ativa da mesma empresa.
+
+Fotos usam o mesmo limite de 256 KiB, prefixo JPEG e base64 estrito da validação Rust. As rotas de criação/alteração aceitam corpo de até 2 MiB, permitindo a foto válida além do limite padrão anterior de 64 KiB. O contrato valida marcadores JPEG; não adiciona uma exigência de decodificação de pixels que o Rust não fazia.
+
+A integração PostgreSQL verifica foto de 70.000 bytes, omissão/null versus limpeza explícita, normalização do comando persistido, leitura legada, configuração de NCM/CEST/estofado, preservação de categoria arquivada e conflitos ao trocar unidade com movimentação ou arquivar com saldo. A revisão final de status, limites e precondições continua necessária antes de liberar o BFF.
 
 ## Critério de liberação
 
