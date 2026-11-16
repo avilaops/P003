@@ -13,8 +13,10 @@ export function buildApp(_dependencies: AppDependencies): FastifyInstance {
   const app = Fastify({ logger: false, bodyLimit: 65_536 })
   app.get("/health/live", async () => ({ status: "ok" }))
   app.setErrorHandler((error, _request, reply) => {
-    const problem = error instanceof Problem
-      ? error
+    const databaseCode = typeof error === "object" && error !== null && "code" in error ? String(error.code) : ""
+    const problem = error instanceof Problem ? error
+      : databaseCode === "23505" ? new Problem(409, "domain_conflict", "Já existe um cadastro com estes dados nesta empresa")
+      : databaseCode === "23503" || databaseCode === "23514" ? new Problem(422, "invalid_input", "Cadastro incompatível com os registros da empresa")
       : new Problem(500, "internal_error", "Erro interno")
     void reply
       .code(problem.status)

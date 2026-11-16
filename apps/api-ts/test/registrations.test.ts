@@ -99,3 +99,35 @@ test("party detail and commands preserve the Rust snapshot, idempotency and revi
   assert.equal(stale.statusCode, 412)
   assert.equal(writes, 2)
 })
+
+test("product detail and commands preserve finishes, idempotency and optimistic revision", async () => {
+  let revision = 1, exists = false, writes = 0
+  const productRow = () => ({ main_media_id: null, upholstery_configurable: true, id, revision: String(revision), has_photo: false, category_id: null, photo_data_url: null, sku: "LD-A001", name: "Banco", unit: "UN", ncm: null, cest: null, price_cents: "123450", status: "active", structure_colors: ["Preto"], swing_arm_colors: [], finishing_palette: "dhz-combined", upholstery_colors: ["Azul"], plate_holder_colors: [], plate_holder_types: ["Standard"], plate_holder_type: "standard" })
+  const client: DatabaseClient = {
+    async query<T extends Record<string, unknown>>(sql: string) {
+      if (sql.includes("FROM tenants tenant")) return { rows: [{ tenant_id: tenant, permissions: ["catalog.products.read", "catalog.products.manage"] }] as unknown as T[] }
+      if (sql.includes("FROM domain_commands")) return { rows: [] as T[] }
+      if (sql.startsWith("SELECT data FROM registration_settings")) return { rows: [{ data: { upholsteryConfigurable: true } }] as unknown as T[] }
+      if (sql.startsWith("SELECT (SELECT main_media_id") && sql.includes("WHERE tenant_id=$1 AND id=$2")) return { rows: exists ? [productRow()] as unknown as T[] : [] as T[] }
+      if (sql.startsWith("INSERT INTO products")) { exists = true; writes += 1 }
+      if (sql.startsWith("UPDATE products")) { revision += 1; writes += 1 }
+      return { rows: [] as T[] }
+    }, release() {},
+  }
+  const app = buildApp({ pool: { async connect() { return client } }, userinfoUrl: "http://auth.test/oauth/userinfo", fetchAuth: async () => Response.json({ sub: "subject-1", email: "user@example.test" }) })
+  const headers = { authorization: "Bearer valid", "x-tenant-id": tenant }
+  const input = { sku: "ld-a001", name: "Banco", unit: "un", ncm: null, cest: null, basePrice: "1234.50", status: "active", structureColors: ["Preto"], upholsteryColors: ["Azul"], plateHolderColors: [], plateHolderTypes: ["Standard"], swingArmColors: [], finishingPalette: "dhz-combined", categoryId: null, photoDataUrl: null }
+  const created = await app.inject({ method: "POST", url: "/api/v1/products", headers: { ...headers, "idempotency-key": "cccccccc-cccc-4ccc-8ccc-cccccccccccc" }, payload: input })
+  assert.equal(created.statusCode, 201, created.body)
+  assert.equal(created.headers.etag, '"1"')
+  assert.equal(created.json().data.basePrice, "1234.50")
+  assert.deepEqual(created.json().data.plateHolderTypes, ["Standard"])
+  const detail = await app.inject({ method: "GET", url: `/api/v1/products/${id}`, headers })
+  assert.equal(detail.statusCode, 200, detail.body)
+  const updated = await app.inject({ method: "PUT", url: `/api/v1/products/${id}`, headers: { ...headers, "if-match": '"1"' }, payload: { ...input, name: "Banco atualizado" } })
+  assert.equal(updated.statusCode, 200, updated.body)
+  assert.equal(updated.headers.etag, '"2"')
+  const stale = await app.inject({ method: "PUT", url: `/api/v1/products/${id}`, headers: { ...headers, "if-match": '"1"' }, payload: input })
+  assert.equal(stale.statusCode, 412)
+  assert.equal(writes, 2)
+})
