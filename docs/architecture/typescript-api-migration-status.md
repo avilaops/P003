@@ -11,7 +11,7 @@ O objetivo continua sendo migrar Preferências, Cadastros, Vendas e Relatórios 
 | Fundação | Auth, empresa, permissões e transação com contexto RLS; escritas bloqueiam empresa antes de carregar permissões; administrador explícito por auth_subject | Testes de plataforma; role real sem bypass de RLS; revogação de permissão durante espera; administrador sem vínculo e revogação da concessão | Revisão final com os demais contratos |
 | Preferências | GET e PUT com revisão i64 exata e verificação de titular antes da revisão | Testes HTTP e PostgreSQL: gravações sucessivas/concorrentes, owner key, auditoria, isolamento e limites i64 | Revisão final dos demais erros HTTP e dados persistidos |
 | Cadastros | Listas, detalhes e comandos de parties, products e referências; configurações cadastrais; schemas e regras de clientes/produtos portados; envelopes/eventos/vínculos dos catálogos alinhados | Testes HTTP; escritas reais e concorrência; clientes com complementos/documento vinculado; produtos com foto, opcionais, legado, configurações e estoque; hierarquia dos catálogos | Revisão final dos contratos e integração geral de Cadastros |
-| Vendas | Listas e detalhes de pedidos e propostas; checkout e versões históricas | Testes HTTP e integração PostgreSQL com migrations completas e RLS | Comandos, transições e consultas comerciais |
+| Vendas | Listas/detalhes de pedidos e propostas; checkout/versões históricas; criação e edição de pedidos diretos de catálogo | Testes HTTP e PostgreSQL com migrations/RLS; criação idempotente, edição, replay, acordo histórico, revisão e guardas de negociação/checkout | Transições de pedidos, comandos de propostas e consultas/comandos comerciais |
 | Relatórios | Pendente | Pendente | Painel e CRUD de relatórios personalizados |
 | BFF e runtime | Pendente | Pendente | Seleção explícita por rota, ausência de retry de comandos, runtime e rollback |
 
@@ -78,3 +78,11 @@ Antes de adicionar uma rota ao BFF, comparar entrada, saída, status, precondiç
 `platform/revision.ts` centraliza leitura, `If-Match` e incremento de revisões positivas até `9223372036854775807`. Valores seguros usam `number`; valores maiores usam `bigint` internamente. A resposta conserva tokens numéricos JSON, sem converter revisões em strings. Headers com zeros iniciais são normalizados; zero, negativos e valores acima do máximo retornam 400, e o incremento além do máximo retorna 500 como o Rust, sem persistência parcial.
 
 O adaptador PostgreSQL serializa objetos com inteiros exatos e lê JSON/JSONB com preservação dos tokens numéricos. Isso permite replay e metadados de auditoria com revisões grandes. Os testes integrados usam o mesmo `PgClientAdapter` da aplicação e verificam bytes do JSON, ETag, JSONB persistido, replay e rollback no limite máximo. A API requer Node.js 22 ou superior para `JSON.rawJSON` e a origem do token no reviver; o runtime web atual usa Node.js 24.
+
+## Comandos de pedidos
+
+`POST /api/v1/orders` e `PUT /api/v1/orders/{id}` implementam o fluxo direto de catálogo. Criação e edição usam `Idempotency-Key`; a edição exige `If-Match`, apenas aceita rascunho e conserva preços, nomes e dados do cliente já acordados. Preparação valida cliente/produtos ativos, data, quantidade com seis casas, duplicação de produtos, acabamentos e total positivo. Valores são calculados com inteiros e o mesmo arredondamento do Rust.
+
+Um item novo com tabela publicada exige o fluxo de simulação comercial. Pedidos com cotação/simulação ou checkout salvo não podem ter seu acordo alterado pelo endpoint de edição simples. O bloqueio de cotação é verificado antes do replay, como no Rust. Audit/outbox, linhas, cabeçalho e comando são gravados na mesma transação da empresa.
+
+A integração verifica criação concorrente idempotente, edição e replay sem duplicação de auditoria, preço/nome/cliente históricos, revisão desatualizada, unidade alterada, estado não editável, checkout e tabela publicada. As transições, propostas e demais fluxos comerciais continuam pendentes; estes endpoints ainda não foram ativados no BFF.

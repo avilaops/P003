@@ -8,6 +8,7 @@ import type { LightMyRequestResponse } from "fastify"
 import { buildApp } from "../src/app.js"
 import { PgClientAdapter, type DatabasePool } from "../src/platform/database.js"
 import { parseJson } from "../src/platform/json.js"
+import { verifyOrderCommands } from "./order-command-cases.js"
 
 // Opt in with a disposable PostgreSQL administrator URL. The generated database
 // and NOLOGIN role belong exclusively to this test and are removed afterwards.
@@ -350,6 +351,7 @@ test("PostgreSQL migrations and RLS support sales detail queries and tenant isol
     assert.equal((await app.inject({ method: "PUT", url: "/api/v1/preferences", headers: { ...headers, "if-match": '"9223372036854775807"' }, payload: { productPageSize: 25 } })).statusCode, 500)
     assert.equal((await app.inject({ method: "PUT", url: "/api/v1/preferences", headers: { ...headers, "if-match": '"9223372036854775808"' }, payload: { productPageSize: 25 } })).statusCode, 400)
     assert.equal((await seed.query("SELECT revision::text FROM personal_preferences WHERE tenant_id=$1 AND auth_subject='reader'", [tenant])).rows[0].revision, "9223372036854775807")
+    await verifyOrderCommands(app, seed, other, role)
     await seed.query("UPDATE platform_administrators SET active=false WHERE auth_subject='operator'")
     assert.equal((await app.inject({ method: "GET", url: `/api/v1/orders/${foreignOrder}`, headers: operatorHeaders })).statusCode, 403)
     // A manage grant alone does not imply the read grant required by Rust writes.

@@ -6,29 +6,18 @@ import { authorizeRequest, requirePermission } from "../../platform/access.js"
 import { Problem } from "../../platform/problem.js"
 import { integer } from "../registrations/query.js"
 import { orderSummary, queryInput } from "../sales/shared.js"
-import { loadCheckout } from "./checkout.js"
+import { loadOrder, summary } from "./snapshot.js"
+import { registerOrderCommands } from "./commands.js"
 
-const summary = "SELECT id,number::text AS number,customer_id,customer_name,customer_tax_id,due_date::text AS due_date,(amount_cents::numeric/100)::numeric(16,2)::text AS amount,status,revision,to_json(updated_at)#>>'{}' AS updated_at,(EXISTS(SELECT 1 FROM order_pricing_snapshots s WHERE s.tenant_id=sales_orders.tenant_id AND s.order_id=sales_orders.id) OR EXISTS(SELECT 1 FROM commercial_order_quotes q WHERE q.tenant_id=sales_orders.tenant_id AND q.order_id=sales_orders.id)) AS pricing_origin FROM sales_orders"
+
 
 export function registerOrderRoutes(app: FastifyInstance, dependencies: AppDependencies) {
+  registerOrderCommands(app, dependencies)
   app.get<{ Params: { id: string } }>("/api/v1/orders/:id", async (request, reply) => {
     const body = await authorizeRequest(request, dependencies, async context => {
       requirePermission(context, "sales.orders.read")
       if (!z.string().uuid().safeParse(request.params.id).success) throw new Problem(422, "invalid_input", "Identificador inválido")
-      const row = await context.client.query(`${summary} WHERE tenant_id=$1 AND id=$2`, [context.tenantId, request.params.id])
-      if (!row.rows[0]) throw new Problem(404, "not_found", "Pedido não encontrado")
-      const data = orderSummary(row.rows[0])
-      const lines = await context.client.query("SELECT product_id,sku,name,unit,(quantity_micros::numeric/1000000)::numeric(19,6)::text AS quantity,(price_cents::numeric/100)::numeric(16,2)::text AS unit_price,(amount_cents::numeric/100)::numeric(16,2)::text AS amount,structure_color,swing_arm_color,plate_holder_color,plate_holder_type,upholstery_color,(SELECT c.weight FROM product_catalog_profiles c WHERE c.tenant_id=sales_order_lines.tenant_id AND c.product_id=sales_order_lines.product_id) AS equipment_weight FROM sales_order_lines WHERE tenant_id=$1 AND order_id=$2 ORDER BY line_number", [context.tenantId, request.params.id])
-      const items = lines.rows.map(item => ({
-        productId: item.product_id, sku: item.sku, name: item.name, unit: item.unit, quantity: item.quantity, unitPrice: item.unit_price, amount: item.amount, equipmentWeight: item.equipment_weight,
-        ...(item.structure_color == null ? {} : { structureColor: item.structure_color }),
-        ...(item.swing_arm_color == null ? {} : { swingArmColor: item.swing_arm_color }),
-        ...(item.plate_holder_color == null ? {} : { plateHolderColor: item.plate_holder_color }),
-        ...(item.plate_holder_type == null ? {} : { plateHolderType: item.plate_holder_type }),
-        ...(item.upholstery_color == null ? {} : { upholsteryColor: item.upholstery_color }),
-      }))
-      const checkout = await loadCheckout(context, request.params.id)
-      return { tenantId: context.tenantId, canEdit: context.permissions.includes("sales.orders.manage"), pricingOrigin: data.pricingOrigin, data, items, ...(checkout ? { checkout } : {}) }
+      return loadOrder(context, request.params.id)
     })
     return reply.header("cache-control", "no-store").header("etag", `"${body.data.revision}"`).send(body)
   })
