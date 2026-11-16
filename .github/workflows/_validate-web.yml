@@ -295,7 +295,7 @@ jobs:
 
         cat > "$script_file" <<''ERP_TIMED_ebb41251ba597764''
 
-        sudo sysctl -w net.ipv4.ip_local_reserved_ports=33118-33120,33128-33130,33928-33929,33941
+        sudo sysctl -w net.ipv4.ip_local_reserved_ports=33118-33120,33128-33130,33928-33929,33941,33211-33212,33311-33313
 
         ERP_TIMED_ebb41251ba597764
 
@@ -386,12 +386,18 @@ jobs:
       if: matrix.shard == 2
       run: |
         python3 scripts/ci/timed.py --label 'web/commercial-documents-and-smtp' --output "artifacts/timings/$GITHUB_JOB.jsonl" -- pnpm --filter web exec playwright test --config playwright.commercial-documents.config.ts
+    - name: TypeScript migration browser and explicit Rust rollback
+      if: matrix.shard == 1
+      run: |
+        python3 scripts/ci/timed.py --label 'web/api-migration-browser' --output "artifacts/timings/$GITHUB_JOB.jsonl" -- pnpm --filter web exec playwright test --config playwright.api-migration.config.ts
     - name: Preserve browser reports and failure screenshots
       uses: actions/upload-artifact@v4
       if: always()
       with:
         name: erp-browser-${{ inputs.source_sha }}-${{ github.run_attempt }}-${{ matrix.shard }}
         path: 'artifacts/danfe-browser/
+
+          artifacts/api-migration-browser/
 
           apps/web/test-results/
 

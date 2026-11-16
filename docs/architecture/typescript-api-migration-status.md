@@ -13,7 +13,7 @@ O objetivo continua sendo migrar Preferências, Cadastros, Vendas e Relatórios 
 | Cadastros | Listas, detalhes e comandos de parties, products e referências; configurações cadastrais; schemas e regras de clientes/produtos portados; envelopes/eventos/vínculos dos catálogos alinhados | Testes HTTP; escritas reais e concorrência; clientes com complementos/documento vinculado; produtos com foto, opcionais, legado, configurações e estoque; hierarquia dos catálogos | Revisão final dos contratos e integração geral de Cadastros |
 | Vendas | Pedidos/propostas; aprovações; tabelas; simulação/conversão simples/mista; checkout; funil e métricas comerciais | Mesma matriz HTTP executada em Rust e TypeScript com migrations/RLS, concorrência, snapshots/permissões e rollback | Conferir rotas legadas usadas pelas telas e revisão final |
 | Relatórios | Painel operacional e lista/criação/alteração de definições de relatórios personalizados | PostgreSQL/RLS com períodos, indicadores financeiros, permissões, visibilidade, fontes/colunas/filtros, revisões concorrentes e rollback | Revisão final de contratos e integração BFF/runtime |
-| BFF e runtime | Seleção por módulo e método/recurso; pacote de produção; processo privado opcional e saúde das duas APIs | 178 testes de modelo web, 98 testes de edge/runtime, tipos web/API, pacote isolado e build web | Navegador integrado, deploy Compose, ativação e retorno em ambiente real |
+| BFF e runtime | Seleção por módulo e método/recurso; pacote de produção; processo privado opcional e saúde das duas APIs | 178 testes de modelo web, 98 testes de edge/runtime, tipos web/API, pacote isolado, build web e dois projetos Playwright com Next real | Deploy Compose, ativação e retorno em ambiente real |
 
 Os registros anteriores que chamaram Cadastros de concluído se basearam em testes limitados e não provam paridade completa. Esta matriz substitui essa classificação. As rotas elegíveis estão configuráveis no BFF; a ativação de produção permanece desabilitada.
 
@@ -194,3 +194,9 @@ O runtime Cloudflare inicia TypeScript em loopback8081 somente quando houver mó
 O produtor web empacota o artefato validado e o produtor API executa a matriz compartilhada durante a validação completa. Testes locais verificaram isolamento das variáveis, espera por prontidão, falha/encerramento dos processos e saúde pública. A integração no deploy Compose existente, a validação por navegador e a ativação real continuam pendentes.
 
 O build web passou após gerar o OpenAPI do checkout e os tipos de rotas Next. Na primeira execução, após compilação/tipos/prerenderização, o Next interrompeu o comando com um alerta de segurança da versão instalada. A repetição concluiu com código zero. Nenhuma atualização de dependência foi realizada nesta etapa; a recomendação de atualização de segurança precisa continuar registrada separadamente.
+
+## Navegador e BFF Next real
+
+`playwright.api-migration.config.ts` inicia dois servidores Next do build de produção: um com os quatro módulos habilitados e outro com retorno explícito a Rust. Ambos usam cookies de sessão cifrados e backends HTTP locais controlados, sem interceptar as chamadas do navegador ao BFF. A matriz PostgreSQL real permanece a verificação separada das regras de negócio.
+
+Os dois projetos passaram. Conferem a tela de Vendas com o backend esperado, consultas das quatro famílias, POST com sessão/empresa/revisão/chave de comando, corpo numérico sem arredondamento e cabeçalhos da resposta. Troca de empresa e sessão ausente são barradas antes do upstream. Perda da resposta produz uma única chamada, sem repetir em outro backend; Financeiro permanece na Rust. O teste integra a primeira partição de navegador da validação completa.
