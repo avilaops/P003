@@ -28,7 +28,6 @@ import type { CatalogFinishPart } from "@/features/catalog/catalog-finish-palett
 import { quantity, useCommand, useResource } from "../../hooks/use-operation"
 import { CommercialReturn } from "../returns/commercial-return"
 import { OrderCommissionTerms } from "@/features/finance/commissions-workspace"
-import { OrderSalesRules } from "./settings/sales-settings"
 import { OrderNegotiation } from "./order-negotiation"
 import { commercialMoney, orderNumber, orderStatusLabels as labels } from "./order-presentation"
 import { OrderPricing } from "@/features/commercial-settings/order-pricing"
@@ -196,7 +195,6 @@ function OrderForm({ initial, etag, tenantId, reload }: { initial?: Detail; etag
           const choice = saved ? { id: saved.productId, name: saved.name, sku: saved.sku, unit: saved.unit, basePrice: saved.unitPrice } : value
           setItems(previous => [...previous, { ...value, ...choice, quantity: "1", preserved: Boolean(saved), structureColor: saved?.structureColor || "", swingArmColor: saved?.swingArmColor || "", upholsteryColor: saved?.upholsteryColor || "", plateHolderColor: saved?.plateHolderColor || "", plateHolderType: saved?.plateHolderType || "" }]); setDirty(true); setError("")
         }} /></div>
-        <details className="border-y py-2"><summary className="cursor-pointer text-sm font-medium">Regras para confirmar o pedido</summary><div className="pt-2"><OrderSalesRules tenantId={tenantId} /></div></details>
         <form className="space-y-2 sm:space-y-4" onSubmit={async event => {
           event.preventDefault(); setError("")
           if (!customer || !items.length || items.some(item => !quantity(item.quantity))) { setError("Selecione cliente e itens com quantidades decimais válidas."); return }
@@ -276,7 +274,7 @@ function OrderDetail({ id }: { id: string }) {
         <OrderDetailCommercial order={value} permissions={access.value?.tenant.id === value.tenantId ? access.value.permissions : []} />
         <OrderFinancePanel key={`${value.data.id}:${value.data.revision}`} orderId={id} onLockChange={boundary.setPrimaryLocked} parentBusy={command.busy || command.uncertain || command.stale || result.loading} />
         <div className="divide-y border-y">
-          <details className="py-3"><summary className="cursor-pointer text-sm font-medium">Negociação e condições comerciais</summary><div className="space-y-4 pt-3"><OrderNegotiation id={id} onDecision={result.reload} showDirector={access.value?.tenant.id === value.tenantId && ["sales.approvals.director", "platform.company.manage"].every(permission => access.value?.permissions.includes(permission))} />{value.data.status === "draft" && <OrderSalesRules tenantId={value.tenantId} />}{value.pricingOrigin && <OrderPricing id={id} onSaved={result.reload} showDirector={access.value?.tenant.id === value.tenantId && ["sales.approvals.director", "platform.company.manage"].every(permission => access.value?.permissions.includes(permission))} />}</div></details>
+          <details className="py-3"><summary className="cursor-pointer text-sm font-medium">Negociação e condições comerciais</summary><div className="space-y-4 pt-3"><OrderNegotiation id={id} onDecision={result.reload} showDirector={access.value?.tenant.id === value.tenantId && ["sales.approvals.director", "platform.company.manage"].every(permission => access.value?.permissions.includes(permission))} />{value.pricingOrigin && <OrderPricing id={id} onSaved={result.reload} showDirector={access.value?.tenant.id === value.tenantId && ["sales.approvals.director", "platform.company.manage"].every(permission => access.value?.permissions.includes(permission))} />}</div></details>
           {access.value?.permissions.includes("finance.commissions.read") && <details className="py-3"><summary className="cursor-pointer text-sm font-medium">Comissões do pedido</summary><div className="pt-3"><OrderCommissionTerms orderId={id} onSaved={result.reload} /></div></details>}
         </div>
         {(value.data.status === "completed" || value.checkout && ["accepted", "confirmed"].includes(value.data.status)) && <Link className={linkClass} href="/financeiro/contas-receber">Consultar contas a receber</Link>}
