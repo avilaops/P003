@@ -216,3 +216,7 @@ A revisão das chamadas em `order-detail-commercial.tsx` identificou `GET /api/v
 A consulta devolve o snapshot original sem recalcular a negociação. Margens privadas exigem simultaneamente gestão da empresa e alçada de diretor. Gestão da empresa permite aprovar uma exceção pendente sem conceder edição geral de pedidos; não concede, sozinha, acesso às margens. A aprovação conserva motivo normalizado, revisão, replay, auditoria/outbox e a transação original.
 
 A mesma matriz passou em Rust e TypeScript para consulta pública/privada, snapshot ausente, pedido inexistente, permissões, motivo inválido, concorrência idempotente, revisão antiga, falta de pendência, revogação antes do replay e rollback quando falha o outbox.
+
+## Fronteiras de autenticação
+
+A matriz compartilhada passou também para perfis `userinfo` com nome nulo ou vazio, resposta 201, perfil inválido, recusa e formato Bearer. O leitor conserva o fallback do nome para e-mail e exige status 200 do Auth. O cabeçalho de empresa presente mas vazio retorna `invalid_tenant`, distinguindo a ausência do cabeçalho. Essas diferenças foram corrigidas na API TypeScript antes da liberação.

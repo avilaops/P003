@@ -5,12 +5,15 @@ import { resolve } from "node:path"
 import { fileURLToPath } from "node:url"
 import type { FastifyInstance, LightMyRequestResponse } from "fastify"
 import { stringifyJson } from "../src/platform/json.js"
+import { authContractProfile } from "./auth-contract-fixture.js"
 
 export async function startRustContractBackend(binary: string, databaseUrl: string, role: string): Promise<FastifyInstance> {
   const auth = createServer((request, response) => {
     const authorization = request.headers.authorization ?? ""
     response.setHeader("content-type", "application/json")
-    response.end(JSON.stringify({ sub: authorization.slice(7), email: "reader@example.test", name: "Contract fixture" }))
+    const fixture = authContractProfile(authorization.slice(7))
+    response.statusCode = fixture.status
+    response.end(JSON.stringify(fixture.profile))
   })
   await new Promise<void>(resolve => auth.listen(0, "127.0.0.1", resolve))
   const authAddress = auth.address()

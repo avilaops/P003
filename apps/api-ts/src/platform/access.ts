@@ -36,7 +36,7 @@ export async function authorizeRequest<T>(
 ): Promise<T> {
   const identity = await authenticateRequest(request, dependencies)
   const rawTenant = singleHeader(request.headers["x-tenant-id"])
-  if (!rawTenant) throw new Problem(400, "missing_tenant", "Empresa ativa não informada")
+  if (rawTenant === undefined) throw new Problem(400, "missing_tenant", "Empresa ativa não informada")
   if (!tenantSchema.safeParse(rawTenant).success) {
     throw new Problem(400, "invalid_tenant", "Identificador da empresa inválido")
   }

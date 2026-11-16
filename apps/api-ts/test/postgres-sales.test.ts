@@ -19,6 +19,8 @@ import { verifyOpportunities } from "./opportunity-cases.js"
 import { verifyCommercialMetrics } from "./commercial-metric-cases.js"
 import { verifyLegacyPricing } from "./legacy-pricing-cases.js"
 import { startRustContractBackend } from "./rust-contract-backend.js"
+import { authContractProfile } from "./auth-contract-fixture.js"
+import { verifyAuthContract } from "./auth-contract-cases.js"
 
 // Opt in with a disposable PostgreSQL administrator URL. The generated database
 // and NOLOGIN role belong exclusively to this test and are removed afterwards.
@@ -63,7 +65,8 @@ for (const backend of backends) test(`${backend}: PostgreSQL migrations and RLS 
       await client.query(`SET ROLE ${role}`)
       return new PgClientAdapter(client)
     } }
-    app = backend === "rust" ? await startRustContractBackend(process.env.API_TS_TEST_RUST_BINARY!, url.toString(), role) : buildApp({ pool, userinfoUrl: "http://auth.test/userinfo", fetchAuth: async (_url, init) => Response.json({ sub: new Headers(init?.headers).get("authorization")?.slice(7), email: "reader@example.test" }) })
+    app = backend === "rust" ? await startRustContractBackend(process.env.API_TS_TEST_RUST_BINARY!, url.toString(), role) : buildApp({ pool, userinfoUrl: "http://auth.test/userinfo", fetchAuth: async (_url, init) => { const fixture = authContractProfile(new Headers(init?.headers).get("authorization")!.slice(7)); return Response.json(fixture.profile, { status: fixture.status }) } })
+    await verifyAuthContract(app, tenant)
     const headers = { authorization: "Bearer reader", "x-tenant-id": tenant }
     const detail = await app.inject({ method: "GET", url: `/api/v1/orders/${order}`, headers })
     assert.equal(detail.statusCode, 200, detail.body)
