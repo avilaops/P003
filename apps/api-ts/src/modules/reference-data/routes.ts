@@ -95,6 +95,7 @@ export function registerReferenceRoutes(app: FastifyInstance, dependencies: AppD
       const scope = `${resource}.create`
       const data = await authorizeRequest(request, dependencies, async context => {
         requirePermission(context, definition.manage)
+        requirePermission(context, definition.read)
         const replay = await context.client.query<{ scope: string; request: unknown; result: Record<string, unknown> }>("SELECT scope,request,result FROM domain_commands WHERE tenant_id=$1 AND auth_subject=$2 AND command_key=$3", [context.tenantId, context.identity.subject, key])
         if (replay.rows[0]) {
           if (replay.rows[0].scope !== scope || !sameJson(replay.rows[0].request, parsed.data)) throw new Problem(409, "domain_conflict", "Esta chave de idempotência já foi usada com outros dados")
@@ -128,6 +129,7 @@ export function registerReferenceRoutes(app: FastifyInstance, dependencies: AppD
       const scope = `${resource}.update`
       const data = await authorizeRequest(request, dependencies, async context => {
         requirePermission(context, definition.manage)
+        requirePermission(context, definition.read)
         const replay = await context.client.query<{ scope: string; request: unknown; result: Record<string, unknown> }>("SELECT scope,request,result FROM domain_commands WHERE tenant_id=$1 AND auth_subject=$2 AND command_key=$3", [context.tenantId, context.identity.subject, key])
         const commandRequest = { id: request.params.id, revision: expected, ...parsed.data }
         if (replay.rows[0]) {

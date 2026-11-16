@@ -8,9 +8,9 @@ O objetivo continua sendo migrar Preferências, Cadastros, Vendas e Relatórios 
 
 | Área | Implementação atual | Verificação disponível | Trabalho restante |
 | --- | --- | --- | --- |
-| Fundação | Auth, empresa, permissões e transação com contexto RLS; escritas bloqueiam empresa antes de carregar permissões | Testes de plataforma; role real sem bypass de RLS; revogação de permissão durante espera do comando | Paridade de administrador da plataforma |
+| Fundação | Auth, empresa, permissões e transação com contexto RLS; escritas bloqueiam empresa antes de carregar permissões; administrador explícito por auth_subject | Testes de plataforma; role real sem bypass de RLS; revogação de permissão durante espera; administrador sem vínculo e revogação da concessão | Revisão final com os demais contratos |
 | Preferências | GET e PUT com revisão | Testes com adaptador de banco simulado | Contrato integrado com PostgreSQL e revisão de paridade |
-| Cadastros | Listas, detalhes e comandos de parties, products e referências; replay por igualdade estrutural de JSON | Testes HTTP; escritas reais de parties/products com criação concorrente idempotente, revisão concorrente, auditoria/outbox e rollback | Validação completa, regras de acesso por operação, envelopes das referências, configurações cadastrais e integração dos catálogos auxiliares |
+| Cadastros | Listas, detalhes e comandos de parties, products e referências; replay por igualdade estrutural de JSON; configurações cadastrais; escritas exigem leitura e gestão | Testes HTTP; escritas reais de parties/products; configurações com concorrência, auditoria e isolamento; administrador e permissão de gestão sem leitura | Validação completa dos cadastros, aplicação de todas as configurações nos comandos, envelopes/regras das referências e integração dos catálogos auxiliares |
 | Vendas | Listas e detalhes de pedidos e propostas; checkout e versões históricas | Testes HTTP e integração PostgreSQL com migrations completas e RLS | Comandos, transições e consultas comerciais |
 | Relatórios | Pendente | Pendente | Painel e CRUD de relatórios personalizados |
 | BFF e runtime | Pendente | Pendente | Seleção explícita por rota, ausência de retry de comandos, runtime e rollback |
@@ -32,6 +32,12 @@ pnpm --filter api-ts typecheck
 ```
 
 Sem `API_TS_TEST_ADMIN_URL`, somente o teste integrado é ignorado. Um resultado com esse teste ignorado não comprova integração PostgreSQL.
+
+## Configurações cadastrais
+
+`GET` e `PUT /api/v1/registration-settings/{section}` implementados para `products`, `parties`, `contact-types` e `tax-profiles`. A leitura aceita gestão da empresa, leitura da empresa ou leitura do domínio correspondente. A escrita exige `platform.company.manage` e `If-Match`; grava a revisão seguinte e auditoria na mesma transação, sem adicionar outbox inexistente no contrato Rust.
+
+Perfis tributários preservam códigos com zeros à esquerda, normalizam alíquotas para quatro casas e validam regras completas somente quando declaradas. O cadastro de perfis não transfere os processos de emissão fiscal para a API TypeScript.
 
 ## Critério de liberação
 

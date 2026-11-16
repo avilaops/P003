@@ -83,6 +83,7 @@ export function registerPartyRoutes(app: FastifyInstance, dependencies: AppDepen
     if (!parsed.success) throw new Problem(422, "invalid_input", "JSON inválido ou campos desconhecidos")
     const body = await authorizeRequest(request, dependencies, async context => {
       requirePermission(context, "catalog.parties.manage")
+      requirePermission(context, "catalog.parties.read")
       const replay = await context.client.query<{ scope: string; request: unknown; result: Record<string, unknown> }>("SELECT scope,request,result FROM domain_commands WHERE tenant_id=$1 AND auth_subject=$2 AND command_key=$3", [context.tenantId, context.identity.subject, key])
       if (replay.rows[0]) { if (replay.rows[0].scope !== "party.create" || !sameJson(replay.rows[0].request, parsed.data)) throw new Problem(409, "domain_conflict", "Esta chave de idempotência já foi usada com outros dados"); return replay.rows[0].result }
       const id = randomUUID(), input = parsed.data
@@ -103,6 +104,7 @@ export function registerPartyRoutes(app: FastifyInstance, dependencies: AppDepen
     if (!parsed.success || !z.string().uuid().safeParse(request.params.id).success) throw new Problem(422, "invalid_input", "JSON inválido ou campos desconhecidos")
     const body = await authorizeRequest(request, dependencies, async context => {
       requirePermission(context, "catalog.parties.manage")
+      requirePermission(context, "catalog.parties.read")
       const previous = await context.client.query(`SELECT ${projection} FROM parties WHERE tenant_id=$1 AND id=$2`, [context.tenantId, request.params.id])
       if (!previous.rows[0]) throw new Problem(404, "not_found", "Cadastro não encontrado")
       if (integer(previous.rows[0].revision) !== expected) throw new Problem(412, "revision_conflict", "O cadastro foi alterado por outra pessoa")

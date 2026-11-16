@@ -6,6 +6,7 @@ import { registerPreferenceRoutes } from "./modules/preferences/routes.js"
 import { registerProductRoutes } from "./modules/products/routes.js"
 import { registerProposalRoutes } from "./modules/proposals/routes.js"
 import { registerReferenceRoutes } from "./modules/reference-data/routes.js"
+import { registerRegistrationSettingsRoutes } from "./modules/registration-settings/routes.js"
 import type { AccessDependencies } from "./platform/access.js"
 import { Problem } from "./platform/problem.js"
 
@@ -32,5 +33,6 @@ export function buildApp(_dependencies: AppDependencies): FastifyInstance {
   registerProductRoutes(app, _dependencies)
   registerProposalRoutes(app, _dependencies)
   registerReferenceRoutes(app, _dependencies)
+  registerRegistrationSettingsRoutes(app, _dependencies)
   return app
 }

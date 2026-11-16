@@ -89,6 +89,7 @@ export function registerProductRoutes(app: FastifyInstance, dependencies: AppDep
     if (!parsed.success) throw new Problem(422, "invalid_input", "Cadastro inválido ou campos desconhecidos")
     const body = await authorizeRequest(request, dependencies, async context => {
       requirePermission(context, "catalog.products.manage")
+      requirePermission(context, "catalog.products.read")
       const input = parsed.data, requestData = normalized(input)
       const replay = await context.client.query<{ scope: string; request: unknown; result: Record<string, unknown> }>("SELECT scope,request,result FROM domain_commands WHERE tenant_id=$1 AND auth_subject=$2 AND command_key=$3", [context.tenantId, context.identity.subject, key])
       if (replay.rows[0]) { if (replay.rows[0].scope !== "product.create" || !sameJson(replay.rows[0].request, requestData)) throw new Problem(409, "domain_conflict", "Esta chave de idempotência já foi usada com outros dados"); return replay.rows[0].result }
@@ -111,6 +112,7 @@ export function registerProductRoutes(app: FastifyInstance, dependencies: AppDep
     if (!parsed.success || !z.string().uuid().safeParse(request.params.id).success) throw new Problem(422, "invalid_input", "Cadastro inválido ou campos desconhecidos")
     const body = await authorizeRequest(request, dependencies, async context => {
       requirePermission(context, "catalog.products.manage")
+      requirePermission(context, "catalog.products.read")
       const loaded = await context.client.query(`SELECT ${projection} FROM products WHERE tenant_id=$1 AND id=$2`, [context.tenantId, request.params.id])
       if (!loaded.rows[0]) throw new Problem(404, "not_found", "Produto não encontrado")
       const previous = product(loaded.rows[0]) as Record<string, unknown>

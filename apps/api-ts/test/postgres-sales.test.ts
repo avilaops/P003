@@ -49,7 +49,7 @@ test("PostgreSQL migrations and RLS support sales detail queries and tenant isol
       await client.query(`SET ROLE ${role}`)
       return { async query<T extends Record<string, unknown>>(sql: string, values: readonly unknown[] = []) { const result = await client.query<T>(sql, [...values]); return { rows: result.rows } }, release() { client.release() } }
     } }
-    app = buildApp({ pool, userinfoUrl: "http://auth.test/userinfo", fetchAuth: async () => Response.json({ sub: "reader", email: "reader@example.test" }) })
+    app = buildApp({ pool, userinfoUrl: "http://auth.test/userinfo", fetchAuth: async (_url, init) => Response.json({ sub: new Headers(init?.headers).get("authorization")?.slice(7), email: "reader@example.test" }) })
     const headers = { authorization: "Bearer reader", "x-tenant-id": tenant }
     const detail = await app.inject({ method: "GET", url: `/api/v1/orders/${order}`, headers })
     assert.equal(detail.statusCode, 200, detail.body)
@@ -122,6 +122,33 @@ test("PostgreSQL migrations and RLS support sales detail queries and tenant isol
     assert.equal(failed.statusCode, 500, failed.body)
     const rolledBack = await seed.query("SELECT (SELECT count(*)::int FROM parties WHERE tenant_id=$1 AND legal_name='Rollback') AS parties,(SELECT count(*)::int FROM domain_commands WHERE command_key=$2) AS commands", [tenant, rollbackKey])
     assert.deepEqual(rolledBack.rows[0], { parties: 0, commands: 0 })
+    // Platform authority is an explicit subject grant, including without membership.
+    await seed.query("INSERT INTO identities(auth_subject,email,display_name) VALUES('operator','operator@example.test','Operador')")
+    await seed.query("INSERT INTO platform_administrators(auth_subject,active,granted_by,reason) VALUES('operator',true,'test','Integration fixture')")
+    const operatorHeaders = { authorization: "Bearer operator", "x-tenant-id": other }
+    const operatorRead = await app.inject({ method: "GET", url: `/api/v1/orders/${foreignOrder}`, headers: operatorHeaders })
+    assert.equal(operatorRead.statusCode, 200, operatorRead.body)
+    assert.equal(operatorRead.json().canEdit, true)
+    const settingsUrl = "/api/v1/registration-settings/parties"
+    const defaultSettings = await app.inject({ method: "GET", url: settingsUrl, headers: operatorHeaders })
+    assert.equal(defaultSettings.statusCode, 200, defaultSettings.body)
+    assert.equal(defaultSettings.headers.etag, '"1"')
+    const settingsEdits = await Promise.all([true, false].map(requireEmail => app!.inject({ method: "PUT", url: settingsUrl, headers: { ...operatorHeaders, "if-match": '"1"' }, payload: { requireEmail, requirePhone: false } })))
+    assert.deepEqual(settingsEdits.map(response => response.statusCode).sort(), [200, 412])
+    const persistedSettings = await app.inject({ method: "GET", url: settingsUrl, headers: operatorHeaders })
+    assert.equal(persistedSettings.headers.etag, '"2"')
+    const settingEvidence = await seed.query("SELECT (SELECT count(*)::int FROM registration_settings WHERE tenant_id=$1 AND section='parties') AS settings,(SELECT count(*)::int FROM audit_log WHERE tenant_id=$1 AND action='registration_settings.updated') AS audits", [other])
+    assert.deepEqual(settingEvidence.rows[0], { settings: 1, audits: 1 })
+    const untouchedSettings = await app.inject({ method: "GET", url: settingsUrl, headers })
+    assert.equal(untouchedSettings.statusCode, 200, untouchedSettings.body)
+    assert.equal(untouchedSettings.headers.etag, '"1"')
+    assert.deepEqual(untouchedSettings.json().data, { requireEmail: false, requirePhone: false })
+    await seed.query("UPDATE platform_administrators SET active=false WHERE auth_subject='operator'")
+    assert.equal((await app.inject({ method: "GET", url: `/api/v1/orders/${foreignOrder}`, headers: operatorHeaders })).statusCode, 403)
+    // A manage grant alone does not imply the read grant required by Rust writes.
+    await seed.query("DELETE FROM role_permissions WHERE role_id=$1 AND permission_code='catalog.products.read'", [readerRole])
+    const manageOnly = await app.inject({ method: "PUT", url: `/api/v1/products/${productId}`, headers: { ...headers, "if-match": '"2"' }, payload: productInput })
+    assert.equal(manageOnly.statusCode, 403, manageOnly.body)
   } finally {
     await app?.close()
     await apiConnections.end()
