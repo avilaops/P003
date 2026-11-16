@@ -4,6 +4,7 @@ import type { FastifyInstance } from "fastify"
 import type { Pool } from "pg"
 import { commercialFixture } from "./commercial-fixture.js"
 import { verifyCommercialConversion } from "./commercial-conversion-cases.js"
+import { verifySimulationPermissionReload } from "./simulation-permission-cases.js"
 
 export async function verifyCommercialSimulation(app: FastifyInstance, seed: Pool, tenant: string, role: string) {
   const { parameters, input } = commercialFixture(), product = randomUUID(), version = randomUUID()
@@ -26,6 +27,7 @@ export async function verifyCommercialSimulation(app: FastifyInstance, seed: Poo
   assert.equal(privileged.json().digest, response.json().digest)
   assert.equal(privileged.json().director.taxBps, 3225)
   assert.deepEqual((await simulate()).json(), response.json())
+  await verifySimulationPermissionReload(app, seed, tenant, "/api/v1/commercial/simulate", input)
   assert.equal((await simulate({ ...input, versionId: randomUUID() })).statusCode, 412)
   assert.equal((await simulate({ ...input, items: [{ ...input.items[0], quantity: 0 }] })).statusCode, 422)
   assert.equal((await simulate({ ...input, unknown: true })).statusCode, 422)

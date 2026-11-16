@@ -16,6 +16,10 @@ export async function verifyOrderCommands(app: FastifyInstance, seed: Pool, tena
   const order = creates[0]!.json().data.id as string
   assert.equal(creates[0]!.json().data.amount, "123.47")
   assert.equal(creates[0]!.json().data.status, "draft")
+  assert.match(String(creates[0]!.headers["x-request-id"]), /^[a-f0-9-]{36}$/)
+  const audit = (await seed.query("SELECT request_id FROM audit_log WHERE entity_id=$1", [order])).rows
+  assert.equal(audit.length, 1)
+  assert.ok(creates.some(response => response.headers["x-request-id"] === audit[0].request_id), "Command audit must retain the identifier returned for the original request")
   await seed.query("UPDATE products SET name='Nome novo',price_cents=999999 WHERE id=$1", [product])
   await seed.query("UPDATE parties SET legal_name='Cliente renomeado' WHERE id=$1", [tenant])
   const revised = { ...input, items: [{ productId: product, quantity: "2.000000" }] }

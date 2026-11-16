@@ -1,4 +1,5 @@
 import Fastify, { type FastifyInstance } from "fastify"
+import { randomUUID } from "node:crypto"
 
 import { registerPartyRoutes } from "./modules/parties/routes.js"
 import { registerDashboardRoutes } from "./modules/dashboard/routes.js"
@@ -34,7 +35,11 @@ export function buildApp(_dependencies: AppDependencies): FastifyInstance {
     })
   })
   app.setReplySerializer(stringifyJson)
-  app.addHook("onRequest", async request => {
+  app.addHook("onRequest", async (request, reply) => {
+    const provided = request.headers["x-request-id"]
+    const requestId = Array.isArray(provided) ? provided[0] ?? "" : provided ?? randomUUID()
+    request.headers["x-request-id"] = requestId
+    reply.header("x-request-id", requestId)
     if (request.routeOptions.url?.startsWith("/api/v1/")) await authenticateRequest(request, _dependencies)
   })
   app.get("/health/live", async () => ({ status: "ok" }))

@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify"
 import type { AppDependencies } from "../../app.js"
 import { authorizeRequest, requirePermission } from "../../platform/access.js"
+import { reloadTenantPermissions } from "../../platform/database.js"
 import { Problem } from "../../platform/problem.js"
 import { negotiationInputSchema } from "./negotiation-model.js"
 import { prepareNegotiation } from "./prepare.js"
@@ -15,6 +16,7 @@ export function registerCommercialSimulation(app: FastifyInstance, dependencies:
       const parsed = mixedInputSchema.safeParse(request.body)
       if (!parsed.success) throw new Problem(422, "invalid_input", "Simulação inválida ou campos desconhecidos")
       const prepared = await prepareMixed(context, parsed.data)
+      await reloadTenantPermissions(context)
       const director = context.permissions.includes("platform.company.manage") && context.permissions.includes("sales.approvals.director") ? prepared.director : null
       return { tenantId: context.tenantId, digest: prepared.digest, sale: prepared.sale, director }
     }, false)
@@ -27,6 +29,7 @@ export function registerCommercialSimulation(app: FastifyInstance, dependencies:
       const parsed = negotiationInputSchema.safeParse(request.body)
       if (!parsed.success) throw new Problem(422, "invalid_input", "Simulação inválida ou campos desconhecidos")
       const prepared = await prepareNegotiation(context, parsed.data)
+      await reloadTenantPermissions(context)
       const director = context.permissions.includes("platform.company.manage") && context.permissions.includes("sales.approvals.director") ? prepared.director : null
       return { tenantId: context.tenantId, version: prepared.version, digest: prepared.digest, sale: prepared.sale, director }
     }, false)

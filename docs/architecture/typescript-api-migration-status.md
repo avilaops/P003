@@ -45,7 +45,7 @@ Categorias de produtos, grupos de produtos, grupos de etiquetas e etiquetas usam
 
 Os escopos persistidos em `domain_commands` usam os nomes Rust (`product_category.created`, `product_group.created`, `tag_group.created`, `tag.created` e os equivalentes `.updated`). A requisição persistida usa `{id,revision,input}` e o resultado armazena o snapshot completo. Auditoria e outbox conservam o nome da tabela como tipo de entidade e apenas revisão, revisão anterior e status nos detalhes.
 
-A integração verifica criação, detalhe, listagem, alteração e replay para os quatro catálogos, incluindo compatibilidade do formato persistido do comando. Também verifica ciclos de categorias, bloqueio de arquivamento com filhos ativos, grupos de etiquetas ativos/arquivados e vínculos de outra empresa. Esses testes não substituem a revisão ainda pendente dos comandos de clientes e produtos.
+A integração verifica criação, detalhe, listagem, alteração e replay para os quatro catálogos, incluindo compatibilidade do formato persistido do comando. Também verifica ciclos de categorias, bloqueio de arquivamento com filhos ativos, grupos de etiquetas ativos/arquivados e vínculos de outra empresa. Os contratos de clientes e produtos também estão descritos nas próximas seções.
 
 ## Clientes e fornecedores
 
@@ -85,7 +85,7 @@ O adaptador PostgreSQL serializa objetos com inteiros exatos e lê JSON/JSONB co
 
 Um item novo com tabela publicada exige o fluxo de simulação comercial. Pedidos com cotação/simulação ou checkout salvo não podem ter seu acordo alterado pelo endpoint de edição simples. O bloqueio de cotação é verificado antes do replay, como no Rust. Audit/outbox, linhas, cabeçalho e comando são gravados na mesma transação da empresa.
 
-A integração verifica criação concorrente idempotente, edição e replay sem duplicação de auditoria, preço/nome/cliente históricos, revisão desatualizada, unidade alterada, estado não editável, checkout e tabela publicada. Os demais fluxos comerciais continuam pendentes; estes endpoints ainda não foram ativados no BFF.
+A integração verifica criação concorrente idempotente, edição e replay sem duplicação de auditoria, preço/nome/cliente históricos, revisão desatualizada, unidade alterada, estado não editável, checkout e tabela publicada. Os demais fluxos comerciais estão descritos abaixo; a seleção é configurável no BFF e permanece desabilitada em produção.
 
 ## Transições dos pedidos
 
@@ -119,7 +119,7 @@ O parser HTTP agora conserva inteiros JSON i64/u64 antes da validação, usando 
 
 `GET`/`PUT /api/v1/commercial/approval-settings`, `GET /api/v1/commercial/orders/{id}` e `POST /api/v1/commercial/orders/{id}/decision` implementados. A configuração exige gestão da empresa. A consulta apresenta o snapshot público e conserva a margem privada apenas quando o usuário possui gestão da empresa e alçada de diretor. Gerente aprova somente negociações que não exigem diretor; a decisão exige leitura do pedido e a alçada, sem conceder edição geral do pedido.
 
-As alçadas são verificadas sobre a negociação atual antes de devolver o replay. Decisão, revisão do pedido, histórico, auditoria/outbox e comando são atômicos. Os testes verificam regra ausente, configurações concorrentes 200/412, margem oculta, gerente sem permissão geral de edição, decisão concorrente idempotente, revogação antes do replay, exigência de diretor e rollback quando falha a gravação do histórico. A simulação de uma linha está descrita abaixo; tabelas e fluxo misto continuam pendentes.
+As alçadas são verificadas sobre a negociação atual antes de devolver o replay. Decisão, revisão do pedido, histórico, auditoria/outbox e comando são atômicos. Os testes verificam regra ausente, configurações concorrentes 200/412, margem oculta, gerente sem permissão geral de edição, decisão concorrente idempotente, revogação antes do replay, exigência de diretor e rollback quando falha a gravação do histórico. A simulação de uma linha, as tabelas e o fluxo misto estão descritos abaixo.
 
 ## Fronteiras das consultas
 
@@ -191,7 +191,7 @@ O build de produção compila somente o código da API para `dist/server.js` e p
 
 O runtime Cloudflare inicia TypeScript em loopback8081 somente quando houver módulos habilitados. Passa somente banco/Auth; mantém segredos de sessão, SMTP e Fiscal fora desse processo. O supervisor aguarda readiness real de Rust e TypeScript antes de iniciar a interface e encerra os demais processos quando um falha. A saúde pública exige todas as APIs habilitadas. As configurações do inventário continuam desativadas por padrão.
 
-O produtor web empacota o artefato validado e o produtor API executa a matriz compartilhada durante a validação completa. Testes locais verificaram isolamento das variáveis, espera por prontidão, falha/encerramento dos processos e saúde pública. A integração no deploy Compose existente, a validação por navegador e a ativação real continuam pendentes.
+O produtor web empacota o artefato validado e o produtor API executa a matriz compartilhada durante a validação completa. Testes locais verificaram isolamento das variáveis, espera por prontidão, falha/encerramento dos processos e saúde pública. A integração no deploy Compose existente e a validação por navegador estão descritas abaixo; a ativação real continua pendente.
 
 O build web passou após gerar o OpenAPI do checkout e os tipos de rotas Next. Na primeira execução, após compilação/tipos/prerenderização, o Next interrompeu o comando com um alerta de segurança da versão instalada. A repetição concluiu com código zero. Nenhuma atualização de dependência foi realizada nesta etapa; a recomendação de atualização de segurança precisa continuar registrada separadamente.
 
@@ -222,6 +222,14 @@ A mesma matriz passou em Rust e TypeScript para consulta pública/privada, snaps
 ## Fronteiras de autenticação
 
 A matriz compartilhada passou também para perfis `userinfo` com nome nulo ou vazio, resposta 201, perfil inválido, recusa e formato Bearer. O leitor conserva o fallback do nome para e-mail e exige status 200 do Auth. O cabeçalho de empresa presente mas vazio retorna `invalid_tenant`, distinguindo a ausência do cabeçalho. Essas diferenças foram corrigidas na API TypeScript antes da liberação.
+
+A API conserva `X-Request-Id` recebido ou gera um UUID antes de autenticar. A resposta, inclusive falhas de autenticação, devolve o mesmo identificador. Comandos que já usam esse campo na auditoria recebem o identificador da requisição original; o teste concorrente verifica essa correlação sem duplicar a auditoria no replay.
+
+## Revisão de código • revogação durante simulação
+
+A revisão independente identificou permissões antigas na projeção privada das duas rotas de simulação: a requisição podia aguardar `FOR SHARE` enquanto uma transação administrativa revogava a alçada. O contexto agora recarrega as permissões antes de incluir `director`, como os `allowed()` da implementação Rust. Quando somente gestão da empresa ou alçada de diretor é revogada, a resposta continua 200 com `director: null` e a mesma cotação pública.
+
+Um teste PostgreSQL observa a espera real em `pg_stat_activity`, revoga cada uma das duas permissões separadamente e libera o bloqueio. Os quatro casos passaram nas duas APIs. O teste falhou antes da correção TypeScript, demonstrando a diferença real. A revisão não identificou outro achado Critical ou Important na cobertura examinada; a confirmação da correção precede a liberação.
 
 ## Revisão no GitHub
 
