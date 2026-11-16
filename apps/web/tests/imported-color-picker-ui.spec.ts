@@ -20,6 +20,7 @@ for (const width of [320, 393, 1280]) test(`lista de cores sobreposta conserva g
   await trigger.click()
   const list = page.getByRole("listbox", { name: "Cor da estrutura de Equipamento com cores", exact: true })
   await expect(list).toBeVisible()
+  await expect(list.getByText("Especiais do catálogo", { exact: true })).toBeVisible()
   expect(Math.abs((await following.boundingBox())!.y - before!.y)).toBeLessThanOrEqual(1)
   expect(await list.evaluate(element => element.scrollHeight > element.clientHeight && getComputedStyle(element).overflowY === "auto")).toBe(true)
   const original = list.getByRole("option", { name: "Piano Black", exact: true }).locator("[data-catalog-color-photo]")
@@ -39,6 +40,19 @@ for (const width of [320, 393, 1280]) test(`lista de cores sobreposta conserva g
   await page.getByRole("heading", { name: "Editar pedido", exact: true }).click()
   await expect(list).toBeHidden()
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+})
+
+test("catálogo textual preserva todas as opções desconhecidas sem inventar fotos", async ({ page }) => {
+  await page.route(/\/api\/erp\/product-categories\?/, route => route.fulfill({ json: { tenantId: tenant, total: 0, data: [] } }))
+  await page.route(`**/api/erp/products/${record}/catalog`, route => route.fulfill({ json: { tenantId: tenant, productId: record, data: null, assets: [], mediaConfigured: false, canEdit: false } }))
+  await page.route(`**/api/erp/products/${record}`, route => route.fulfill({ headers: { ETag: '"1"' }, json: { tenantId: tenant, canEdit: false, data: { id: record, sku: "LEGADO", name: "Acabamentos textuais", revision: 1, status: "active", unit: "UN", basePrice: "100.00", categoryId: null, hasPhoto: false, finishingPalette: "", structureColors: ["Preto", "Amarelo"], swingArmColors: [], upholsteryColors: [] } } }))
+  await page.goto(`/cadastros/produtos/${record}`)
+  await page.getByText("Acabamentos disponíveis", { exact: true }).click()
+  await page.getByRole("button", { name: "Ver opções de Estrutura", exact: true }).click()
+  const list = page.getByRole("list", { name: "Opções de Estrutura", exact: true })
+  await expect(list.getByText("Preto", { exact: true })).toBeVisible()
+  await expect(list.getByText("Amarelo", { exact: true })).toBeVisible()
+  await expect(list.locator("[data-catalog-color-photo]")).toHaveCount(0)
 })
 test("teclado, obrigatório, opcional e disabled preservam formulário e histórico", async ({ page }) => {
   await page.goto(`/vendas/pedidos/${record}/editar`)
