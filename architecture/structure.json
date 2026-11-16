@@ -46,8 +46,8 @@
     "pos": "Operação do PDV, sessões de caixa, fechamento e histórico, com autorização no backend."
   },
   "routeSurface": {
-    "count": 500,
-    "sha256": "e4e6eff698ab6e1550d30e07aa664e834d3a73ebc4ed714d76b7532cb351ad9f"
+    "count": 499,
+    "sha256": "6a0964255e22a40e633fe2e2fb069c9cef833ede7ea0c67428d7453b6c92c95b"
   },
   "retiredPaths": [
     "apps/web/src/lib/erp-session.ts",
@@ -85,13 +85,14 @@
     "apps/web/src/components/theme-provider.tsx",
     "apps/web/src/components/demonstration-preview.tsx",
     "apps/web/src/components/erp-entry-preview.tsx",
+    "apps/web/src/app/preferencias/vendas/page.tsx",
     "apps/web/src/components/unavailable-import.tsx",
     "apps/web/src/components/session-recovery.tsx",
     "apps/api/src/platform/financial_settings.rs"
   ],
   "routeSurfaceReview": {
-    "previousPolicyCommit": "47c8e84270d67ddf2daff21b2a47a6b8a456ad45",
-    "reviewedMainCommit": "47c8e84270d67ddf2daff21b2a47a6b8a456ad45",
-    "changes": "2 rotas BFF POST adicionadas para simular e criar pedido com tabelas mistas. Preservam autenticação, empresa, origem, comando idempotente e validação de query. Rotas legadas permanecem."
+    "previousPolicyCommit": "c5090e5c6ea2dfd7b07e0bd6e3650b39b0d889ab",
+    "reviewedMainCommit": "f1b6bdf425c6b43c9fc1071bccb70ec36632425a",
+    "changes": "A rota de preferências de vendas foi retirada por decisão operacional. A política comercial permanece na tabela de preços e no fluxo de aprovação do pedido."
   }
 }
