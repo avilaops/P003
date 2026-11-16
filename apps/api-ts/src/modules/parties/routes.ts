@@ -1,3 +1,4 @@
+import { revisionValue, nextRevision, parseRevision as revision } from "../../platform/revision.js"
 import { randomUUID } from "node:crypto"
 
 import type { FastifyInstance } from "fastify"
@@ -18,7 +19,6 @@ const partyQuerySchema = z.strictObject({
 })
 
 function header(value: string | string[] | undefined) { return Array.isArray(value) ? undefined : value }
-function revision(value: string | string[] | undefined) { const match = /^"([1-9]\d*)"$/.exec(header(value) ?? ""); if (!value) throw new Problem(428, "revision_required", "Recarregue o cadastro antes de salvar"); if (!match) throw new Problem(400, "invalid_revision", "Revisão inválida"); return Number(match[1]) }
 function command(value: string | string[] | undefined) { if (!value) throw new Problem(428, "idempotency_required", "Informe a chave de idempotência"); const parsed = z.string().uuid().safeParse(header(value)); if (!parsed.success) throw new Problem(422, "invalid_input", "Chave de idempotência inválida"); return parsed.data }
 
 const projection = "id,revision,person_type,legal_name,trade_name,tax_id,email,phone,is_customer,is_supplier,status,addresses,contacts,fiscal"
@@ -31,7 +31,7 @@ async function validateSettings(context: AuthorizedContext, input: PartyInput) {
 
 function party(row: Record<string, unknown>) {
   return {
-    id: row.id, revision: integer(row.revision), personType: row.person_type,
+    id: row.id, revision: revisionValue(row.revision), personType: row.person_type,
     legalName: row.legal_name, tradeName: row.trade_name, taxId: row.tax_id,
     email: row.email, phone: row.phone, isCustomer: row.is_customer,
     isSupplier: row.is_supplier, status: row.status, fiscal: row.fiscal,
@@ -102,8 +102,8 @@ export function registerPartyRoutes(app: FastifyInstance, dependencies: AppDepen
       await validateSettings(context, parsed.data)
       const previous = await context.client.query(`SELECT ${projection} FROM parties WHERE tenant_id=$1 AND id=$2`, [context.tenantId, request.params.id])
       if (!previous.rows[0]) throw new Problem(404, "not_found", "Cadastro não encontrado")
-      if (integer(previous.rows[0].revision) !== expected) throw new Problem(412, "revision_conflict", "O cadastro foi alterado por outra pessoa")
-      const old = party(previous.rows[0]), input = parsed.data, next = expected + 1
+      if (revisionValue(previous.rows[0].revision) !== expected) throw new Problem(412, "revision_conflict", "O cadastro foi alterado por outra pessoa")
+      const old = party(previous.rows[0]), input = parsed.data, next = nextRevision(expected)
       if (input.taxId !== old.taxId || input.personType !== old.personType) {
         const linked = await context.client.query<{ exists: boolean }>("SELECT EXISTS(SELECT 1 FROM sales_orders WHERE tenant_id=$1 AND customer_id=$2 UNION ALL SELECT 1 FROM purchase_orders WHERE tenant_id=$1 AND supplier_id=$2) AS exists", [context.tenantId, request.params.id])
         if (linked.rows[0]?.exists) throw new Problem(409, "domain_conflict", "Documento e tipo de pessoa não podem mudar após vinculação a um pedido")

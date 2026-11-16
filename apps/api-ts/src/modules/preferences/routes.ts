@@ -1,3 +1,4 @@
+import { parseRevision as revision } from "../../platform/revision.js"
 import type { FastifyInstance } from "fastify"
 
 import type { AppDependencies } from "../../app.js"
@@ -5,16 +6,6 @@ import { authorizeRequest } from "../../platform/access.js"
 import { Problem } from "../../platform/problem.js"
 import { preferencesInputSchema } from "./schema.js"
 import { getPreferences, putPreferences } from "./service.js"
-
-function revision(value: string | string[] | undefined): number {
-  if (value === undefined) throw new Problem(428, "revision_required", "Recarregue o cadastro antes de salvar")
-  if (Array.isArray(value)) throw new Problem(400, "invalid_revision", "Revisão inválida")
-  const match = /^"([0-9]+)"$/.exec(value)
-  if (!match?.[1]) throw new Problem(400, "invalid_revision", "Revisão inválida")
-  const parsed = Number(match[1])
-  if (!Number.isSafeInteger(parsed) || parsed <= 0) throw new Problem(400, "invalid_revision", "Revisão inválida")
-  return parsed
-}
 
 export function registerPreferenceRoutes(app: FastifyInstance, dependencies: AppDependencies) {
   app.get("/api/v1/preferences", async (request, reply) => {

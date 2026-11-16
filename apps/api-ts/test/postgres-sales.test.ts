@@ -6,7 +6,8 @@ import { Pool } from "pg"
 import type { LightMyRequestResponse } from "fastify"
 
 import { buildApp } from "../src/app.js"
-import type { DatabasePool } from "../src/platform/database.js"
+import { PgClientAdapter, type DatabasePool } from "../src/platform/database.js"
+import { parseJson } from "../src/platform/json.js"
 
 // Opt in with a disposable PostgreSQL administrator URL. The generated database
 // and NOLOGIN role belong exclusively to this test and are removed afterwards.
@@ -48,7 +49,7 @@ test("PostgreSQL migrations and RLS support sales detail queries and tenant isol
     const pool: DatabasePool = { async connect() {
       const client = await apiConnections.connect()
       await client.query(`SET ROLE ${role}`)
-      return { async query<T extends Record<string, unknown>>(sql: string, values: readonly unknown[] = []) { const result = await client.query<T>(sql, [...values]); return { rows: result.rows } }, release() { client.release() } }
+      return new PgClientAdapter(client)
     } }
     app = buildApp({ pool, userinfoUrl: "http://auth.test/userinfo", fetchAuth: async (_url, init) => Response.json({ sub: new Headers(init?.headers).get("authorization")?.slice(7), email: "reader@example.test" }) })
     const headers = { authorization: "Bearer reader", "x-tenant-id": tenant }
@@ -309,6 +310,46 @@ test("PostgreSQL migrations and RLS support sales detail queries and tenant isol
     assert.equal(preferenceEvidence.rows.length, 3)
     assert.equal(preferenceEvidence.rows[2].details.previousRevision, 3)
     assert.equal(preferenceEvidence.rows[2].details.revision, 4)
+    const highRevision = "9007199254740993"
+    await seed.query("UPDATE personal_preferences SET revision=$3 WHERE tenant_id=$1 AND auth_subject=$2", [tenant, "reader", highRevision])
+    const highRead = await app.inject({ method: "GET", url: "/api/v1/preferences", headers })
+    assert.equal(highRead.headers.etag, `"${highRevision}"`)
+    assert.ok(highRead.body.includes(`"revision":${highRevision}`))
+    const highSaved = await app.inject({ method: "PUT", url: "/api/v1/preferences", headers: { ...headers, "if-match": `"${highRevision}"` }, payload: { productPageSize: 25 } })
+    assert.equal(highSaved.statusCode, 200, highSaved.body)
+    assert.equal(highSaved.headers.etag, '"9007199254740994"')
+    const highAudit = await seed.query("SELECT details->>'previousRevision' AS previous,details->>'revision' AS next FROM audit_log WHERE tenant_id=$1 AND action='preferences.updated' ORDER BY occurred_at DESC LIMIT 1", [tenant])
+    assert.deepEqual(highAudit.rows[0], { previous: highRevision, next: "9007199254740994" })
+    const highGroup = refs.get("product-groups")!
+    await seed.query("UPDATE product_groups SET revision=$2 WHERE id=$1", [highGroup, highRevision])
+    const highKey = randomUUID(), highInput = { code: "GRUPO", name: "Grupo grande", status: "active" }
+    const highCommand = () => app!.inject({ method: "PUT", url: `/api/v1/product-groups/${highGroup}`, headers: { ...operatorHeaders, "if-match": `"${highRevision}"`, "idempotency-key": highKey }, payload: highInput })
+    const highChanged = await highCommand()
+    assert.equal(highChanged.statusCode, 200, highChanged.body)
+    const highReplay = await highCommand()
+    assert.equal(highReplay.statusCode, 200, highReplay.body)
+    assert.equal(highReplay.headers["idempotency-replayed"], "true")
+    assert.deepEqual(parseJson(highReplay.body), parseJson(highChanged.body))
+    assert.ok(highReplay.body.includes('"revision":9007199254740994'))
+    const exactStored = await seed.query("SELECT request->>'revision' AS previous,result->'data'->>'revision' AS next FROM domain_commands WHERE command_key=$1", [highKey])
+    assert.deepEqual(exactStored.rows[0], { previous: highRevision, next: "9007199254740994" })
+    for (const [table, endpoint, recordId, payload] of [
+      ["parties", "parties", partyId, partyInput], ["products", "products", productId, productInput],
+    ] as const) {
+      await seed.query(`UPDATE ${table} SET revision=$2 WHERE id=$1`, [recordId, highRevision])
+      const response: LightMyRequestResponse = await app.inject({ method: "PUT", url: `/api/v1/${endpoint}/${recordId}`, headers: { ...headers, "if-match": `"${highRevision}"` }, payload })
+      assert.equal(response.statusCode, 200, response.body)
+      assert.equal(response.headers.etag, '"9007199254740994"')
+      assert.ok(response.body.includes('"revision":9007199254740994'))
+    }
+    await seed.query("UPDATE registration_settings SET revision=$2 WHERE tenant_id=$1 AND section='products'", [other, highRevision])
+    const highSettings = await app.inject({ method: "PUT", url: "/api/v1/registration-settings/products", headers: { ...operatorHeaders, "if-match": `"${highRevision}"` }, payload: { requireNcm: false, requireCest: false } })
+    assert.equal(highSettings.statusCode, 200, highSettings.body)
+    assert.equal(highSettings.headers.etag, '"9007199254740994"')
+    await seed.query("UPDATE personal_preferences SET revision=9223372036854775807 WHERE tenant_id=$1 AND auth_subject='reader'", [tenant])
+    assert.equal((await app.inject({ method: "PUT", url: "/api/v1/preferences", headers: { ...headers, "if-match": '"9223372036854775807"' }, payload: { productPageSize: 25 } })).statusCode, 500)
+    assert.equal((await app.inject({ method: "PUT", url: "/api/v1/preferences", headers: { ...headers, "if-match": '"9223372036854775808"' }, payload: { productPageSize: 25 } })).statusCode, 400)
+    assert.equal((await seed.query("SELECT revision::text FROM personal_preferences WHERE tenant_id=$1 AND auth_subject='reader'", [tenant])).rows[0].revision, "9223372036854775807")
     await seed.query("UPDATE platform_administrators SET active=false WHERE auth_subject='operator'")
     assert.equal((await app.inject({ method: "GET", url: `/api/v1/orders/${foreignOrder}`, headers: operatorHeaders })).statusCode, 403)
     // A manage grant alone does not imply the read grant required by Rust writes.

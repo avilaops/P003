@@ -1,3 +1,4 @@
+import { revisionValue, nextRevision, parseRevision as revision } from "../../platform/revision.js"
 import { randomUUID } from "node:crypto"
 
 import type { FastifyInstance } from "fastify"
@@ -19,7 +20,6 @@ const querySchema = z.strictObject({
 
 function one(value: string | string[] | undefined) { return Array.isArray(value) ? undefined : value }
 function command(value: string | string[] | undefined) { if (!value) throw new Problem(428, "idempotency_required", "Informe a chave de idempotência"); const parsed = z.string().uuid().safeParse(one(value)); if (!parsed.success) throw new Problem(422, "invalid_input", "Chave de idempotência inválida"); return parsed.data }
-function revision(value: string | string[] | undefined) { if (!value) throw new Problem(428, "revision_required", "Recarregue o cadastro antes de salvar"); const match = /^"([1-9]\d*)"$/.exec(one(value) ?? ""); if (!match) throw new Problem(400, "invalid_revision", "Revisão inválida"); return Number(match[1]) }
 function cents(value: string) { const [whole, fraction = ""] = value.split("."); return BigInt(whole!) * 100n + BigInt(fraction.padEnd(2, "0")) }
 
 const projection = "(SELECT main_media_id FROM product_catalog_profiles WHERE tenant_id=products.tenant_id AND product_id=products.id) AS main_media_id,COALESCE((SELECT (data->>'upholsteryConfigurable')::boolean FROM registration_settings WHERE tenant_id=products.tenant_id AND section='products'),true) AS upholstery_configurable,id,sku,name,unit,ncm,cest,price_cents,status,revision,category_id,structure_colors,swing_arm_colors,finishing_palette,upholstery_colors,plate_holder_colors,plate_holder_types,plate_holder_type,photo_data_url,(COALESCE(photo_data_url,'')<>'' OR EXISTS(SELECT 1 FROM product_catalog_profiles WHERE tenant_id=products.tenant_id AND product_id=products.id AND main_media_id IS NOT NULL)) AS has_photo"
@@ -36,7 +36,7 @@ function product(row: Record<string, unknown>) {
   const legacy = types.length === 1 ? types[0] === "Standard" ? "standard" : types[0] === "Olímpico" ? "olympic" : null : null
   return {
     photoUrl: row.main_media_id ? `/api/erp/products/${String(row.id)}/media/${String(row.main_media_id)}` : null,
-    upholsteryConfigurable: row.upholstery_configurable, id: row.id, revision: integer(row.revision),
+    upholsteryConfigurable: row.upholstery_configurable, id: row.id, revision: revisionValue(row.revision),
     hasPhoto: row.has_photo, ...(row.category_id ? { categoryId: String(row.category_id) } : {}),
     ...(row.photo_data_url == null ? {} : { photoDataUrl: row.photo_data_url }), sku: row.sku, name: row.name, unit: row.unit,
     ncm: row.ncm, cest: row.cest, basePrice: price(row.price_cents), status: row.status,
@@ -105,15 +105,15 @@ export function registerProductRoutes(app: FastifyInstance, dependencies: AppDep
       const loaded = await context.client.query(`SELECT ${projection} FROM products WHERE tenant_id=$1 AND id=$2`, [context.tenantId, request.params.id])
       if (!loaded.rows[0]) throw new Problem(404, "not_found", "Produto não encontrado")
       const previous = product(loaded.rows[0]) as Record<string, unknown>
-      if (integer(previous.revision) !== expected) throw new Problem(412, "revision_conflict", "O produto foi alterado por outra pessoa")
+      if (revisionValue(previous.revision) !== expected) throw new Problem(412, "revision_conflict", "O produto foi alterado por outra pessoa")
       const data = materialize({ ...parsed.data, categoryId: parsed.data.categoryId ?? previous.categoryId as string | undefined, photoDataUrl: parsed.data.photoDataUrl ?? previous.photoDataUrl as string | undefined, structureColors: parsed.data.structureColors ?? previous.structureColors as string[], swingArmColors: parsed.data.swingArmColors ?? previous.swingArmColors as string[], finishingPalette: parsed.data.finishingPalette ?? previous.finishingPalette as "" | "dhz-hammerforce-pro" | "dhz-sforce" | "dhz-combined", upholsteryColors: parsed.data.upholsteryColors ?? previous.upholsteryColors as string[], plateHolderColors: parsed.data.plateHolderColors ?? previous.plateHolderColors as string[], plateHolderTypes: parsed.data.plateHolderTypes ?? previous.plateHolderTypes as string[] })
       if (data.categoryId !== (previous.categoryId ?? null)) await validateCategory(context, data.categoryId)
       if (data.unit !== previous.unit) { const movement = await context.client.query<{ exists: boolean }>("SELECT EXISTS(SELECT 1 FROM stock_movements WHERE tenant_id=$1 AND product_id=$2) AS exists", [context.tenantId, request.params.id]); if (movement.rows[0]?.exists) throw new Problem(409, "domain_conflict", "Unidade não pode mudar após movimentação de estoque") }
       if (data.status === "archived") { const balance = await context.client.query<{ quantity: string }>("SELECT COALESCE((SELECT quantity_micros FROM stock_balances WHERE tenant_id=$1 AND product_id=$2),0)::text AS quantity", [context.tenantId, request.params.id]); if (balance.rows[0]?.quantity !== undefined && balance.rows[0].quantity !== "0") throw new Problem(409, "domain_conflict", "Regularize o saldo antes de arquivar o produto") }
-      await context.client.query("UPDATE products SET sku=$3,name=$4,unit=$5,ncm=$6,cest=$7,price_cents=$8,status=$9,revision=$10,structure_colors=$11,upholstery_colors=$12,plate_holder_colors=$13,plate_holder_types=$14,plate_holder_type=$15,photo_data_url=$16,category_id=$17,swing_arm_colors=$18,finishing_palette=$19,updated_at=now() WHERE tenant_id=$1 AND id=$2", [context.tenantId, request.params.id, data.sku, data.name, data.unit, data.ncm, data.cest, cents(data.basePrice).toString(), data.status, expected + 1, data.structureColors, data.upholsteryColors, data.plateHolderColors, data.plateHolderTypes, legacyType(data.plateHolderTypes), data.photoDataUrl, data.categoryId, data.swingArmColors, data.finishingPalette])
+      await context.client.query("UPDATE products SET sku=$3,name=$4,unit=$5,ncm=$6,cest=$7,price_cents=$8,status=$9,revision=$10,structure_colors=$11,upholstery_colors=$12,plate_holder_colors=$13,plate_holder_types=$14,plate_holder_type=$15,photo_data_url=$16,category_id=$17,swing_arm_colors=$18,finishing_palette=$19,updated_at=now() WHERE tenant_id=$1 AND id=$2", [context.tenantId, request.params.id, data.sku, data.name, data.unit, data.ncm, data.cest, cents(data.basePrice).toString(), data.status, nextRevision(expected), data.structureColors, data.upholsteryColors, data.plateHolderColors, data.plateHolderTypes, legacyType(data.plateHolderTypes), data.photoDataUrl, data.categoryId, data.swingArmColors, data.finishingPalette])
       const next = await context.client.query(`SELECT ${projection} FROM products WHERE tenant_id=$1 AND id=$2`, [context.tenantId, request.params.id])
-      await context.client.query("INSERT INTO audit_log(tenant_id,identity_id,action,entity_type,entity_id,request_id,details) SELECT $1,id,'product.updated','product',$3,$4,$5 FROM identities WHERE auth_subject=$2", [context.tenantId, context.identity.subject, request.params.id, one(request.headers["x-request-id"]) ?? null, { previousRevision: expected, revision: expected + 1 }])
-      await context.client.query("INSERT INTO outbox_events(tenant_id,aggregate_type,aggregate_id,event_type,payload) VALUES($1,'product',$2,'product.updated',$3)", [context.tenantId, request.params.id, { previousRevision: expected, revision: expected + 1 }])
+      await context.client.query("INSERT INTO audit_log(tenant_id,identity_id,action,entity_type,entity_id,request_id,details) SELECT $1,id,'product.updated','product',$3,$4,$5 FROM identities WHERE auth_subject=$2", [context.tenantId, context.identity.subject, request.params.id, one(request.headers["x-request-id"]) ?? null, { previousRevision: expected, revision: nextRevision(expected) }])
+      await context.client.query("INSERT INTO outbox_events(tenant_id,aggregate_type,aggregate_id,event_type,payload) VALUES($1,'product',$2,'product.updated',$3)", [context.tenantId, request.params.id, { previousRevision: expected, revision: nextRevision(expected) }])
       return { tenantId: context.tenantId, canEdit: true, data: product(next.rows[0]!) }
     })
     return reply.header("cache-control", "no-store").header("etag", `"${body.data.revision}"`).send(body)

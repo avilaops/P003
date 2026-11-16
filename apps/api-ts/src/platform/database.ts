@@ -1,7 +1,8 @@
-import { Pool, type PoolClient } from "pg"
+import { Pool, types, type PoolClient } from "pg"
 import { z } from "zod"
 
 import { Problem } from "./problem.js"
+import { parseJson, stringifyJson } from "./json.js"
 
 export type QueryRows<T extends Record<string, unknown> = Record<string, unknown>> = { rows: T[] }
 
@@ -72,10 +73,10 @@ export async function withTenantTransaction<T>(
   }
 }
 
-class PgClientAdapter implements DatabaseClient {
+export class PgClientAdapter implements DatabaseClient {
   constructor(private readonly client: PoolClient) {}
   async query<T extends Record<string, unknown>>(sql: string, values: readonly unknown[] = []): Promise<QueryRows<T>> {
-    const result = await this.client.query<T>(sql, [...values])
+    const result = await this.client.query<T>({ text: sql, values: values.map(value => value !== null && typeof value === "object" && !Array.isArray(value) && !(value instanceof Date) && !Buffer.isBuffer(value) ? stringifyJson(value) : value), types: { getTypeParser: (oid: number) => oid === 114 || oid === 3802 ? parseJson : types.getTypeParser(oid) } })
     return { rows: result.rows }
   }
   release() { this.client.release() }

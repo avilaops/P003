@@ -1,3 +1,4 @@
+import { revisionValue, nextRevision, parseRevision as expectedRevision } from "../../platform/revision.js"
 import { randomUUID } from "node:crypto"
 
 import type { FastifyInstance } from "fastify"
@@ -41,16 +42,8 @@ function commandKey(value: string | string[] | undefined) {
   return parsed.data
 }
 
-function expectedRevision(value: string | string[] | undefined) {
-  if (value === undefined) throw new Problem(428, "revision_required", "Recarregue o cadastro antes de salvar")
-  const match = /^"([0-9]+)"$/.exec(singleHeader(value) ?? "")
-  const parsed = match?.[1] ? Number(match[1]) : Number.NaN
-  if (!Number.isSafeInteger(parsed) || parsed <= 0) throw new Problem(400, "invalid_revision", "Revisão inválida")
-  return parsed
-}
-
 function output(row: Record<string, unknown>, extras: readonly string[]) {
-  const value: Record<string, unknown> = { id: row.id, revision: integer(row.revision), code: row.code, name: row.name, status: row.status, notes: row.notes }
+  const value: Record<string, unknown> = { id: row.id, revision: revisionValue(row.revision), code: row.code, name: row.name, status: row.status, notes: row.notes }
   if (extras.includes("parent_id")) value.parentId = row.parent_id
   if (extras.includes("sort_order")) value.sortOrder = integer(row.sort_order)
   if (extras.includes("group_id")) value.groupId = row.group_id
@@ -171,7 +164,7 @@ export function registerReferenceRoutes(app: FastifyInstance, dependencies: AppD
         await context.client.query("SELECT id FROM tenants WHERE id=$1 FOR UPDATE", [context.tenantId])
         const current = await load(context.client, context.tenantId, request.params.id)
         if (!current) throw new Problem(404, "not_found", "Registro não encontrado nesta empresa")
-        if (integer(current.revision) !== expected) throw new Problem(412, "revision_conflict", "O cadastro foi alterado por outra pessoa")
+        if (revisionValue(current.revision) !== expected) throw new Problem(412, "revision_conflict", "O cadastro foi alterado por outra pessoa")
         const values = parsed.data as Record<string, unknown>
         await validateRelations(context, resource, request.params.id, values)
         const assignments = ["code", "name", "status", "notes", ...definition.extras]
@@ -181,7 +174,7 @@ export function registerReferenceRoutes(app: FastifyInstance, dependencies: AppD
         const row = await load(context.client, context.tenantId, request.params.id)
         if (!row) throw new Problem(404, "not_found", "Registro não encontrado nesta empresa")
         const result = { tenantId: context.tenantId, canEdit: true, data: output(row, definition.extras) }
-        const details = { revision: expected + 1, previousRevision: expected, status: parsed.data.status }
+        const details = { revision: nextRevision(expected), previousRevision: expected, status: parsed.data.status }
         await context.client.query("INSERT INTO audit_log(tenant_id,identity_id,action,entity_type,entity_id,request_id,details) SELECT $1,id,$3,$4,$5,$6,$7 FROM identities WHERE auth_subject=$2", [context.tenantId, context.identity.subject, scope, definition.table, request.params.id, singleHeader(request.headers["x-request-id"]) ?? null, details])
         await context.client.query("INSERT INTO outbox_events(tenant_id,aggregate_type,aggregate_id,event_type,payload) VALUES($1,$2,$3,$4,$5)", [context.tenantId, definition.table, request.params.id, scope, details])
         await context.client.query("INSERT INTO domain_commands(tenant_id,auth_subject,command_key,scope,request,result) VALUES($1,$2,$3,$4,$5,$6)", [context.tenantId, context.identity.subject, key, scope, commandRequest, result])

@@ -9,7 +9,7 @@ O objetivo continua sendo migrar Preferências, Cadastros, Vendas e Relatórios 
 | Área | Implementação atual | Verificação disponível | Trabalho restante |
 | --- | --- | --- | --- |
 | Fundação | Auth, empresa, permissões e transação com contexto RLS; escritas bloqueiam empresa antes de carregar permissões; administrador explícito por auth_subject | Testes de plataforma; role real sem bypass de RLS; revogação de permissão durante espera; administrador sem vínculo e revogação da concessão | Revisão final com os demais contratos |
-| Preferências | GET e PUT com revisão, leitura numérica de bigint e verificação de titular antes da revisão | Testes HTTP e PostgreSQL: gravações sucessivas/concorrentes, owner key, auditoria, null/omissão e isolamento | Revisão final dos limites de precondições e dados persistidos |
+| Preferências | GET e PUT com revisão i64 exata e verificação de titular antes da revisão | Testes HTTP e PostgreSQL: gravações sucessivas/concorrentes, owner key, auditoria, isolamento e limites i64 | Revisão final dos demais erros HTTP e dados persistidos |
 | Cadastros | Listas, detalhes e comandos de parties, products e referências; configurações cadastrais; schemas e regras de clientes/produtos portados; envelopes/eventos/vínculos dos catálogos alinhados | Testes HTTP; escritas reais e concorrência; clientes com complementos/documento vinculado; produtos com foto, opcionais, legado, configurações e estoque; hierarquia dos catálogos | Revisão final dos contratos e integração geral de Cadastros |
 | Vendas | Listas e detalhes de pedidos e propostas; checkout e versões históricas | Testes HTTP e integração PostgreSQL com migrations completas e RLS | Comandos, transições e consultas comerciais |
 | Relatórios | Pendente | Pendente | Painel e CRUD de relatórios personalizados |
@@ -69,6 +69,12 @@ A integração PostgreSQL verifica foto de 70.000 bytes, omissão/null versus li
 
 A autenticação das rotas registradas `/api/v1/` ocorre antes do parser do corpo e a identidade é reutilizada no handler, sem segunda consulta ao userinfo. Falhas de parsing JSON, tipo de conteúdo e limite de corpo retornam problema 422; falha de autenticação continua precedendo esses erros. `/health/live` permanece público.
 
-A revisão final ainda precisa cobrir valores de revisão fora do intervalo inteiro seguro de JavaScript, fronteiras dos demais cabeçalhos e respostas de erro em todos os módulos. Testes dos fluxos correntes não provam essa paridade de limites.
+A revisão final ainda precisa cobrir fronteiras dos demais cabeçalhos e respostas de erro em todos os módulos. O tratamento i64 descrito abaixo já possui testes específicos e integrados.
 
 Antes de adicionar uma rota ao BFF, comparar entrada, saída, status, precondições, permissões, auditoria, outbox e regras de negócio com a implementação Rust. Escritas precisam provar concorrência, idempotência e rollback em PostgreSQL real. Testes com banco simulado ajudam a verificar o HTTP, mas não substituem essa prova.
+
+## Revisões de 64 bits
+
+`platform/revision.ts` centraliza leitura, `If-Match` e incremento de revisões positivas até `9223372036854775807`. Valores seguros usam `number`; valores maiores usam `bigint` internamente. A resposta conserva tokens numéricos JSON, sem converter revisões em strings. Headers com zeros iniciais são normalizados; zero, negativos e valores acima do máximo retornam 400, e o incremento além do máximo retorna 500 como o Rust, sem persistência parcial.
+
+O adaptador PostgreSQL serializa objetos com inteiros exatos e lê JSON/JSONB com preservação dos tokens numéricos. Isso permite replay e metadados de auditoria com revisões grandes. Os testes integrados usam o mesmo `PgClientAdapter` da aplicação e verificam bytes do JSON, ETag, JSONB persistido, replay e rollback no limite máximo. A API requer Node.js 22 ou superior para `JSON.rawJSON` e a origem do token no reviver; o runtime web atual usa Node.js 24.

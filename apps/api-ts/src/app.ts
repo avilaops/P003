@@ -9,11 +9,13 @@ import { registerReferenceRoutes } from "./modules/reference-data/routes.js"
 import { registerRegistrationSettingsRoutes } from "./modules/registration-settings/routes.js"
 import { authenticateRequest, type AccessDependencies } from "./platform/access.js"
 import { Problem } from "./platform/problem.js"
+import { stringifyJson } from "./platform/json.js"
 
 export type AppDependencies = AccessDependencies
 
 export function buildApp(_dependencies: AppDependencies): FastifyInstance {
   const app = Fastify({ logger: false, bodyLimit: 65_536 })
+  app.setReplySerializer(stringifyJson)
   app.addHook("onRequest", async request => {
     if (request.routeOptions.url?.startsWith("/api/v1/")) await authenticateRequest(request, _dependencies)
   })

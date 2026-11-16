@@ -1,8 +1,8 @@
+import { revisionValue, nextRevision, type Revision } from "../../platform/revision.js"
 import { createHash } from "node:crypto"
 
 import type { AuthorizedContext } from "../../platform/access.js"
 import { Problem } from "../../platform/problem.js"
-import { integer } from "../registrations/query.js"
 import type { DashboardLayout, PreferencesInput } from "./schema.js"
 
 const defaultLayout: DashboardLayout = {
@@ -18,7 +18,7 @@ const defaultLayout: DashboardLayout = {
 }
 
 type StoredPreferences = {
-  revision: number
+  revision: Revision
   product_page_size: number
   dashboard_layout: DashboardLayout
 }
@@ -26,7 +26,7 @@ type StoredPreferences = {
 export type PreferencesSnapshot = {
   ownerKey: string
   tenantId: string
-  revision: number
+  revision: Revision
   data: { productPageSize: number; dashboardLayout: DashboardLayout }
 }
 
@@ -40,7 +40,7 @@ async function load(context: AuthorizedContext): Promise<StoredPreferences> {
     [context.tenantId, context.authSubject],
   )
   const row = result.rows[0]
-  return row ? { ...row, revision: integer(row.revision) } : { revision: 1, product_page_size: 25, dashboard_layout: defaultLayout }
+  return row ? { ...row, revision: revisionValue(row.revision) } : { revision: 1, product_page_size: 25, dashboard_layout: defaultLayout }
 }
 
 function snapshot(context: AuthorizedContext, stored: StoredPreferences): PreferencesSnapshot {
@@ -56,7 +56,7 @@ export async function getPreferences(context: AuthorizedContext) {
   return snapshot(context, await load(context))
 }
 
-export async function putPreferences(context: AuthorizedContext, expected: number, input: PreferencesInput) {
+export async function putPreferences(context: AuthorizedContext, expected: Revision, input: PreferencesInput) {
   await context.client.query("SELECT id FROM tenants WHERE id=$1 FOR UPDATE", [context.tenantId])
   const ownerKey = preferenceOwnerKey(context.tenantId, context.authSubject)
   if ((input.dashboardLayout !== undefined || input.ownerKey !== undefined) && input.ownerKey !== ownerKey) {
@@ -66,7 +66,7 @@ export async function putPreferences(context: AuthorizedContext, expected: numbe
   if (current.revision !== expected) {
     throw new Problem(412, "revision_conflict", "Outra pessoa alterou o cadastro. Sua edição foi preservada")
   }
-  const next = current.revision + 1
+  const next = nextRevision(current.revision)
   const layout = input.dashboardLayout ?? current.dashboard_layout
   await context.client.query(
     "INSERT INTO personal_preferences(tenant_id,auth_subject,product_page_size,revision,dashboard_layout) VALUES($1,$2,$3,$4,$5) ON CONFLICT(tenant_id,auth_subject) DO UPDATE SET product_page_size=$3,revision=$4,dashboard_layout=$5,updated_at=now()",

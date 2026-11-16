@@ -1,3 +1,4 @@
+import { revisionValue } from "../../platform/revision.js"
 import { z } from "zod"
 
 import { Problem } from "../../platform/problem.js"
@@ -15,9 +16,9 @@ export function queryInput(value: unknown, statuses: readonly string[]) {
 }
 
 export function orderSummary(row: Record<string, unknown>) {
-  return { id: row.id, number: String(row.number), customerId: row.customer_id, customerName: row.customer_name, customerTaxId: row.customer_tax_id, dueDate: row.due_date, amount: row.amount, status: row.status, revision: integer(row.revision), updatedAt: row.updated_at, pricingOrigin: row.pricing_origin }
+  return { id: row.id, number: String(row.number), customerId: row.customer_id, customerName: row.customer_name, customerTaxId: row.customer_tax_id, dueDate: row.due_date, amount: row.amount, status: row.status, revision: revisionValue(row.revision), updatedAt: row.updated_at, pricingOrigin: row.pricing_origin }
 }
 
 export function proposalSummary(row: Record<string, unknown>) {
-  return { id: row.id, number: String(row.number), version: integer(row.version), revision: integer(row.revision), customerId: row.customer_id, customerName: row.customer_name, customerTaxId: row.customer_tax_id, validUntil: row.valid_until, paymentTerms: row.payment_terms, deliveryTerms: row.delivery_terms, notes: row.notes, amount: row.amount, status: row.status, expired: row.expired, orderId: row.order_id, isCurrent: row.is_current, createdAt: row.created_at, updatedAt: row.updated_at, sentAt: row.sent_at, decidedAt: row.decided_at, decidedBy: row.decided_by, decisionReason: row.decision_reason }
+  return { id: row.id, number: String(row.number), version: integer(row.version), revision: revisionValue(row.revision), customerId: row.customer_id, customerName: row.customer_name, customerTaxId: row.customer_tax_id, validUntil: row.valid_until, paymentTerms: row.payment_terms, deliveryTerms: row.delivery_terms, notes: row.notes, amount: row.amount, status: row.status, expired: row.expired, orderId: row.order_id, isCurrent: row.is_current, createdAt: row.created_at, updatedAt: row.updated_at, sentAt: row.sent_at, decidedAt: row.decided_at, decidedBy: row.decided_by, decisionReason: row.decision_reason }
 }
