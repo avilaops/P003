@@ -1,5 +1,13 @@
 import type { TenantContext } from "../../platform/database.js"
 import { integer } from "../registrations/query.js"
+import { z } from "zod"
+
+const paymentMethod = z.object({ id: z.guid(), code: z.string(), name: z.string(), modality: z.string() })
+function decodePaymentMethod(value: unknown) {
+  const decoded = paymentMethod.safeParse(value)
+  if (!decoded.success) throw Error("Invalid saved checkout payment method")
+  return decoded.data
+}
 
 export async function loadCheckout(context: TenantContext, orderId: string) {
   const { client, tenantId } = context
@@ -11,13 +19,14 @@ export async function loadCheckout(context: TenantContext, orderId: string) {
   const installments = []
   for (const item of rows.rows) {
     if (integer(item.number) === 0) { due = item.due_on; continue }
-    installments.push({ id: item.id, number: integer(item.number), paymentMethodId: item.payment_method_id, paymentMethod: item.payment_method, dueOn: item.due_on, amountCents: integer(item.amount_cents) })
+    if (item.due_on === null) throw Error("Missing saved installment due date")
+    installments.push({ id: item.id, number: integer(item.number), paymentMethodId: item.payment_method_id, paymentMethod: decodePaymentMethod(item.payment_method), dueOn: item.due_on, amountCents: integer(item.amount_cents) })
   }
   const originated = await client.query<{ originated: boolean }>("SELECT EXISTS(SELECT 1 FROM receivables WHERE tenant_id=$1 AND order_id=$2) AS originated", [tenantId, orderId])
   const customer = row.customer_snapshot as Record<string, unknown>
   return {
     confirmationCreatesReceivables: !originated.rows[0]?.originated,
-    entry: { amountCents: integer(row.entry_amount_cents), paymentMethodId: row.entry_payment_method_id, paymentMethod: row.entry_payment_method, dueOn: due },
+    entry: { amountCents: integer(row.entry_amount_cents), paymentMethodId: row.entry_payment_method_id, paymentMethod: row.entry_payment_method === null ? null : decodePaymentMethod(row.entry_payment_method), dueOn: due },
     installments, manufacturingDays: row.manufacturing_days, deliveryNotes: row.delivery_notes, paymentNotes: row.payment_notes, notes: row.notes,
     customer, stateRegistration: typeof customer.stateRegistration === "string" ? customer.stateRegistration : null,
   }

@@ -48,9 +48,10 @@ export async function verifyOrderTransitions(app: FastifyInstance, seed: Pool, t
 
   const scheduled = await create(), method = randomUUID()
   await seed.query("INSERT INTO payment_methods(id,tenant_id,code,name,modality,settlement_days,status,revision) VALUES($1,$2,'TRANSITION','Pix','pix',0,'active',1)", [method, tenant])
-  await seed.query("INSERT INTO sales_order_checkouts(tenant_id,order_id,customer_snapshot,entry_amount_cents,entry_payment_method_id,entry_payment_method,delivery_notes,payment_notes,notes) VALUES($1,$2,'{\"legalName\":\"Cliente congelado\"}',2500,$3,'{}','','','')", [tenant, scheduled, method])
+  const methodSnapshot = { id: method, code: "TRANSITION", name: "Pix", modality: "pix" }
+  await seed.query("INSERT INTO sales_order_checkouts(tenant_id,order_id,customer_snapshot,entry_amount_cents,entry_payment_method_id,entry_payment_method,delivery_notes,payment_notes,notes) VALUES($1,$2,'{\"legalName\":\"Cliente congelado\"}',2500,$3,$4,'','','')", [tenant, scheduled, method, methodSnapshot])
   for (const [number, kind, amount, due] of [[0, "entry", 2500, null], [1, "balance", 7500, "2027-01-01"]] as const) {
-    await seed.query("INSERT INTO sales_order_installments(id,tenant_id,order_id,number,kind,payment_method_id,payment_method,due_on,amount_cents) VALUES($1,$2,$3,$4,$5,$6,'{}',$7,$8)", [randomUUID(), tenant, scheduled, number, kind, method, due, amount])
+    await seed.query("INSERT INTO sales_order_installments(id,tenant_id,order_id,number,kind,payment_method_id,payment_method,due_on,amount_cents) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9)", [randomUUID(), tenant, scheduled, number, kind, method, methodSnapshot, due, amount])
   }
   const acceptedKey = randomUUID()
   const accepted = await transition(scheduled, "accept", 1, acceptedKey)
@@ -70,6 +71,16 @@ export async function verifyOrderTransitions(app: FastifyInstance, seed: Pool, t
   assert.equal(summary.beforeShipment, true)
   assert.equal(summary.reconciliation.production.status, "not_required")
   assert.equal(summary.reconciliation.commission.paymentsPreserved, true)
+  // Saved snapshots must be decoded like the original typed checkout reader.
+  for (const field of ["entry", "installment", "extension"]) {
+    const snapshotOrder = await create()
+    const entryMethod = field === "entry" ? {} : { ...methodSnapshot, ignored: "stored extension" }
+    await seed.query("INSERT INTO sales_order_checkouts(tenant_id,order_id,customer_snapshot,entry_amount_cents,entry_payment_method_id,entry_payment_method,delivery_notes,payment_notes,notes) VALUES($1,$2,'{}',2500,$3,$4,'','','')", [tenant, snapshotOrder, method, entryMethod])
+    await seed.query("INSERT INTO sales_order_installments(id,tenant_id,order_id,number,kind,payment_method_id,payment_method,due_on,amount_cents) VALUES($1,$2,$3,1,'balance',$4,$5,'2027-01-01',7500)", [randomUUID(), tenant, snapshotOrder, method, field === "installment" ? {} : methodSnapshot])
+    const decoded = await app.inject({ method: "GET", url: `/api/v1/orders/${snapshotOrder}`, headers })
+    assert.equal(decoded.statusCode, field === "extension" ? 200 : 500, "Incomplete saved payment snapshots must fail closed")
+    if (field === "extension") assert.deepEqual(decoded.json().checkout.entry.paymentMethod, methodSnapshot)
+  }
   assert.equal((await transition(competing, "accept")).statusCode, 409, "Acceptance requires checkout")
   await verifyTransitionGuards(app, seed, tenant, product, method)
 }

@@ -12,7 +12,7 @@ export async function verifyTransitionGuards(app: FastifyInstance, seed: Pool, t
     await seed.query("INSERT INTO sales_order_lines(tenant_id,order_id,line_number,product_id,sku,name,unit,quantity_micros,price_cents,amount_cents) VALUES($1,$2,1,$3,'TRANSITION','Equipamento','UN',1000000,10000,10000)", [tenant, id, product])
     if (schedule) {
       await seed.query("INSERT INTO sales_order_checkouts(tenant_id,order_id,customer_snapshot,entry_amount_cents,delivery_notes,payment_notes,notes) VALUES($1,$2,'{\"legalName\":\"Cliente\"}',0,'','','')", [tenant, id])
-      await seed.query("INSERT INTO sales_order_installments(id,tenant_id,order_id,number,kind,payment_method_id,payment_method,due_on,amount_cents) VALUES($1,$2,$3,1,'balance',$4,'{}','2027-01-01',10000)", [randomUUID(), tenant, id, method])
+      await seed.query("INSERT INTO sales_order_installments(id,tenant_id,order_id,number,kind,payment_method_id,payment_method,due_on,amount_cents) VALUES($1,$2,$3,1,'balance',$4,$5,'2027-01-01',10000)", [randomUUID(), tenant, id, method, { id: method, code: "TRANSITION", name: "Pix", modality: "pix" }])
     }
     return id
   }

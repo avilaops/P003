@@ -17,10 +17,12 @@ import { verifyCommercialSimulation } from "./commercial-simulation-cases.js"
 import { verifyCommercialMixed } from "./commercial-mixed-cases.js"
 import { verifyOpportunities } from "./opportunity-cases.js"
 import { verifyCommercialMetrics } from "./commercial-metric-cases.js"
+import { startRustContractBackend } from "./rust-contract-backend.js"
 
 // Opt in with a disposable PostgreSQL administrator URL. The generated database
 // and NOLOGIN role belong exclusively to this test and are removed afterwards.
-test("PostgreSQL migrations and RLS preserve registration and sales workflows across tenants", { skip: !process.env.API_TS_TEST_ADMIN_URL }, async () => {
+const backends = process.env.API_TS_TEST_RUST_BINARY ? ["typescript", "rust"] : ["typescript"]
+for (const backend of backends) test(`${backend}: PostgreSQL migrations and RLS preserve registration and sales workflows across tenants`, { skip: !process.env.API_TS_TEST_ADMIN_URL }, async () => {
   const url = new URL(process.env.API_TS_TEST_ADMIN_URL!)
   const suffix = randomUUID().replaceAll("-", ""), database = `api_ts_test_${suffix}`, role = `api_ts_role_${suffix}`
   const admin = new Pool({ connectionString: url.toString() })
@@ -60,7 +62,7 @@ test("PostgreSQL migrations and RLS preserve registration and sales workflows ac
       await client.query(`SET ROLE ${role}`)
       return new PgClientAdapter(client)
     } }
-    app = buildApp({ pool, userinfoUrl: "http://auth.test/userinfo", fetchAuth: async (_url, init) => Response.json({ sub: new Headers(init?.headers).get("authorization")?.slice(7), email: "reader@example.test" }) })
+    app = backend === "rust" ? await startRustContractBackend(process.env.API_TS_TEST_RUST_BINARY!, url.toString(), role) : buildApp({ pool, userinfoUrl: "http://auth.test/userinfo", fetchAuth: async (_url, init) => Response.json({ sub: new Headers(init?.headers).get("authorization")?.slice(7), email: "reader@example.test" }) })
     const headers = { authorization: "Bearer reader", "x-tenant-id": tenant }
     const detail = await app.inject({ method: "GET", url: `/api/v1/orders/${order}`, headers })
     assert.equal(detail.statusCode, 200, detail.body)

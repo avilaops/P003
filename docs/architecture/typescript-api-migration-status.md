@@ -167,4 +167,12 @@ Lista, detalhe, criação e alteração de `/api/v1/opportunities` portados. Tot
 
 `GET /api/v1/commercial/metrics/orders` e `commissions` preservam as consultas Rust. Conclusões são contadas pelos eventos `order.completed` dentro da competência em Brasília, independentemente da criação do pedido. A leitura de comissões exige sua permissão própria; competência e valores atuais pendentes/futuros conservam os critérios originais. Essas consultas não migram os comandos do módulo Financeiro.
 
-Os testes PostgreSQL verificam criação idempotente, edição concorrente 200/412, filtros/totais globais, vínculo de cliente, entradas inválidas e rollback no funil. As métricas usam valores conhecidos e eventos na fronteira UTC do mês para demonstrar o recorte de Brasília; recebimento parcial e estorno mudam a previsão de comissão de 664 para 885 centavos. A matriz HTTP executada contra ambos os backends continua sendo um requisito de liberação pendente.
+Os testes PostgreSQL verificam criação idempotente, edição concorrente 200/412, filtros/totais globais, vínculo de cliente, entradas inválidas e rollback no funil. As métricas usam valores conhecidos e eventos na fronteira UTC do mês para demonstrar o recorte de Brasília; recebimento parcial e estorno mudam a previsão de comissão de 664 para 885 centavos.
+
+## Matriz HTTP executada nas duas APIs
+
+`pnpm --filter api-ts test:contracts` executa os mesmos cenários de integração contra Fastify e contra o servidor Rust real compilado do checkout. Cada execução cria seu próprio banco, aplica todas as migrações e usa a mesma role restrita sujeita a RLS. O servidor Rust recebe autenticação local controlada, limite de conexões e workers desabilitados; nenhuma credencial externa é necessária. O comando exige a URL administrativa de testes e falha se não puder executar a comparação.
+
+A matriz passou nas duas implementações em 16/11/2026. A comparação identificou fixtures de pagamento incompletas, corrigidas para refletir os snapshots realmente salvos. Cenários adicionais demonstraram uma diferença real na leitura TypeScript: snapshots incompletos eram retornados sem validação. O leitor agora conserva o erro 500 do contrato Rust para dados salvos inválidos e omite campos extras ao decodificar a forma de pagamento.
+
+Esse resultado verifica os cenários existentes, sem substituir a revisão final de cobertura, o teste do BFF ou a validação de implantação/retorno por módulo. As rotas equivalentes Rust continuam presentes para retorno controlado.
