@@ -7,7 +7,7 @@ const tenant = "11111111-1111-4111-8111-111111111111"
 const id = "22222222-2222-4222-8222-222222222222"
 const uri = source => "data:text/javascript;base64," + Buffer.from(source).toString("base64")
 const session = uri(`export const currentSession=async()=>({tenantId:"${tenant}",accessToken:"fixture"});export const currentIdentitySession=currentSession;export const erpConfiguration=()=>({origin:"http://fixture.local",api:"http://backend.local"});`)
-const source = readFileSync(new URL("../src/server/bff/erp-proxy.ts", import.meta.url), "utf8").replace('import "server-only"', "").replace('"@/server/auth/erp-session"', JSON.stringify(session)).replace('"@/lib/api/local-fiscal-origin"', JSON.stringify(new URL("../src/lib/api/local-fiscal-origin.ts", import.meta.url).href))
+const source = readFileSync(new URL("../src/server/bff/erp-proxy.ts", import.meta.url), "utf8").replace('import "server-only"', "").replace('"@/server/bff/erp-backend"', JSON.stringify(new URL("../src/server/bff/erp-backend.ts", import.meta.url).href)).replace('"@/server/auth/erp-session"', JSON.stringify(session)).replace('"@/lib/api/local-fiscal-origin"', JSON.stringify(new URL("../src/lib/api/local-fiscal-origin.ts", import.meta.url).href))
 const { forwardErp } = await import(uri(ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } }).outputText))
 
 test("POS BFF preserves account-session identity, revision, idempotency and history filters", async () => {

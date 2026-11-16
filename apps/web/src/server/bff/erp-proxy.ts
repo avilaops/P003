@@ -1,5 +1,6 @@
 import "server-only"
 import { fiscalApiOrigin } from "@/lib/api/local-fiscal-origin"
+import { selectErpBackend } from "@/server/bff/erp-backend"
 
 import { currentIdentitySession, currentSession, erpConfiguration } from "@/server/auth/erp-session"
 
@@ -56,7 +57,7 @@ export async function forwardErp(request: Request, resource: string) {
     || (simulatorQuote || simulatorCreate || orderPricingApprove) && request.method === "POST"
   const proposalCollection = resource === "/proposals"
   const proposalDetail = /^\/proposals\/[a-f0-9-]{36}$/i.test(resource)
-  const proposalAction = /^\/proposals\/[a-f0-9-]{36}\/(?:send|accept|reject|cancel|revise|convert)$/i.test(resource)
+  const proposalAction = /^\/proposals\/[a-f0-9-]{36}\/(?:send|accept|reject|cancel|revise|convert|approve-order)$/i.test(resource)
   const proposalResource = proposalCollection || proposalDetail || proposalAction
   if (proposalResource && !(proposalCollection ? ["GET", "POST"] : proposalDetail ? ["GET", "PUT"] : ["POST"]).includes(request.method)) return Response.json({ title: "Método inválido" }, { status: 405 })
   const salesSettingsResource = /^\/registration-settings\/(products|parties|contact-types|tax-profiles)$/.test(resource) && ["GET", "PUT"].includes(request.method) || ["/sales-settings", "/inventory-settings", "/purchase-settings"].includes(resource) && ["GET", "PUT"].includes(request.method)
@@ -120,7 +121,11 @@ export async function forwardErp(request: Request, resource: string) {
     if (etag) headers.set("If-Match", etag)
     const commandKey = request.headers.get("idempotency-key")
     if (commandKey) headers.set("Idempotency-Key", commandKey)
-    const api = fiscalApiOrigin(resource, config.api, process.env.ERP_FISCAL_API_URL, process.env.NODE_ENV)
+    const selected = selectErpBackend(request.method, resource, config.api, {
+      ERP_TYPESCRIPT_API_URL: process.env.ERP_TYPESCRIPT_API_URL,
+      ERP_TYPESCRIPT_MODULES: process.env.ERP_TYPESCRIPT_MODULES,
+    })
+    const api = selected.backend === "typescript" ? selected.origin : fiscalApiOrigin(resource, selected.origin, process.env.ERP_FISCAL_API_URL, process.env.NODE_ENV)
     const upstream = new URL(`${api}/api/v1${resource}`)
     if (opportunityResource) {
       const query = new URL(request.url).searchParams

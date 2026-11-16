@@ -11,7 +11,8 @@ export const currentIdentitySession = currentSession;
 export const erpConfiguration = () => ({origin:"http://fixture.local",api:"http://backend.local"});
 `).toString("base64");
 const source = readFileSync(new URL("../src/server/bff/erp-proxy.ts", import.meta.url), "utf8")
-  .replace('import "server-only"', "")
+  .replace('import "server-only"', "").replace('"@/server/bff/erp-backend"', JSON.stringify(new URL("../src/server/bff/erp-backend.ts", import.meta.url).href))
+  .replace('"@/lib/api/local-fiscal-origin"', JSON.stringify(new URL("../src/lib/api/local-fiscal-origin.ts", import.meta.url).href))
   .replace('"@/server/auth/erp-session"', JSON.stringify(sessionModule));
 const compiled = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } }).outputText;
 const { forwardErp } = await import("data:text/javascript;base64," + Buffer.from(compiled).toString("base64"));

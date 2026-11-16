@@ -176,3 +176,11 @@ Os testes PostgreSQL verificam criação idempotente, edição concorrente 200/4
 A matriz passou nas duas implementações em 16/11/2026. A comparação identificou fixtures de pagamento incompletas, corrigidas para refletir os snapshots realmente salvos. Cenários adicionais demonstraram uma diferença real na leitura TypeScript: snapshots incompletos eram retornados sem validação. O leitor agora conserva o erro 500 do contrato Rust para dados salvos inválidos e omite campos extras ao decodificar a forma de pagamento.
 
 Esse resultado verifica os cenários existentes, sem substituir a revisão final de cobertura, o teste do BFF ou a validação de implantação/retorno por módulo. As rotas equivalentes Rust continuam presentes para retorno controlado.
+
+## Seleção de backend no BFF
+
+O proxy do navegador seleciona o backend antes do envio, usando uma lista explícita de métodos e recursos já implementados. `ERP_TYPESCRIPT_MODULES` aceita `preferences,registrations,sales,reports`; vazio conserva todas as rotas Rust. Um módulo habilitado exige `ERP_TYPESCRIPT_API_URL` como origem HTTPS ou HTTP em loopback. Recursos fora da lista continuam na Rust, inclusive Fiscal, Financeiro, documentos e e-mail.
+
+O proxy conserva sessão, empresa, corpo sem reserializar números, `If-Match`, `Idempotency-Key`, ETag e identificação da resposta. Cada operação faz uma única chamada. Perda de resposta ou erro do backend não provoca nova tentativa em Rust. Para retornar um módulo, remova seu nome da configuração e reinicie/reimplante o BFF. As duas implementações compartilham PostgreSQL, revisões e comandos salvos.
+
+Testes de seleção e do proxy real verificam as quatro famílias, rollback de Vendas, cabeçalhos/JSON, conflito, falha após envio, configuração ausente e permanência de rotas não migradas em Rust. A regressão dos proxies existentes também passou. A ativação de produção continua pendente da preparação do processo TypeScript no runtime.
