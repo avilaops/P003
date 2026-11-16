@@ -2,6 +2,7 @@ import { createHash } from "node:crypto"
 
 import type { AuthorizedContext } from "../../platform/access.js"
 import { Problem } from "../../platform/problem.js"
+import { integer } from "../registrations/query.js"
 import type { DashboardLayout, PreferencesInput } from "./schema.js"
 
 const defaultLayout: DashboardLayout = {
@@ -34,11 +35,12 @@ export function preferenceOwnerKey(tenantId: string, authSubject: string) {
 }
 
 async function load(context: AuthorizedContext): Promise<StoredPreferences> {
-  const result = await context.client.query<StoredPreferences>(
+  const result = await context.client.query<Omit<StoredPreferences, "revision"> & { revision: number | string }>(
     "SELECT revision,product_page_size,dashboard_layout FROM personal_preferences WHERE tenant_id=$1 AND auth_subject=$2",
     [context.tenantId, context.authSubject],
   )
-  return result.rows[0] ?? { revision: 1, product_page_size: 25, dashboard_layout: defaultLayout }
+  const row = result.rows[0]
+  return row ? { ...row, revision: integer(row.revision) } : { revision: 1, product_page_size: 25, dashboard_layout: defaultLayout }
 }
 
 function snapshot(context: AuthorizedContext, stored: StoredPreferences): PreferencesSnapshot {
@@ -56,13 +58,13 @@ export async function getPreferences(context: AuthorizedContext) {
 
 export async function putPreferences(context: AuthorizedContext, expected: number, input: PreferencesInput) {
   await context.client.query("SELECT id FROM tenants WHERE id=$1 FOR UPDATE", [context.tenantId])
-  const current = await load(context)
-  if (current.revision !== expected) {
-    throw new Problem(412, "revision_conflict", "Outra pessoa alterou o cadastro. Sua edição foi preservada")
-  }
   const ownerKey = preferenceOwnerKey(context.tenantId, context.authSubject)
   if ((input.dashboardLayout !== undefined || input.ownerKey !== undefined) && input.ownerKey !== ownerKey) {
     throw new Problem(409, "domain_conflict", "A conta ou empresa mudou. Recarregue suas preferências")
+  }
+  const current = await load(context)
+  if (current.revision !== expected) {
+    throw new Problem(412, "revision_conflict", "Outra pessoa alterou o cadastro. Sua edição foi preservada")
   }
   const next = current.revision + 1
   const layout = input.dashboardLayout ?? current.dashboard_layout

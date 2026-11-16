@@ -14,9 +14,18 @@ export type AccessDependencies = {
 
 export type AuthorizedContext = TenantContext & { identity: AuthenticatedIdentity }
 const tenantSchema = z.string().uuid()
+const authenticatedRequests = new WeakMap<object, AuthenticatedIdentity>()
 
 function singleHeader(value: string | string[] | undefined): string | undefined {
   return Array.isArray(value) ? undefined : value
+}
+
+export async function authenticateRequest(request: RequestLike, dependencies: AccessDependencies) {
+  const cached = authenticatedRequests.get(request)
+  if (cached) return cached
+  const identity = await authenticate(singleHeader(request.headers.authorization), dependencies.userinfoUrl, dependencies.fetchAuth)
+  authenticatedRequests.set(request, identity)
+  return identity
 }
 
 export async function authorizeRequest<T>(
@@ -24,17 +33,13 @@ export async function authorizeRequest<T>(
   dependencies: AccessDependencies,
   operation: (context: AuthorizedContext) => Promise<T>,
 ): Promise<T> {
-  const identity = await authenticate(
-    singleHeader(request.headers.authorization),
-    dependencies.userinfoUrl,
-    dependencies.fetchAuth,
-  )
+  const identity = await authenticateRequest(request, dependencies)
   const rawTenant = singleHeader(request.headers["x-tenant-id"])
   if (!rawTenant) throw new Problem(400, "missing_tenant", "Empresa ativa não informada")
   if (!tenantSchema.safeParse(rawTenant).success) {
     throw new Problem(400, "invalid_tenant", "Identificador da empresa inválido")
   }
-  return withTenantTransaction(dependencies.pool, rawTenant, identity.subject, context =>
+  return withTenantTransaction(dependencies.pool, rawTenant.toLowerCase(), identity.subject, context =>
     operation({ ...context, identity }),
     request.method !== undefined && !["GET", "HEAD", "OPTIONS"].includes(request.method.toUpperCase()),
   )

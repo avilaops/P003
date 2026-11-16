@@ -9,10 +9,10 @@ import { getPreferences, putPreferences } from "./service.js"
 function revision(value: string | string[] | undefined): number {
   if (value === undefined) throw new Problem(428, "revision_required", "Recarregue o cadastro antes de salvar")
   if (Array.isArray(value)) throw new Problem(400, "invalid_revision", "Revisão inválida")
-  const match = /^"([1-9][0-9]*)"$/.exec(value)
+  const match = /^"([0-9]+)"$/.exec(value)
   if (!match?.[1]) throw new Problem(400, "invalid_revision", "Revisão inválida")
   const parsed = Number(match[1])
-  if (!Number.isSafeInteger(parsed)) throw new Problem(400, "invalid_revision", "Revisão inválida")
+  if (!Number.isSafeInteger(parsed) || parsed <= 0) throw new Problem(400, "invalid_revision", "Revisão inválida")
   return parsed
 }
 

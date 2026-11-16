@@ -9,7 +9,7 @@ O objetivo continua sendo migrar Preferências, Cadastros, Vendas e Relatórios 
 | Área | Implementação atual | Verificação disponível | Trabalho restante |
 | --- | --- | --- | --- |
 | Fundação | Auth, empresa, permissões e transação com contexto RLS; escritas bloqueiam empresa antes de carregar permissões; administrador explícito por auth_subject | Testes de plataforma; role real sem bypass de RLS; revogação de permissão durante espera; administrador sem vínculo e revogação da concessão | Revisão final com os demais contratos |
-| Preferências | GET e PUT com revisão | Testes com adaptador de banco simulado | Contrato integrado com PostgreSQL e revisão de paridade |
+| Preferências | GET e PUT com revisão, leitura numérica de bigint e verificação de titular antes da revisão | Testes HTTP e PostgreSQL: gravações sucessivas/concorrentes, owner key, auditoria, null/omissão e isolamento | Revisão final dos limites de precondições e dados persistidos |
 | Cadastros | Listas, detalhes e comandos de parties, products e referências; configurações cadastrais; schemas e regras de clientes/produtos portados; envelopes/eventos/vínculos dos catálogos alinhados | Testes HTTP; escritas reais e concorrência; clientes com complementos/documento vinculado; produtos com foto, opcionais, legado, configurações e estoque; hierarquia dos catálogos | Revisão final dos contratos e integração geral de Cadastros |
 | Vendas | Listas e detalhes de pedidos e propostas; checkout e versões históricas | Testes HTTP e integração PostgreSQL com migrations completas e RLS | Comandos, transições e consultas comerciais |
 | Relatórios | Pendente | Pendente | Painel e CRUD de relatórios personalizados |
@@ -66,5 +66,9 @@ Fotos usam o mesmo limite de 256 KiB, prefixo JPEG e base64 estrito da validaç�
 A integração PostgreSQL verifica foto de 70.000 bytes, omissão/null versus limpeza explícita, normalização do comando persistido, leitura legada, configuração de NCM/CEST/estofado, preservação de categoria arquivada e conflitos ao trocar unidade com movimentação ou arquivar com saldo. A revisão final de status, limites e precondições continua necessária antes de liberar o BFF.
 
 ## Critério de liberação
+
+A autenticação das rotas registradas `/api/v1/` ocorre antes do parser do corpo e a identidade é reutilizada no handler, sem segunda consulta ao userinfo. Falhas de parsing JSON, tipo de conteúdo e limite de corpo retornam problema 422; falha de autenticação continua precedendo esses erros. `/health/live` permanece público.
+
+A revisão final ainda precisa cobrir valores de revisão fora do intervalo inteiro seguro de JavaScript, fronteiras dos demais cabeçalhos e respostas de erro em todos os módulos. Testes dos fluxos correntes não provam essa paridade de limites.
 
 Antes de adicionar uma rota ao BFF, comparar entrada, saída, status, precondições, permissões, auditoria, outbox e regras de negócio com a implementação Rust. Escritas precisam provar concorrência, idempotência e rollback em PostgreSQL real. Testes com banco simulado ajudam a verificar o HTTP, mas não substituem essa prova.

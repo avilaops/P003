@@ -21,9 +21,9 @@ export const dashboardLayoutSchema = z.strictObject({
 })
 
 export const preferencesInputSchema = z.strictObject({
-  ownerKey: z.string().optional(),
+  ownerKey: z.preprocess(value => value === null ? undefined : value, z.string().optional()),
   productPageSize: z.union([z.literal(10), z.literal(25), z.literal(50), z.literal(100)]),
-  dashboardLayout: dashboardLayoutSchema.optional(),
+  dashboardLayout: z.preprocess(value => value === null ? undefined : value, dashboardLayoutSchema.optional()),
 })
 
 export type DashboardLayout = z.infer<typeof dashboardLayoutSchema>
