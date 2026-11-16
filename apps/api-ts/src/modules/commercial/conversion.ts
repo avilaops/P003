@@ -11,11 +11,14 @@ import { checkoutInputSchema, saveCheckout } from "../orders/checkout-save.js"
 import { storeLines } from "../orders/prepare.js"
 import { decimal, validateDate } from "../sales/fixed.js"
 import { loadSaleProduct, selectFinishes } from "../sales/finishes.js"
-import { negotiationInputSchema } from "./negotiation-model.js"
+import { negotiationInputSchema, type NegotiationInput } from "./negotiation-model.js"
 import { prepareNegotiation } from "./prepare.js"
+import { mixedInputSchema, type MixedInput } from "./mixed-model.js"
+import { prepareMixed } from "./mixed-prepare.js"
 
 const uuid = z.string().uuid().transform(value => value.toLowerCase())
 export const conversionInputSchema = z.strictObject({ simulation: negotiationInputSchema, digest: z.string(), customerId: uuid, dueDate: z.string(), opportunityId: uuid.nullable().default(null), opportunityRevision: signed64.nullable().default(null), checkout: checkoutInputSchema.nullable().default(null) })
+const mixedConversionSchema = conversionInputSchema.extend({ simulation: mixedInputSchema }).strict()
 async function linkOpportunity(context: AuthorizedContext, id: string, expected: Revision, customer: string, order: string) {
   const current = (await context.client.query("SELECT revision,customer_id,order_id FROM sales_opportunities WHERE tenant_id=$1 AND id=$2", [context.tenantId, id])).rows[0]
   if (!current) throw new Problem(404, "not_found", "Registro não encontrado nesta empresa")
@@ -25,17 +28,18 @@ async function linkOpportunity(context: AuthorizedContext, id: string, expected:
 }
 
 export function registerCommercialConversion(app: FastifyInstance, dependencies: AppDependencies) {
-  app.post("/api/v1/commercial/orders", async (request, reply) => {
+  for (const mixed of [false, true]) app.post(mixed ? "/api/v1/commercial/mixed/orders" : "/api/v1/commercial/orders", async (request, reply) => {
     const body = await authorizeRequest(request, dependencies, async context => {
       requirePermission(context, "sales.orders.read"); requirePermission(context, "sales.orders.manage")
-      const key = commandKey(request.headers["idempotency-key"]), parsed = conversionInputSchema.safeParse(request.body)
+      const key = commandKey(request.headers["idempotency-key"]), parsed = (mixed ? mixedConversionSchema : conversionInputSchema).safeParse(request.body)
       if (!parsed.success) throw new Problem(422, "invalid_input", "Conversão inválida ou campos desconhecidos")
       const input = parsed.data
       const command = { simulation: input.simulation, digest: input.digest, customerId: input.customerId, dueDate: input.dueDate, opportunityId: input.opportunityId, opportunityRevision: input.opportunityRevision, ...(input.checkout === null ? {} : { checkout: input.checkout }) }
       if ((input.opportunityId === null) !== (input.opportunityRevision === null)) throw new Problem(422, "invalid_input", "Oportunidade exige sua revisão atual")
-      const repeated = await replay(context, key, "negotiation.convert", command)
+      const scope = mixed ? "mixed_negotiation.convert" : "negotiation.convert"
+      const repeated = await replay(context, key, scope, command)
       if (repeated) return repeated
-      const prepared = await prepareNegotiation(context, input.simulation)
+      const prepared = mixed ? await prepareMixed(context, input.simulation as MixedInput) : await prepareNegotiation(context, input.simulation as NegotiationInput)
       if (prepared.digest !== input.digest) throw new Problem(412, "revision_conflict", "Outra pessoa alterou o cadastro. Sua edição foi preservada")
       const due = validateDate(input.dueDate), { client, tenantId } = context
       const customer = (await client.query("SELECT legal_name,tax_id FROM parties WHERE tenant_id=$1 AND id=$2 AND is_customer AND status='active'", [tenantId, input.customerId])).rows[0]
@@ -54,13 +58,16 @@ export function registerCommercialConversion(app: FastifyInstance, dependencies:
         await record(context, request.headers, "sales_opportunity", input.opportunityId, "opportunity.order_linked", { orderId: order, revision: nextRevision(input.opportunityRevision) })
       }
       const auto = prepared.rules.directorAutoApproval && context.permissions.includes("sales.approvals.director"), status = !prepared.sale.approvalReasons.length ? "not_required" : auto ? "approved" : "pending"
-      const publicSnapshot = { input: input.simulation, sale: prepared.sale, version: prepared.version, digest: prepared.digest }, privateSnapshot = { director: prepared.director, policy: prepared.policy, sources: prepared.sources }
-      await client.query("INSERT INTO commercial_order_quotes(tenant_id,order_id,price_version_id,public_snapshot,private_snapshot,approval_rules,approval_status,requires_director,created_by) SELECT $1,$2,$3,$4,$5,$6,$7,$8,id FROM identities WHERE auth_subject=$9", [tenantId, order, input.simulation.versionId, publicSnapshot, privateSnapshot, prepared.rules, status, prepared.director.requiresDirector, context.authSubject])
+      const publicSnapshot = prepared.kind === "single" ? { input: input.simulation, sale: prepared.sale, version: prepared.version, digest: prepared.digest } : { kind: "mixed", input: input.simulation, sale: prepared.sale, digest: prepared.digest }
+      const privateSnapshot = prepared.kind === "single" ? { director: prepared.director, policy: prepared.policy, sources: prepared.sources } : { director: prepared.director, policies: prepared.policies, sources: prepared.sources }
+      const priceVersion = prepared.kind === "single" ? (input.simulation as NegotiationInput).versionId : null
+      await client.query("INSERT INTO commercial_order_quotes(tenant_id,order_id,price_version_id,public_snapshot,private_snapshot,approval_rules,approval_status,requires_director,created_by) SELECT $1,$2,$3,$4,$5,$6,$7,$8,id FROM identities WHERE auth_subject=$9", [tenantId, order, priceVersion, publicSnapshot, privateSnapshot, prepared.rules, status, prepared.director.requiresDirector, context.authSubject])
+      if (prepared.kind === "mixed") for (const policy of prepared.policies) await client.query("INSERT INTO commercial_order_quote_versions(tenant_id,order_id,product_line,version_id,version_snapshot) VALUES($1,$2,$3,$4,$5)", [tenantId, order, policy.line, policy.versionId, policy])
       if (input.checkout !== null) await saveCheckout(context, order, input.customerId, BigInt(prepared.sale.totalCents), BigInt(prepared.sale.downPaymentCents), input.checkout)
       if (auto && status === "approved") await client.query("INSERT INTO commercial_approval_decisions(id,tenant_id,order_id,order_revision,decision,reason,decided_by) SELECT $1,$2,$3,1,'approved','Autoaprovação da diretoria conforme política salva',id FROM identities WHERE auth_subject=$4", [randomUUID(), tenantId, order, context.authSubject])
-      await record(context, request.headers, "sales_order", order, "order.created", { revision: 1, priceVersionId: input.simulation.versionId, approvalStatus: status, amount: decimal(BigInt(prepared.sale.totalCents), 2) })
+      await record(context, request.headers, "sales_order", order, "order.created", { revision: 1, ...(prepared.kind === "single" ? { priceVersionId: priceVersion } : { priceVersions: prepared.policies.map(policy => policy.versionId) }), approvalStatus: status, amount: decimal(BigInt(prepared.sale.totalCents), 2) })
       const result = { tenantId, id: order, revision: 1, approvalStatus: status }
-      await remember(context, key, "negotiation.convert", command, result)
+      await remember(context, key, scope, command, result)
       return result
     })
     return reply.code(201).header("cache-control", "no-store").header("etag", '"1"').send(body)

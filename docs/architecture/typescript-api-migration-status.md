@@ -11,7 +11,7 @@ O objetivo continua sendo migrar Preferências, Cadastros, Vendas e Relatórios 
 | Fundação | Auth, empresa, permissões e transação com contexto RLS; escritas bloqueiam empresa antes de carregar permissões; administrador explícito por auth_subject | Testes de plataforma; role real sem bypass de RLS; revogação de permissão durante espera; administrador sem vínculo e revogação da concessão | Revisão final com os demais contratos |
 | Preferências | GET e PUT com revisão i64 exata e verificação de titular antes da revisão | Testes HTTP e PostgreSQL: gravações sucessivas/concorrentes, owner key, auditoria, isolamento e limites i64 | Revisão final dos demais erros HTTP e dados persistidos |
 | Cadastros | Listas, detalhes e comandos de parties, products e referências; configurações cadastrais; schemas e regras de clientes/produtos portados; envelopes/eventos/vínculos dos catálogos alinhados | Testes HTTP; escritas reais e concorrência; clientes com complementos/documento vinculado; produtos com foto, opcionais, legado, configurações e estoque; hierarquia dos catálogos | Revisão final dos contratos e integração geral de Cadastros |
-| Vendas | Pedidos/propostas; aprovações; cálculo/simulação de uma linha; conversão com checkout e vínculo da oportunidade | Testes HTTP e PostgreSQL com migrations/RLS; cenários Rust, fontes, concorrência, snapshots/permissões, acordo parcelado e efeitos/rollback | Tabelas comerciais, simulação/conversão mista, demais consultas comerciais e revisão final |
+| Vendas | Pedidos/propostas; aprovações; cálculo/simulação e conversão de uma linha ou tabelas mistas; checkout/vínculo da oportunidade | Testes HTTP e PostgreSQL com migrations/RLS; cenários Rust, fontes, rateio, concorrência, snapshots/permissões e efeitos/rollback | Tabelas e demais consultas comerciais, oportunidades/métricas e revisão final |
 | Relatórios | Painel operacional e lista/criação/alteração de definições de relatórios personalizados | PostgreSQL/RLS com períodos, indicadores financeiros, permissões, visibilidade, fontes/colunas/filtros, revisões concorrentes e rollback | Revisão final de contratos e integração BFF/runtime |
 | BFF e runtime | Pendente | Pendente | Seleção explícita por rota, ausência de retry de comandos, runtime e rollback |
 
@@ -135,7 +135,7 @@ Testes unitários e PostgreSQL cobrem essas fronteiras. A revisão geral de prec
 
 Os testes reproduzem os valores dos cenários Rust, incluindo R$ 12.563,23 líquidos, R$ 1.633,22 de IPI e R$ 14.196,45 totais; preço com múltiplos produtos/quantidades, limite de total que não pode ser ultrapassado, prejuízo, entrada explícita zero e configurações inviáveis. PostgreSQL verifica a versão publicada, fontes válidas, margem oculta, estabilidade do digest, alteração da revisão de aprovação e fontes desatualizadas. O digest usa SHA-256 de JSON com chaves ordenadas, preservando a representação de inteiros e a estrutura usada por `serde_json::Value`.
 
-O endpoint de simulação não cria pedidos. A conversão separada está descrita a seguir; tabelas e simulação mista continuam pendentes.
+O endpoint de simulação não cria pedidos. A conversão separada está descrita a seguir; a tabela comercial de consulta ainda está pendente.
 
 ## Conversão da simulação e condições negociadas
 
@@ -143,4 +143,12 @@ O endpoint de simulação não cria pedidos. A conversão separada está descrit
 
 `orders/checkout-save.ts` grava o cliente e as formas de pagamento como snapshots, entrada, parcelas, fabricação e observações. Forma de pagamento precisa estar ativa na mesma empresa; entrada e parcelas devem somar o total exato. As condições salvas são imutáveis e não representam recebimento ou criação de títulos. O aceite/confirmacão origina os títulos nos momentos já descritos nas transições.
 
-A integração verifica digest desatualizado, oportunidade incompleta/stale, entrada sem forma de pagamento, soma incorreta, criação concorrente idempotente e replay do resultado original após aceite. Uma falha de INSERT no checkout desfaz pedido, itens, cotação, vínculo, auditoria e comando. O fluxo completo de entrada explícita zero permanece pendente de aprovação; após decisão autorizada, o aceite origina somente o título do saldo. Conversão mista ainda pendente.
+A integração verifica digest desatualizado, oportunidade incompleta/stale, entrada sem forma de pagamento, soma incorreta, criação concorrente idempotente e replay do resultado original após aceite. Uma falha de INSERT no checkout desfaz pedido, itens, cotação, vínculo, auditoria e comando. O fluxo completo de entrada explícita zero permanece pendente de aprovação; após decisão autorizada, o aceite origina somente o título do saldo.
+
+## Simulação e conversão de tabelas mistas
+
+`POST /api/v1/commercial/mixed/simulate` e `POST /api/v1/commercial/mixed/orders` portados. Cada item conserva linha comercial e versão de origem, permitindo misturar importados e nacionais. O desconto usa uma razão comum; frete e taxa fixa são rateados com restos distribuídos de forma determinística, conservando todos os centavos. Cada grupo usa sua política de IPI e entrada. Taxas fixas incompatíveis retornam conflito; prejuízo em um grupo exige diretor mesmo com lucro agregado positivo.
+
+A conversão compartilha o fluxo de cliente, acabamentos, oportunidade, checkout e auditoria com a conversão simples. Registra `mixed_negotiation.convert`, snapshot público com `kind: mixed`, políticas privadas e vínculos em `commercial_order_quote_versions`; não força uma única versão no cabeçalho. Margem privada continua protegida.
+
+Os testes reproduzem o cenário Rust de total 152.715 centavos com IPI/entrada diferentes, frete 103 e taxa fixa 101 distribuídos sem duplicação. Conferem modos de desconto, limite de total, conservação dos itens e prejuízo por grupo. PostgreSQL verifica simulação/privacidade, entrada 86.497 e saldo 66.218, duas origens vinculadas, conversão concorrente idempotente, replay após custo alterado e rollback se a gravação das versões falhar.
