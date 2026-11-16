@@ -8,14 +8,14 @@ import type { AppDependencies } from "../../app.js"
 import { authorizeRequest, requirePermission, type AuthorizedContext } from "../../platform/access.js"
 import { Problem } from "../../platform/problem.js"
 import { sameJson } from "../../platform/json.js"
-import { integer } from "../registrations/query.js"
+import { integer, queryInteger, searchQuery } from "../registrations/query.js"
 import { partyInputSchema, type PartyInput } from "./schema.js"
 
 const partyQuerySchema = z.strictObject({
-  q: z.string().max(160).default(""), status: z.enum(["active", "archived"]).optional(),
+  q: searchQuery, status: z.enum(["active", "archived"]).optional(),
   role: z.enum(["customer", "supplier"]).optional(),
-  offset: z.coerce.number().int().min(0).max(100_000).default(0),
-  limit: z.coerce.number().int().min(1).max(100).default(25),
+  offset: queryInteger(0, 100_000).default(0),
+  limit: queryInteger(1, 100).default(25),
 })
 
 function header(value: string | string[] | undefined) { return Array.isArray(value) ? undefined : value }

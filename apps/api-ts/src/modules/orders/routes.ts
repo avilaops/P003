@@ -5,7 +5,7 @@ import type { AppDependencies } from "../../app.js"
 import { authorizeRequest, requirePermission } from "../../platform/access.js"
 import { Problem } from "../../platform/problem.js"
 import { integer } from "../registrations/query.js"
-import { orderSummary, queryInput } from "../sales/shared.js"
+import { orderSummary, orderSearchNumber, queryInput } from "../sales/shared.js"
 import { loadOrder, summary } from "./snapshot.js"
 import { registerOrderCommands } from "./commands.js"
 import { registerOrderTransitions } from "./transitions.js"
@@ -28,7 +28,7 @@ export function registerOrderRoutes(app: FastifyInstance, dependencies: AppDepen
     const body = await authorizeRequest(request, dependencies, async context => {
       requirePermission(context, "sales.orders.read")
       const digits = /^[\d.\-/ ]*$/.test(query.q) ? query.q.replace(/\D/g, "") : ""
-      const normalized = query.q.toUpperCase(), number = Number((normalized.startsWith("PV-") ? normalized.slice(3) : normalized)) || null
+      const number = orderSearchNumber(query.q)
       const filter = "WHERE tenant_id=$1 AND ($2='' OR strpos(lower(customer_name),lower($2))>0 OR strpos(id::text,lower($2))>0 OR ($3<>'' AND strpos(customer_tax_id,$3)>0) OR number=$4) AND ($5='' OR status=$5)"
       const order = query.sort === "updated" ? "sales_orders.updated_at DESC,sales_orders.id DESC" : "sales_orders.created_at DESC,sales_orders.id DESC"
       const rows = await context.client.query(`${summary} ${filter} ORDER BY ${order} LIMIT $6 OFFSET $7`, [context.tenantId, query.q, digits, number, query.status, query.limit, query.offset])

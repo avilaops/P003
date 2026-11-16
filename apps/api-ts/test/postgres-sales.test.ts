@@ -73,6 +73,16 @@ test("PostgreSQL migrations and RLS preserve registration and sales workflows ac
     const list = await app.inject({ method: "GET", url: "/api/v1/orders?sort=updated", headers })
     assert.equal(list.statusCode, 200, list.body)
     assert.equal(list.json().total, 1)
+    for (const q of ["1e30", "1.0", "9223372036854775807", "9223372036854775808", "😀".repeat(160)]) {
+      const result: LightMyRequestResponse = await app.inject({ method: "GET", url: `/api/v1/orders?q=${encodeURIComponent(q)}`, headers })
+      assert.equal(result.statusCode, 200, result.body)
+      assert.equal(result.json().total, 0, "Only positive i64 integer strings match an order number")
+    }
+    for (const query of ["limit=1.0", "limit=1e1", "offset=", "limit=0x10", "limit=1&limit=2", "q=middle%00control"]) {
+      const result: LightMyRequestResponse = await app.inject({ method: "GET", url: `/api/v1/orders?${query}`, headers })
+      assert.equal(result.statusCode, 422, result.body)
+    }
+    assert.equal((await app.inject({ method: "GET", url: `/api/v1/proposals/${proposal}?version=1.0`, headers })).statusCode, 422)
     await seed.query(`GRANT INSERT,UPDATE ON ALL TABLES IN SCHEMA public TO ${role}`)
     await seed.query("INSERT INTO role_permissions(role_id,permission_code) VALUES($1,'catalog.parties.read'),($1,'catalog.parties.manage')", [readerRole])
     const partyInput = { personType: "juridica", legalName: "Cliente novo", tradeName: null, taxId: "04252011000110", email: "client@example.test", phone: null, isCustomer: true, isSupplier: false, status: "active", addresses: [], contacts: [] }

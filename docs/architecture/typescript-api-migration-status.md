@@ -120,3 +120,9 @@ O parser HTTP agora conserva inteiros JSON i64/u64 antes da validação, usando 
 `GET`/`PUT /api/v1/commercial/approval-settings`, `GET /api/v1/commercial/orders/{id}` e `POST /api/v1/commercial/orders/{id}/decision` implementados. A configuração exige gestão da empresa. A consulta apresenta o snapshot público e conserva a margem privada apenas quando o usuário possui gestão da empresa e alçada de diretor. Gerente aprova somente negociações que não exigem diretor; a decisão exige leitura do pedido e a alçada, sem conceder edição geral do pedido.
 
 As alçadas são verificadas sobre a negociação atual antes de devolver o replay. Decisão, revisão do pedido, histórico, auditoria/outbox e comando são atômicos. Os testes verificam regra ausente, configurações concorrentes 200/412, margem oculta, gerente sem permissão geral de edição, decisão concorrente idempotente, revogação antes do replay, exigência de diretor e rollback quando falha a gravação do histórico. Tabelas e cálculos de simulação continuam pendentes.
+
+## Fronteiras das consultas
+
+Buscas de pedidos extraem somente número inteiro positivo até o máximo i64. Expressões como `1e30`, `1.0` e inteiros acima do limite continuam como busca textual, sem enviar decimal ou overflow ao PostgreSQL. Paginação e versão exigem sintaxe inteira e rejeitam coerções de JavaScript, valores vazios e parâmetros repetidos. Os limites de busca contam caracteres Unicode após remover espaços externos; pedidos rejeitam caracteres de controle, enquanto propostas preservam a regra original de rejeitar NUL no texto.
+
+Testes unitários e PostgreSQL cobrem essas fronteiras. A revisão geral de precedência de erros e precondições continua pendente.

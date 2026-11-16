@@ -2,17 +2,25 @@ import { revisionValue } from "../../platform/revision.js"
 import { z } from "zod"
 
 import { Problem } from "../../platform/problem.js"
-import { integer } from "../registrations/query.js"
+import { integer, queryInteger, searchQuery } from "../registrations/query.js"
 
 export const salesListSchema = z.strictObject({
-  q: z.string().max(160).default(""), status: z.string().max(20).default(""), sort: z.enum(["created", "updated"]).default("created"),
-  offset: z.coerce.number().int().min(0).max(100_000).default(0), limit: z.coerce.number().int().min(1).max(100).default(25),
+  q: searchQuery, status: z.string().max(20).default(""), sort: z.enum(["created", "updated"]).default("created"),
+  offset: queryInteger(0, 100_000).default(0), limit: queryInteger(1, 100).default(25),
 })
 
-export function queryInput(value: unknown, statuses: readonly string[]) {
+export function queryInput(value: unknown, statuses: readonly string[], proposal = false) {
   const parsed = salesListSchema.safeParse(value)
   if (!parsed.success || !statuses.includes(parsed.data.status)) throw new Problem(422, "invalid_input", "Filtros inválidos")
+  if ((proposal ? /\u0000/u : /\p{Cc}/u).test(parsed.data.q)) throw new Problem(422, "invalid_input", proposal ? "Texto obrigatório ausente ou fora do limite" : "Pesquisa inválida")
   return { ...parsed.data, q: parsed.data.q.trim() }
+}
+
+export function orderSearchNumber(value: string): string | null {
+  const normalized = value.replace(/[a-z]/g, character => character.toUpperCase()), number = normalized.startsWith("PV-") ? normalized.slice(3) : normalized
+  if (!/^\+?[0-9]+$/.test(number)) return null
+  const exact = BigInt(number)
+  return exact > 0n && exact <= 9223372036854775807n ? exact.toString() : null
 }
 
 export function orderSummary(row: Record<string, unknown>) {
