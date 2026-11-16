@@ -13,7 +13,7 @@
       "ERP_ACTIVATION_SOURCE_SHA": "",
       "ERP_RECOVERY_VERIFIED": "false",
       "ERP_AUTH_VERIFIED": "false",
-      "SUPABASE_PROJECT_REF": "",
+      "POSTGRES_ALLOWED_HOST": "",
       "DATABASE_MAX_CONNECTIONS": "5",
       "ERP_BACKGROUND_WORKERS_ENABLED": "false"
     },

@@ -22,9 +22,11 @@ class PreflightError(RuntimeError):
     """A public-safe failure. Never attach raw libpq/URI diagnostics."""
 
 
-def connection_environment(url, project_ref, *, allow_local=False):
+def connection_environment(url, allowed_host, *, allow_local=False):
     try:
-        if not re.fullmatch(r'[a-z0-9]{20}', project_ref):
+        if (not isinstance(allowed_host, str)
+                or len(allowed_host) > 253
+                or not re.fullmatch(r'[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+', allowed_host)):
             raise ValueError()
         value = urlsplit(url)
         pairs = parse_qsl(value.query, keep_blank_values=True, strict_parsing=True)
@@ -39,7 +41,8 @@ def connection_environment(url, project_ref, *, allow_local=False):
         user, password = unquote(value.username), unquote(value.password)
         database = unquote(value.path[1:])
         local = host in ('127.0.0.1', 'localhost', '::1')
-        if not database or '\0' in user + password + database:
+        if (not database or '\0' in user + password + database
+                or user.split('.')[0] in ('postgres', 'rds_superuser', 'cloudsqlsuperuser')):
             raise ValueError()
         if local:
             if not allow_local:
@@ -48,11 +51,7 @@ def connection_environment(url, project_ref, *, allow_local=False):
             if not 1 <= port <= 65535:
                 raise ValueError()
         else:
-            direct = host == f'db.{project_ref}.supabase.co'
-            session = (host is not None
-                       and re.fullmatch(r'aws-\d+-[a-z0-9-]+\.pooler\.supabase\.com', host)
-                       and user.endswith('.' + project_ref))
-            if not (direct or session) or port != 5432:
+            if host != allowed_host or port != 5432:
                 raise ValueError()
             sslmode = params.get('sslmode', 'verify-full')
             if sslmode != 'verify-full':
@@ -67,11 +66,11 @@ def connection_environment(url, project_ref, *, allow_local=False):
             env['PGSSLROOTCERT'] = params.get('sslrootcert', 'system')
         return env
     except (ValueError, TypeError, AttributeError):
-        raise PreflightError('Invalid PostgreSQL endpoint, project identity or TLS configuration') from None
+        raise PreflightError('Invalid PostgreSQL endpoint, allowed host, runtime user or TLS configuration') from None
 
 
-def query_json(url, project_ref, query, *, allow_local=False, run=subprocess.run):
-    env = connection_environment(url, project_ref, allow_local=allow_local)
+def query_json(url, allowed_host, query, *, allow_local=False, run=subprocess.run):
+    env = connection_environment(url, allowed_host, allow_local=allow_local)
     try:
         result = run(['psql', '-X', '-w', '-qAt', '-v', 'ON_ERROR_STOP=1'],
                      input=query, text=True, encoding='utf-8', capture_output=True, env=env, timeout=30, check=False)
@@ -179,8 +178,8 @@ ROLLBACK;
 """
 
 
-def backup_database(url, project_ref, destination, *, allow_local=False, run=subprocess.run):
-    env = connection_environment(url, project_ref, allow_local=allow_local)
+def backup_database(url, allowed_host, destination, *, allow_local=False, run=subprocess.run):
+    env = connection_environment(url, allowed_host, allow_local=allow_local)
     target = Path(destination).absolute()
     if target.exists() or target.is_symlink() or not target.parent.is_dir():
         raise PreflightError('Backup destination must be a new file in an existing private directory')
@@ -225,7 +224,7 @@ def backup_database(url, project_ref, destination, *, allow_local=False, run=sub
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('command', choices=('preflight', 'backup'))
-    parser.add_argument('--project-ref', required=True)
+    parser.add_argument('--allowed-host', default=os.environ.get('POSTGRES_ALLOWED_HOST'))
     parser.add_argument('--source-sha', required=True)
     parser.add_argument('--repository', type=Path, default=Path(__file__).resolve().parents[1])
     parser.add_argument('--allow-local-validation', action='store_true')
@@ -239,14 +238,16 @@ def main():
             raise PreflightError('Separate DATABASE_MIGRATION_URL and DATABASE_URL are required')
         options = {'allow_local': args.allow_local_validation}
         manifest = migration_manifest(args.repository, args.source_sha)
-        proof = validate_snapshot(query_json(migration_url, args.project_ref, SNAPSHOT_SQL, **options),
+        if not args.allowed_host:
+            raise PreflightError('POSTGRES_ALLOWED_HOST or --allowed-host is required')
+        proof = validate_snapshot(query_json(migration_url, args.allowed_host, SNAPSHOT_SQL, **options),
                                   manifest, require_data=args.require_data)
-        proof.update(validate_runtime_role(query_json(runtime_url, args.project_ref, RUNTIME_SQL, **options)))
+        proof.update(validate_runtime_role(query_json(runtime_url, args.allowed_host, RUNTIME_SQL, **options)))
         proof['sourceSha'] = args.source_sha
         if args.command == 'backup':
             if args.output is None:
                 raise PreflightError('A new private backup output file is required')
-            proof['backup'] = backup_database(migration_url, args.project_ref, args.output, **options)
+            proof['backup'] = backup_database(migration_url, args.allowed_host, args.output, **options)
         print(json.dumps(proof))
         return 0
     except PreflightError as error:

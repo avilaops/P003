@@ -10,8 +10,8 @@ const IMAGE = `registry.cloudflare.com/account/erp-runtime@sha256:${'b'.repeat(6
 const environment = () => ({
   RUNTIME_MODE: 'application', ERP_SOURCE_SHA: SHA, ERP_ACTIVATION_SOURCE_SHA: SHA,
   ERP_RECOVERY_VERIFIED: 'true', ERP_AUTH_VERIFIED: 'true',
-  SUPABASE_PROJECT_REF: 'abcdefghijklmnopqrst',
-  DATABASE_URL: 'postgresql://erp_next_app:secret@db.abcdefghijklmnopqrst.supabase.co:5432/postgres?sslmode=verify-full',
+  POSTGRES_ALLOWED_HOST: 'postgres.internal.example',
+  DATABASE_URL: 'postgresql://erp_next_app:secret@postgres.internal.example:5432/postgres?sslmode=verify-full',
   AUTH_ISSUER: 'https://auth.example.invalid', AUTH_USERINFO_URL: 'https://auth.example.invalid/oauth/userinfo',
   ERP_WEB_ORIGIN: 'https://erp.example.invalid', ERP_AUTH_CLIENT_ID: 'erp',
   ERP_AUTH_CLIENT_SECRET: 'client-secret', ERP_SESSION_SECRET: 's'.repeat(40),
@@ -27,14 +27,16 @@ test('activation requires exact source, recovered data, auth and safe database i
     { DATABASE_URL: environment().DATABASE_URL.replace('verify-full', 'disable') },
     { DATABASE_URL: environment().DATABASE_URL + '&sslrootcert=system' },
     { DATABASE_URL: environment().DATABASE_URL.replace(':5432/', ':6543/') },
-    { DATABASE_URL: environment().DATABASE_URL.replace('.supabase.co', '.supabase.co.evil.invalid') },
+    { DATABASE_URL: environment().DATABASE_URL.replace('postgres.internal.example', 'evil.postgres.internal.example') },
+    { DATABASE_URL: environment().DATABASE_URL.replace('postgres.internal.example', 'postgres.internal.example.evil.invalid') },
+    { POSTGRES_ALLOWED_HOST: 'POSTGRES.internal.example' },
     { ERP_SESSION_SECRET: 'short' }, { AUTH_ISSUER: 'http://auth.example.invalid' },
     { ERP_WEB_ORIGIN: 'https://erp.example.invalid/subpath' },
   ]) assert.equal(runtimeConfiguration({ ...environment(), ...change }), null);
 });
 
 test('only required runtime secrets reach each process, with private loopback API', () => {
-  const env = { ...environment(), DATABASE_MIGRATION_URL: 'ADMIN', SUPABASE_SERVICE_ROLE_KEY: 'PRIVILEGED',
+  const env = { ...environment(), DATABASE_MIGRATION_URL: 'ADMIN', POSTGRES_ADMIN_PASSWORD: 'PRIVILEGED',
     CLOUDFLARE_API_TOKEN: 'CF', NODE_OPTIONS: '--inspect=0.0.0.0', SMTP_PASSWORD: 'MAIL',
     ERP_API_URL: 'https://wrong.invalid', API_BIND_ADDRESS: '0.0.0.0:9999' };
   const split = childEnvironments(env);
@@ -46,7 +48,7 @@ test('only required runtime secrets reach each process, with private loopback AP
   assert.equal(split.api.ERP_SESSION_SECRET, undefined);
   assert.equal(split.web.DATABASE_URL, undefined);
   for (const part of Object.values(split)) for (const key of ['DATABASE_MIGRATION_URL',
-    'SUPABASE_SERVICE_ROLE_KEY', 'CLOUDFLARE_API_TOKEN', 'NODE_OPTIONS']) assert.equal(part[key], undefined);
+    'POSTGRES_ADMIN_PASSWORD', 'CLOUDFLARE_API_TOKEN', 'NODE_OPTIONS']) assert.equal(part[key], undefined);
 });
 
 function fixture(overrides = {}) {

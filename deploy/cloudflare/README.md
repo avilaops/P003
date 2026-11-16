@@ -57,9 +57,9 @@ The runtime fails closed unless RUNTIME_MODE=application, the exact source and
 activation SHA match, recovered-data and auth prerequisites are explicitly
 verified, and required credentials/configuration validate. These operator flags
 record prerequisites; they do not themselves recover data or validate a server.
-The PostgreSQL URL must identify the selected Supabase project and use strict
-TLS/direct or session mode. The managed preflight must separately verify the
-role's actual permissions; a username check is not a privilege audit.
+The PostgreSQL URL must match `POSTGRES_ALLOWED_HOST` exactly and use strict
+TLS with `sslmode=verify-full`. The managed preflight must separately verify
+the role's actual permissions; a username check is not a privilege audit.
 
 Background workers default off in this inactive declaration. Before activation,
 review payroll/fiscal schedules, choose their real execution strategy and set
@@ -74,7 +74,8 @@ private documents and backups are never attached to the public edge. A runtime
 bridge does not transfer the API's existing bytea documents to R2: preserve them
 until a separate hash-verified storage migration can be completed with the data.
 
-See `../supabase/README.md` for managed database checks and the full restore test.
+See `../../docs/architecture/postgresql-operacional.md` for managed database checks,
+backup and the full restore test.
 
 This Worker serves public Next.js build assets from private R2 storage while the
 ERP application is unavailable. Dynamic requests return an honest `503` with

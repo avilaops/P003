@@ -47,7 +47,7 @@ export function runtimeConfiguration(env) {
     if (env.RUNTIME_MODE !== 'application' || !/^[a-f0-9]{40}$/.test(env.ERP_SOURCE_SHA || '')
       || env.ERP_ACTIVATION_SOURCE_SHA !== env.ERP_SOURCE_SHA
       || env.ERP_RECOVERY_VERIFIED !== 'true' || env.ERP_AUTH_VERIFIED !== 'true'
-      || !/^[a-z0-9]{20}$/.test(env.SUPABASE_PROJECT_REF || '')
+      || !/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+$/.test(env.POSTGRES_ALLOWED_HOST || '')
       || typeof env.ERP_SESSION_SECRET !== 'string' || new TextEncoder().encode(env.ERP_SESSION_SECRET).length < 32
       || !env.ERP_AUTH_CLIENT_ID || !env.ERP_AUTH_CLIENT_SECRET) return null;
     origin(env.AUTH_ISSUER);
@@ -56,15 +56,12 @@ export function runtimeConfiguration(env) {
     if (userinfo.origin !== origin(env.AUTH_ISSUER) || userinfo.username || userinfo.password || userinfo.hash) return null;
     const database = new URL(env.DATABASE_URL);
     const username = decodeURIComponent(database.username);
-    const reference = env.SUPABASE_PROJECT_REF;
-    const direct = database.hostname === `db.${reference}.supabase.co`;
-    const session = /^aws-\d+-[a-z0-9-]+\.pooler\.supabase\.com$/.test(database.hostname)
-      && username.endsWith(`.${reference}`);
     const parameters = [...database.searchParams.keys()];
-    if (!['postgres:', 'postgresql:'].includes(database.protocol) || !(direct || session)
+    if (!['postgres:', 'postgresql:'].includes(database.protocol)
+      || database.hostname !== env.POSTGRES_ALLOWED_HOST
       || database.port !== '5432' || !database.password || database.pathname.length < 2
       || database.pathname.slice(1).includes('/') || database.hash
-      || !username || ['postgres', 'supabase_admin'].includes(username.split('.')[0])
+      || !username || ['postgres', 'rds_superuser', 'cloudsqlsuperuser'].includes(username.split('.')[0])
       || parameters.length !== new Set(parameters).size
       || parameters.some(key => !['sslmode', 'sslrootcert', 'application_name'].includes(key))
       || database.searchParams.get('sslmode') !== 'verify-full'

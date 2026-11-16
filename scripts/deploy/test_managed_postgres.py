@@ -12,8 +12,8 @@ MODULE = Path(__file__).resolve().parents[2] / 'deploy' / 'managed-postgres.py'
 spec = importlib.util.spec_from_file_location('managed_postgres', MODULE)
 pg = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(pg)
-REF = 'abcdefghijklmnopqrst'
-URL = f'postgresql://erp_next_app:never-print-me@db.{REF}.supabase.co:5432/postgres'
+HOST = 'postgres.internal.example'
+URL = f'postgresql://erp_next_app:never-print-me@{HOST}:5432/postgres?sslmode=verify-full'
 SHA = 'a' * 40
 CHECKSUM = hashlib.sha384(b'CREATE TABLE test(id int);\n').hexdigest()
 MANIFEST = {202611130001: CHECKSUM}
@@ -26,35 +26,45 @@ def snapshot():
 
 
 class ConnectionTests(unittest.TestCase):
-    def test_supabase_direct_and_session_keep_password_out_of_argv(self):
-        env = pg.connection_environment(URL, REF)
-        self.assertEqual(env['PGHOST'], f'db.{REF}.supabase.co')
+    def test_exact_managed_host_keeps_password_out_of_argv(self):
+        env = pg.connection_environment(URL, HOST)
+        self.assertEqual(env['PGHOST'], HOST)
         self.assertEqual(env['PGPASSWORD'], 'never-print-me')
         self.assertEqual(env['PGSSLMODE'], 'verify-full')
         self.assertEqual(env['PGCLIENTENCODING'], 'UTF8')
-        session = URL.replace('erp_next_app:', f'erp_next_app.{REF}:').replace(f'db.{REF}.supabase.co', 'aws-0-sa-east-1.pooler.supabase.com')
-        self.assertEqual(pg.connection_environment(session, REF)['PGPORT'], '5432')
+        self.assertEqual(env['PGPORT'], '5432')
 
     def test_encoded_password_and_username_are_preserved(self):
-        env = pg.connection_environment(URL.replace('never-print-me', 'a%40b%3Ac%2F%24%23'), REF)
+        env = pg.connection_environment(URL.replace('never-print-me', 'a%40b%3Ac%2F%24%23'), HOST)
         self.assertEqual(env['PGPASSWORD'], 'a@b:c/$#')
 
-    def test_rejects_foreign_hosts_projects_transaction_pooling_and_weak_tls(self):
-        invalid = [URL.replace(REF, 'z' * 20), URL.replace('.supabase.co', '.supabase.co.evil.invalid'),
-                   URL.replace(':5432', ':6543'), URL + '?sslmode=disable', URL + '?sslmode=require',
-                   URL + '?sslmode=verify-full&sslmode=disable', URL + '?options=-c%20role=postgres',
-                   URL + '#fragment', URL.replace('postgresql:', 'http:')]
+    def test_rejects_foreign_hosts_ports_duplicate_parameters_and_weak_tls(self):
+        invalid = [URL.replace(HOST, f'evil.{HOST}'), URL.replace(HOST, f'{HOST}.evil.invalid'),
+                   URL.replace(':5432', ':6543'), URL.replace('verify-full', 'disable'),
+                   URL.replace('verify-full', 'require'), URL + '&sslmode=disable',
+                   URL + '&options=-c%20role=postgres', URL + '#fragment',
+                   URL.replace('postgresql:', 'http:')]
         for url in invalid:
             with self.subTest(url=url.replace('never-print-me', 'redacted')):
                 with self.assertRaises(pg.PreflightError) as caught:
-                    pg.connection_environment(url, REF)
+                    pg.connection_environment(url, HOST)
                 self.assertNotIn('never-print-me', str(caught.exception))
+
+    def test_rejects_invalid_allowed_host_and_administrative_users(self):
+        for allowed_host in ['', '.example', 'postgres.internal.example:5432', 'POSTGRES.internal.example']:
+            with self.subTest(allowed_host=allowed_host):
+                with self.assertRaises(pg.PreflightError):
+                    pg.connection_environment(URL, allowed_host)
+        for user in ['postgres', 'rds_superuser', 'cloudsqlsuperuser']:
+            with self.subTest(user=user):
+                with self.assertRaises(pg.PreflightError):
+                    pg.connection_environment(URL.replace('erp_next_app', user), HOST)
 
     def test_local_connection_requires_explicit_opt_in(self):
         local = 'postgresql://fixture:password@127.0.0.1:5432/fixture'
         with self.assertRaises(pg.PreflightError):
-            pg.connection_environment(local, REF)
-        env = pg.connection_environment(local, REF, allow_local=True)
+            pg.connection_environment(local, HOST)
+        env = pg.connection_environment(local, HOST, allow_local=True)
         self.assertEqual(env['PGSSLMODE'], 'disable')
         self.assertNotIn('PGSSLROOTCERT', env)
 
@@ -64,7 +74,7 @@ class ConnectionTests(unittest.TestCase):
             calls.append((args, kwargs))
             return subprocess.CompletedProcess(args, 1, '', 'never-print-me: database failure')
         with self.assertRaises(pg.PreflightError) as caught:
-            pg.query_json(URL, REF, 'SELECT 1', run=run)
+            pg.query_json(URL, HOST, 'SELECT 1', run=run)
         self.assertNotIn('never-print-me', str(caught.exception))
         self.assertNotIn('never-print-me', json.dumps(calls[0][0]))
         self.assertEqual(calls[0][1]['env']['PGPASSWORD'], 'never-print-me')
@@ -137,7 +147,7 @@ class BackupTests(unittest.TestCase):
                     kwargs['stdout'].write(b'PGDMP\x01fixture full database')
                     return subprocess.CompletedProcess(args, 0, None, b'')
                 return subprocess.CompletedProcess(args, 0, b'TABLE DATA public _sqlx_migrations\nTABLE DATA public sales_orders\n', b'')
-            proof = pg.backup_database(URL, REF, target, run=run)
+            proof = pg.backup_database(URL, HOST, target, run=run)
             self.assertEqual(proof['sha256'], hashlib.sha256(target.read_bytes()).hexdigest())
             self.assertFalse(proof['restoreTested'])
             self.assertNotIn('--schema-only', calls[0][0])
@@ -157,7 +167,7 @@ class BackupTests(unittest.TestCase):
                         return subprocess.CompletedProcess(args, int(failure == 'dump'), None, b'never-print-me')
                     return subprocess.CompletedProcess(args, 0, b'TABLE public legacy_table', b'')
                 with self.assertRaises(pg.PreflightError):
-                    pg.backup_database(URL, REF, target, run=run)
+                    pg.backup_database(URL, HOST, target, run=run)
                 self.assertFalse(target.exists())
                 self.assertEqual(unrelated.read_text(), 'preserve')
                 self.assertEqual(len(list(Path(directory).iterdir())), 1)
@@ -167,7 +177,7 @@ class BackupTests(unittest.TestCase):
             target = Path(directory) / 'database.dump'
             target.write_bytes(b'keep existing backup')
             with self.assertRaises(pg.PreflightError):
-                pg.backup_database(URL, REF, target, run=lambda *a, **k: self.fail('must not invoke pg_dump'))
+                pg.backup_database(URL, HOST, target, run=lambda *a, **k: self.fail('must not invoke pg_dump'))
             self.assertEqual(target.read_bytes(), b'keep existing backup')
 
 
