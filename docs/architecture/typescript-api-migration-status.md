@@ -11,7 +11,7 @@ O objetivo continua sendo migrar Preferências, Cadastros, Vendas e Relatórios 
 | Fundação | Auth, empresa, permissões e transação com contexto RLS; escritas bloqueiam empresa antes de carregar permissões; administrador explícito por auth_subject | Testes de plataforma; role real sem bypass de RLS; revogação de permissão durante espera; administrador sem vínculo e revogação da concessão | Revisão final com os demais contratos |
 | Preferências | GET e PUT com revisão i64 exata e verificação de titular antes da revisão | Testes HTTP e PostgreSQL: gravações sucessivas/concorrentes, owner key, auditoria, isolamento e limites i64 | Revisão final dos demais erros HTTP e dados persistidos |
 | Cadastros | Listas, detalhes e comandos de parties, products e referências; configurações cadastrais; schemas e regras de clientes/produtos portados; envelopes/eventos/vínculos dos catálogos alinhados | Testes HTTP; escritas reais e concorrência; clientes com complementos/documento vinculado; produtos com foto, opcionais, legado, configurações e estoque; hierarquia dos catálogos | Revisão final dos contratos e integração geral de Cadastros |
-| Vendas | Listas/detalhes de pedidos e propostas; checkout/versões históricas; criação/edição de pedidos diretos e transições accept/confirm/cancel/complete | Testes HTTP e PostgreSQL com migrations/RLS; idempotência, concorrência, revisões, estoque/parcelas/produção, aprovações, fiscal e rollback | Comandos de propostas, consultas/comandos comerciais, gravação do checkout nos respectivos fluxos e revisão final |
+| Vendas | Listas/detalhes de pedidos e propostas; criação/edição, revisões e transições de propostas; conversão/aprovação em pedido; pedidos diretos e accept/confirm/cancel/complete | Testes HTTP e PostgreSQL com migrations/RLS; idempotência, concorrência, revisões i64, acordo histórico, permissões separadas, estoque/parcelas/produção, fiscal e rollback | Consultas/comandos comerciais, gravação do checkout nos respectivos fluxos e revisão final |
 | Relatórios | Pendente | Pendente | Painel e CRUD de relatórios personalizados |
 | BFF e runtime | Pendente | Pendente | Seleção explícita por rota, ausência de retry de comandos, runtime e rollback |
 
@@ -85,7 +85,7 @@ O adaptador PostgreSQL serializa objetos com inteiros exatos e lê JSON/JSONB co
 
 Um item novo com tabela publicada exige o fluxo de simulação comercial. Pedidos com cotação/simulação ou checkout salvo não podem ter seu acordo alterado pelo endpoint de edição simples. O bloqueio de cotação é verificado antes do replay, como no Rust. Audit/outbox, linhas, cabeçalho e comando são gravados na mesma transação da empresa.
 
-A integração verifica criação concorrente idempotente, edição e replay sem duplicação de auditoria, preço/nome/cliente históricos, revisão desatualizada, unidade alterada, estado não editável, checkout e tabela publicada. Propostas e demais fluxos comerciais continuam pendentes; estes endpoints ainda não foram ativados no BFF.
+A integração verifica criação concorrente idempotente, edição e replay sem duplicação de auditoria, preço/nome/cliente históricos, revisão desatualizada, unidade alterada, estado não editável, checkout e tabela publicada. Os demais fluxos comerciais continuam pendentes; estes endpoints ainda não foram ativados no BFF.
 
 ## Transições dos pedidos
 
@@ -94,3 +94,11 @@ A integração verifica criação concorrente idempotente, edição e replay sem
 Cancelamento antes da expedição exige estorno explícito dos recebimentos, cancela títulos não pagos, verifica emissão fiscal em andamento e comissões, estorna consumos da produção e registra a conciliação e a retirada de contratos pendentes. Permissões adicionais de produção/estoque são verificadas antes do replay; retirar essas permissões impede repetir o comando antigo. Lançamentos originais são preservados.
 
 Os cenários PostgreSQL verificam concorrência e replay, reserva concorrente sem saldo livre, baixa única, aceite sem estoque, parcelas/entrada com data de Brasília, preservação do acordo aceito após mudança de política, recebimento com estorno explícito, aprovações pendentes, cliente/produto inativo, unidade alterada, mínimo/prazo/contato, NF-e de produção e estorno único de componentes. Uma falha financeira induzida após a saída desfaz saldo, movimentação, recebível, revisão e comando. Isso comprova os efeitos dessas transições, sem declarar migrados os módulos completos de Financeiro, Estoque, Produção, Fiscal ou Contratos.
+
+## Propostas comerciais
+
+`POST`/`PUT /api/v1/proposals`, ações `send`/`accept`/`reject`/`cancel`, `revise`, `convert` e `approve-order` portados. A edição preserva preços e identificação já acordados; mudar preço exige `sales.proposals.negotiate`. Aceitar/rejeitar exige `sales.proposals.decide`, sem conceder implicitamente edição. Conversão exige também leitura/gestão de pedidos; aprovação e criação conjunta exige decisão. A ação `send` atualiza o estado comercial e não envia e-mail: os endpoints de e-mail continuam no Rust.
+
+Revisão cria versão nova e conserva linhas antigas; validade usa a data de Brasília. A conversão copia os snapshots aceitos para um pedido em rascunho, verificando cliente/produtos ativos e unidade atual. O replay usa os mesmos escopos e objetos do Rust, incluindo os campos nulos de entrada e normalização do alias `armColor` antes de persistir o comando. Acabamentos são compartilhados com a preparação de pedidos, conservando regras de escolhas atuais e históricas.
+
+Testes PostgreSQL cobrem criação e conversão concorrentes idempotentes, edição/versões históricas, condições expiradas, bloqueio de edição após envio, motivo obrigatório, aceite por usuário sem gestão, negociação sem permissão, alteração de unidade antes da conversão, aliases, revisão maior que 2^53 e rollback integral de pedido/linhas/vínculo/comando na falha de outbox. A matriz geral ainda exige revisão final de erros/precondições antes de ativar o BFF.
