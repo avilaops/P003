@@ -15,6 +15,8 @@ import { verifyReports } from "./report-cases.js"
 import { verifyCommercialApprovals } from "./commercial-approval-cases.js"
 import { verifyCommercialSimulation } from "./commercial-simulation-cases.js"
 import { verifyCommercialMixed } from "./commercial-mixed-cases.js"
+import { verifyOpportunities } from "./opportunity-cases.js"
+import { verifyCommercialMetrics } from "./commercial-metric-cases.js"
 
 // Opt in with a disposable PostgreSQL administrator URL. The generated database
 // and NOLOGIN role belong exclusively to this test and are removed afterwards.
@@ -374,6 +376,8 @@ test("PostgreSQL migrations and RLS preserve registration and sales workflows ac
     await verifyCommercialApprovals(app, seed, other, role)
     await verifyCommercialSimulation(app, seed, other, role)
     await verifyCommercialMixed(app, seed, other, role)
+    await verifyOpportunities(app, seed, other, role)
+    await verifyCommercialMetrics(app, seed)
     await seed.query("UPDATE platform_administrators SET active=false WHERE auth_subject='operator'")
     assert.equal((await app.inject({ method: "GET", url: `/api/v1/orders/${foreignOrder}`, headers: operatorHeaders })).statusCode, 403)
     // A manage grant alone does not imply the read grant required by Rust writes.

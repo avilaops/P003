@@ -5,7 +5,7 @@ const optionalText = (max: number) => z.string().trim().nullish().transform(valu
 const asciiEmail = (value: string) => /^[\x00-\x7f]+$/.test(value) && !/\s/u.test(value) && /^[^@]+@[^@]+$/.test(value)
 const statePrefixes: Record<string, string> = { RO: "11", AC: "12", AM: "13", RR: "14", PA: "15", AP: "16", TO: "17", MA: "21", PI: "22", CE: "23", RN: "24", PB: "25", PE: "26", AL: "27", SE: "28", BA: "29", MG: "31", ES: "32", RJ: "33", SP: "35", PR: "41", SC: "42", RS: "43", MS: "50", MT: "51", GO: "52", DF: "53" }
 
-function validDocument(value: string, person: "fisica" | "juridica") {
+export function validDocument(value: string, person: "fisica" | "juridica") {
   if (person === "fisica" ? !/^\d{11}$/.test(value) : !/^[0-9A-Z]{12}\d{2}$/.test(value)) return false
   const digits = [...value].map(character => character.charCodeAt(0) - 48), length = digits.length
   if (digits.every(digit => digit === digits[0])) return false
