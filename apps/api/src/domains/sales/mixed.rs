@@ -96,7 +96,7 @@ async fn prepare(
     })
 }
 
-#[utoipa::path(post,path="/api/v1/commercial/mixed/simulate",tag="Sales",request_body=MixedSimulationInput,security(("bearerAuth"=[])),params(("X-Tenant-Id"=Uuid,Header)),responses((status=200,body=MixedSimulation),(status=409,description="Políticas ou fontes incompatíveis"),(status=412,description="Tabela desatualizada")))]
+#[utoipa::path(post,path="/api/v1/commercial/mixed/simulate",operation_id="mixed_commercial_simulate",tag="Sales",request_body=MixedSimulationInput,security(("bearerAuth"=[])),params(("X-Tenant-Id"=Uuid,Header)),responses((status=200,body=MixedSimulation),(status=409,description="Políticas ou fontes incompatíveis"),(status=412,description="Tabela desatualizada")))]
 pub async fn simulate(
     State(state): State<AppState>,
     Extension(identity): Extension<AuthenticatedIdentity>,
@@ -143,7 +143,7 @@ pub struct MixedConvertInput {
     opportunity_id: Option<Uuid>,
     opportunity_revision: Option<i64>,
 }
-#[utoipa::path(post,path="/api/v1/commercial/mixed/orders",tag="Sales",request_body=MixedConvertInput,security(("bearerAuth"=[])),params(("X-Tenant-Id"=Uuid,Header),("Idempotency-Key"=Uuid,Header)),responses((status=201,body=Value),(status=412,description="Simulação divergente")))]
+#[utoipa::path(post,path="/api/v1/commercial/mixed/orders",operation_id="mixed_commercial_convert",tag="Sales",request_body=MixedConvertInput,security(("bearerAuth"=[])),params(("X-Tenant-Id"=Uuid,Header),("Idempotency-Key"=Uuid,Header)),responses((status=201,body=Value),(status=412,description="Simulação divergente")))]
 pub async fn convert(
     State(state): State<AppState>,
     Extension(identity): Extension<AuthenticatedIdentity>,
