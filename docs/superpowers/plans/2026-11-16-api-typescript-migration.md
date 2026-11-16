@@ -165,6 +165,6 @@ As tarefas acima preparam o código e a verificação local. Não representam at
 
 - [ ] Conferir as chamadas legadas ainda usadas pelas telas do escopo e registrar a cobertura final.
 - [x] Testar o BFF no Next real pelo navegador com os módulos habilitados e o retorno explícito a Rust.
-- [ ] Integrar o processo privado ao deploy Compose existente, preservando os manifestos e segredos.
+- [x] Integrar o processo privado ao deploy Compose existente, preservando os manifestos e segredos.
 - [ ] Validar a implantação candidata e ativar gradualmente os módulos.
 - [ ] Comprovar retorno por módulo e operação real antes de retirar rotas Rust equivalentes.

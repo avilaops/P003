@@ -21,6 +21,18 @@ bootstrap e reimportação não integram uma publicação normal.
 
 ## Preparação inicial
 
+### API TypeScript • ativação gradual
+
+A imagem web da mesma revisão inclui `apps/api-ts`, já compilada e com dependências de execução. O manifesto conserva os quatro componentes existentes. O serviço privado usa essa mesma imagem; não publica portas e compartilha apenas a rede da API Rust em `127.0.0.1:8081`.
+
+No layout de produção `compose.json`, o dispatcher preserva `ERP_TYPESCRIPT_MODULES` da configuração web. Quando houver um módulo habilitado, prepara `api-ts` com somente banco/Auth extraídos da configuração da API, define a origem privada do BFF e fixa sua imagem no digest web validado. Sessão, SMTP, Fiscal e assinatura ficam fora desse processo. Nomes desconhecidos/duplicados de módulos interrompem a preparação sem regravar a configuração. Sem módulos habilitados e sem serviço anterior, não acrescenta um processo.
+
+No layout `compose.yaml`, o serviço é opcional no perfil `typescript`. Prepare `api-ts.env` privado a partir de `api-ts.env.example`, usando a mesma role restrita da API; o dispatcher conserva esse arquivo nas releases seguintes. Habilite o perfil em `COMPOSE_PROFILES=typescript` na configuração privada do Compose. No `web.env`, informe `ERP_TYPESCRIPT_API_URL=http://127.0.0.1:8081` e os módulos desejados em `ERP_TYPESCRIPT_MODULES`. A lista aceita `preferences,registrations,sales,reports`. Definir apenas os módulos, sem o processo pronto, faz a saúde web falhar e impede promoção.
+
+Para retornar um módulo, remova seu nome da configuração web e recrie o serviço web com a mesma release validada. A decisão ocorre antes do envio; falha ou perda de resposta de comando nunca provoca fallback automático. Um processo TypeScript já existente pode permanecer disponível durante esse retorno, sem receber operações dos módulos desabilitados. Planeje o limite total de conexões dos dois pools. A retirada de rotas Rust exige evidência de operação e retorno reais.
+
+O dispatcher precisa ser atualizado no servidor com os bytes revisados de `deploy/production-deploy.sh` antes de usar a preparação automática do layout JSON, seguindo o procedimento abaixo. Estas mudanças de fonte mantêm a ativação desabilitada por padrão.
+
 Esta mudança não exige trocar os segredos existentes `ERP_DEPLOY_*`. O token
 do GitHub Actions precisa poder publicar packages; o Docker do servidor precisa
 ter acesso de leitura aos quatro pacotes privados `ghcr.io/avilaops/erp-next-*`.
