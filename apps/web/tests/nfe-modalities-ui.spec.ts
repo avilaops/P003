@@ -38,6 +38,37 @@ async function products(page: Page, cfop: string) {
   await page.getByLabel("Origem da mercadoria", { exact: true }).selectOption("0")
 }
 
+for (const width of [390, 1280]) test(`product suggestions overlay the form without moving its fields • ${width}px`, async ({ page, context }, info) => {
+  const state = await fixture(page, context)
+  await page.route("**/api/erp/me", route => route.fulfill({ json: { tenant: { id: tenant }, permissions: ["fiscal.nfe.read", "fiscal.nfe.manage", "catalog.products.read"] } }))
+  const data = Array.from({ length: 20 }, (_, index) => ({ id: `product-${index}`, sku: `EQ-${index}`, name: `Equipamento ${index}`, unit: "UN", ncm: "95069100", basePrice: "1234.56" }))
+  await page.route("**/api/erp/products?*", route => route.fulfill({ json: { tenantId: tenant, data } }))
+  await page.setViewportSize({ width, height: 900 })
+  await page.goto("/fiscal/notas-saida/nova")
+  await page.getByRole("button", { name: "3. Produtos", exact: true }).click()
+  const table = page.getByRole("table", { name: "Itens da nota fiscal", exact: true })
+  const before = await table.boundingBox()
+  const search = page.getByRole("combobox", { name: "Buscar produto por nome ou SKU", exact: true })
+  await search.fill("equipamento")
+  const list = page.getByRole("listbox", { name: "Produtos encontrados", exact: true })
+  await expect(list.getByRole("option")).toHaveCount(20)
+  await expect(page.getByRole("button", { name: /^Adicionar EQ-/ })).toHaveCount(0)
+  expect(Math.abs((await table.boundingBox())!.y - before!.y)).toBeLessThan(2)
+  expect(await list.evaluate(element => element.scrollHeight > element.clientHeight)).toBe(true)
+  expect((await list.boundingBox())!.height).toBeLessThanOrEqual(300)
+  await expect(list.getByRole("option").first()).toContainText("R$ 1.234,56")
+  await page.screenshot({ path: info.outputPath(`product-suggestions-${width}.png`), fullPage: true })
+  await search.press("Escape")
+  await expect(list).toBeHidden()
+  await search.press("ArrowDown")
+  await expect(list).toBeVisible()
+  if (width === 1280) await search.press("Enter")
+  else await list.getByRole("option").first().click()
+  await expect(list).toBeHidden()
+  await expect(page.getByLabel("Descrição do produto", { exact: true })).toHaveValue("Equipamento 0")
+  expect(state.transmissions).toEqual([])
+})
+
 test("operation natures refresh after returning to the draft without losing its fields", async ({ page, context }) => {
   await fixture(page, context)
   const first = { id: "11111111-1111-4111-8111-111111111111", code: "001", name: "Venda importada", active: true, direction: "outgoing", model: 55, purpose: 1, internalCfop: "5101", interstateCfop: "6101", foreignCfop: "" }
@@ -46,26 +77,27 @@ test("operation natures refresh after returning to the draft without losing its 
   let revision = 1
   await page.route("**/api/erp/fiscal/settings/operation-natures", route => route.fulfill({ json: { tenantId: tenant, revision, data: { items } } }))
   await page.goto("/fiscal/notas-saida/nova")
-  const select = page.getByRole("combobox", { name: "Natureza cadastrada", exact: true })
-  await expect(select.locator("option")).toHaveCount(1)
+  const select = page.getByRole("combobox", { name: "Natureza da operação", exact: true })
+  const options = page.locator("datalist option")
+  await expect(select).toHaveCount(1)
+  await expect(page.getByLabel("Natureza cadastrada", { exact: true })).toHaveCount(0)
+  await expect(page.getByRole("button", { name: "Aplicar natureza", exact: true })).toHaveCount(0)
+  await expect(options).toHaveCount(0)
   await page.getByLabel("Série", { exact: true }).fill("7")
   await page.getByLabel("Natureza da operação", { exact: true }).fill("Texto preservado")
   items = [first, second, { ...first, id: "inactive", active: false }, { ...first, id: "incoming", direction: "incoming" }, { ...first, id: "nfce", model: 65 }, { ...first, id: "return", purpose: 4 }]
   revision = 3
   await page.evaluate(() => window.dispatchEvent(new Event("focus")))
-  await expect(select.locator("option")).toHaveCount(3)
+  await expect(options).toHaveCount(2)
   await expect(page.getByLabel("Série", { exact: true })).toHaveValue("7")
   await expect(page.getByLabel("Natureza da operação", { exact: true })).toHaveValue("Texto preservado")
-  await select.selectOption(first.id)
-  await page.getByRole("button", { name: "Aplicar natureza", exact: true }).click()
+  await select.fill(first.name)
   await expect(page.getByLabel("Natureza da operação", { exact: true })).toHaveValue(first.name)
-  await expect(page.getByLabel("Referência da instrução fiscal", { exact: true })).toHaveValue("001 · revisão 3")
+  await expect(page.getByLabel("Referência da instrução fiscal", { exact: true })).toHaveValue("001 • revisão 3")
   items = [second]
   revision = 4
   await page.getByRole("button", { name: "Atualizar naturezas", exact: true }).click()
-  await expect(select.locator("option")).toHaveCount(2)
-  await expect(select).toHaveValue("")
-  await expect(page.getByRole("button", { name: "Aplicar natureza", exact: true })).toBeDisabled()
+  await expect(options).toHaveCount(1)
   await expect(page.getByLabel("Natureza da operação", { exact: true })).toHaveValue(first.name)
 })
 
@@ -81,14 +113,14 @@ test("operation nature reload failures can be retried and foreign company result
   await expect(page.getByText("Consulta de naturezas indisponível", { exact: true })).toBeVisible()
   fail = false
   await page.getByRole("button", { name: "Atualizar naturezas", exact: true }).click()
-  const select = page.getByRole("combobox", { name: "Natureza cadastrada", exact: true })
-  await expect(select.locator("option")).toHaveCount(2)
-  await select.selectOption(record)
+  const select = page.getByRole("combobox", { name: "Natureza da operação", exact: true })
+  await expect(page.locator("datalist option")).toHaveCount(1)
+  await select.fill(nature.name)
   responseTenant = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
   await page.getByRole("button", { name: "Atualizar naturezas", exact: true }).click()
   await expect(page.getByText("Reabra o rascunho para conferir a empresa", { exact: true })).toBeVisible()
-  await expect(select.locator("option")).toHaveCount(1)
-  await expect(page.getByRole("button", { name: "Aplicar natureza", exact: true })).toBeDisabled()
+  await expect(page.locator("datalist option")).toHaveCount(0)
+  await expect(select).toHaveValue(nature.name)
 })
 
 test("new NF-e defaults departure to the current Brasilia time and preserves manual edits", async ({ page, context }) => {

@@ -1,3 +1,4 @@
+import { installEmptyNationalTable } from "./helpers/empty-national-table"
 import { expect, test } from "@playwright/test"
 import { createServer } from "node:http"
 import { installFrontendFixture, tenant, record } from "./helpers/frontend-fixture"
@@ -79,8 +80,9 @@ test("company onboarding shows the same warning without creating a company", asy
 })
 
 test("selecting an existing customer for an order checks registration without modifying the customer", async ({ page, context }) => {
+  await installEmptyNationalTable(context)
   let writes = 0
-  page.on("request", request => { if (request.method() !== "GET" && /\/api\/erp\/(?:parties|orders|commercial\/orders)(?:[/?]|$)/.test(request.url())) writes++ })
+  page.on("request", request => { if (request.method() !== "GET" && /\/api\/erp\/(?:parties|orders|commercial\/(?:mixed\/)?orders)(?:[/?]|$)/.test(request.url())) writes++ })
   await context.route(/\/api\/erp\/commercial\/tables\/imported(?:\?.*)?$/, route => route.fulfill({ json: { tenantId: tenant, line: "imported", authority: "seller", canManage: false, canCreateOrder: true, paymentMethods: [], data: { id: "55555555-5555-4555-8555-555555555555", version: 41, publishedAt: "2026-11-12T12:00:00Z", originState: "SP", freeDiscountBps: 2000, minimumDownPaymentBps: 7000, items: [] } } }))
   await page.goto("/vendas/pedidos/novo")
   await page.getByRole("button", { name: "Buscar cliente", exact: true }).click()

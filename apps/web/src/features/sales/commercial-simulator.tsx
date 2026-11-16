@@ -2,7 +2,7 @@
 import { catalogPaletteFor } from "@/features/catalog/catalog-color-photo-model"
 import { CatalogPaletteReference } from "@/features/catalog/catalog-color-photos"
 
-import { useEffect, useRef, useState, type ReactNode } from "react"
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react"
 import { useRouter } from "next/navigation"
 import { erpFetch } from "@/lib/api/client"
 import { PageHeader } from "@/components/page-header"
@@ -16,10 +16,12 @@ import { GuardedLink as Link, useNavigationGuard } from "@/components/shell/navi
 import { states } from "@/features/commercial-settings/commercial-parameters"
 import { Lookup, ColorChoice, PlateHolderChoice, type Choice } from "./orders"
 import { NegotiationResult } from "./negotiation-result"
-import { money, percent, inputAmount, parseAmount, type PriceItem, type PriceTable, type SimulationInput, type Simulation } from "./negotiation-types"
+import { money, percent, inputAmount, parseAmount, type PriceItem, type PriceTable, type SimulationInput, type NegotiationInput, type Simulation } from "./negotiation-types"
+import { mixedOrderTable } from "./mixed-order-table"
+import { OrderPageHeading } from "./order-proposal-actions"
 import type { Opportunity } from "./opportunities"
 import { commercialTableReturn, type CommercialSelection } from "./commercial-navigation-model"
-import { CommercialCheckout, type CheckoutHandle } from "./commercial-checkout"
+import { CommercialCheckout, type CheckoutHandle, type CheckoutProposalSnapshot } from "./commercial-checkout"
 import { paymentToday, type CheckoutInput } from "./commercial-payment-model"
 import { checkoutEntryIssue } from "./commercial-payment-mobile-model"
 import { OrderWeightSummary } from "./order-weight-summary"
@@ -29,7 +31,7 @@ import { OrderPendingReview, OrderQuickSummary, OrderSectionNavigation, focusOrd
 import { orderedOrderIssues, type OrderIssue } from "./order-progress"
 import { OrderDeliveryDestination, OrderDiscountFields, OrderFreightFields } from "./order-negotiation-fields"
 
-type Selected = { productId: string; quantity: string; structureColor: string; swingArmColor: string; upholsteryColor: string; plateHolderColor: string; plateHolderType: string }
+type Selected = { line?: string; versionId?: string; productId: string; quantity: string; structureColor: string; swingArmColor: string; upholsteryColor: string; plateHolderColor: string; plateHolderType: string }
 const selectClass = "h-9 min-h-9 min-w-0 rounded-lg border bg-background px-2"
 const sectionHeadingClass = "scroll-mt-48 rounded-sm font-semibold focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring lg:scroll-mt-40"
 const validOrderQuantity = (value: string) => /^\d{1,7}$/.test(value) && Number(value) >= 1 && Number(value) <= 1_000_000
@@ -41,20 +43,52 @@ function jumpTo(section: string) {
   heading?.scrollIntoView({ block: "start" })
 }
 
-function pricingKey(input: { versionId: string; destinationState: string; taxpayer: boolean; discount: { kind: string; value: number }; freightCents: number; items: { productId: string; quantity: number }[] }) {
-  return JSON.stringify([input.versionId, input.destinationState, input.taxpayer, input.discount.kind, input.discount.value, input.freightCents, input.items.map(item => [item.productId, item.quantity])])
+function pricingKey(input: { versionId?: string; destinationState: string; taxpayer: boolean; discount: { kind: string; value: number }; freightCents: number; items: { productId: string; quantity: number; line?: string; versionId?: string }[] }) {
+  return JSON.stringify([input.versionId, input.destinationState, input.taxpayer, input.discount.kind, input.discount.value, input.freightCents, input.items.map(item => [item.productId, item.quantity, item.line, item.versionId])])
 }
 type SimulatorProps = { initialLine: string; initialProduct: string; initialItems?: CommercialSelection[]; initialDestination?: string; initialTaxpayer?: boolean; initialOpportunity?: string; returnTo?: string; orderMode?: boolean }
 export function CommercialSimulator(props: SimulatorProps) {
   return props.initialOpportunity ? <OpportunityContext {...props} id={props.initialOpportunity} /> : <SimulatorPage {...props} />
 }
+function SimulatorPage(props: SimulatorProps & { opportunity?: Opportunity; opportunityTenant?: string }) {
+  return props.orderMode ? <MixedOrderPage {...props} /> : <SingleSimulatorPage {...props} />
+}
+function MixedOrderPage(props: SimulatorProps & { opportunity?: Opportunity; opportunityTenant?: string }) {
+  const context = new URLSearchParams()
+  if (props.initialDestination) context.set("destinationState", props.initialDestination)
+  if (props.initialTaxpayer) context.set("taxpayer", "true")
+  const suffix = context.size ? `?${context}` : ""
+  const imported = useResource<PriceTable>(`/api/erp/commercial/tables/imported${suffix}`)
+  const national = useResource<PriceTable>(`/api/erp/commercial/tables/national${suffix}`)
+  const access = useResource<{ tenant: { id: string }; permissions: string[] }>("/api/erp/me")
+  const tenantId = access.value?.tenant.id || ""
+  const foreign = [imported.value, national.value].some(table => table && table.tenantId !== tenantId)
+  const table = useMemo(() => {
+    const sources = [imported.value, national.value].filter((table): table is PriceTable => Boolean(table))
+    if (!tenantId || !sources.length || sources.some(source => source.tenantId !== tenantId)) return null
+    const warnings = [imported.error ? "Não foi possível consultar a tabela importada." : imported.value && !imported.value.data ? "Publique a tabela importada para incluir seus equipamentos." : "", national.error ? "Não foi possível consultar a tabela nacional." : national.value && !national.value.data ? "Publique a tabela nacional para incluir seus equipamentos." : ""].filter(Boolean)
+    return mixedOrderTable(sources, tenantId, warnings)
+  }, [imported.value, national.value, imported.error, national.error, tenantId])
+  const loading = imported.loading || national.loading || access.loading
+  const unavailable = access.error || (foreign && tenantId ? "As tabelas não correspondem à empresa ativa." : "") || (props.opportunityTenant && props.opportunityTenant !== tenantId ? "A empresa da sessão mudou. Reabra a oportunidade." : "")
+  return <main className="commercial-order-page space-y-4">
+    {loading || unavailable || !table?.data ? <>
+      <OrderPageHeading tenantId={tenantId} sale={null} pending={false} destinationState={props.initialDestination || ""} taxpayer={!!props.initialTaxpayer} />
+      {loading ? <p role="status">Carregando tabelas publicadas…</p> : unavailable ? <p role="alert">{unavailable}</p> : <div role="status" className="space-y-3"><p>Nenhuma tabela publicada está disponível para este pedido.</p><Button variant="outline" onClick={() => { imported.reload(); national.reload(); access.reload() }}>Consultar tabelas novamente</Button></div>}
+    </> : <>
+      {props.opportunity && <p className="text-sm">Oportunidade: {props.opportunity.title}</p>}
+      <Simulator key={tenantId} table={table} initialSourceLine={props.initialLine} initialProduct={props.initialProduct} initialItems={props.initialItems} initialDestination={props.initialDestination} initialTaxpayer={props.initialTaxpayer} opportunity={props.opportunity} onLineLockChange={ignoreLineLock} canCreate={table.canCreateOrder !== false && !!access.value?.permissions.includes("sales.orders.manage")} canManageCustomer={!!access.value?.permissions.includes("catalog.parties.manage")} orderMode lineControl={null} />
+    </>}
+  </main>
+}
+function ignoreLineLock() {}
 function OpportunityContext({ id, ...props }: SimulatorProps & { id: string }) {
   const source = useResource<{ tenantId: string; data: Opportunity }>(`/api/erp/opportunities/${id}`)
   if (source.loading) return <main className="p-6"><p role="status">Carregando dados da oportunidade…</p></main>
   if (source.error || !source.value) return <main className="p-6"><p role="alert"><RequestError message={source.error || "Oportunidade indisponível"} status={source.status} /></p></main>
   return <SimulatorPage {...props} opportunity={source.value.data} opportunityTenant={source.value.tenantId} />
 }
-function SimulatorPage({ initialLine, initialProduct, opportunity, opportunityTenant, returnTo, initialItems, initialDestination, initialTaxpayer, orderMode = false }: SimulatorProps & { opportunity?: Opportunity; opportunityTenant?: string }) {
+function SingleSimulatorPage({ initialLine, initialProduct, opportunity, opportunityTenant, returnTo, initialItems, initialDestination, initialTaxpayer, orderMode = false }: SimulatorProps & { opportunity?: Opportunity; opportunityTenant?: string }) {
   const [line, setLine] = useState(initialLine === "national" ? "national" : "imported")
   const [lineLocked, setLineLocked] = useState(false)
   const context = new URLSearchParams()
@@ -75,13 +109,13 @@ function SimulatorPage({ initialLine, initialProduct, opportunity, opportunityTe
   </main>
 }
 
-function Simulator({ table: initialTable, initialProduct, initialItems, initialDestination, initialTaxpayer, opportunity, onLineLockChange, canCreate, canManageCustomer, orderMode, lineControl }: { table: PriceTable; initialProduct: string; initialItems?: CommercialSelection[]; initialDestination?: string; initialTaxpayer?: boolean; opportunity?: Opportunity; onLineLockChange: (locked: boolean) => void; canCreate: boolean; canManageCustomer: boolean; orderMode: boolean; lineControl: ReactNode }) {
+function Simulator({ table: initialTable, initialSourceLine, initialProduct, initialItems, initialDestination, initialTaxpayer, opportunity, onLineLockChange, canCreate, canManageCustomer, orderMode, lineControl }: { table: PriceTable; initialProduct: string; initialItems?: CommercialSelection[]; initialDestination?: string; initialTaxpayer?: boolean; opportunity?: Opportunity; onLineLockChange: (locked: boolean) => void; canCreate: boolean; canManageCustomer: boolean; orderMode: boolean; lineControl: ReactNode; initialSourceLine?: string }) {
   const router = useRouter()
   const command = useCommand()
   const [updatedTable, setUpdatedTable] = useState<PriceTable | null>(null)
   const [reloading, setReloading] = useState(false)
   const table = updatedTable || initialTable
-  const [items, setItems] = useState<Selected[]>(() => (initialItems?.length ? initialItems : initialProduct ? [{ productId: initialProduct, quantity: 1 }] : []).map(item => ({ productId: item.productId, quantity: String(item.quantity), structureColor: "", swingArmColor: "", upholsteryColor: "", plateHolderColor: "", plateHolderType: "" })))
+  const [items, setItems] = useState<Selected[]>(() => (initialItems?.length ? initialItems : initialProduct ? [{ productId: initialProduct, quantity: 1 }] : []).map(item => { const source = table.data?.items.find(price => price.productId === item.productId && (!orderMode || price.line === (initialSourceLine === "national" ? "national" : "imported"))); return { productId: item.productId, quantity: String(item.quantity), ...(orderMode ? { line: source?.line, versionId: source?.versionId } : {}), structureColor: "", swingArmColor: "", upholsteryColor: "", plateHolderColor: "", plateHolderType: "" } }))
   const [product, setProduct] = useState("")
   const [search, setSearch] = useState("")
   const [destinationDraft, setDestination] = useState(initialDestination || table.data?.originState || "")
@@ -92,11 +126,13 @@ function Simulator({ table: initialTable, initialProduct, initialItems, initialD
   const [downPayment, setDownPayment] = useState("")
   const [customer, setCustomer] = useState<Choice | null>(opportunity?.customerId ? { id: opportunity.customerId, legalName: opportunity.customerName || "Cliente da oportunidade" } : null)
   const [dueDate, setDueDate] = useState("")
-  const [calculated, setResult] = useState<{ value: Simulation; input: SimulationInput } | null>(null)
+  const [calculated, setResult] = useState<{ value: Simulation; input: NegotiationInput } | null>(null)
   const [pricedTotal, setPricedTotal] = useState<{ key: string; totalCents: number; minimumCents: number } | null>(null)
   const checkout = useRef<CheckoutHandle>(null)
   const customerForm = useRef<OrderCustomerHandle>(null)
-  const pendingOrder = useRef<{ simulation: SimulationInput; digest: string; dueDate: string; checkout: CheckoutInput } | null>(null)
+  const [proposalCustomerName, setProposalCustomerName] = useState("")
+  const [proposalCheckout, setProposalCheckout] = useState<CheckoutProposalSnapshot>({ paymentTerms: "", deliveryTerms: "" })
+  const pendingOrder = useRef<{ simulation: NegotiationInput; digest: string; dueDate: string; checkout: CheckoutInput } | null>(null)
   const converting = useRef(false)
   const [savingOrder, setSavingOrder] = useState(false)
   const [customerBusy, setCustomerBusy] = useState(false)
@@ -117,24 +153,26 @@ function Simulator({ table: initialTable, initialProduct, initialItems, initialD
   const [checkoutIssues, setCheckoutIssues] = useState<OrderIssue[]>([])
   const destination = orderMode && !destinationManual ? customerProgress.addressState || initialDestination || table.data?.originState || "" : destinationDraft
   const frozen = (!orderMode && manualBusy) || savingOrder || customerBusy || customerUncertain || reloading || command.busy || command.uncertain || command.stale
-  const currentPriceKey = pricingKey({ versionId: table.data?.id || "", destinationState: destination, taxpayer: taxpayer === "true", discount: { kind: discount.kind, value: parseAmount(discount.raw) ?? -1 }, freightCents: ourFreight ? parseAmount(freight) ?? -1 : 0, items: items.map(item => ({ productId: item.productId, quantity: Number(item.quantity) })) })
+  const currentPriceKey = pricingKey({ versionId: orderMode ? undefined : table.data?.id || "", destinationState: destination, taxpayer: taxpayer === "true", discount: { kind: discount.kind, value: parseAmount(discount.raw) ?? -1 }, freightCents: ourFreight ? parseAmount(freight) ?? -1 : 0, items: items.map(item => ({ productId: item.productId, quantity: Number(item.quantity), ...(orderMode ? { line: item.line, versionId: item.versionId } : {}) })) })
   const paymentTotal = pricedTotal?.key === currentPriceKey ? pricedTotal.totalCents : null
   const paymentEntry = paymentTotal === null ? null : downPayment.trim() ? parseAmount(downPayment) : pricedTotal!.minimumCents
-  const unavailableItems = items.filter(item => !table.data?.items.some(source => source.productId === item.productId && source.available !== false))
+  const sourcePrice = (item: Selected) => table.data?.items.find(source => source.productId === item.productId && (!orderMode || source.line === item.line && source.versionId === item.versionId))
+  const unavailableItems = items.filter(item => !sourcePrice(item) || sourcePrice(item)?.available === false)
   useEffect(() => { onLineLockChange(frozen) }, [frozen, onLineLockChange])
   useNavigationGuard(dirty || command.uncertain ? "Sair sem concluir esta negociação?" : null)
   function change() { pendingOrder.current = null; if (!orderMode) setResult(null); setDirty(true); setError(""); setQuoteError(false); command.reset() }
-  function simulationInput(): SimulationInput {
+  function simulationInput(): NegotiationInput {
     if (!table.data) throw Error("Publique uma tabela antes de simular.")
     if (unavailableItems.length) throw Error("Há equipamentos indisponíveis nesta tabela. Confira a seleção e remova esses itens explicitamente para continuar.")
     const value = parseAmount(discount.raw)
     const freightCents = ourFreight ? parseAmount(freight) : 0
     const entry = downPayment.trim() ? parseAmount(downPayment) : null
     if (value === null || freightCents === null || (downPayment.trim() && entry === null) || !items.length || items.some(i => !/^\d{1,7}$/.test(i.quantity) || Number(i.quantity) < 1 || Number(i.quantity) > 1000000)) throw Error("Confira quantidade, desconto, frete e entrada. Use até duas casas decimais para valores.")
-    return { line: table.line, versionId: table.data.id, destinationState: destination, taxpayer: taxpayer === "true", discount: { kind: discount.kind, value }, freightCents, downPaymentCents: entry, items: items.map(i => ({ productId: i.productId, quantity: Number(i.quantity), structureColor: i.structureColor || null, swingArmColor: i.swingArmColor || null, upholsteryColor: i.upholsteryColor || null, plateHolderColor: null, plateHolderType: i.plateHolderType || null })) }
+    const base: Omit<SimulationInput, "line" | "versionId"> = { destinationState: destination, taxpayer: taxpayer === "true", discount: { kind: discount.kind, value }, freightCents, downPaymentCents: entry, items: items.map(i => ({ productId: i.productId, quantity: Number(i.quantity), structureColor: i.structureColor || null, swingArmColor: i.swingArmColor || null, upholsteryColor: i.upholsteryColor || null, plateHolderColor: null, plateHolderType: i.plateHolderType || null })) }
+    return orderMode ? { ...base, items: base.items.map((item, index) => ({ ...item, line: items[index].line!, versionId: items[index].versionId! })) } : { ...base, line: table.line, versionId: table.data.id }
   }
   const orderQuoteSignature = (() => { if (!orderMode) return ""; try { return JSON.stringify(simulationInput()) } catch { return "" } })()
-  const result = calculated && calculated.input.versionId === table.data?.id && (!orderMode || JSON.stringify(calculated.input) === orderQuoteSignature) ? calculated : null
+  const result = calculated && (orderMode ? JSON.stringify(calculated.input) === orderQuoteSignature : "versionId" in calculated.input && calculated.input.versionId === table.data?.id) ? calculated : null
   const busy = manualBusy || !!orderQuoteSignature && autoPendingKey === orderQuoteSignature
   const entryIssue = checkoutEntryIssue(paymentTotal, downPayment)
   const invalidFreight = ourFreight && parseAmount(freight) === null
@@ -162,12 +200,12 @@ function Simulator({ table: initialTable, initialProduct, initialItems, initialD
   }
   useEffect(() => {
     if (!orderMode || !orderQuoteSignature || command.busy || command.uncertain || savingOrder || customerUncertain || reloading) return
-    const input: SimulationInput = JSON.parse(orderQuoteSignature)
+    const input: NegotiationInput = JSON.parse(orderQuoteSignature)
     const controller = new AbortController()
     const timer = setTimeout(async () => {
       setAutoPendingKey(orderQuoteSignature); setError(""); setQuoteError(false)
       try {
-        const response = await erpFetch("/api/erp/commercial/simulate", { method: "POST", headers: { "Content-Type": "application/json", "X-Tenant-Id": table.tenantId }, body: orderQuoteSignature, signal: controller.signal })
+        const response = await erpFetch((orderMode ? "/api/erp/commercial/mixed/simulate" : "/api/erp/commercial/simulate"), { method: "POST", headers: { "Content-Type": "application/json", "X-Tenant-Id": table.tenantId }, body: orderQuoteSignature, signal: controller.signal })
         const value: Simulation & { title?: string } = await response.json()
         if (!response.ok) { if (!controller.signal.aborted && [409, 412].includes(response.status)) setQuoteStale(true); throw Error(value.title || "Não foi possível calcular a negociação.") }
         if (value.tenantId !== table.tenantId || !/^[a-f0-9]{64}$/.test(value.digest) || !value.sale) throw Error("Resposta da simulação incompleta.")
@@ -179,11 +217,11 @@ function Simulator({ table: initialTable, initialProduct, initialItems, initialD
   }, [orderMode, orderQuoteSignature, table.tenantId, table, quoteRetry, command.busy, command.uncertain, savingOrder, customerUncertain, reloading])
   async function simulate() {
     if (frozen) return
-    let input: SimulationInput
+    let input: NegotiationInput
     try { input = simulationInput() } catch (reason) { setError(reason instanceof Error ? reason.message : "Confira as condições."); jumpTo(!items.length || items.some(i => !/^\d{1,7}$/.test(i.quantity) || Number(i.quantity) < 1 || Number(i.quantity) > 1000000) ? "equipment" : "conditions"); return }
     setBusy(true); setError(""); setResult(null)
     try {
-      const response = await erpFetch("/api/erp/commercial/simulate", { method: "POST", headers: { "Content-Type": "application/json", "X-Tenant-Id": table.tenantId }, body: JSON.stringify(input) })
+      const response = await erpFetch((orderMode ? "/api/erp/commercial/mixed/simulate" : "/api/erp/commercial/simulate"), { method: "POST", headers: { "Content-Type": "application/json", "X-Tenant-Id": table.tenantId }, body: JSON.stringify(input) })
       const value: Simulation & { title?: string } = await response.json()
       if (!response.ok) throw Error(value.title || "Não foi possível simular.")
       if (value.tenantId !== table.tenantId || !/^[a-f0-9]{64}$/.test(value.digest) || !value.sale) throw Error("Resposta da simulação incompleta.")
@@ -218,13 +256,13 @@ function Simulator({ table: initialTable, initialProduct, initialItems, initialD
       converting.current = true; setSavingOrder(true); setError("")
       try {
         if (command.uncertain) {
-          const value = await command.send<{ tenantId: string; id: string }>("/api/erp/commercial/orders", table.tenantId, {}, "", "POST", reply => reply?.tenantId === table.tenantId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(reply.id))
+          const value = await command.send<{ tenantId: string; id: string }>((orderMode ? "/api/erp/commercial/mixed/orders" : "/api/erp/commercial/orders"), table.tenantId, {}, "", "POST", reply => reply?.tenantId === table.tenantId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(reply.id))
           if (value?.tenantId === table.tenantId && value.id) { setDirty(false); router.push(`/vendas/pedidos/${value.id}`) }
           return
         }
         const selected = await customerForm.current?.save()
         if (!selected) return
-        const value = await command.send<{ tenantId: string; id: string }>("/api/erp/commercial/orders", table.tenantId, { ...pendingOrder.current, customerId: selected.id, ...(opportunity ? { opportunityId: opportunity.id, opportunityRevision: opportunity.revision } : {}) }, "", "POST", reply => reply?.tenantId === table.tenantId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(reply.id))
+        const value = await command.send<{ tenantId: string; id: string }>((orderMode ? "/api/erp/commercial/mixed/orders" : "/api/erp/commercial/orders"), table.tenantId, { ...pendingOrder.current, customerId: selected.id, ...(opportunity ? { opportunityId: opportunity.id, opportunityRevision: opportunity.revision } : {}) }, "", "POST", reply => reply?.tenantId === table.tenantId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(reply.id))
         if (value?.tenantId === table.tenantId && value.id) { setDirty(false); router.push(`/vendas/pedidos/${value.id}`) }
       } finally { converting.current = false; setSavingOrder(false) }
       return
@@ -235,13 +273,30 @@ function Simulator({ table: initialTable, initialProduct, initialItems, initialD
       try { terms = checkout.current?.read(); if (!terms) throw Error("Confira as condições do pedido.") }
       catch (reason) { setError(reason instanceof Error ? reason.message : "Confira as condições do pedido."); jumpTo("customer"); return }
     }
-    const value = await command.send<{ tenantId: string; id: string }>("/api/erp/commercial/orders", table.tenantId, { simulation: result.input, digest: result.value.digest, customerId: customer.id, dueDate, ...(terms ? { checkout: terms } : {}), ...(opportunity ? { opportunityId: opportunity.id, opportunityRevision: opportunity.revision } : {}) })
+    const value = await command.send<{ tenantId: string; id: string }>((orderMode ? "/api/erp/commercial/mixed/orders" : "/api/erp/commercial/orders"), table.tenantId, { simulation: result.input, digest: result.value.digest, customerId: customer.id, dueDate, ...(terms ? { checkout: terms } : {}), ...(opportunity ? { opportunityId: opportunity.id, opportunityRevision: opportunity.revision } : {}) })
     if (value?.tenantId === table.tenantId && value.id) { setDirty(false); router.push(`/vendas/pedidos/${value.id}`) }
   }
   async function refreshTable() {
     if (reloading || command.busy || command.uncertain) return
     setReloading(true); setError("")
     try {
+      if (orderMode) {
+        const sources = await Promise.all(["imported", "national"].map(async line => {
+          const response = await erpFetch(`/api/erp/commercial/tables/${line}`, { cache: "no-store" })
+          const latest: PriceTable & { title?: string } = await response.json()
+          if (!response.ok) throw Error(latest.title || "Não foi possível atualizar as tabelas.")
+          if (latest.tenantId !== table.tenantId || latest.line !== line) throw Error("Confira a empresa das tabelas antes de continuar.")
+          return latest
+        }))
+        const latest = mixedOrderTable(sources, table.tenantId, sources.filter(source => !source.data).map(source => `Publique a tabela ${source.line === "national" ? "nacional" : "importada"} para incluir seus equipamentos.`))
+        setUpdatedTable(latest)
+        setItems(current => current.map(item => {
+          const source = latest.data?.items.find(product => product.productId === item.productId && product.line === item.line)
+          return source ? { ...item, versionId: source.versionId } : item
+        }))
+        setResult(null); setPricedTotal(null); setQuoteStale(false); setQuoteError(false); command.reset()
+        return
+      }
       const response = await erpFetch(`/api/erp/commercial/tables/${table.line}`, { cache: "no-store" })
       const latest: PriceTable & { title?: string } = await response.json()
       if (!response.ok) throw Error(latest.title || "Não foi possível atualizar a tabela.")
@@ -254,7 +309,8 @@ function Simulator({ table: initialTable, initialProduct, initialItems, initialD
   if (orderMode) {
     const sale = result?.value.sale || null
     const quantityTotal = items.every(item => validOrderQuantity(item.quantity)) ? items.reduce((total, item) => total + Number(item.quantity), 0) : null
-    const ownLimit = table.data.destinations?.find(rule => rule.state === destination && rule.taxpayer === (taxpayer === "true"))?.maxOwnDiscountBps ?? table.data.freeDiscountBps
+    const selectedTables = table.sources?.filter(source => source.data && (!items.length || items.some(item => item.line === source.line))) || [table]
+    const ownLimit = Math.min(...selectedTables.map(source => source.data?.destinations?.find(rule => rule.state === destination && rule.taxpayer === (taxpayer === "true"))?.maxOwnDiscountBps ?? source.data?.freeDiscountBps ?? table.data!.freeDiscountBps))
     function markDirty() {
       if (!savingOrder && !customerUncertain && !command.uncertain) pendingOrder.current = null
       setDirty(true); setError("")
@@ -263,12 +319,15 @@ function Simulator({ table: initialTable, initialProduct, initialItems, initialD
       const search = document.getElementById("order-equipment-search")
       search?.focus({ preventScroll: true }); search?.scrollIntoView({ block: "center" })
     }
-    const add = (productId: string) => {
+    const add = (productId: string, source?: PriceItem) => {
       if (frozen) return
       const existing = items.find(item => item.productId === productId)
+      const selectedSource = source || table.data?.items.find(item => item.productId === productId)
+      if (!selectedSource?.line || !selectedSource.versionId) return
+      if (existing && (existing.line !== selectedSource.line || existing.versionId !== selectedSource.versionId)) { setError("Este equipamento já está no pedido por outra tabela. Remova-o antes de trocar a origem."); return }
       if (existing && (!validOrderQuantity(existing.quantity) || Number(existing.quantity) >= 1_000_000)) { setError("Confira a quantidade deste equipamento antes de acrescentar uma unidade."); return }
       if (!existing && items.length >= 100) { setError("O pedido aceita até 100 equipamentos diferentes."); return }
-      setItems(current => existing ? current.map(item => item.productId === productId ? { ...item, quantity: String(Number(item.quantity) + 1) } : item) : [...current, { productId, quantity: "1", structureColor: "", swingArmColor: "", upholsteryColor: "", plateHolderColor: "", plateHolderType: "" }])
+      setItems(current => existing ? current.map(item => item.productId === productId ? { ...item, quantity: String(Number(item.quantity) + 1) } : item) : [...current, { productId, line: selectedSource.line, versionId: selectedSource.versionId, quantity: "1", structureColor: "", swingArmColor: "", upholsteryColor: "", plateHolderColor: "", plateHolderType: "" }])
       change()
     }
     const saveBlocked = !canCreate ? "Seu acesso permite consultar; salvar exige permissão de gestão de vendas."
@@ -279,26 +338,27 @@ function Simulator({ table: initialTable, initialProduct, initialItems, initialD
       : busy && !command.uncertain && !customerUncertain ? "Calculando os valores da negociação. Aguarde." : ""
     const deliveryMethodNote = freightMode === "pickup" ? "Entrega: retirada pelo cliente." : freightMode === "company" ? "Entrega: frete por nossa conta, sem acréscimo ao total cobrado do cliente." : "Entrega: frete pago pelo cliente, contratado separadamente do pedido."
     return <div data-simulation-dirty={dirty} className="order-form-content">
+      <OrderPageHeading tenantId={table.tenantId} sale={sale} pending={busy || reloading} destinationState={destination} taxpayer={taxpayer === "true"} dueDate={dueDate} customerName={proposalCustomerName} paymentTerms={proposalCheckout.paymentTerms} deliveryTerms={[deliveryMethodNote, proposalCheckout.deliveryTerms].filter(Boolean).join(" • ")} />
       <OrderSectionNavigation issues={orderIssues} />
       <CommercialCheckout
         ref={checkout} tenantId={table.tenantId} methods={table.paymentMethods || []}
         totalCents={paymentTotal} entryCents={paymentEntry} entryRaw={downPayment}
         onEntryChange={raw => { setDownPayment(raw); change() }} dueDate={dueDate}
         onDueDateChange={date => { setDueDate(date); markDirty() }} onDirty={markDirty} disabled={frozen}
-        onProgressChange={setCheckoutIssues} deliveryMethodNote={deliveryMethodNote}
+        onProgressChange={setCheckoutIssues} onProposalChange={setProposalCheckout} deliveryMethodNote={deliveryMethodNote}
         freightField={<OrderFreightFields mode={freightMode} value={freight} error={attempted ? orderIssues.find(issue => issue.field === "delivery.freight")?.message : undefined} onMode={mode => { setFreightMode(mode); setOurFreight(mode === "company"); change() }} onChange={value => { setFreight(value); change() }} />}
         renderOrder={({ payment, delivery }) => <CommercialOrderLayout
           equipment={<OrderSection id="order-equipment" title="Equipamentos" detail={quantityTotal === null ? "Confira as quantidades" : quantityTotal + " un."}>
-            <div className="order-table-context">{lineControl}<details><summary>Detalhes da tabela</summary><p>Versão {table.data!.version} · {table.line === "national" ? "Nacional" : "Importada"}</p><p>Ao trocar a tabela, confira os preços e monte uma nova negociação.</p></details></div>
+            {table.sourceWarnings?.map(message => <p role="status" key={message} className="text-sm">{message} <Button type="button" variant="outline" disabled={frozen} onClick={refreshTable}>Atualizar tabelas</Button></p>)}
             <OrderEquipmentSearch items={table.data!.items} selected={items.map(item => item.productId)} disabled={frozen} onAdd={add} />
             {unavailableItems.length > 0 && <p role="alert" className="text-sm">Há equipamentos indisponíveis nesta versão. Remova os itens indicados para continuar.</p>}
             {items.length ? <div className="order-equipment-scroll" role="region" aria-label="Equipamentos do pedido" tabIndex={0}>
               <DataTable className="order-equipment-table" aria-label="Equipamentos do pedido">
                 <thead><tr><th scope="col">Equipamento</th><th scope="col">Qtd.</th><th scope="col">Valor unit. s/ IPI</th><th scope="col">Desconto</th><th scope="col">Total c/ IPI</th><th scope="col"><span className="sr-only">Ações</span></th></tr></thead>
                 <tbody>{items.map((item, index) => <SelectedProduct key={item.productId} item={item}
-                  name={table.data!.items.find(source => source.productId === item.productId)?.name || "Equipamento indisponível"}
-                  sku={table.data!.items.find(source => source.productId === item.productId)?.sku || ""}
-                  tenant={table.tenantId} orderMode price={table.data!.items.find(source => source.productId === item.productId)}
+                  name={sourcePrice(item)?.name || "Equipamento indisponível"}
+                  sku={sourcePrice(item)?.sku || ""}
+                  tenant={table.tenantId} orderMode price={sourcePrice(item)}
                   priced={sale?.items.find(source => source.productId === item.productId)} disabled={frozen}
                   update={next => { setItems(current => current.map((source, position) => position === index ? next : source)); change() }}
                   remove={() => { setItems(current => current.filter(source => source.productId !== item.productId)); change() }} />)}</tbody>
@@ -310,7 +370,7 @@ function Simulator({ table: initialTable, initialProduct, initialItems, initialD
           </OrderSection>}
           customer={<OrderCustomerForm ref={customerForm} tenantId={table.tenantId} disabled={frozen}
             canManage={canCreate && canManageCustomer} onDirty={markDirty}
-            onBusyChange={setCustomerBusy} onUncertainChange={setCustomerUncertain} onProgressChange={setCustomerProgress}
+            onBusyChange={setCustomerBusy} onUncertainChange={setCustomerUncertain} onProgressChange={setCustomerProgress} onProposalNameChange={setProposalCustomerName}
             onDestinationChange={state => { if (!destinationManual && state !== destination) { setDestination(state); change() } }}
             onTaxpayerChange={value => { if (!taxpayerManual && String(value) !== taxpayer) { setTaxpayer(String(value)); change() } }} />}
           delivery={<><OrderDeliveryDestination destination={destination} addressState={customerProgress.addressState}
@@ -321,7 +381,7 @@ function Simulator({ table: initialTable, initialProduct, initialItems, initialD
           discount={<OrderDiscountFields sale={sale} discount={discount} pending={busy} hasItems={!!items.length} disabled={frozen}
             percentError={attempted ? orderIssues.find(issue => issue.field === "discount.percent")?.message : undefined}
             totalError={attempted ? orderIssues.find(issue => issue.field === "discount.total")?.message : undefined}
-            ownLimit={ownLimit} freeLimit={table.data!.freeDiscountBps} authority={table.authority} onAdd={focusSearch}
+            ownLimit={ownLimit} freeLimit={sale?.freeDiscountBps ?? table.data!.freeDiscountBps} authority={table.authority} onAdd={focusSearch}
             onPercent={raw => { setDiscount({ kind: "percent", raw }); change() }}
             onTotal={raw => { setDiscount(raw.trim() ? { kind: "total", raw } : { kind: "percent", raw: "0" }); change() }} />}
           payment={<OrderSection id="order-payment" title="Forma de pagamento" detail="Combinada com o cliente">{payment}</OrderSection>}

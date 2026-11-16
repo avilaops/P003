@@ -4,7 +4,7 @@ use axum::{
     http::{HeaderMap, StatusCode},
     response::Response,
 };
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use sqlx::{FromRow, Postgres, Transaction};
 use utoipa::ToSchema;
 use uuid::Uuid;
@@ -14,10 +14,7 @@ use super::{
     model::{DraftInput, Recipient, exact_decimal},
 };
 use crate::{
-    domains::{
-        DomainError, authorized, db, decimal, party_complements::PartyAddress, response,
-        sales::negotiation_model::SaleQuote,
-    },
+    domains::{DomainError, authorized, db, decimal, party_complements::PartyAddress, response},
     platform::{access, auth::AuthenticatedIdentity, state::AppState},
 };
 
@@ -83,11 +80,22 @@ impl Line {
     }
 }
 
+// Only per-item monetary evidence is relevant to fiscal preparation. This view
+// accepts historical single-policy and mixed-policy snapshots without inventing
+// a global IPI percentage or weakening the existing line consistency checks.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct FiscalCommercialQuote {
+    items: Vec<crate::domains::sales::negotiation_model::QuotedLine>,
+    net_sale_cents: i64,
+    total_cents: i64,
+}
+
 async fn commercial_quote(
     tx: &mut Transaction<'_, Postgres>,
     tenant: Uuid,
     id: Uuid,
-) -> Result<Option<SaleQuote>, DomainError> {
+) -> Result<Option<FiscalCommercialQuote>, DomainError> {
     let sale: Option<serde_json::Value> = sqlx::query_scalar(
         "SELECT public_snapshot->'sale' FROM commercial_order_quotes WHERE tenant_id=$1 AND order_id=$2",
     )
@@ -412,6 +420,21 @@ pub(super) async fn validate(
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn commercial_fiscal_view_accepts_mixed_policy_rates_without_global_ipi() {
+        let quote: super::FiscalCommercialQuote=serde_json::from_value(serde_json::json!({
+            "calculatorVersion":"ludus-mixed-order-v1-integer-cents","ipiBps":null,"netSaleCents":10000,"totalCents":11300,
+            "items":[{"productId":uuid::Uuid::nil(),"line":"imported","versionId":uuid::Uuid::nil(),"ipiBps":1300,"sku":"TEST","name":"Equipamento","unit":"UN","quantity":1,"tableUnitCents":10000,"unitNetCents":10000,"unitTotalCents":11300,"netCents":10000,"ipiCents":1300,"totalCents":11300}]
+        })).unwrap();
+        assert_eq!(
+            (
+                quote.items[0].net_cents,
+                quote.items[0].ipi_cents,
+                quote.total_cents
+            ),
+            (10000, 1300, 11300)
+        );
+    }
     use super::*;
 
     #[test]

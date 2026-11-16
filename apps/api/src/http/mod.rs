@@ -62,6 +62,8 @@ mod mail_settings_tests;
 #[cfg(test)]
 mod mcp_tests;
 #[cfg(test)]
+mod mixed_negotiation_tests;
+#[cfg(test)]
 mod monitor_tests;
 #[cfg(test)]
 mod negotiation_tests;
@@ -432,6 +434,14 @@ pub fn router(state: AppState) -> Router {
         .route(
             "/api/v1/commercial/simulate",
             post(sales::negotiation::simulate),
+        )
+        .route(
+            "/api/v1/commercial/mixed/simulate",
+            post(sales::mixed::simulate),
+        )
+        .route(
+            "/api/v1/commercial/mixed/orders",
+            post(sales::mixed::convert),
         )
         .route(
             "/api/v1/commercial/orders",

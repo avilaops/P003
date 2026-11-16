@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { TaxProfilePicker } from "./settings/tax-profile-picker"
 import { OperationNaturePicker } from "./settings/operation-nature-picker"
+import { NfeProductPicker, type NfePickerProduct } from "./nfe-product-picker"
 import { certificateMessage } from "./outgoing-nfe-model"
 import { NfeItemsTable } from "./nfe-items-table"
 import { NfeTransportFields, NfeRetentionsFields, NfeInstallmentsFields, NfeAdditionalFields, NfeAmountsSummary } from "./nfe-extras-fields"
@@ -24,7 +25,6 @@ import { EmissionActions } from "./emission-actions"
 import { applyRecipientFiscal, applyTaxProfile, blankDraft, blankIbptItem, blankItem, blankTaxDeclaration, blockerLabels, invoiceTotal, productsTotal, submission, type DraftInput, type DraftItem, type FiscalReadiness, type TaxDeclaration } from "./nfe-draft-model"
 import { IbptDraftFields, IbptSavedSnapshot } from "./ibpt-draft-fields"
 
-type Product = { id: string; sku: string; name: string; unit: string; ncm: string | null; basePrice: string }
 type Snapshot = Schema<"DraftSnapshot">
 type Preparation = Schema<"OrderPreparation">
 const editorSteps = ["Dados da nota", "Destinatário", "Produtos", "Tributação", "Pagamento", "Revisão e emissão"]
@@ -56,17 +56,12 @@ export function NfeDraftEditor({ id, sourceOrderId, initialModel = 55 }: { id?: 
   const [blocked, setBlocked] = useState(false)
   const [error, setError] = useState("")
   const [notice, setNotice] = useState("")
-  const [query, setQuery] = useState("")
-  const [products, setProducts] = useState<Product[]>([])
-  const [productError, setProductError] = useState("")
-  const [searching, setSearching] = useState(false)
   const [canSearch, setCanSearch] = useState(false)
   const [canSearchParties, setCanSearchParties] = useState(false)
   const [reload, setReload] = useState(0)
   const command = useRef<{ key: string; body: string } | null>(null)
   const writing = useRef(false)
   const request = useRef<AbortController | null>(null)
-  const productRequest = useRef<AbortController | null>(null)
   const dirty = baseline !== "" && baseline !== JSON.stringify(draft)
 
   useEffect(() => {
@@ -94,7 +89,7 @@ export function NfeDraftEditor({ id, sourceOrderId, initialModel = 55 }: { id?: 
         setCanIssue(me.permissions.includes("fiscal.nfe.issue"))
         setCanCancel(me.permissions.includes("fiscal.nfe.cancel"))
         setCanCorrect(me.permissions.includes("fiscal.nfe.correction"))
-        setBlocked(false); setError(""); setProducts([]); command.current = null
+        setBlocked(false); setError(""); command.current = null
       } catch (reason) { if (!controller.signal.aborted) { setError(reason instanceof Error ? reason.message : "Falha ao abrir o rascunho"); setCanEdit(false); setCanIssue(false); setCanCancel(false); setCanCorrect(false) } }
       finally { if (!controller.signal.aborted) setLoading(false) }
     }
@@ -130,7 +125,7 @@ export function NfeDraftEditor({ id, sourceOrderId, initialModel = 55 }: { id?: 
     window.addEventListener("beforeunload", warn)
     return () => window.removeEventListener("beforeunload", warn)
   }, [dirty, uncertain, saving])
-  useEffect(() => () => { request.current?.abort(); productRequest.current?.abort() }, [])
+  useEffect(() => () => { request.current?.abort() }, [])
 
   function changeItem(index: number, patch: Partial<DraftItem>) {
     setDraft(previous => ({ ...previous, items: previous.items.map((item, position) => position === index ? { ...item, ...patch } : item) }))
@@ -143,25 +138,13 @@ export function NfeDraftEditor({ id, sourceOrderId, initialModel = 55 }: { id?: 
     if ((dirty || uncertain) && !window.confirm("Recarregar substitui a edição pelos dados do servidor. Deseja continuar?")) return
     setLoading(true); setUncertain(false); setNotice(""); setReload(value => value + 1)
   }
-  async function findProducts() {
-    productRequest.current?.abort()
-    const controller = new AbortController(); productRequest.current = controller
-    setSearching(true); setProductError("")
-    try {
-      const response = await erpFetch(`/api/erp/products?status=active&limit=20&q=${encodeURIComponent(query.trim())}`, { cache: "no-store", signal: controller.signal })
-      const value = await response.json()
-      if (!response.ok) throw new Error(value.title || "Não foi possível buscar os produtos")
-      if (!controller.signal.aborted) setProducts(value.data)
-    } catch (reason) { if (!controller.signal.aborted) setProductError(reason instanceof Error ? reason.message : "Falha na busca de produtos") }
-    finally { if (!controller.signal.aborted) setSearching(false) }
-  }
-  function addProduct(product: Product) {
+  function addProduct(product: NfePickerProduct) {
     const item = { ...blankItem(), code: product.sku, description: product.name, unit: product.unit, ncm: product.ncm || "", unitPrice: product.basePrice }
     setDraft(previous => {
       const replaceBlank = previous.items.length === 1 && JSON.stringify(previous.items[0]) === JSON.stringify(blankItem())
       return { ...previous, items: replaceBlank ? [item] : [...previous.items, item], ...(previous.ibpt ? { ibpt: { ...previous.ibpt, items: replaceBlank ? [blankIbptItem()] : [...previous.ibpt.items, blankIbptItem()] } } : {}) }
     })
-    setProducts([]); setQuery(""); setNotice("Dados do produto copiados. Confira o NCM e preencha a tributação conforme a instrução fiscal.")
+    setNotice("Dados do produto copiados. Confira o NCM e preencha a tributação conforme a instrução fiscal.")
   }
   async function save(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -234,10 +217,9 @@ export function NfeDraftEditor({ id, sourceOrderId, initialModel = 55 }: { id?: 
           <div hidden={step !== 0} data-editor-step="0" className="space-y-4">
           <section className="form-section grid gap-4 sm:grid-cols-2" aria-label="Operação fiscal">
             <NfeIdentificationFields draft={draft} change={patch => setDraft(previous => ({ ...previous, ...patch }))} profile={emissionHeader ? { ...(issuerProfile || snapshot?.data.issuer?.profile || readiness), series: emissionHeader.series } : issuerProfile || snapshot?.data.issuer?.profile || readiness} number={emissionHeader?.number} onImport={() => { if ((!dirty && !uncertain) || window.confirm("Sair desta preparação e abrir a importação de XML autorizado?")) router.push("/fiscal/notas-saida/importar") }} />
-            <div className="sm:col-span-2">{tenant && <OperationNaturePicker key={`nature-${tenant}`} tenant={tenant} onApply={(nature,revision)=>setDraft(previous=>({...previous,operationNature:nature.name,taxRuleReference:`${nature.code} · revisão ${revision}`}))} />}</div>
+            <div className="sm:col-span-2">{tenant && <OperationNaturePicker key={`nature-${tenant}`} tenant={tenant} value={draft.operationNature} onChange={operationNature=>setDraft(previous=>({...previous,operationNature}))} onApply={(nature,revision)=>setDraft(previous=>({...previous,operationNature:nature.name,taxRuleReference:`${nature.code} • revisão ${revision}`}))} />}</div>
             <Field label="Ambiente do rascunho"><select aria-label="Ambiente do rascunho" className="h-10 w-full rounded-lg border bg-background px-3 text-sm" value={draft.environment} onChange={event => setDraft({ ...draft, environment: event.target.value as DraftInput["environment"] })}><option value="homologation">Homologação</option><option value="production">Produção</option></select></Field>
             {draft.model === 55 && <Field label="Finalidade fiscal"><select aria-label="Finalidade fiscal" disabled={draft.printType === 6 || !!draft.exportation || !!draft.sourceOrderId} className="h-10 w-full rounded-lg border bg-background px-3 text-sm" value={draft.purpose ?? 1} onChange={event => { const purpose = Number(event.target.value); setDraft({ ...draft, purpose, creditType: purpose === 5 ? draft.creditType || null : null, debitType: purpose === 6 ? draft.debitType || null : null, items: draft.items.map(item => ({ ...item, referencedDfe: null })), ...([5, 6].includes(purpose) ? { presenceIndicator: 0, referencedAccessKeys: [] } : {}), ...(purpose !== 4 ? { returnDirection: undefined, sourceReturnId: undefined, sourceReturnKind: undefined, ...(purpose === 1 ? { referencedAccessKeys: [] } : {}) } : {}) }) }}><option value={1}>1 · Normal</option><option value={2}>2: NF-e complementar</option><option value={3}>3: NF-e de ajuste</option><option value={4}>4: Devolução de mercadoria</option><option value={5}>5: Nota de crédito</option><option value={6}>6: Nota de débito</option></select></Field>}
-            <Field label="Natureza da operação"><Input required maxLength={60} value={draft.operationNature} onChange={event => setDraft({ ...draft, operationNature: event.target.value })} /></Field>
             <Field label="Referência da instrução fiscal"><Input required maxLength={200} value={draft.taxRuleReference} onChange={event => setDraft({ ...draft, taxRuleReference: event.target.value })} /></Field>
             {draft.model === 65 && <><Field label="Modalidade de emissão NFC-e"><select aria-label="Modalidade de emissão NFC-e" className="h-10 w-full rounded-lg border bg-background px-3 text-sm" value={draft.emissionType ?? "1"} onChange={event => setDraft({ ...draft, emissionType: event.target.value as DraftInput["emissionType"] })}><option value="1">1 · Normal</option><option value="3">3 · Contingência FS-IA</option><option value="4">4 · Contingência EPEC</option><option value="9">9 · Contingência offline</option></select></Field><Field label="Troco da NFC-e (R$)"><Input aria-label="Troco da NFC-e" inputMode="decimal" maxLength={17} value={draft.changeAmount || ""} onChange={event => setDraft({ ...draft, changeAmount: event.target.value || undefined })} /></Field></>}
           </section>
@@ -254,7 +236,7 @@ export function NfeDraftEditor({ id, sourceOrderId, initialModel = 55 }: { id?: 
           </div>
           <div hidden={step !== 2} data-editor-step="2" className="space-y-4">
           <section className="form-section space-y-4" aria-label="Itens do rascunho"><h2 className="text-lg font-semibold">Itens</h2>
-            {canSearch && !draft.sourceOrderId && <div className="rounded-xl border p-4"><div className="flex flex-wrap items-end gap-3"><label className="grid min-w-0 flex-1 gap-2 text-sm">Buscar produto por nome ou SKU<Input value={query} onChange={event => setQuery(event.target.value)} /></label><Button type="button" variant="outline" disabled={searching || !query.trim()} onClick={() => void findProducts()}>{searching ? "Buscando…" : "Buscar produtos"}</Button></div>{productError && <p role="alert" className="mt-3 text-sm text-destructive">{productError}</p>}<ul className="mt-3 space-y-2">{products.map(product => <li key={product.id}><Button type="button" variant="outline" className="h-auto max-w-full whitespace-normal text-left" disabled={draft.items.length >= 990} onClick={() => addProduct(product)}>Adicionar {product.sku}: {product.name}</Button></li>)}</ul><Link className="mt-3 inline-flex min-h-11 items-center font-medium text-primary underline underline-offset-4" href="/cadastros/produtos/novo" target="_blank" rel="noopener noreferrer">Cadastrar produto</Link></div>}
+            {canSearch && !draft.sourceOrderId && <NfeProductPicker key={`${tenant}:${reload}`} tenant={tenant} disabled={draft.items.length >= 990} onSelect={addProduct} />}
             <NfeItemsTable draft={draft} changeItem={changeItem} remove={index => setDraft({ ...draft, items: draft.items.filter((_, position) => position !== index), ...(draft.ibpt ? { ibpt: { ...draft.ibpt, items: draft.ibpt.items.filter((_, position) => position !== index) } } : {}) })} />
             <Button type="button" variant="outline" disabled={!!draft.sourceOrderId || draft.items.length >= 990} onClick={() => setDraft({ ...draft, items: [...draft.items, blankItem()], ...(draft.ibpt ? { ibpt: { ...draft.ibpt, items: [...draft.ibpt.items, blankIbptItem()] } } : {}) })}>Adicionar item manualmente</Button>
           </section>

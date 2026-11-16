@@ -1,3 +1,4 @@
+import { installEmptyNationalTable } from "./helpers/empty-national-table"
 import { expect, test } from "@playwright/test"
 import { createServer } from "node:http"
 import { installFrontendFixture, tenant } from "./helpers/frontend-fixture"
@@ -17,6 +18,7 @@ test.beforeAll(async () => { await new Promise<void>(resolve => upstream.listen(
 test.afterAll(async () => { await new Promise<void>(resolve => upstream.close(() => resolve())) })
 test.beforeEach(async ({ context }) => {
   await installFrontendFixture(context)
+  await installEmptyNationalTable(context)
   await context.route("**/api/erp/me", route => route.fulfill({ json: access }))
   await context.route(/\/api\/erp\/commercial\/tables\/imported(?:\?.*)?$/, route => route.fulfill({ json: { tenantId: tenant, line: "imported", authority: "seller", canManage: false, canCreateOrder: true, paymentMethods: [], data: { id: "55555555-5555-4555-8555-555555555555", version: 41, publishedAt: "2026-11-12T12:00:00Z", originState: "SP", freeDiscountBps: 2000, minimumDownPaymentBps: 7000, items: [] } } }))
 })
@@ -24,7 +26,7 @@ test.beforeEach(async ({ context }) => {
 for (const width of [393, 1280]) test(`new order recovers an empty lookup at ${width}px and preserves manual fields`, async ({ page, context }, info) => {
   await page.setViewportSize({ width, height: 900 })
   let queries = 0, writes = 0
-  page.on("request", request => { if (request.method() !== "GET" && /\/api\/erp\/(?:parties|orders|commercial\/orders)(?:\?|$)/.test(request.url())) writes++ })
+  page.on("request", request => { if (request.method() !== "GET" && /\/api\/erp\/(?:parties|orders|commercial\/(?:mixed\/)?orders)(?:\?|$)/.test(request.url())) writes++ })
   await context.route("**/api/erp/registry-lookups", route => {
     queries++
     expect(route.request().postDataJSON()).toMatchObject({ kind: "cnpj", context: "party", value: expect.any(String) })

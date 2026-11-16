@@ -32268,6 +32268,211 @@
           "response"
         ]
       }
+    },
+    {
+      "id": "commercial-mixed-simulate",
+      "flow": "commercial-negotiation",
+      "status": "implemented",
+      "operation": {
+        "method": "POST",
+        "path": "/api/v1/commercial/mixed/simulate"
+      },
+      "actor": "authorized_sales_member",
+      "permissions": [
+        "sales.orders.read"
+      ],
+      "input": {
+        "headers": [
+          "Authorization",
+          "X-Tenant-Id"
+        ],
+        "pathParameters": [],
+        "body": {
+          "source": "apps/api/src/domains/sales/mixed_model.rs",
+          "type": "MixedSimulationInput"
+        },
+        "query": null
+      },
+      "preconditions": [
+        "Empresa ativa e permissões comerciais; cada item declara linha e versão publicada ativa da própria empresa.",
+        "Política, produto e custos atuais conferidos; taxa fixa comum aplicada uma vez ou conflito explícito.",
+        "Desconto global e valores por política, sem aceitar preços calculados pelo cliente."
+      ],
+      "transition": {
+        "from": "Condições comerciais atuais",
+        "to": "Sem alteração"
+      },
+      "effects": {
+        "writes": [],
+        "external": [],
+        "excludes": [
+          "Não emite documento fiscal nem substitui configurações por valores de referência.",
+          "Não usa uma versão única fictícia, não duplica frete/taxa, nem expõe custos na venda pública."
+        ]
+      },
+      "concurrency": {
+        "revision": false,
+        "idempotency": false,
+        "rule": "Conversão revalida digest e revisões sob bloqueio da empresa; comandos incertos repetem a mesma chave."
+      },
+      "response": {
+        "successStatuses": [
+          200
+        ],
+        "errorStatuses": [
+          400,
+          401,
+          403,
+          404,
+          409,
+          412,
+          422,
+          428,
+          500,
+          503
+        ],
+        "action": "Calcular negociação com tabelas combinadas"
+      },
+      "recovery": "Preservar entradas, conferir revisão e simular novamente após mudança; repetir criação ou decisão incerta com a mesma chave.",
+      "ui": {
+        "pages": [
+          "/vendas/pedidos/novo"
+        ],
+        "bff": {
+          "method": "POST",
+          "path": "/api/erp/commercial/mixed/simulate"
+        },
+        "gap": null
+      },
+      "sources": [
+        "apps/api/src/domains/sales/mixed.rs",
+        "apps/api/src/domains/sales/mixed_model.rs",
+        "apps/web/src/features/sales/commercial-simulator.tsx",
+        "apps/web/src/features/sales/mixed-order-table.ts",
+        "apps/web/src/features/sales/order-proposal-actions.tsx",
+        "migrations/202611160001_mixed_commercial_orders.sql",
+        "apps/web/src/app/api/erp/commercial/mixed/simulate/route.ts"
+      ],
+      "verification": {
+        "status": "not_verified_by_catalog",
+        "criteria": [
+          "interface",
+          "request",
+          "authorization",
+          "domain",
+          "persistence",
+          "effects",
+          "failure",
+          "response"
+        ]
+      }
+    },
+    {
+      "id": "commercial-mixed-convert",
+      "flow": "commercial-negotiation",
+      "status": "implemented",
+      "operation": {
+        "method": "POST",
+        "path": "/api/v1/commercial/mixed/orders"
+      },
+      "actor": "authorized_sales_member",
+      "permissions": [
+        "sales.orders.read",
+        "sales.orders.manage"
+      ],
+      "input": {
+        "headers": [
+          "Authorization",
+          "X-Tenant-Id",
+          "Idempotency-Key"
+        ],
+        "pathParameters": [],
+        "body": {
+          "source": "apps/api/src/domains/sales/mixed.rs",
+          "type": "MixedConvertInput"
+        },
+        "query": null
+      },
+      "preconditions": [
+        "Empresa ativa e permissões comerciais; cada item declara linha e versão publicada ativa da própria empresa.",
+        "Política, produto e custos atuais conferidos; taxa fixa comum aplicada uma vez ou conflito explícito.",
+        "Digest atual conferido sob lock; cliente e checkout válidos; replay antes de recalcular."
+      ],
+      "transition": {
+        "from": "Condições comerciais atuais",
+        "to": "Negociação ou política versionada"
+      },
+      "effects": {
+        "writes": [
+          "sales_orders",
+          "sales_order_lines",
+          "commercial_order_quotes",
+          "audit_log",
+          "outbox_events",
+          "domain_commands"
+        ],
+        "external": [],
+        "excludes": [
+          "Não emite documento fiscal nem substitui configurações por valores de referência.",
+          "Não usa uma versão única fictícia, não duplica frete/taxa, nem expõe custos na venda pública."
+        ]
+      },
+      "concurrency": {
+        "revision": false,
+        "idempotency": true,
+        "rule": "Conversão revalida digest e revisões sob bloqueio da empresa; comandos incertos repetem a mesma chave."
+      },
+      "response": {
+        "successStatuses": [
+          201
+        ],
+        "errorStatuses": [
+          400,
+          401,
+          403,
+          404,
+          409,
+          412,
+          422,
+          428,
+          500,
+          503
+        ],
+        "action": "Criar pedido com tabelas combinadas"
+      },
+      "recovery": "Preservar entradas, conferir revisão e simular novamente após mudança; repetir criação ou decisão incerta com a mesma chave.",
+      "ui": {
+        "pages": [
+          "/vendas/pedidos/novo"
+        ],
+        "bff": {
+          "method": "POST",
+          "path": "/api/erp/commercial/mixed/orders"
+        },
+        "gap": null
+      },
+      "sources": [
+        "apps/api/src/domains/sales/mixed.rs",
+        "apps/api/src/domains/sales/mixed_model.rs",
+        "apps/web/src/features/sales/commercial-simulator.tsx",
+        "apps/web/src/features/sales/mixed-order-table.ts",
+        "apps/web/src/features/sales/order-proposal-actions.tsx",
+        "migrations/202611160001_mixed_commercial_orders.sql",
+        "apps/web/src/app/api/erp/commercial/mixed/orders/route.ts"
+      ],
+      "verification": {
+        "status": "not_verified_by_catalog",
+        "criteria": [
+          "interface",
+          "request",
+          "authorization",
+          "domain",
+          "persistence",
+          "effects",
+          "failure",
+          "response"
+        ]
+      }
     }
   ],
   "actionsAppendix": [

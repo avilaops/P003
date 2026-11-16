@@ -46,8 +46,8 @@
     "pos": "Operação do PDV, sessões de caixa, fechamento e histórico, com autorização no backend."
   },
   "routeSurface": {
-    "count": 498,
-    "sha256": "2b82de44c88bd9c85cd5b47098bbf7174dfa963b076a0d41c263aa268ce4e534"
+    "count": 500,
+    "sha256": "e4e6eff698ab6e1550d30e07aa664e834d3a73ebc4ed714d76b7532cb351ad9f"
   },
   "retiredPaths": [
     "apps/web/src/lib/erp-session.ts",
@@ -90,8 +90,8 @@
     "apps/api/src/platform/financial_settings.rs"
   ],
   "routeSurfaceReview": {
-    "previousPolicyCommit": "510155f168effa39a619892b2a632a21fac83c9e",
-    "reviewedMainCommit": "510155f168effa39a619892b2a632a21fac83c9e",
-    "changes": "2 rotas BFF adicionadas para envio SMTP financeiro: recebível e relatório agregado. GET/POST preservam sessão, empresa, revisão, origem e chave de comando; consultas adicionais são recusadas. Nenhum endereço removido."
+    "previousPolicyCommit": "47c8e84270d67ddf2daff21b2a47a6b8a456ad45",
+    "reviewedMainCommit": "47c8e84270d67ddf2daff21b2a47a6b8a456ad45",
+    "changes": "2 rotas BFF POST adicionadas para simular e criar pedido com tabelas mistas. Preservam autenticação, empresa, origem, comando idempotente e validação de query. Rotas legadas permanecem."
   }
 }
