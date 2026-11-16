@@ -217,7 +217,9 @@ impl ProductInput {
         }
         if let Some(palette) = &mut self.finishing_palette {
             *palette = palette.trim().to_owned();
-            if !["", "dhz-hammerforce-pro", "dhz-sforce"].contains(&palette.as_str()) {
+            if !["", "dhz-hammerforce-pro", "dhz-sforce", "dhz-combined"]
+                .contains(&palette.as_str())
+            {
                 return Err(DomainError::Invalid("Paleta de catálogo desconhecida"));
             }
         }

@@ -611,12 +611,14 @@ async fn legacy_frozen_costs_work_without_current_costs_and_calculated_costs_sta
                 StatusCode::CONFLICT
             );
         }
-        sqlx::query("UPDATE products SET revision=2 WHERE tenant_id=$1 AND id=$2")
-            .bind(tenant)
-            .bind(product)
-            .execute(&admin)
-            .await
-            .unwrap();
+        sqlx::query(
+            "UPDATE products SET revision=2,price_cents=price_cents+1 WHERE tenant_id=$1 AND id=$2",
+        )
+        .bind(tenant)
+        .bind(product)
+        .execute(&admin)
+        .await
+        .unwrap();
         assert_eq!(
             call(
                 &router,

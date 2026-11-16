@@ -237,7 +237,7 @@ async fn mixed_quote_rejects_missing_foreign_and_stale_provenance(admin: PgPool)
         .0,
         StatusCode::UNPROCESSABLE_ENTITY
     );
-    sqlx::query("UPDATE products SET revision=revision+1 WHERE id=$1")
+    sqlx::query("UPDATE products SET revision=revision+1,price_cents=price_cents+1 WHERE id=$1")
         .bind(Uuid::parse_str(input["items"][0]["productId"].as_str().unwrap()).unwrap())
         .execute(&admin)
         .await

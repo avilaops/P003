@@ -3,7 +3,23 @@ import { test } from "node:test";
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { catalogColorPhoto, catalogPaletteFor } from "../src/features/catalog/catalog-color-photo-model.ts";
-import { getCatalogFinishPalette } from "../src/features/catalog/catalog-finish-palettes.ts";
+import { catalogPaletteSources, getCatalogFinishPalette } from "../src/features/catalog/catalog-finish-palettes.ts";
+
+test("the explicit combined palette uses real source pixels for paint and every fabric", () => {
+  assert.equal(catalogPaletteFor("dhz-combined"), "dhz-combined");
+  assert.deepEqual(catalogPaletteSources("dhz-combined").map(source => source.title), ["HammerForce Pro", "Hammer S-FORCE"]);
+  const palette = getCatalogFinishPalette("dhz-combined");
+  assert.ok(palette);
+  for (const part of ["structure", "swingArm", "upholstery"]) {
+    for (const name of [...palette[part].standard, ...palette[part].special]) {
+      assert.ok(catalogColorPhoto(name, "dhz-combined", part), `${part}/${name}`);
+    }
+  }
+  assert.equal(catalogColorPhoto("Khaki", "dhz-combined", "upholstery")?.asset, "/catalog/dhz-s-force-original-colors.jpeg");
+  assert.equal(catalogColorPhoto("Mocha", "dhz-combined", "upholstery")?.asset, "/catalog/dhz-hammerforce-pro-original-colors.jpeg");
+  assert.equal(catalogColorPhoto("Hermès Orange", "dhz-combined", "structure"), undefined);
+  assert.equal(catalogColorPhoto("Preto", "dhz-combined", "upholstery"), undefined);
+});
 
 test("a palette requires an explicit catalog reference rather than a set of common paint names", () => {
   assert.equal(catalogPaletteFor("dhz-hammerforce-pro"), "dhz-hammerforce-pro");

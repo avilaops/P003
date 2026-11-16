@@ -1,0 +1,13 @@
+.catalog-color-trigger { display: flex; align-items: center; gap: 10px; min-height: 46px; width: 100%; min-width: 0; padding: 6px 10px; border: 1px solid var(--input); border-radius: 8px; background: var(--background); color: var(--foreground); text-align: left; font: inherit; }
+.catalog-color-trigger:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+.catalog-color-trigger:disabled { cursor: not-allowed; opacity: .5; }
+.catalog-color-name { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.catalog-color-swatch-frame { display: flex; align-items: center; justify-content: center; width: 46px; min-height: 34px; flex: 0 0 46px; }
+.catalog-color-swatch { display: block; border-radius: 3px; flex-shrink: 0; }
+.catalog-color-positioner { z-index: 150; width: max(var(--anchor-width), 240px); max-width: calc(100vw - 24px); }
+.catalog-color-popup { overflow: hidden; background: var(--popover); color: var(--popover-foreground); border: 1px solid var(--border); border-radius: 10px; box-shadow: 0 8px 28px #0003; font-size: 14px; }
+.catalog-color-list { max-height: min(320px, var(--available-height)); overflow-y: auto; overscroll-behavior: contain; padding: 4px; outline: none; }
+.catalog-color-option { display: flex; align-items: center; gap: 10px; min-height: 46px; padding: 6px 8px; border-radius: 6px; outline: none; cursor: pointer; overflow-wrap: anywhere; }
+.catalog-color-option[data-highlighted], .catalog-color-option:hover { background: var(--accent); color: var(--accent-foreground); }
+.catalog-color-group-label { padding: 8px; font-size: 14px; font-weight: 600; color: var(--muted-foreground); }
+.catalog-color-readonly-row { display: flex; align-items: center; gap: 10px; min-height: 46px; padding: 6px 8px; overflow-wrap: anywhere; }

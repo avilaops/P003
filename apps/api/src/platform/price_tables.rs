@@ -152,7 +152,7 @@ async fn candidate(
     let parameters: CommercialParameters = serde_json::from_value(policy.clone())
         .map_err(|_| DomainError::Invalid("Parâmetros salvos inválidos"))?;
     let simulation = parameters.simulate()?;
-    let sources: Vec<CostRow> = sqlx::query_as("SELECT p.id AS product_id,p.sku,p.name,p.unit,p.revision AS product_revision,c.revision AS cost_revision,c.purchase_cost_cents,c.tax_credit_bps,c.packaging_cents FROM product_costs c JOIN products p ON p.tenant_id=c.tenant_id AND p.id=c.product_id WHERE c.tenant_id=$1 AND c.product_line=$2 AND p.status='active' ORDER BY p.id LIMIT 5001")
+    let sources: Vec<CostRow> = sqlx::query_as("SELECT p.id AS product_id,p.sku,p.name,p.unit,p.price_revision AS product_revision,c.revision AS cost_revision,c.purchase_cost_cents,c.tax_credit_bps,c.packaging_cents FROM product_costs c JOIN products p ON p.tenant_id=c.tenant_id AND p.id=c.product_id WHERE c.tenant_id=$1 AND c.product_line=$2 AND p.status='active' ORDER BY p.id LIMIT 5001")
         .bind(tenant).bind(line).fetch_all(&mut **tx).await.map_err(db)?;
     if sources.is_empty() {
         return Err(DomainError::Conflict(
@@ -193,7 +193,7 @@ pub(crate) async fn suggested_down_payment(
     p: &CommercialParameters,
 ) -> Result<Option<Value>, DomainError> {
     let calculation = p.simulate()?;
-    let sources: Vec<CostRow> = sqlx::query_as("SELECT p.id AS product_id,p.sku,p.name,p.unit,p.revision AS product_revision,c.revision AS cost_revision,c.purchase_cost_cents,c.tax_credit_bps,c.packaging_cents FROM product_costs c JOIN products p ON p.tenant_id=c.tenant_id AND p.id=c.product_id WHERE c.tenant_id=$1 AND c.product_line=$2 AND p.status='active' ORDER BY p.id LIMIT 5001")
+    let sources: Vec<CostRow> = sqlx::query_as("SELECT p.id AS product_id,p.sku,p.name,p.unit,p.price_revision AS product_revision,c.revision AS cost_revision,c.purchase_cost_cents,c.tax_credit_bps,c.packaging_cents FROM product_costs c JOIN products p ON p.tenant_id=c.tenant_id AND p.id=c.product_id WHERE c.tenant_id=$1 AND c.product_line=$2 AND p.status='active' ORDER BY p.id LIMIT 5001")
         .bind(tenant).bind(line).fetch_all(&mut **tx).await.map_err(db)?;
     if sources.len() > 5000 {
         return Err(DomainError::Invalid(
