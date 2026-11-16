@@ -209,6 +209,8 @@ O dispatcher do layout JSON prepara o serviço privado quando a configuração w
 
 O transformador JSON passou nos testes de ativação, desativação e separação de segredos. O parser real do Compose validou o YAML com configuração sintética, sem iniciar containers. Sete simulações completas do dispatcher dependem de Linux e foram ignoradas no Windows; a tentativa de usar WSL encontrou o serviço de virtualização indisponível. Essas simulações continuam obrigatórias no CI Linux. Não houve alteração do dispatcher instalado ou da configuração de produção.
 
+As nove verificações de `test_dispatcher.py`, incluindo as sete simulações de Linux, foram executadas em seguida em um diretório temporário isolado no servidor Applications e passaram. O pacote continha somente sete arquivos de código permitidos. Docker, imagens, releases e HTTP foram substituídos pelas fixtures do próprio teste; os serviços reais permaneceram intactos. O pacote e os arquivos temporários remotos foram removidos após a execução.
+
 ## Pedidos antigos • simulação preservada
 
 A revisão das chamadas em `order-detail-commercial.tsx` identificou `GET /api/v1/orders/{id}/pricing` e `POST /api/v1/orders/{id}/pricing/approve`, usados pelos pedidos antigos. Ambos foram portados e adicionados à seleção de Vendas no BFF.
@@ -220,3 +222,7 @@ A mesma matriz passou em Rust e TypeScript para consulta pública/privada, snaps
 ## Fronteiras de autenticação
 
 A matriz compartilhada passou também para perfis `userinfo` com nome nulo ou vazio, resposta 201, perfil inválido, recusa e formato Bearer. O leitor conserva o fallback do nome para e-mail e exige status 200 do Auth. O cabeçalho de empresa presente mas vazio retorna `invalid_tenant`, distinguindo a ausência do cabeçalho. Essas diferenças foram corrigidas na API TypeScript antes da liberação.
+
+## Revisão no GitHub
+
+O [PR #229](https://github.com/avilaops/P003/pull/229) reúne a implementação em rascunho. A verificação TypeScript/PostgreSQL e a matriz Rust/TypeScript são obrigatórias também na validação de PR, sem depender de `inputs.full` e sem permitir omitir a URL de testes. A preparação do código e o PR não representam ativação em produção.

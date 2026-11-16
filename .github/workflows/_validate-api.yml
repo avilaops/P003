@@ -94,14 +94,11 @@ jobs:
 
         '
     - uses: pnpm/action-setup@v4
-      if: inputs.full
     - uses: actions/setup-node@v4
-      if: inputs.full
       with:
         node-version: 24
         cache: pnpm
     - name: Verify TypeScript API and shared Rust HTTP contracts
-      if: inputs.full
       env:
         API_TS_TEST_ADMIN_URL: postgres://postgres:ci_isolated_only@127.0.0.1:5432/postgres
       run: |
