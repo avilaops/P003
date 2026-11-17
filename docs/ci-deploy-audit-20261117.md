@@ -41,3 +41,15 @@ A regra de propriedade não reconhecia referências locais como `erp-next-web@sh
 Após ensaio e verificação da regra em 11 testes rápidos, foram removidas 32 imagens antigas com o procedimento de retenção, sem força e sob o bloqueio de deploy. Restaram oito imagens do registro do ERP, correspondentes aos quatro componentes das duas releases. A API TypeScript utiliza a imagem web da release ativa. A regra corrigida foi instalada nas duas releases mantidas, com cópia privada dos scripts anteriores.
 
 O volume da aplicação ficou com aproximadamente 12 GB livres e 85% de ocupação. A partição do sistema permaneceu com 94% de ocupação; arquivos dos outros serviços não foram removidos.
+
+## Publicação • trabalho nativo reutilizável
+
+Na execução `44143367329`, o job de API levou 16 min 17 s. A verificação TypeScript com PostgreSQL levou 20 s; os testes nativos e exportação de contrato levaram 8 min 49 s, a comparação HTTP levou 2 min 28 s e a compilação de produção levou 2 min 19 s. A execução foi cancelada no GitHub depois dessa etapa, durante os testes de navegador. Esses tempos não representam três horas em uma única execução.
+
+O CI dos PRs já selecionava alterações TypeScript. A publicação completa ainda repetia o trabalho nativo. O ajuste acrescenta um cache restrito às publicações completas confiáveis, com identidade das entradas nativas, plataforma, rotação semanal, hashes de arquivos e conferência da imagem no registro por digest. Executáveis, contratos e digest conservam a revisão que os produziu. A evidência `native-reuse.json` registra essa origem.
+
+PostgreSQL, tipos, testes TypeScript e comparação HTTP continuam executando. Rust, migrações, consultas, certificados/ativos e scripts ou configuração de validação invalidam o cache. Entradas corrompidas, incompatíveis ou sem imagem disponível voltam à validação completa. `force_native_rebuild` também força o caminho completo e renova o cache. PRs e regressões não usam o reaproveitamento da publicação.
+
+A primeira publicação do ajuste prepara o cache. O ganho com cache disponível ainda precisa ser medido em uma publicação posterior; a execução que já começou não é acelerada por essa alteração.
+
+Foi identificada ainda uma alteração da migração fiscal `202611170001`, já aplicada em produção. Seu checksum SQLx SHA-384, conferido no banco, é `a7b9af8edb26817c43bc5223ad4a314bd0b8103ab056574f0283908bbea922cabdf3a0f0e781d1f8ba38ce72b74e35cf`. O arquivo original foi preservado; os privilégios permanecem na migração aditiva `202611170002`. Não se altera o histórico do banco para aceitar uma migração reescrita.

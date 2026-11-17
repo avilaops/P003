@@ -15,6 +15,10 @@ name: Validate API
         description: Skip native compilation for scoped TypeScript-only PRs
         type: boolean
         default: false
+      force_native_rebuild:
+        description: Bypass validated native release cache
+        type: boolean
+        default: false
     outputs:
       digest:
         description: Validated registry image digest
@@ -43,12 +47,43 @@ jobs:
       with:
         ref: ${{ inputs.source_sha }}
         persist-credentials: false
+    - uses: pnpm/action-setup@v4
+    - uses: actions/setup-node@v4
+      with:
+        node-version: 24
+        cache: pnpm
+    - name: Identify native release inputs
+      id: native_key
+      if: inputs.publish && inputs.full
+      env:
+        NATIVE_INPUT_HASH: ${{ hashFiles('**/*.rs', '**/Cargo.toml', '**/Cargo.lock', 'rust-toolchain.toml', '.cargo/**', '.sqlx/**', 'apps/api/**', 'apps/contract-signature-validator/**', 'migrations/**', 'queries/**', 'deploy/**', '.dockerignore', '.github/workflows/**', 'apps/api-ts/scripts/**', 'scripts/ci/**', 'scripts/contracts/**') }}
+      run: node scripts/ci/native-release-cache.mjs key
+    - name: Restore validated native release
+      if: steps.native_key.outputs.prefix != '' && !inputs.force_native_rebuild
+      uses: actions/cache/restore@v4
+      with:
+        path: artifacts/native-release-cache
+        key: ${{ steps.native_key.outputs.prefix }}${{ github.run_id }}-${{ github.run_attempt }}
+        restore-keys: ${{ steps.native_key.outputs.prefix }}
+    - uses: docker/login-action@v3
+      if: inputs.publish
+      with:
+        registry: ghcr.io
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    - name: Verify native cache integrity and immutable image
+      id: native_cache
+      if: steps.native_key.outputs.prefix != '' && !inputs.force_native_rebuild
+      env:
+        SOURCE_SHA: ${{ inputs.source_sha }}
+        NATIVE_INPUT_HASH: ${{ steps.native_key.outputs.input_hash }}
+      run: node scripts/ci/native-release-cache.mjs restore
     - uses: dtolnay/rust-toolchain@1.99.1
-      if: '!inputs.typescript_only || inputs.full || inputs.publish'
+      if: steps.native_cache.outputs.reuse != 'true' && (!inputs.typescript_only || inputs.full || inputs.publish)
       with:
         components: rustfmt,clippy
     - uses: Swatinem/rust-cache@v2
-      if: '!inputs.typescript_only || inputs.full || inputs.publish'
+      if: steps.native_cache.outputs.reuse != 'true' && (!inputs.typescript_only || inputs.full || inputs.publish)
     - run: 'script_file=$(mktemp)
 
         trap ''rm -f -- "$script_file"'' EXIT
@@ -63,7 +98,7 @@ jobs:
         -- bash --noprofile --norc -e -o pipefail "$script_file"
 
         '
-      if: '!inputs.typescript_only || inputs.full || inputs.publish'
+      if: steps.native_cache.outputs.reuse != 'true' && (!inputs.typescript_only || inputs.full || inputs.publish)
     - run: 'script_file=$(mktemp)
 
         trap ''rm -f -- "$script_file"'' EXIT
@@ -78,9 +113,9 @@ jobs:
         -- bash --noprofile --norc -e -o pipefail "$script_file"
 
         '
-      if: inputs.full
+      if: inputs.full && steps.native_cache.outputs.reuse != 'true'
     - name: Test and export the exact source contract
-      if: '!inputs.typescript_only || inputs.full || inputs.publish'
+      if: steps.native_cache.outputs.reuse != 'true' && (!inputs.typescript_only || inputs.full || inputs.publish)
       run: 'script_file=$(mktemp)
 
         trap ''rm -f -- "$script_file"'' EXIT
@@ -101,11 +136,6 @@ jobs:
         -- bash --noprofile --norc -e -o pipefail "$script_file"
 
         '
-    - uses: pnpm/action-setup@v4
-    - uses: actions/setup-node@v4
-      with:
-        node-version: 24
-        cache: pnpm
     - name: Verify TypeScript API with PostgreSQL
       env:
         API_TS_TEST_ADMIN_URL: postgres://postgres:ci_isolated_only@127.0.0.1:5432/postgres
@@ -117,15 +147,10 @@ jobs:
       if: '!inputs.typescript_only || inputs.full || inputs.publish'
       env:
         API_TS_TEST_ADMIN_URL: postgres://postgres:ci_isolated_only@127.0.0.1:5432/postgres
+        API_TS_TEST_RUST_BINARY: ${{ steps.native_cache.outputs.reference }}
+        API_TS_TEST_GATEWAY_BINARY: ${{ steps.native_cache.outputs.gateway }}
       run: |
         python3 scripts/ci/timed.py --label 'api/rust-typescript-contracts' --output "artifacts/timings/$GITHUB_JOB.jsonl" -- pnpm --filter api-ts test:contracts
-    - uses: actions/upload-artifact@v4
-      if: '!inputs.typescript_only || inputs.full || inputs.publish'
-      with:
-        name: erp-openapi-${{ inputs.source_sha }}-${{ github.run_attempt }}
-        path: artifacts/contracts/
-        if-no-files-found: error
-        retention-days: 7
     - run: 'script_file=$(mktemp)
 
         trap ''rm -f -- "$script_file"'' EXIT
@@ -140,22 +165,36 @@ jobs:
         -- bash --noprofile --norc -e -o pipefail "$script_file"
 
         '
-      if: inputs.publish
-    - uses: docker/login-action@v3
-      if: inputs.publish
-      with:
-        registry: ghcr.io
-        username: ${{ github.actor }}
-        password: ${{ secrets.GITHUB_TOKEN }}
+      if: inputs.publish && steps.native_cache.outputs.reuse != 'true'
     - name: Publish api by immutable digest
       id: image
-      if: inputs.publish
+      if: inputs.publish && steps.native_cache.outputs.reuse != 'true'
       uses: docker/build-push-action@v6
       with:
         context: .
         file: deploy/api.Dockerfile
         push: true
         tags: ghcr.io/avilaops/erp-next-api:sha-${{ inputs.source_sha }}
+    - name: Prepare fully validated native release cache
+      if: inputs.publish && inputs.full && steps.native_cache.outputs.reuse != 'true'
+      env:
+        SOURCE_SHA: ${{ inputs.source_sha }}
+        NATIVE_INPUT_HASH: ${{ steps.native_key.outputs.input_hash }}
+        NATIVE_DIGEST: ${{ steps.image.outputs.digest }}
+      run: node scripts/ci/native-release-cache.mjs save
+    - name: Save validated native release
+      if: inputs.publish && inputs.full && steps.native_cache.outputs.reuse != 'true' && steps.native_key.outputs.prefix != ''
+      uses: actions/cache/save@v4
+      with:
+        path: artifacts/native-release-cache
+        key: ${{ steps.native_key.outputs.prefix }}${{ github.run_id }}-${{ github.run_attempt }}
+    - uses: actions/upload-artifact@v4
+      if: '!inputs.typescript_only || inputs.full || inputs.publish'
+      with:
+        name: erp-openapi-${{ inputs.source_sha }}-${{ github.run_attempt }}
+        path: artifacts/contracts/
+        if-no-files-found: error
+        retention-days: 7
     - name: Preserve measured script durations
       if: always()
       uses: actions/upload-artifact@v4
@@ -165,5 +204,5 @@ jobs:
         retention-days: 7
         if-no-files-found: warn
     outputs:
-      digest: ${{ steps.image.outputs.digest }}
+      digest: ${{ steps.native_cache.outputs.digest || steps.image.outputs.digest }}
       openapi_artifact_name: erp-openapi-${{ inputs.source_sha }}-${{ github.run_attempt }}

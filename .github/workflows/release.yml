@@ -64,6 +64,7 @@ jobs:
       source_sha: ${{ needs.select.outputs.sha }}
       full: true
       publish: true
+      force_native_rebuild: ${{ inputs.force_native_rebuild || false }}
   fiscal:
     needs: select
     permissions:
@@ -298,3 +299,7 @@ jobs:
         description: Full SHA already integrated into main
         type: string
         required: true
+      force_native_rebuild:
+        description: Rebuild and validate native API even when identical validated inputs exist
+        type: boolean
+        default: false
