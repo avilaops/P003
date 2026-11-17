@@ -5,6 +5,7 @@ import { useResource } from "@/hooks/use-operation"
 import { Pagination } from "@/components/workspace/pagination"
 import { erpFetch } from "@/lib/api/client"
 import { lookupMunicipalityCode } from "@/lib/municipality-code"
+import { formatPhone, formatTaxId, normalizeDocumentSearch } from "@/lib/format-document"
 import { partySessionEnded } from "@/lib/party-draft-session"
 
 import type { Schema } from "@/lib/api/types"
@@ -49,7 +50,7 @@ export function PartyList() {
   if (query.status) params.set("status", query.status)
   const resource = useResource<Page>(`/api/erp/parties?${params}`)
   const { value: result, loading, error, status: responseStatus } = resource
-  function search(value: typeof query) { if (!navigate(value)) resource.reload() }
+  function search(value: typeof query) { const next = { ...value, q: normalizeDocumentSearch(value.q) }; if (!navigate(next)) resource.reload() }
 
   return <>
 
@@ -59,7 +60,7 @@ export function PartyList() {
         event.preventDefault(); const form = new FormData(event.currentTarget)
         search({ q: String(form.get("q") || ""), role: String(form.get("role") || ""), status: String(form.get("status") || ""), offset: 0 })
       }}>
-        <div className="col-span-2 grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-end gap-2"><label className="min-w-0 space-y-1">Buscar nome ou documento<SearchInput onSearch={(q, form) => { const fields = form ? new FormData(form) : null; search({ q, role: String(fields?.get("role") || ""), status: String(fields?.get("status") || ""), offset: 0 }) }} name="q" defaultValue={query.q} maxLength={160} placeholder="Documento sem máscara" /></label><Button className="h-9 px-3" type="submit" disabled={loading}>Buscar</Button></div>
+        <div className="col-span-2 grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-end gap-2"><label className="min-w-0 space-y-1">Buscar nome ou documento<SearchInput onSearch={(q, form) => { const fields = form ? new FormData(form) : null; search({ q, role: String(fields?.get("role") || ""), status: String(fields?.get("status") || ""), offset: 0 }) }} name="q" defaultValue={query.q} maxLength={160} placeholder="Nome, CPF ou CNPJ" /></label><Button className="h-9 px-3" type="submit" disabled={loading}>Buscar</Button></div>
         <label className="min-w-0 space-y-1">Relacionamento<select key={query.role} name="role" defaultValue={query.role} className={selectClass}><option value="">Todos</option><option value="customer">Clientes</option><option value="supplier">Fornecedores</option></select></label>
         <label className="min-w-0 space-y-1">Situação no ERP<select key={query.status} name="status" defaultValue={query.status} className={selectClass}><option value="">Todas</option><option value="active">Ativos</option><option value="archived">Arquivados</option></select></label>
       </form>
@@ -68,8 +69,8 @@ export function PartyList() {
         {result.data.length ? <div className="workspace-list-scroll" role="region" aria-label="Lista de clientes e fornecedores" tabIndex={0}><DataTable aria-label="Clientes e fornecedores" className="table-fixed lg:table-auto">
           <thead><tr><th scope="col" className="w-[55%] lg:w-auto">Nome</th><th scope="col" className="hidden lg:table-cell">CPF / CNPJ</th><th scope="col" className="hidden lg:table-cell">Relacionamento</th><th scope="col">Contato</th><th scope="col" className="hidden lg:table-cell">Situação no ERP</th></tr></thead>
           <tbody>{result.data.map(party => <tr key={party.id}>
-            <th scope="row" className="align-top font-medium"><Link className={`${linkClass} line-clamp-2 [overflow-wrap:anywhere] lg:line-clamp-none`} title={party.legalName} href={`/cadastros/clientes-fornecedores/${party.id}`}>{party.legalName}</Link><div className="mt-1 space-y-0.5 text-xs font-normal text-muted-foreground lg:hidden"><p className="[overflow-wrap:anywhere]">{party.taxId}</p><p>{relationship(party)}</p><p>{party.status === "active" ? "Ativo" : "Arquivado"}</p></div></th>
-            <td className="hidden whitespace-nowrap lg:table-cell">{party.taxId}</td><td className="hidden lg:table-cell">{relationship(party)}</td><td className="align-top [overflow-wrap:anywhere]">{party.email && <p>{party.email}</p>}{party.phone && <p className="mt-1 text-xs text-muted-foreground">{party.phone}</p>}{!party.email && !party.phone && "Não informado"}</td><td className="hidden lg:table-cell">{party.status === "active" ? "Ativo" : "Arquivado"}</td>
+            <th scope="row" className="align-top font-medium"><Link className={`${linkClass} line-clamp-2 [overflow-wrap:anywhere] lg:line-clamp-none`} title={party.legalName} href={`/cadastros/clientes-fornecedores/${party.id}`}>{party.legalName}</Link><div className="mt-1 space-y-0.5 text-xs font-normal text-muted-foreground lg:hidden"><p className="[overflow-wrap:anywhere]">{formatTaxId(party.taxId)}</p><p>{relationship(party)}</p><p>{party.status === "active" ? "Ativo" : "Arquivado"}</p></div></th>
+            <td className="hidden whitespace-nowrap lg:table-cell">{formatTaxId(party.taxId)}</td><td className="hidden lg:table-cell">{relationship(party)}</td><td className="align-top [overflow-wrap:anywhere]">{party.email && <p>{party.email}</p>}{party.phone && <p className="mt-1 text-xs text-muted-foreground">{formatPhone(party.phone)}</p>}{!party.email && !party.phone && "Não informado"}</td><td className="hidden lg:table-cell">{party.status === "active" ? "Ativo" : "Arquivado"}</td>
           </tr>)}</tbody>
         </DataTable></div> : <p>Nenhuma pessoa encontrada.</p>}
         <Pagination offset={query.offset} pageSize={25} total={result.total} onOffsetChange={offset => search({ ...query, offset })} />
@@ -249,7 +250,7 @@ export function PartyEditor({ id, view = false, draftScope, tenantId }: { id?: s
         {storageError && <div role="alert" className="space-y-2"><p>{storageError}</p>{storageInvalid && <Button type="button" variant="outline" onClick={reload}>Descartar rascunho e consultar servidor</Button>}</div>}
         {error && <div role="alert" className="space-y-3 rounded-lg border border-destructive p-4"><p>{error}</p>{sessionEnded && <AccessLink />}{conflict && <Button variant="outline" onClick={reload}>Recarregar cadastro</Button>}</div>}
         {view && snapshot.data ? <>
-          <dl className="grid min-w-0 grid-cols-2 gap-2">{[["Tipo", draft.personType === "fisica" ? "Pessoa física" : "Pessoa jurídica"], ["CPF ou CNPJ", draft.taxId], ["Nome fantasia", draft.tradeName || "Não informado"], ["E-mail", draft.email || "Não informado"], ["Telefone", draft.phone || "Não informado"], ["Relacionamento", relationship(draft)], ["Situação no ERP", draft.status === "active" ? "Ativo" : "Arquivado"]].map(([label, value]) => <div className={`min-w-0 ${label === "E-mail" ? "col-span-2" : ""}`} key={label}><dt className="text-xs text-muted-foreground">{label}</dt><dd className="mt-1 font-medium [overflow-wrap:anywhere]">{value}</dd></div>)}</dl>
+          <dl className="grid min-w-0 grid-cols-2 gap-2">{[["Tipo", draft.personType === "fisica" ? "Pessoa física" : "Pessoa jurídica"], ["CPF ou CNPJ", formatTaxId(draft.taxId)], ["Nome fantasia", draft.tradeName || "Não informado"], ["E-mail", draft.email || "Não informado"], ["Telefone", formatPhone(draft.phone) || "Não informado"], ["Relacionamento", relationship(draft)], ["Situação no ERP", draft.status === "active" ? "Ativo" : "Arquivado"]].map(([label, value]) => <div className={`min-w-0 ${label === "E-mail" ? "col-span-2" : ""}`} key={label}><dt className="text-xs text-muted-foreground">{label}</dt><dd className="mt-1 font-medium [overflow-wrap:anywhere]">{value}</dd></div>)}</dl>
           {draft.personType === "juridica" && <CnpjRegistrationCheck value={draft.taxId} tenantId={snapshot.tenantId} />}
           <PartyComplements addresses={draft.addresses} contacts={draft.contacts} />
           <dl className="grid min-w-0 grid-cols-2 gap-2"><div><dt className="text-xs text-muted-foreground">Classificação ICMS</dt><dd>{draft.fiscal ? fiscalLabels[draft.fiscal.taxpayerIndicator] : "Não informada"}</dd></div><div><dt className="text-xs text-muted-foreground">Inscrição estadual</dt><dd>{draft.fiscal?.stateRegistration || "Não informada"}</dd></div></dl>

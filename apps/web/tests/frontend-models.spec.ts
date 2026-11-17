@@ -4,6 +4,7 @@ import path from "node:path"
 import { normalizeDecimal } from "../src/lib/decimal-input"
 import { fixedValue } from "../src/features/purchasing/purchase-types"
 import { isDemonstrationRoute, demonstrationRoutes } from "../src/lib/demonstration-routes"
+import { unavailableFeatureFor } from "../src/lib/unavailable-features"
 
 test("decimais preservam precisão e rejeitam agrupamento, arredondamento e excesso", () => {
   for (const [input, expected] of [["12,50", "12.50"], ["12.50", "12.50"], ["12", "12.00"], ["0,1", "0.10"], ["999999999999,99", "999999999999.99"]]) {
@@ -48,7 +49,11 @@ test("inventário de páginas exige título e preserva rotas operacionais nas pr
       expect(isDemonstrationRoute(route), route).toBe(false)
     }
   }
-  for (const route of demonstrationRoutes) expect(isDemonstrationRoute(route.replace(/\[[^\]]+\]/g, "exemplo")), route).toBe(true)
+  for (const route of demonstrationRoutes) {
+    expect(isDemonstrationRoute(route.replace(/\[[^\]]+\]/g, "exemplo")), route).toBe(true)
+    // Every unavailable route explains itself instead of falling back to a generic page.
+    expect(unavailableFeatureFor(route.replace(/\[[^\]]+\]/g, "exemplo"))?.title, route).toBeTruthy()
+  }
   expect(isDemonstrationRoute("/preferencias/integracoes/lojas")).toBe(false)
   expect(isDemonstrationRoute("/estoque/lancamentos/novo")).toBe(false)
   expect(isDemonstrationRoute("/fiscal/notas-saida")).toBe(false)
