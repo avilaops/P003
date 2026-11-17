@@ -1,6 +1,6 @@
 # API TypeScript • cobertura da migração
 
-Inventário da branch `feat/api-typescript-migration`, conferido com as chamadas das telas e a lista explícita do BFF em 16/11/2026. A ativação usa `ERP_TYPESCRIPT_MODULES`; esta lista não representa ativação de produção.
+Inventário integrado à `main`, conferido com as chamadas das telas e a lista explícita do BFF em 16/11/2026. Os quatro módulos foram ativados em produção na release `3c00410091fc30e6191f301f2b762740643a2772`. As evidências e os limites da verificação estão em [Estado da migração](typescript-api-migration-status.md#produção--ativação-e-retorno-verificados).
 
 | Módulo | Métodos e recursos em `/api/v1` | Uso conferido no frontend |
 | --- | --- | --- |
@@ -42,4 +42,4 @@ A seleção é feita por método e recurso, permitindo que uma tela consulte amb
 
 Os testes Node do BFF verificam a lista permitida, recursos mantidos em Rust, configuração inválida e ausência de nova tentativa após um comando. Dois projetos Playwright exercitam o Next real e o navegador com os módulos habilitados e com retorno explícito a Rust. A matriz PostgreSQL verifica separadamente as regras dos backends; os upstreams do teste de navegador são fixtures HTTP locais controladas.
 
-O retorno remove o módulo de `ERP_TYPESCRIPT_MODULES` e recria/reinicia o BFF antes de receber a próxima operação. As duas APIs compartilham as revisões e os comandos persistidos. Falha ou perda de resposta nunca seleciona outro backend automaticamente. A retirada de código Rust aguarda evidência de operação e retorno em ambiente real.
+O retorno remove o módulo de `ERP_TYPESCRIPT_MODULES` e recria/reinicia o BFF antes de receber a próxima operação. As duas APIs compartilham as revisões e os comandos persistidos. Falha ou perda de resposta nunca seleciona outro backend automaticamente. O retorno por configuração foi exercitado individualmente em produção, com os quatro módulos restaurados ao final. A retirada de código Rust aguarda a observação de operações autenticadas no novo caminho e o encerramento da janela de retorno.
