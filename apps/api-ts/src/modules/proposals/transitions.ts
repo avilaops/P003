@@ -8,7 +8,7 @@ import { Problem } from "../../platform/problem.js"
 import { nextRevision, parseRevision, type Revision } from "../../platform/revision.js"
 import { validateDate } from "../sales/fixed.js"
 import { proposalId, proposalText, proposalTransition } from "./schema.js"
-import { loadProposal } from "./snapshot.js"
+import { loadProposal, projectProposalReplay } from "./snapshot.js"
 import type { CommandHeaders } from "../orders/receivables.js"
 import { formalizeProposal, transferProposalAgreement } from "./formalize.js"
 
@@ -73,7 +73,7 @@ export function registerProposalTransitions(app: FastifyInstance, dependencies: 
       }
       const input = { id, revision: expected, ...(conversion ? { dueDate: due } : action === "revise" ? {} : { reason }) }
       const repeated = await replay(context, key, event, input)
-      if (repeated) return repeated
+      if (repeated) return projectProposalReplay(context, repeated)
       const current = await loadProposal(context, id)
       if (current.data.revision !== expected) throw new Problem(412, "revision_conflict", "Outra pessoa alterou o cadastro. Sua edição foi preservada")
       const today = String((await context.client.query("SELECT (CURRENT_TIMESTAMP AT TIME ZONE 'America/Sao_Paulo')::date::text AS today")).rows[0]!.today)

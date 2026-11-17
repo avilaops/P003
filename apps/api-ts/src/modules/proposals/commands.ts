@@ -8,7 +8,7 @@ import { nextRevision, parseRevision } from "../../platform/revision.js"
 import { decimal } from "../sales/fixed.js"
 import { prepareProposal, storeProposalLines } from "./prepare.js"
 import { proposalId, proposalInputSchema } from "./schema.js"
-import { loadProposal } from "./snapshot.js"
+import { loadProposal, projectProposalReplay } from "./snapshot.js"
 import { registerProposalTransitions } from "./transitions.js"
 
 export function registerProposalCommands(app: FastifyInstance, dependencies: AppDependencies) {
@@ -22,7 +22,7 @@ export function registerProposalCommands(app: FastifyInstance, dependencies: App
       if (!parsed.success) throw new Problem(422, "invalid_input", "JSON inválido ou campos desconhecidos")
       const input = { id: existingId ?? null, revision: expected, input: parsed.data }
       const repeated = await replay(context, key, scope, input)
-      if (repeated) return repeated
+      if (repeated) return projectProposalReplay(context, repeated)
       const previous = existingId ? await loadProposal(context, existingId) : undefined
       if (previous && previous.data.revision !== expected) throw new Problem(412, "revision_conflict", "Outra pessoa alterou o cadastro. Sua edição foi preservada")
       if (previous && (previous.data.status !== "draft" || previous.data.orderId !== null)) throw new Problem(409, "domain_conflict", "Somente rascunhos podem ser editados")

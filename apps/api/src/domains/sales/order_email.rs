@@ -142,11 +142,23 @@ fn attachment(current: &OrderSnapshot, company: &str, tax_id: &str) -> MailAttac
         .checkout
         .as_ref()
         .and_then(|checkout| checkout.customer["legalName"].as_str())
+        .or_else(|| {
+            current
+                .proposal_agreement
+                .as_ref()
+                .and_then(|agreement| agreement["customer"]["legalName"].as_str())
+        })
         .unwrap_or(&data.customer_name);
     let customer_tax_id = current
         .checkout
         .as_ref()
         .and_then(|checkout| checkout.customer["taxId"].as_str())
+        .or_else(|| {
+            current
+                .proposal_agreement
+                .as_ref()
+                .and_then(|agreement| agreement["customer"]["taxId"].as_str())
+        })
         .unwrap_or(&data.customer_tax_id);
     let mut html = format!(
         "<!doctype html><html lang=\"pt-BR\"><meta charset=\"utf-8\"><title>Pedido {}</title><style>body{{font:14px Arial,sans-serif;margin:32px;color:#17202a}}table{{border-collapse:collapse;width:100%}}th,td{{padding:8px;border-bottom:1px solid #ddd;text-align:left}}</style><body><h1>{}</h1><p>CNPJ/CPF: {}</p><h2>Pedido {} · revisão {}</h2><p>Cliente: {} · CPF/CNPJ: {}</p><p>Vencimento: {} · Situação: {}</p><table><thead><tr><th>Produto</th><th>Acabamento</th><th>Quantidade</th><th>Unitário (R$)</th><th>Total (R$)</th></tr></thead><tbody>",
@@ -239,6 +251,22 @@ fn attachment(current: &OrderSnapshot, company: &str, tax_id: &str) -> MailAttac
                 html.push_str(&format!(
                     "<h2>{label}</h2><p>{}</p>",
                     escape(&value).replace('\n', "<br>")
+                ));
+            }
+        }
+    }
+    if current.checkout.is_none()
+        && let Some(agreement) = &current.proposal_agreement
+    {
+        for (label, key) in [
+            ("Pagamento", "paymentTerms"),
+            ("Entrega", "deliveryTerms"),
+            ("Observações", "notes"),
+        ] {
+            if let Some(value) = agreement[key].as_str().filter(|value| !value.is_empty()) {
+                html.push_str(&format!(
+                    "<h2>{label}</h2><p>{}</p>",
+                    escape(value).replace('\n', "<br>")
                 ));
             }
         }
@@ -557,6 +585,7 @@ mod tests {
             can_edit: true,
             pricing_origin: true,
             checkout: None,
+            proposal_agreement: None,
             data: OrderSummary {
                 id: Uuid::nil(),
                 number: "42".into(),

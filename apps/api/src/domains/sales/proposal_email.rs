@@ -47,6 +47,7 @@ pub async fn get(
     Extension(identity): Extension<AuthenticatedIdentity>,
     headers: HeaderMap,
     Path(id): Path<Uuid>,
+    mcp: Option<Extension<crate::platform::typescript_gateway::McpDispatchCredential>>,
 ) -> Result<Response, DomainError> {
     let (tenant, mut tx, manage) =
         authorized(&state, &headers, &identity, READ, MANAGE, false).await?;
@@ -71,9 +72,22 @@ pub async fn get(
             .fetch_one(&mut *tx)
             .await
             .map_err(db)?;
+    let commercial_ok = !manage
+        || !commercial_check::required(&mut tx, tenant, id, current.data.version).await?
+        || commercial_check::check(
+            &state,
+            &headers,
+            mcp.as_ref().map(|value| &value.0),
+            tenant,
+            id,
+            current.data.revision,
+        )
+        .await
+        .is_ok();
     let value = ProposalEmailStatus {
         tenant_id: tenant,
         can_send: manage
+            && commercial_ok
             && ["draft", "sent"].contains(&current.data.status.as_str())
             && current.data.order_id.is_none()
             && super::super::date(&current.data.valid_until)? >= today,
@@ -140,6 +154,60 @@ fn escape(value: &str) -> String {
         .replace('\'', "&#39;")
 }
 
+fn technical_html(technical: Option<&serde_json::Value>) -> String {
+    use super::super::order_document::decimal_br;
+    let Some(technical) = technical else {
+        return String::new();
+    };
+    let dimensions = technical["dimensionsMm"]
+        .as_array()
+        .filter(|values| values.len() == 3)
+        .and_then(|values| {
+            values
+                .iter()
+                .map(|value| value.as_u64().filter(|value| (1..=50000).contains(value)))
+                .collect::<Option<Vec<_>>>()
+        })
+        .map(|values| {
+            format!(
+                "{} mm",
+                values
+                    .iter()
+                    .map(|value| decimal_br(&value.to_string(), false))
+                    .collect::<Vec<_>>()
+                    .join(" × ")
+            )
+        })
+        .unwrap_or_else(|| "Dimensões não informadas".into());
+    let weight = technical["weight"]
+        .as_str()
+        .filter(|value| !value.trim().is_empty())
+        .unwrap_or("não informado");
+    let stack = technical["weightStack"]
+        .as_str()
+        .filter(|value| !value.trim().is_empty())
+        .unwrap_or_else(|| {
+            if technical["category"]
+                .as_str()
+                .unwrap_or("")
+                .to_lowercase()
+                .contains("bateria")
+            {
+                "não informada"
+            } else {
+                "não se aplica"
+            }
+        });
+    let photo = technical["photoDataUrl"].as_str().filter(|value| value.len() <= 350000 && (value.starts_with("data:image/jpeg;base64,") || value.starts_with("data:image/png;base64,")))
+        .map(|value| format!("<img src=\"{}\" alt=\"Foto do equipamento\" width=\"56\" height=\"56\" style=\"object-fit:contain\">", escape(value))).unwrap_or_default();
+    format!(
+        "{photo}<div><small>{}<br>Peso: {}<br>Bateria: {}</small></div>",
+        escape(&dimensions),
+        escape(weight),
+        escape(stack)
+    )
+}
+
 fn attachment(current: &ProposalSnapshot, company: &str, tax_id: &str) -> MailAttachment {
     use super::super::order_document::{date, decimal_br};
     let data = &current.data;
@@ -193,7 +261,7 @@ fn attachment(current: &ProposalSnapshot, company: &str, tax_id: &str) -> MailAt
         .flatten()
         .collect::<Vec<_>>()
         .join(" • ");
-        html.push_str(&format!("<tr><td>{}<br><small>{}</small></td><td>{}</td><td class=\"numeric\">{} {}</td><td class=\"numeric\">{}</td><td class=\"numeric\">{}</td></tr>", escape(&item.name), escape(&item.sku), escape(&finishes), escape(&decimal_br(&item.quantity, false)), escape(&item.unit), escape(&decimal_br(&item.unit_price, true)), escape(&decimal_br(&item.amount, true))));
+        html.push_str(&format!("<tr><td>{}<br><small>{}</small>{}</td><td>{}</td><td class=\"numeric\">{} {}</td><td class=\"numeric\">{}</td><td class=\"numeric\">{}</td></tr>", escape(&item.name), escape(&item.sku), technical_html(item.technical.as_ref()), escape(&finishes), escape(&decimal_br(&item.quantity, false)), escape(&item.unit), escape(&decimal_br(&item.unit_price, true)), escape(&decimal_br(&item.amount, true))));
     }
     html.push_str(&format!("</tbody></table></section><div class=\"commercial-document-total\"><strong>Total: {}</strong></div>", escape(&decimal_br(&data.amount, true))));
     for (title, value) in [
@@ -248,6 +316,7 @@ pub async fn send(
     Extension(identity): Extension<AuthenticatedIdentity>,
     headers: HeaderMap,
     Path(id): Path<Uuid>,
+    mcp: Option<Extension<crate::platform::typescript_gateway::McpDispatchCredential>>,
     payload: Result<Json<ProposalEmailInput>, JsonRejection>,
 ) -> Result<Response, DomainError> {
     let key = command_key(&headers)?;
@@ -292,6 +361,24 @@ pub async fn send(
             "Somente a versão atual e válida de uma proposta em rascunho ou enviada pode ser enviada por e-mail",
         ));
     }
+    let commercial_approval =
+        if commercial_check::required(&mut tx, tenant, id, current.data.version).await? {
+            match commercial_check::check(
+                &state,
+                &headers,
+                mcp.as_ref().map(|value| &value.0),
+                tenant,
+                id,
+                expected,
+            )
+            .await
+            {
+                Ok(candidate) => candidate,
+                Err(response) => return Ok(response),
+            }
+        } else {
+            serde_json::Value::Null
+        };
     let Some(mailer) = crate::platform::mail_settings::resolve_in(&state, &mut tx).await? else {
         // Nothing is persisted or published when SMTP is unavailable.
         return Ok(response(
@@ -307,6 +394,13 @@ pub async fn send(
             .await
             .map_err(db)?;
     let file = attachment(&current, &company, &tax_id);
+    if !commercial_approval.is_null() {
+        let changed = sqlx::query("UPDATE sales_proposal_versions SET commercial_approval=$4 WHERE tenant_id=$1 AND proposal_id=$2 AND version=$3 AND commercial_public->>'digest'=$5")
+            .bind(tenant).bind(id).bind(current.data.version).bind(&commercial_approval).bind(commercial_approval["digest"].as_str()).execute(&mut *tx).await.map_err(db)?;
+        if changed.rows_affected() != 1 {
+            return Err(DomainError::StaleRevision);
+        }
+    }
     let delivery = Uuid::now_v7();
     // Persist uncertainty before crossing the SMTP boundary. A crash can never cause a replay to resend.
     sqlx::query("INSERT INTO sales_proposal_email_deliveries(id,tenant_id,proposal_id,version,proposal_revision,result_revision,subject_id,command_key,recipient,snapshot_html,status) VALUES($1,$2,$3,$4,$5,$5,$6,$7,$8,$9,'uncertain')")
@@ -412,6 +506,10 @@ mod tests {
             tenant_id: Uuid::nil(),
             can_edit: true,
             versions: vec![],
+            commercial: None,
+            customer: None,
+            checkout: None,
+            director: None,
             data: ProposalSummary {
                 id: Uuid::nil(),
                 number: "17".into(),
@@ -450,6 +548,9 @@ mod tests {
                 swing_arm_color: Some("Apple Green <swing>".into()),
                 plate_holder_color: Some("Azul legado".into()),
                 plate_holder_type: Some("Olímpico".into()),
+                technical: Some(
+                    json!({"dimensionsMm":[1500,1200,1400],"weight":"150 kg","weightStack":"100 kg","category":"Bateria de pesos"}),
+                ),
             }],
         };
         let file = attachment(&current, "Empresa & Filhos", "04252011000110");
@@ -469,6 +570,9 @@ mod tests {
             "À vista &amp; combinado",
             "Preto &amp; azul",
             "Braços: Apple Green &lt;swing&gt;",
+            "1.500 × 1.200 × 1.400 mm",
+            "Bateria: 100 kg",
+            "Peso: 150 kg",
             "&lt;img src=x onerror=alert(1)&gt;",
         ] {
             assert!(html.contains(expected), "missing {expected}");

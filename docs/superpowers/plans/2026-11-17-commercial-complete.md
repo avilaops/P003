@@ -28,7 +28,7 @@
 
 ### Task 1: Cotação comercial da proposta e persistência
 
-**Files:** `apps/api-ts/src/modules/proposals/{schema,prepare,commands,snapshot,commercial}.ts`, migration `202611170001_commercial_proposals.sql`, testes em `apps/api-ts/test/commercial-proposals.test.ts` e `commercial-proposal-cases.ts`.
+**Files:** `apps/api-ts/src/modules/proposals/{schema,prepare,commands,snapshot,commercial}.ts`, migration `202611170003_commercial_proposals.sql`, testes em `apps/api-ts/test/commercial-proposals.test.ts` e `commercial-proposal-cases.ts`.
 
 **Interfaces:** Consome `prepareMixed(context, input)` e `MixedInput`; produz `prepareProposalCommercial(context,input,prepared)` e snapshots por versão, com projeção segura.
 

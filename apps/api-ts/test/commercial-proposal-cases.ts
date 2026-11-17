@@ -45,6 +45,37 @@ export async function verifyCommercialProposals(app: FastifyInstance, seed: Pool
   await seed.query("INSERT INTO membership_roles(membership_id,role_id) VALUES($1,$2)", [membership, sellerRole])
   await seed.query("INSERT INTO role_permissions(role_id,permission_code) SELECT $1,unnest($2::text[])", [sellerRole, ["sales.proposals.read", "sales.proposals.manage", "sales.proposals.decide", "sales.orders.read", "sales.orders.manage"]])
   const sellerHeaders = { ...headers, authorization: "Bearer proposal-seller" }
+  const privatePermissions = ["platform.company.manage", "sales.approvals.director"]
+  await seed.query("INSERT INTO role_permissions(role_id,permission_code) SELECT $1,unnest($2::text[])", [sellerRole, privatePermissions])
+  const replayCreateKey = randomUUID(), replayUpdateKey = randomUUID(), replaySendKey = randomUUID()
+  const replayBody = { ...input, commercial }
+  const requestReplay = (method: "POST" | "PUT", url: string, key: string, payload: object, revision?: string) => app.inject({ method, url, headers: { ...sellerHeaders, "idempotency-key": key, ...(revision ? { "if-match": revision } : {}) }, payload })
+  const privateCreate = await requestReplay("POST", "/api/v1/proposals", replayCreateKey, replayBody)
+  assert.equal(privateCreate.statusCode, 201, privateCreate.body)
+  assert.ok(privateCreate.json().director?.equipmentCostCents)
+  const replayId = privateCreate.json().data.id
+  const privateUpdate = await requestReplay("PUT", `/api/v1/proposals/${replayId}`, replayUpdateKey, replayBody, '"1"')
+  assert.equal(privateUpdate.statusCode, 200, privateUpdate.body)
+  const privateSend = await requestReplay("POST", `/api/v1/proposals/${replayId}/send`, replaySendKey, {}, '"2"')
+  assert.equal(privateSend.statusCode, 200, privateSend.body)
+  for (const permission of privatePermissions) {
+    await seed.query("DELETE FROM role_permissions WHERE role_id=$1 AND permission_code=$2", [sellerRole, permission])
+    const replays = [await requestReplay("POST", "/api/v1/proposals", replayCreateKey, replayBody), await requestReplay("PUT", `/api/v1/proposals/${replayId}`, replayUpdateKey, replayBody, '"1"'), await requestReplay("POST", `/api/v1/proposals/${replayId}/send`, replaySendKey, {}, '"2"')]
+    for (const response of replays) {
+      assert.ok(response.statusCode === 200 || response.statusCode === 201, response.body)
+      assert.equal(response.json().director, null, "Replay must reapply current financial permissions")
+      assert.ok(!/equipmentCostCents|netProfitCents/.test(response.body))
+    }
+    await seed.query("INSERT INTO role_permissions(role_id,permission_code) VALUES($1,$2)", [sellerRole, permission])
+  }
+  await seed.query("DELETE FROM role_permissions WHERE role_id=$1 AND permission_code=ANY($2::text[])", [sellerRole, privatePermissions])
+  await seed.query("DELETE FROM role_permissions WHERE role_id=$1 AND permission_code='sales.orders.read'", [sellerRole])
+  const proposalOnlyTable = await app.inject({ url: "/api/v1/commercial/tables/national", headers: sellerHeaders })
+  assert.equal(proposalOnlyTable.statusCode, 200, "Proposal managers can price proposals without order-read permission")
+  const proposalOnlySimulation = await app.inject({ method: "POST", url: "/api/v1/commercial/mixed/simulate", headers: sellerHeaders, payload: simulation })
+  assert.equal(proposalOnlySimulation.statusCode, 200, proposalOnlySimulation.body)
+  assert.equal(proposalOnlySimulation.json().director, null)
+  await seed.query("INSERT INTO role_permissions(role_id,permission_code) VALUES($1,'sales.orders.read')", [sellerRole])
   const seller = await app.inject({ url: `/api/v1/proposals/${id}`, headers: sellerHeaders })
   assert.equal(seller.statusCode, 200, seller.body)
   assert.equal(seller.json().director, null)
@@ -84,6 +115,21 @@ export async function verifyCommercialProposals(app: FastifyInstance, seed: Pool
   const order = await app.inject({ url: `/api/v1/orders/${orderId}`, headers })
   assert.equal(order.json().pricingOrigin, true)
   assert.equal(order.json().items[0].unitPrice, "14196.45")
+  await seed.query("UPDATE product_catalog_profiles SET weight='180 kg' WHERE tenant_id=$1 AND product_id=$2", [tenant, product])
+  const frozenOrder = await app.inject({ url: `/api/v1/orders/${orderId}`, headers })
+  assert.equal(frozenOrder.json().items[0].equipmentWeight, "150 kg", "Converted order must use agreed technical weight")
+  assert.equal(order.json().proposalAgreement.paymentTerms, input.paymentTerms)
+  assert.equal(order.json().proposalAgreement.deliveryTerms, input.deliveryTerms)
+  assert.equal(order.json().proposalAgreement.notes, input.notes)
+  assert.equal(order.json().proposalAgreement.customer.email, "customer@example.test")
+  assert.equal(order.json().checkout, undefined, "Textual agreement must not fabricate installments")
+  assert.equal((await seed.query("SELECT count(*)::int AS count FROM sales_order_checkouts WHERE tenant_id=$1 AND order_id=$2", [tenant, orderId])).rows[0].count, 0)
+  await seed.query("UPDATE parties SET email='changed@example.test' WHERE tenant_id=$1 AND id=$1", [tenant])
+  const agreedCustomer = await app.inject({ url: `/api/v1/orders/${orderId}`, headers })
+  assert.equal(agreedCustomer.json().proposalAgreement.customer.email, "customer@example.test")
+  await seed.query("UPDATE parties SET email='customer@example.test' WHERE tenant_id=$1 AND id=$1", [tenant])
+  await seed.query("UPDATE sales_order_lines SET technical_snapshot=technical_snapshot-'weight' WHERE tenant_id=$1 AND order_id=$2", [tenant, orderId])
+  assert.equal((await app.inject({ url: `/api/v1/orders/${orderId}`, headers })).json().items[0].equipmentWeight, null, "Frozen unknown weight must not be replaced by later catalogue data")
   assert.equal((await seed.query("SELECT count(*)::int AS count FROM sales_orders WHERE tenant_id=$1", [tenant])).rows[0].count, before + 1)
   const discounted = { ...simulation, discount: { kind: "percent", value: 5000 } }
   const discountedQuote = await app.inject({ method: "POST", url: "/api/v1/commercial/mixed/simulate", headers: sellerHeaders, payload: discounted })
@@ -105,4 +151,21 @@ export async function verifyCommercialProposals(app: FastifyInstance, seed: Pool
   assert.equal(sendRevised.statusCode, 409, "A new proposal version requires its own commercial approval")
   const fiscalBypass = await app.inject({ method: "POST", url: "/api/v1/commercial/mixed/orders", headers: { ...headers, "idempotency-key": randomUUID() }, payload: { customerId: tenant, dueDate: "2027-01-01", simulation: dishonest, digest: dishonestQuote.json().digest } })
   assert.equal(fiscalBypass.statusCode, 409, "Direct order conversion must apply the same PF fiscal rule as proposals")
+  const approvalBeforeCheck = (await seed.query("SELECT commercial_approval FROM sales_proposal_versions WHERE tenant_id=$1 AND proposal_id=$2 AND version=2", [tenant, excessId])).rows[0].commercial_approval
+  const mailLock = await seed.connect()
+  let check: Awaited<ReturnType<typeof app.inject>> | undefined
+  try {
+    await mailLock.query("BEGIN")
+    await mailLock.query("SELECT id FROM tenants WHERE id=$1 FOR UPDATE", [tenant])
+    check = await Promise.race([
+      app.inject({ method: "POST", url: `/api/v1/proposals/${excessId}/commercial-validation`, headers, payload: {} }),
+      new Promise<never>((_, reject) => { const timer = setTimeout(() => reject(Error("Read-only commercial check waited for the native mail transaction lock")), 1500); timer.unref() }),
+    ])
+  } finally { await mailLock.query("ROLLBACK"); mailLock.release() }
+  assert.equal(check.statusCode, 200, check.body)
+  assert.equal(check.json().approvalCandidate.by, "operator")
+  assert.ok(!/purchaseCostCents|equipmentCostCents|netProfitCents/.test(check.body))
+  assert.equal((await seed.query("SELECT commercial_approval FROM sales_proposal_versions WHERE tenant_id=$1 AND proposal_id=$2 AND version=2", [tenant, excessId])).rows[0].commercial_approval, approvalBeforeCheck, "Checking from native SMTP must not commit a separate approval")
+  const sellerCheck = await app.inject({ method: "POST", url: `/api/v1/proposals/${excessId}/commercial-validation`, headers: sellerHeaders, payload: {} })
+  assert.equal(sellerCheck.statusCode, 409, "Native mail must receive the same authority refusal")
 }

@@ -13,7 +13,7 @@ type Public = { kind: string; input: MixedInput; digest: string; sale: Prepared[
 type Approval = { by: string; digest: string }
 type Agreement = { commercial_public: Public | null; commercial_approval: Approval | null; customer_snapshot: Record<string, unknown> | null; checkout_snapshot: CheckoutInput | null; customer_id: string }
 
-export async function formalizeProposal(context: AuthorizedContext, id: string, version: number) {
+export async function formalizeProposal(context: AuthorizedContext, id: string, version: number, persistApproval = true) {
   const { client, tenantId } = context
   const agreement = (await client.query<Agreement>("SELECT commercial_public,commercial_approval,customer_snapshot,checkout_snapshot,customer_id FROM sales_proposal_versions WHERE tenant_id=$1 AND proposal_id=$2 AND version=$3", [tenantId, id, version])).rows[0]!
   if (!agreement.commercial_public) {
@@ -33,7 +33,7 @@ export async function formalizeProposal(context: AuthorizedContext, id: string, 
     const manager = context.permissions.includes("sales.approvals.manage") && !prepared.director.requiresDirector
     if (!director && !manager) conflict("A negociação está acima da sua alçada. A gestão precisa aprovar esta proposta antes do envio ou conversão")
     approval = { by: context.authSubject, digest: quote.digest }
-    await client.query("UPDATE sales_proposal_versions SET commercial_approval=$4 WHERE tenant_id=$1 AND proposal_id=$2 AND version=$3", [tenantId, id, version, approval])
+    if (persistApproval) await client.query("UPDATE sales_proposal_versions SET commercial_approval=$4 WHERE tenant_id=$1 AND proposal_id=$2 AND version=$3", [tenantId, id, version, approval])
   }
   return { agreement, quote, prepared, approval }
 }

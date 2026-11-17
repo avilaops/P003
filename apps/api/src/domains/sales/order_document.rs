@@ -81,6 +81,8 @@ pub async fn attachment(
     // Checkout contains the agreed customer snapshot. Never replace it with the live party.
     let customer = if let Some(checkout) = &current.checkout {
         checkout.customer.clone()
+    } else if let Some(agreement) = &current.proposal_agreement {
+        agreement["customer"].clone()
     } else {
         sqlx::query_scalar::<_, Value>("SELECT jsonb_build_object('email',email,'phone',phone,'addresses',addresses,'contacts',contacts) FROM parties WHERE tenant_id=$1 AND id=$2")
             .bind(tenant).bind(current.data.customer_id).fetch_one(&mut **tx).await.map_err(db)?
@@ -235,6 +237,16 @@ fn commercial(
         ] {
             if !value.is_empty() {
                 sections.push((label.into(), value));
+            }
+        }
+    } else if let Some(agreement) = &current.proposal_agreement {
+        for (label, key) in [
+            ("Pagamento previsto", "paymentTerms"),
+            ("Entrega", "deliveryTerms"),
+            ("Observações", "notes"),
+        ] {
+            if let Some(value) = agreement[key].as_str().filter(|value| !value.is_empty()) {
+                sections.push((label.into(), value.to_owned()));
             }
         }
     } else {

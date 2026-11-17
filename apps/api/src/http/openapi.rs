@@ -78,6 +78,7 @@ use crate::platform::{
         sales::proposals::update,
         sales::proposals::approve_order,
         sales::proposals::email::get, sales::proposals::email::send,
+        sales::proposals::commercial_check::validate,
         sales::order_email::get, sales::order_email::send,
         sales::order_document::get,
         crate::platform::mail_settings::get, crate::platform::mail_settings::put,

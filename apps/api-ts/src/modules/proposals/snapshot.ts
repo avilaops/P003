@@ -2,6 +2,10 @@ import type { AuthorizedContext } from "../../platform/access.js"
 import { Problem } from "../../platform/problem.js"
 import { proposalSummary } from "../sales/shared.js"
 
+export function projectProposalReplay(context: AuthorizedContext, body: Record<string, unknown>): Record<string, unknown> & { canEdit: boolean } {
+  return { ...body, canEdit: context.permissions.includes("sales.proposals.manage"), ...(Object.hasOwn(body, "director") ? { director: context.permissions.includes("platform.company.manage") && context.permissions.includes("sales.approvals.director") ? body.director : null } : {}) }
+}
+
 export const summary = "SELECT p.id,p.number::text AS number,v.version,p.revision,v.customer_id,v.customer_name,v.customer_tax_id,v.valid_until::text AS valid_until,v.payment_terms,v.delivery_terms,v.notes,(v.amount_cents::numeric/100)::numeric(16,2)::text AS amount,v.status,(v.status='sent' AND v.valid_until < (CURRENT_TIMESTAMP AT TIME ZONE 'America/Sao_Paulo')::date) AS expired,p.order_id,(v.version=p.current_version) AS is_current,v.created_at::text AS created_at,to_json(p.updated_at)#>>'{}' AS updated_at,v.sent_at::text AS sent_at,v.decided_at::text AS decided_at,v.decided_by,v.decision_reason FROM sales_proposals p JOIN sales_proposal_versions v ON v.tenant_id=p.tenant_id AND v.proposal_id=p.id"
 export async function loadProposal(context: AuthorizedContext, id: string, version?: number) {
   const detailSummary = summary.replace("SELECT p.id", "SELECT v.commercial_public,v.commercial_private,v.customer_snapshot,v.checkout_snapshot,p.id")

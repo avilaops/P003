@@ -12,7 +12,8 @@ import type { CheckoutSnapshot } from "./commercial-payment-model"
 import { CommercialCheckoutSummary } from "./commercial-checkout-summary"
 import { OrderWeightSummary } from "./order-weight-summary"
 
-type Order = Schema<"OrderSnapshot"> & { checkout?: CheckoutSnapshot | null }
+type Agreement = { proposalId: string; proposalNumber: string; proposalVersion: number; customer: CheckoutSnapshot["customer"]; paymentTerms: string; deliveryTerms: string; notes: string }
+type Order = Schema<"OrderSnapshot"> & { checkout?: CheckoutSnapshot | null; proposalAgreement?: unknown }
 type Quote = { tenantId: string; data: { sale: Sale; input: SimulationInput; version: number } | null; director?: Director | null; approvalStatus?: string; checkout?: CheckoutSnapshot | null }
 type Pricing = { tenantId: string; data: { snapshot: LegacySimulation; approved: boolean; needsApproval: boolean } | null }
 type Party = Schema<"PartySnapshot">
@@ -54,7 +55,8 @@ export function OrderDetailCommercial({ order, permissions }: { order: Order; pe
   const legacy = legacySnapshot?.tenantId === order.tenantId ? legacySnapshot : undefined
   const sale = quote?.sale
   const checkout = order.checkout || loaded?.quote?.checkout
-  const customer = checkout?.customer || loaded?.party?.data
+  const agreement = order.proposalAgreement as Agreement | null | undefined
+  const customer = checkout?.customer || agreement?.customer || loaded?.party?.data
   const address = customer?.addresses?.find(item => item.primary) || customer?.addresses?.[0]
   const contact = customer?.contacts?.find(item => item.primary) || customer?.contacts?.[0]
   const tableTotal = sale?.tableTotalCents ?? legacy?.sale.tableTotalCents
@@ -120,6 +122,7 @@ export function OrderDetailCommercial({ order, permissions }: { order: Order; pe
       ]} />{entry !== undefined && <p className="text-xs text-muted-foreground">Valores negociados. Consulte os recebimentos no financeiro.</p>}</section>
     </div>
     {checkout && <CommercialCheckoutSummary checkout={checkout} />}
+    {!checkout && agreement && <section className="space-y-3 border-t pt-4" aria-label="Condições aprovadas na proposta"><h2 className="font-semibold">Condições aprovadas • Proposta {agreement.proposalNumber}</h2><Fields values={[["Pagamento previsto", agreement.paymentTerms], ["Entrega", agreement.deliveryTerms], ["Observações", agreement.notes]]} /></section>}
     {hasComposition && <section className="space-y-3 border-t pt-4" aria-label="Desconto e aprovação"><h2 className="font-semibold">Desconto e aprovação</h2><Fields values={[
       ["Desconto aplicado", discountBps === undefined ? undefined : percent(discountBps)], ["Desconto em reais", amount(discount)], ["Limite sem aprovação", freeDiscount === undefined ? undefined : percent(freeDiscount)],
       ["Situação da aprovação", quote ? approvals[loaded?.quote?.approvalStatus || ""] || loaded?.quote?.approvalStatus : legacy ? (loaded?.pricing?.data?.approved ? "Aprovada" : loaded?.pricing?.data?.needsApproval ? "Aguardando aprovação" : "Dentro da política") : undefined]
