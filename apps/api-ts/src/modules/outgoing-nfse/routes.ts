@@ -8,7 +8,7 @@ import { commandKey, record, remember, replay } from "../../platform/commands.js
 import { Problem } from "../../platform/problem.js"
 import { authorizeServiceRequest } from "../../platform/service-auth.js"
 import type { CertificateMaterial, FiscalEngineResult, OutgoingNfseEngine } from "./engine-client.js"
-import { finishIssuance, fiscalTimestamp, parseIssuanceInput, startIssuance, type IssuanceSnapshot } from "./service.js"
+import { confirmManualIssuance, finishIssuance, fiscalTimestamp, parseIssuanceInput, startIssuance, startManualIssuance, type IssuanceSnapshot } from "./service.js"
 
 export type OutgoingNfseDependencies = {
   engine: OutgoingNfseEngine
@@ -17,6 +17,7 @@ export type OutgoingNfseDependencies = {
 
 const idSchema = z.string().uuid()
 const cancelSchema = z.object({ reasonCode: z.enum(["1", "2", "9"]), reason: z.string().trim().min(15).max(255) }).strict()
+const manualConfirmationSchema = z.object({ xml: z.string().min(1).max(1_048_576) }).strict()
 const unavailable = () => { throw new Problem(503, "fiscal_engine_unavailable", "Emissão de NFS-e não configurada") }
 
 export function registerOutgoingNfseRoutes(app: FastifyInstance, dependencies: AppDependencies) {
@@ -35,6 +36,14 @@ export function registerOutgoingNfseRoutes(app: FastifyInstance, dependencies: A
     }
     const body = await authorize(request, context => finishIssuance(context, request.headers, started.id!, key, result))
     return reply.code(result.status === "uncertain" || result.status === "pending" ? 202 : 200).header("cache-control", "no-store").send(body)
+  })
+
+  app.post("/api/v1/integrations/nfse/manual-issuances", async (request, reply) => {
+    const fiscal = dependencies.outgoingNfse ?? unavailable()
+    const input = parseIssuanceInput(request.body)
+    const key = commandKey(request.headers["idempotency-key"])
+    const body = await authorize(request, context => startManualIssuance(context, request.headers, key, input, fiscal.engine))
+    return reply.code(201).header("cache-control", "no-store").send(body)
   })
 
   app.get("/api/v1/integrations/nfse/issuances/:id", async (request, reply) => {
@@ -60,6 +69,26 @@ export function registerOutgoingNfseRoutes(app: FastifyInstance, dependencies: A
       return row.xml
     })
     return reply.header("content-type", "application/xml; charset=utf-8").header("cache-control", "no-store").send(xml)
+  })
+
+  app.post("/api/v1/integrations/nfse/issuances/:id/manual-confirm", async (request, reply) => {
+    const fiscal = dependencies.outgoingNfse ?? unavailable()
+    const id = idSchema.safeParse((request.params as { id?: string }).id)
+    const input = manualConfirmationSchema.safeParse(request.body)
+    if (!id.success || !input.success) throw new Problem(422, "invalid_input", "Confirmação manual de NFS-e inválida")
+    const key = commandKey(request.headers["idempotency-key"])
+    const prepared = await authorize(request, async context => {
+      requirePermission(context, "fiscal.outgoing_nfse.issue")
+      const row = (await context.client.query<{ status: string; request_snapshot: { issuanceMode?: string } }>("SELECT status,request_snapshot FROM fiscal_outgoing_nfse_issuances WHERE tenant_id=$1 AND id=$2", [context.tenantId, id.data])).rows[0]
+      if (!row) throw new Problem(404, "not_found", "Emissão de NFS-e não encontrada")
+      if (row.status !== "pending" || row.request_snapshot.issuanceMode !== "manual") throw new Problem(409, "domain_conflict", "Somente uma emissão manual pendente aceita confirmação por XML")
+      const company = (await context.client.query<{ tax_id: string }>("SELECT tax_id FROM tenants WHERE id=$1", [context.tenantId])).rows[0]
+      if (!company) throw new Problem(409, "company_incomplete", "Cadastro da empresa incompleto para emissão fiscal")
+      return company.tax_id
+    })
+    const inspected = await fiscal.engine.inspectOutgoing({ xml: input.data.xml, providerTaxId: prepared })
+    const body = await authorize(request, context => confirmManualIssuance(context, request.headers, key, id.data, input.data.xml, inspected))
+    return reply.header("cache-control", "no-store").send(body)
   })
 
   app.post("/api/v1/integrations/nfse/issuances/:id/reconcile", async (request, reply) => {
