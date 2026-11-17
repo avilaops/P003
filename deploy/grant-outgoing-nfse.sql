@@ -1,0 +1,4 @@
+REVOKE DELETE ON fiscal_outgoing_nfse_issuances,fiscal_outgoing_nfse_sequences FROM erp_next_app;
+REVOKE UPDATE,DELETE ON fiscal_outgoing_nfse_events FROM erp_next_app;
+GRANT SELECT,INSERT,UPDATE ON fiscal_outgoing_nfse_issuances,fiscal_outgoing_nfse_sequences TO erp_next_app;
+GRANT SELECT,INSERT ON fiscal_outgoing_nfse_events TO erp_next_app;
