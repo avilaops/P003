@@ -22,6 +22,7 @@ import { startRustContractBackend } from "./rust-contract-backend.js"
 import { authContractProfile } from "./auth-contract-fixture.js"
 import { verifyAuthContract } from "./auth-contract-cases.js"
 import { verifyMcpDispatch } from "./mcp-dispatch-cases.js"
+import { verifyCommercialProposals } from "./commercial-proposal-cases.js"
 
 // Opt in with a disposable PostgreSQL administrator URL. The generated database
 // and NOLOGIN role belong exclusively to this test and are removed afterwards.
@@ -393,6 +394,7 @@ for (const backend of backends) test(`${backend}: PostgreSQL migrations and RLS 
     await verifyCommercialMixed(app, seed, other, role)
     await verifyOpportunities(app, seed, other, role)
     await verifyCommercialMetrics(app, seed)
+    if (backend !== "rust") await verifyCommercialProposals(app, seed)
     if (backend === "typescript") await verifyMcpDispatch(app, seed)
     if (backend === "gateway") await verifyMcpDispatch(app, seed, true)
     await seed.query("UPDATE platform_administrators SET active=false WHERE auth_subject='operator'")
