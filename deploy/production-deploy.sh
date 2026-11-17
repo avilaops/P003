@@ -134,7 +134,7 @@ web = environment(config["services"]["web"])
 # process from the validated web image; recovery selects a whole prior release.
 settings = {key: api[key] for key in ("DATABASE_URL", "DATABASE_MAX_CONNECTIONS", "AUTH_ISSUER", "AUTH_USERINFO_URL", "ERP_MCP_ORIGIN") if api.get(key)}
 settings.setdefault("AUTH_ISSUER", web.get("AUTH_ISSUER", ""))
-settings.update({"NODE_ENV": "production", "API_TS_HOST": "127.0.0.1", "API_TS_PORT": "8081"})
+settings.update({"NODE_ENV": "production", "API_TS_HOST": "0.0.0.0", "API_TS_PORT": "8081"})
 fiscal_url = previous_api_ts.get("ERP_FISCAL_ENGINE_URL") or api.get("ERP_FISCAL_ENGINE_URL")
 fiscal_token = previous_api_ts.get("ERP_FISCAL_ENGINE_TOKEN") or token
 fiscal_keyring = previous_api_ts.get("FISCAL_A1_KEYRING") or api.get("FISCAL_A1_KEYRING")

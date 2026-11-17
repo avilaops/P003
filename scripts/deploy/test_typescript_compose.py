@@ -37,7 +37,7 @@ class TypeScriptComposeTests(unittest.TestCase):
             self.assertEqual(api['image'], values['ERP_WEB_IMAGE'])
             self.assertEqual(api['network_mode'], 'service:api')
             self.assertNotIn('ports', api)
-            self.assertEqual(api['environment']['API_TS_HOST'], '127.0.0.1')
+            self.assertEqual(api['environment']['API_TS_HOST'], '0.0.0.0')
             self.assertNotIn('SMTP_PASSWORD', api['environment'])
             self.assertNotIn('ERP_SESSION_SECRET', api['environment'])
             self.assertEqual(api['command'], ['node', 'apps/api-ts/dist/server.js'])
