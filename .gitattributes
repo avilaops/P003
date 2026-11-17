@@ -25,3 +25,6 @@ apps/web/public/banks/*.svg text eol=lf whitespace=-trailing-space
 # The edge serves the same public search metadata bytes as the web application.
 apps/web/public/robots.txt text eol=lf
 apps/web/public/sitemap.xml text eol=lf
+
+# Keep the exported strategy document byte-exact.
+docs/strategy/*.pdf binary

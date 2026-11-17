@@ -8,7 +8,7 @@ const configuration = loadConfiguration()
 const pool = new PostgresPool(configuration.databaseUrl, configuration.maximumConnections)
 const outgoingNfse = configuration.fiscalEngine ? (() => {
   const vault = new FiscalCertificateVault(configuration.fiscalEngine.keyring)
-  return { engine: new HttpOutgoingNfseEngine(configuration.fiscalEngine.url, configuration.fiscalEngine.token), certificateProvider: vault.material.bind(vault) }
+  return { engine: new HttpOutgoingNfseEngine(configuration.fiscalEngine.url, configuration.fiscalEngine.token), certificateProvider: vault.material.bind(vault), automaticEnabled: configuration.fiscalEngine.automaticEnabled }
 })() : undefined
 const app = buildApp({ pool, userinfoUrl: configuration.userinfoUrl, mcpResource: configuration.mcpResource, ...(outgoingNfse ? { outgoingNfse } : {}) })
 app.addHook("onClose", async () => { await pool.close() })

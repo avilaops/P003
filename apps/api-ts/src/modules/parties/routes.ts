@@ -60,7 +60,7 @@ export function registerPartyRoutes(app: FastifyInstance, dependencies: AppDepen
   })
 
   app.get<{ Params: { id: string } }>("/api/v1/parties/:id", async (request, reply) => {
-    if (!z.string().uuid().safeParse(request.params.id).success) throw new Problem(404, "not_found", "Cadastro não encontrado")
+    if (!z.guid().safeParse(request.params.id).success) throw new Problem(404, "not_found", "Cadastro não encontrado")
     const body = await authorizeRequest(request, dependencies, async context => {
       requirePermission(context, "catalog.parties.read")
       const result = await context.client.query(`SELECT ${projection} FROM parties WHERE tenant_id=$1 AND id=$2`, [context.tenantId, request.params.id])
@@ -95,7 +95,7 @@ export function registerPartyRoutes(app: FastifyInstance, dependencies: AppDepen
   app.put<{ Params: { id: string } }>("/api/v1/parties/:id", async (request, reply) => {
     const expected = revision(request.headers["if-match"])
     const parsed = partyInputSchema.safeParse(request.body)
-    if (!parsed.success || !z.string().uuid().safeParse(request.params.id).success) throw new Problem(422, "invalid_input", "JSON inválido ou campos desconhecidos")
+    if (!parsed.success || !z.guid().safeParse(request.params.id).success) throw new Problem(422, "invalid_input", "JSON inválido ou campos desconhecidos")
     const body = await authorizeRequest(request, dependencies, async context => {
       requirePermission(context, "catalog.parties.manage")
       requirePermission(context, "catalog.parties.read")

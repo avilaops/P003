@@ -20,7 +20,7 @@ export function registerOrderRoutes(app: FastifyInstance, dependencies: AppDepen
   app.get<{ Params: { id: string } }>("/api/v1/orders/:id", async (request, reply) => {
     const body = await authorizeRequest(request, dependencies, async context => {
       requirePermission(context, "sales.orders.read")
-      if (!z.string().uuid().safeParse(request.params.id).success) throw new Problem(422, "invalid_input", "Identificador inválido")
+      if (!z.guid().safeParse(request.params.id).success) throw new Problem(422, "invalid_input", "Identificador inválido")
       return loadOrder(context, request.params.id)
     })
     return reply.header("cache-control", "no-store").header("etag", `"${body.data.revision}"`).send(body)

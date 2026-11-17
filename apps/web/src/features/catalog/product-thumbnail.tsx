@@ -14,7 +14,7 @@ export function ProductThumbnail({ id, name, tenantId, hasPhoto, decorative = fa
     if (snapshot || hasPhoto === false || !root.current) return
     const controller = new AbortController()
     function loadPhoto() {
-      void erpFetch(`/api/erp/products/${id}`, { cache: "no-store", signal: controller.signal }).then(async response => {
+      void erpFetch(`/api/erp/products/${id}`, { cache: "no-store", headers: { "X-ERP-Purpose": "product-thumbnail" }, signal: controller.signal }).then(async response => {
         if (!response.ok) throw new Error("Foto indisponível")
         const result = await response.json()
         if (result.tenantId !== tenantId || result.data?.id !== id) throw new Error("Empresa ou produto alterado")

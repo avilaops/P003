@@ -16,7 +16,7 @@ export function registerOrderTransitions(app: FastifyInstance, dependencies: App
   for (const action of ["accept", "confirm", "cancel", "complete"] as const) {
     app.post<{ Params: { id: string } }>(`/api/v1/orders/:id/${action}`, async (request, reply) => {
       const key = commandKey(request.headers["idempotency-key"]), expected = parseRevision(request.headers["if-match"])
-      const parsed = z.string().uuid().safeParse(request.params.id)
+      const parsed = z.guid().safeParse(request.params.id)
       if (!parsed.success) throw new Problem(422, "invalid_input", "Identificador inválido")
       const id = parsed.data.toLowerCase(), scope = `order.${action}`, target = targets[action]
       const body = await authorizeRequest(request, dependencies, async context => {

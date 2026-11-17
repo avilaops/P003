@@ -25,7 +25,7 @@ export type TenantContext = {
   permissions: string[]
 }
 
-const tenantSchema = z.string().uuid()
+const tenantSchema = z.guid()
 const accessSql = "SELECT tenant.id AS tenant_id,COALESCE(array_agg(DISTINCT role_permission.permission_code) FILTER (WHERE role_permission.permission_code IS NOT NULL),'{}') AS permissions FROM tenants tenant JOIN tenant_memberships membership ON membership.tenant_id=tenant.id JOIN identities identity ON identity.id=membership.identity_id LEFT JOIN membership_roles membership_role ON membership_role.membership_id=membership.id LEFT JOIN roles role ON role.id=membership_role.role_id LEFT JOIN role_permissions role_permission ON role_permission.role_id=role.id WHERE tenant.id=$1 AND identity.auth_subject=$2 AND tenant.status='active' AND membership.status='active' GROUP BY tenant.id"
 const authorizedAccessSql = `WITH platform_authority AS (
   SELECT EXISTS(SELECT 1 FROM platform_administrators WHERE auth_subject=$2 AND active) AS allowed

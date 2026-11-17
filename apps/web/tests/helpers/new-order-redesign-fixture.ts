@@ -61,6 +61,7 @@ export async function installNewOrderRedesignFixture(page: Page, baseURL?: strin
   await installFrontendFixture(page.context(), baseURL)
   const batches: string[][] = []
   const individualReads: string[] = []
+  const thumbnailReads: string[] = []
   const writes: string[] = []
   const simulations: MixedSimulationInput[] = []
   let batchUnavailable = false
@@ -115,14 +116,15 @@ export async function installNewOrderRedesignFixture(page: Page, baseURL?: strin
 
     const product = /^products\/([^/]+)(?:\/catalog)?$/.exec(resource)
     if (product && catalog.has(product[1])) {
-      individualReads.push(resource)
+      if (request.headers()["x-erp-purpose"] === "product-thumbnail") thumbnailReads.push(resource)
+      else individualReads.push(resource)
       return route.fulfill({ json: { tenantId: tenant, data: catalog.get(product[1]) } })
     }
     return route.fallback()
   })
 
   return {
-    batches, individualReads, simulations, writes,
+    batches, individualReads, thumbnailReads, simulations, writes,
     setBatchUnavailable: (unavailable: boolean) => { batchUnavailable = unavailable },
     setBatchTenant: (id: string) => { batchTenant = id },
     setSimulationUnavailable: (unavailable: boolean) => { simulationUnavailable = unavailable },
