@@ -1,6 +1,6 @@
 # API TypeScript • cobertura da migração
 
-Inventário integrado à `main`, conferido com as chamadas das telas e a lista explícita do BFF em 16/11/2026. Os quatro módulos foram ativados em produção na release `3c00410091fc30e6191f301f2b762740643a2772`. As evidências e os limites da verificação estão em [Estado da migração](typescript-api-migration-status.md#produção--ativação-e-retorno-verificados).
+Inventário integrado à `main`, conferido com as chamadas das telas e a lista explícita do BFF. A primeira ativação ocorreu em 16/11/2026; a transição com MCP e retirada dos handlers de produção foi publicada em 17/11 na revisão `32f196818b4b1fcb1d3b5a33a70ce006f82f00c5`. As evidências atuais estão em [Conclusão dos quatro módulos](typescript-api-transition-finalization.md); o registro da etapa anterior permanece em [Estado da migração](typescript-api-migration-status.md).
 
 | Módulo | Métodos e recursos em `/api/v1` | Uso conferido no frontend |
 | --- | --- | --- |

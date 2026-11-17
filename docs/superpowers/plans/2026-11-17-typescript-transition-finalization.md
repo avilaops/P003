@@ -69,6 +69,6 @@
 ## Task 5 • Publicação e evidências finais
 
 - [x] Revisão independente de toda a alteração e correções necessárias.
-- [ ] PR/CI, merge e release com SHA exato, conservando a release anterior recuperável.
-- [ ] Conferir navegador autenticado e MCP nos quatro módulos, origem TypeScript, empresa, ETag e saúde; somente leituras no ambiente real.
-- [ ] Atualizar inventário, procedimento de retorno e memória com fatos verificados e limites.
+- [x] PR/CI, merge e release com SHA exato, conservando a release anterior recuperável.
+- [x] Conferir navegador autenticado e MCP nos quatro módulos, origem TypeScript, empresa, ETag e saúde; somente leituras no ambiente real.
+- [x] Atualizar inventário, procedimento de retorno e memória com fatos verificados e limites.
