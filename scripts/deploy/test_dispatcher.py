@@ -62,7 +62,7 @@ class TypeScriptComposeTests(unittest.TestCase):
                 self.assertEqual(api['image'], 'erp-next-web:sha-' + A)
                 self.assertEqual(api['network_mode'], 'service:api')
                 self.assertNotIn('ports', api)
-                self.assertEqual(api['environment']['API_TS_HOST'], '127.0.0.1')
+                self.assertEqual(api['environment']['API_TS_HOST'], '0.0.0.0')
                 self.assertEqual(api['environment']['AUTH_ISSUER'], 'https://auth.test')
                 self.assertEqual(api['environment']['DATABASE_URL'], config['services']['api']['environment']['DATABASE_URL'])
                 self.assertEqual(api['environment']['ERP_FISCAL_ENGINE_URL'], 'http://127.0.0.1:8091')

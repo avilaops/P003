@@ -29,7 +29,7 @@ services:
         required: true
     environment:
       NODE_ENV: production
-      API_TS_HOST: 127.0.0.1
+      API_TS_HOST: 0.0.0.0
       API_TS_PORT: "8081"
     network_mode: service:api
     depends_on:
