@@ -100,14 +100,6 @@ CREATE POLICY fiscal_outgoing_nfse_sequences_isolation ON fiscal_outgoing_nfse_s
     USING (tenant_id=nullif(current_setting('app.tenant_id',true),'')::uuid)
     WITH CHECK (tenant_id=nullif(current_setting('app.tenant_id',true),'')::uuid);
 
-DO $$
-BEGIN
-    IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname='erp_next_app') THEN
-        GRANT SELECT,INSERT,UPDATE ON fiscal_outgoing_nfse_issuances,fiscal_outgoing_nfse_sequences TO erp_next_app;
-        GRANT SELECT,INSERT ON fiscal_outgoing_nfse_events TO erp_next_app;
-    END IF;
-END $$;
-
 INSERT INTO permissions(code,description) VALUES
     ('fiscal.outgoing_nfse.read','Consultar NFS-e emitidas pela empresa'),
     ('fiscal.outgoing_nfse.issue','Emitir e reconciliar NFS-e da empresa'),
