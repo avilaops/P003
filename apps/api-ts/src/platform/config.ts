@@ -21,7 +21,7 @@ export type Configuration = {
   port: number
   maximumConnections: number
   mcpResource: string
-  fiscalEngine?: { url: string; token: string; keyring: string }
+  fiscalEngine?: { url: string; token: string; keyring: string; automaticEnabled: boolean }
 }
 
 export function loadConfiguration(environment: NodeJS.ProcessEnv = process.env): Configuration {
@@ -43,6 +43,6 @@ export function loadConfiguration(environment: NodeJS.ProcessEnv = process.env):
     port: value.API_TS_PORT,
     maximumConnections: value.DATABASE_MAX_CONNECTIONS,
     mcpResource: `${mcpOrigin.origin}/mcp`,
-    ...(value.NFSE_ISSUANCE_ENABLED === "true" && fiscalUrl && value.ERP_FISCAL_ENGINE_TOKEN && value.FISCAL_A1_KEYRING ? { fiscalEngine: { url: fiscalUrl.origin, token: value.ERP_FISCAL_ENGINE_TOKEN, keyring: value.FISCAL_A1_KEYRING } } : {}),
+    ...(fiscalUrl && value.ERP_FISCAL_ENGINE_TOKEN && value.FISCAL_A1_KEYRING ? { fiscalEngine: { url: fiscalUrl.origin, token: value.ERP_FISCAL_ENGINE_TOKEN, keyring: value.FISCAL_A1_KEYRING, automaticEnabled: value.NFSE_ISSUANCE_ENABLED === "true" } } : {}),
   }
 }

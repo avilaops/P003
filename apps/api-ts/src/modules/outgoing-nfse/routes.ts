@@ -12,6 +12,7 @@ import { confirmManualIssuance, finishIssuance, fiscalTimestamp, parseIssuanceIn
 
 export type OutgoingNfseDependencies = {
   engine: OutgoingNfseEngine
+  automaticEnabled: boolean
   certificateProvider(context: AuthorizedContext): Promise<{ issuerTaxId: string; certificate: CertificateMaterial }>
 }
 
@@ -24,6 +25,7 @@ export function registerOutgoingNfseRoutes(app: FastifyInstance, dependencies: A
   const authorize = <T>(request: Parameters<typeof authorizeServiceRequest<T>>[0], operation: Parameters<typeof authorizeServiceRequest<T>>[2]) => authorizeServiceRequest(request, dependencies.pool, operation)
   app.post("/api/v1/integrations/nfse/issuances", async (request, reply) => {
     const fiscal = dependencies.outgoingNfse ?? unavailable()
+    if (!fiscal.automaticEnabled) throw new Problem(503, "nfse_automatic_disabled", "Emissão automática de NFS-e permanece desabilitada")
     const input = parseIssuanceInput(request.body)
     const key = commandKey(request.headers["idempotency-key"])
     const started = await authorize(request, context => startIssuance(context, request.headers, key, input, fiscal.engine, fiscal.certificateProvider))
@@ -93,6 +95,7 @@ export function registerOutgoingNfseRoutes(app: FastifyInstance, dependencies: A
 
   app.post("/api/v1/integrations/nfse/issuances/:id/reconcile", async (request, reply) => {
     const fiscal = dependencies.outgoingNfse ?? unavailable()
+    if (!fiscal.automaticEnabled) throw new Problem(503, "nfse_automatic_disabled", "Reconciliação automática de NFS-e permanece desabilitada")
     const id = idSchema.safeParse((request.params as { id?: string }).id)
     if (!id.success) throw new Problem(400, "invalid_id", "Identificador da emissão inválido")
     const key = commandKey(request.headers["idempotency-key"])
@@ -133,6 +136,7 @@ export function registerOutgoingNfseRoutes(app: FastifyInstance, dependencies: A
 
   app.post("/api/v1/integrations/nfse/issuances/:id/cancel", async (request, reply) => {
     const fiscal = dependencies.outgoingNfse ?? unavailable()
+    if (!fiscal.automaticEnabled) throw new Problem(503, "nfse_automatic_disabled", "Cancelamento automático de NFS-e permanece desabilitado")
     const id = idSchema.safeParse((request.params as { id?: string }).id)
     const input = cancelSchema.safeParse(request.body)
     if (!id.success || !input.success) throw new Problem(422, "invalid_input", "Cancelamento de NFS-e inválido")
