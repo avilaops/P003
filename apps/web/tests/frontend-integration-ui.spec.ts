@@ -52,7 +52,7 @@ test("fiscal integrado mantém listagem e preparação do pedido fora das prévi
   await page.route("**/api/erp/fiscal/order-preparations/" + record, route => route.fulfill({ json: { tenantId: tenant, orderId: record, orderRevision: 2, customerId: record, recipient: input.recipient, items: input.items, productsTotal: input.productsTotal } }))
   await page.goto("/fiscal")
   const fiscalLink = page.locator('main a[href="/fiscal/notas-saida"]')
-  await expect(fiscalLink).toContainText("Preparar e consultar NF-e", { timeout: process.env.ERP_BROWSER_DEV === "1" ? 30_000 : 5_000 })
+  await expect(fiscalLink).toContainText("Preparar e consultar notas de saída", { timeout: process.env.ERP_BROWSER_DEV === "1" ? 30_000 : 5_000 })
   await fiscalLink.click()
   await expect(page).toHaveTitle("NF-e de saída • ERP")
   await expect(page.getByText("Nenhuma nota fiscal cadastrada nesta empresa.", { exact: true })).toBeVisible()
