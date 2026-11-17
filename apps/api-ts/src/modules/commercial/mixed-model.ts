@@ -4,7 +4,7 @@ import { revisionValue, type Revision } from "../../platform/revision.js"
 import { calculateNegotiation, negotiationInputSchema, type ApprovalRules, type NegotiationInput, type SourceItem } from "./negotiation-model.js"
 import { commercialCents, invalidCommercial as invalid, rounded, up, simulateParameters, unsigned32, type CommercialParameters } from "./parameters.js"
 
-const nullableText = z.string().nullable().default(null), uuid = z.string().uuid().transform(value => value.toLowerCase())
+const nullableText = z.string().nullable().default(null), uuid = z.guid().transform(value => value.toLowerCase())
 export const mixedInputSchema = negotiationInputSchema.omit({ line: true, versionId: true }).extend({ items: z.array(z.strictObject({ line: z.string(), versionId: uuid, productId: uuid, quantity: unsigned32, structureColor: nullableText, swingArmColor: nullableText, plateHolderColor: nullableText, plateHolderType: nullableText, upholsteryColor: nullableText })) }).strict()
 export type MixedInput = z.infer<typeof mixedInputSchema>
 export type Policy = { line: string; versionId: string; version: Revision; parameters: CommercialParameters }

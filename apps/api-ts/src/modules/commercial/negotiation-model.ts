@@ -3,7 +3,7 @@ import { revisionValue, type Revision } from "../../platform/revision.js"
 import { selectPlateHolderType } from "../sales/finishes.js"
 import { commercialCents as cents, invalidCommercial as invalid, rounded, up, simulateParameters, unsigned32, unsigned64, type CommercialParameters } from "./parameters.js"
 
-const nullableText = z.string().nullable().default(null), uuid = z.string().uuid().transform(value => value.toLowerCase())
+const nullableText = z.string().nullable().default(null), uuid = z.guid().transform(value => value.toLowerCase())
 export const negotiationInputSchema = z.strictObject({
   line: z.string(), versionId: uuid, destinationState: z.string(), taxpayer: z.boolean(),
   discount: z.discriminatedUnion("kind", [z.strictObject({ kind: z.literal("percent"), value: unsigned32 }), z.strictObject({ kind: z.literal("amount"), value: unsigned64 }), z.strictObject({ kind: z.literal("total"), value: unsigned64 })]),

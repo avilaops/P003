@@ -32,7 +32,7 @@ export function registerOrderCommands(app: FastifyInstance, dependencies: AppDep
   })
   app.put<{ Params: { id: string } }>("/api/v1/orders/:id", async (request, reply) => {
     const key = commandKey(request.headers["idempotency-key"]), expected = parseRevision(request.headers["if-match"])
-    const id = z.string().uuid().safeParse(request.params.id)
+    const id = z.guid().safeParse(request.params.id)
     if (!id.success) throw new Problem(422, "invalid_input", "Identificador inválido")
     const outcome = await authorizeRequest(request, dependencies, async context => {
       requirePermission(context, "sales.orders.read"); requirePermission(context, "sales.orders.manage")

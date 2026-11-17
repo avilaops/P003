@@ -25,10 +25,10 @@ const baseInput = z.object({
 }).strict()
 
 const inputSchemas = {
-  "product-categories": baseInput.extend({ parentId: z.string().uuid().nullable().optional().default(null), sortOrder: z.number().int().min(0).max(999_999) }).strict(),
+  "product-categories": baseInput.extend({ parentId: z.guid().nullable().optional().default(null), sortOrder: z.number().int().min(0).max(999_999) }).strict(),
   "product-groups": baseInput,
   "tag-groups": baseInput,
-  tags: baseInput.extend({ groupId: z.string().uuid().nullable().optional().default(null) }).strict(),
+  tags: baseInput.extend({ groupId: z.guid().nullable().optional().default(null) }).strict(),
 } as const
 
 function singleHeader(value: string | string[] | undefined) {
@@ -36,7 +36,7 @@ function singleHeader(value: string | string[] | undefined) {
 }
 
 function commandKey(value: string | string[] | undefined) {
-  const parsed = z.string().uuid().safeParse(singleHeader(value))
+  const parsed = z.guid().safeParse(singleHeader(value))
   if (singleHeader(value) === undefined) throw new Problem(428, "idempotency_required", "Informe a chave de idempotência")
   if (!parsed.success) throw new Problem(422, "invalid_input", "Chave de idempotência inválida")
   return parsed.data
@@ -99,7 +99,7 @@ export function registerReferenceRoutes(app: FastifyInstance, dependencies: AppD
     })
 
     app.get<{ Params: { id: string } }>(`/api/v1/${resource}/:id`, async (request, reply) => {
-      if (!z.string().uuid().safeParse(request.params.id).success) throw new Problem(404, "not_found", "Registro não encontrado nesta empresa")
+      if (!z.guid().safeParse(request.params.id).success) throw new Problem(404, "not_found", "Registro não encontrado nesta empresa")
       const data = await authorizeRequest(request, dependencies, async context => {
         requirePermission(context, definition.read)
         const row = await load(context.client, context.tenantId, request.params.id)
@@ -149,7 +149,7 @@ export function registerReferenceRoutes(app: FastifyInstance, dependencies: AppD
       const key = commandKey(request.headers["idempotency-key"])
       const expected = expectedRevision(request.headers["if-match"])
       const parsed = schema.safeParse(request.body)
-      if (!z.string().uuid().safeParse(request.params.id).success) throw new Problem(404, "not_found", "Registro não encontrado nesta empresa")
+      if (!z.guid().safeParse(request.params.id).success) throw new Problem(404, "not_found", "Registro não encontrado nesta empresa")
       if (!parsed.success) throw new Problem(422, "invalid_input", "Cadastro inválido ou campos desconhecidos")
       const scope = `${definition.event}.updated`
       const data = await authorizeRequest(request, dependencies, async context => {

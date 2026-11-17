@@ -16,7 +16,7 @@ export function registerProposalRoutes(app: FastifyInstance, dependencies: AppDe
     const body = await authorizeRequest(request, dependencies, async context => {
       requirePermission(context, "sales.proposals.read")
       const parsed = z.strictObject({ version: queryInteger(1, 2_147_483_647).optional() }).safeParse(request.query)
-      if (!parsed.success || !z.string().uuid().safeParse(request.params.id).success) throw new Problem(422, "invalid_input", "Versão ou identificador inválido")
+      if (!parsed.success || !z.guid().safeParse(request.params.id).success) throw new Problem(422, "invalid_input", "Versão ou identificador inválido")
       return loadProposal(context, request.params.id, parsed.data.version)
     })
     return reply.header("cache-control", "no-store").header("etag", `"${body.data.revision}"`).send(body)

@@ -8,7 +8,7 @@ import { Problem } from "../../platform/problem.js"
 import { nextRevision, parseRevision, revisionValue } from "../../platform/revision.js"
 
 function idValue(value: string) {
-  const parsed = z.string().uuid().safeParse(value)
+  const parsed = z.guid().safeParse(value)
   if (!parsed.success) throw new Problem(422, "invalid_input", "Identificador inválido")
   return parsed.data.toLowerCase()
 }

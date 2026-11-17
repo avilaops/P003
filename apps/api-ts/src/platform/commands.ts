@@ -5,7 +5,7 @@ import { Problem } from "./problem.js"
 
 export function commandKey(value: string | string[] | undefined) {
   if (value === undefined) throw new Problem(428, "idempotency_required", "Informe Idempotency-Key para confirmar esta operação")
-  const parsed = z.string().uuid().safeParse(value)
+  const parsed = z.guid().safeParse(value)
   if (!parsed.success) throw new Problem(422, "invalid_input", "Idempotency-Key deve ser UUID")
   return parsed.data
 }

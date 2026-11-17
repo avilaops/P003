@@ -11,7 +11,7 @@ import { loadCheckout } from "../orders/checkout.js"
 const policy = "platform.company.manage", director = "sales.approvals.director", manager = "sales.approvals.manage", read = "sales.orders.read"
 export const approvalRulesSchema = z.strictObject({ belowTarget: z.boolean(), freight: z.boolean(), directorAutoApproval: z.boolean(), managerLimit: z.enum(["profit", "target"]) })
 function idValue(value: string) {
-  const id = z.string().uuid().safeParse(value)
+  const id = z.guid().safeParse(value)
   if (!id.success) throw new Problem(422, "invalid_input", "Identificador inválido")
   return id.data.toLowerCase()
 }

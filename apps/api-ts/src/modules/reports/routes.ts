@@ -42,7 +42,7 @@ export function registerReportRoutes(app: FastifyInstance, dependencies: AppDepe
     return reply.code(201).header("cache-control", "no-store").header("etag", `"${body.data.revision}"`).send(body)
   })
   app.put<{ Params: { id: string } }>(`${url}/:id`, async (request, reply) => {
-    const expected = parseRevision(request.headers["if-match"]), id = z.string().uuid().safeParse(request.params.id)
+    const expected = parseRevision(request.headers["if-match"]), id = z.guid().safeParse(request.params.id)
     if (!id.success) throw new Problem(422, "invalid_input", "Identificador inválido")
     const body = await authorizeRequest(request, dependencies, async context => {
       requirePermission(context, "system.reports.read"); requirePermission(context, "system.reports.manage")

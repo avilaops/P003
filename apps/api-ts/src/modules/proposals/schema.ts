@@ -4,9 +4,9 @@ import { Problem } from "../../platform/problem.js"
 const optional = z.preprocess(value => value === null ? undefined : value, z.string().optional())
 const nullable = z.string().nullable().default(null)
 export const proposalInputSchema = z.strictObject({
-  customerId: z.string().uuid().transform(value => value.toLowerCase()), validUntil: z.string(), paymentTerms: z.string(), deliveryTerms: z.string(), notes: z.string(),
+  customerId: z.guid().transform(value => value.toLowerCase()), validUntil: z.string(), paymentTerms: z.string(), deliveryTerms: z.string(), notes: z.string(),
   items: z.array(z.strictObject({
-    productId: z.string().uuid().transform(value => value.toLowerCase()), quantity: z.string(), unitPrice: nullable, structureColor: nullable, upholsteryColor: nullable,
+    productId: z.guid().transform(value => value.toLowerCase()), quantity: z.string(), unitPrice: nullable, structureColor: nullable, upholsteryColor: nullable,
     swingArmColor: optional, armColor: optional, plateHolderColor: optional, plateHolderType: optional,
   })),
 }).transform(input => {
@@ -22,7 +22,7 @@ export const proposalInputSchema = z.strictObject({
 })
 export type ProposalInput = z.infer<typeof proposalInputSchema>
 export function proposalId(value: string) {
-  const id = z.string().uuid().safeParse(value)
+  const id = z.guid().safeParse(value)
   if (!id.success) throw new Problem(422, "invalid_input", "Identificador inválido")
   return id.data.toLowerCase()
 }

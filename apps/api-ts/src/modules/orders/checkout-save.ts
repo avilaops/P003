@@ -5,7 +5,7 @@ import { signed64 } from "../../platform/numbers.js"
 import { Problem } from "../../platform/problem.js"
 import { validateDate } from "../sales/fixed.js"
 
-const uuid = z.string().uuid().transform(value => value.toLowerCase())
+const uuid = z.guid().transform(value => value.toLowerCase())
 export const checkoutInputSchema = z.strictObject({
   entry: z.strictObject({ paymentMethodId: uuid.nullable().default(null), dueOn: z.string().nullable().default(null) }),
   installments: z.array(z.strictObject({ paymentMethodId: uuid, dueOn: z.string(), amountCents: signed64 })),

@@ -19,7 +19,7 @@ const partyQuerySchema = z.strictObject({
 })
 
 function header(value: string | string[] | undefined) { return Array.isArray(value) ? undefined : value }
-function command(value: string | string[] | undefined) { if (!value) throw new Problem(428, "idempotency_required", "Informe a chave de idempotência"); const parsed = z.string().uuid().safeParse(header(value)); if (!parsed.success) throw new Problem(422, "invalid_input", "Chave de idempotência inválida"); return parsed.data }
+function command(value: string | string[] | undefined) { if (!value) throw new Problem(428, "idempotency_required", "Informe a chave de idempotência"); const parsed = z.guid().safeParse(header(value)); if (!parsed.success) throw new Problem(422, "invalid_input", "Chave de idempotência inválida"); return parsed.data }
 
 const projection = "id,revision,person_type,legal_name,trade_name,tax_id,email,phone,is_customer,is_supplier,status,addresses,contacts,fiscal"
 
@@ -60,7 +60,7 @@ export function registerPartyRoutes(app: FastifyInstance, dependencies: AppDepen
   })
 
   app.get<{ Params: { id: string } }>("/api/v1/parties/:id", async (request, reply) => {
-    if (!z.string().uuid().safeParse(request.params.id).success) throw new Problem(404, "not_found", "Cadastro não encontrado")
+    if (!z.guid().safeParse(request.params.id).success) throw new Problem(404, "not_found", "Cadastro não encontrado")
     const body = await authorizeRequest(request, dependencies, async context => {
       requirePermission(context, "catalog.parties.read")
       const result = await context.client.query(`SELECT ${projection} FROM parties WHERE tenant_id=$1 AND id=$2`, [context.tenantId, request.params.id])
@@ -95,7 +95,7 @@ export function registerPartyRoutes(app: FastifyInstance, dependencies: AppDepen
   app.put<{ Params: { id: string } }>("/api/v1/parties/:id", async (request, reply) => {
     const expected = revision(request.headers["if-match"])
     const parsed = partyInputSchema.safeParse(request.body)
-    if (!parsed.success || !z.string().uuid().safeParse(request.params.id).success) throw new Problem(422, "invalid_input", "JSON inválido ou campos desconhecidos")
+    if (!parsed.success || !z.guid().safeParse(request.params.id).success) throw new Problem(422, "invalid_input", "JSON inválido ou campos desconhecidos")
     const body = await authorizeRequest(request, dependencies, async context => {
       requirePermission(context, "catalog.parties.manage")
       requirePermission(context, "catalog.parties.read")

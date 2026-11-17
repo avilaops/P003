@@ -13,13 +13,13 @@ import { productInputSchema, materialize, type ProductInput as Input } from "./s
 
 const querySchema = z.strictObject({
   q: z.string().max(160).default(""), status: z.enum(["active", "archived"]).optional(),
-  category_id: z.string().uuid().optional(), offset: z.coerce.number().int().min(0).max(100_000).default(0),
+  category_id: z.guid().optional(), offset: z.coerce.number().int().min(0).max(100_000).default(0),
   limit: z.coerce.number().int().min(1).max(100).default(25),
 })
 
 
 function one(value: string | string[] | undefined) { return Array.isArray(value) ? undefined : value }
-function command(value: string | string[] | undefined) { if (!value) throw new Problem(428, "idempotency_required", "Informe a chave de idempotência"); const parsed = z.string().uuid().safeParse(one(value)); if (!parsed.success) throw new Problem(422, "invalid_input", "Chave de idempotência inválida"); return parsed.data }
+function command(value: string | string[] | undefined) { if (!value) throw new Problem(428, "idempotency_required", "Informe a chave de idempotência"); const parsed = z.guid().safeParse(one(value)); if (!parsed.success) throw new Problem(422, "invalid_input", "Chave de idempotência inválida"); return parsed.data }
 function cents(value: string) { const [whole, fraction = ""] = value.split("."); return BigInt(whole!) * 100n + BigInt(fraction.padEnd(2, "0")) }
 
 const projection = "(SELECT main_media_id FROM product_catalog_profiles WHERE tenant_id=products.tenant_id AND product_id=products.id) AS main_media_id,COALESCE((SELECT (data->>'upholsteryConfigurable')::boolean FROM registration_settings WHERE tenant_id=products.tenant_id AND section='products'),true) AS upholstery_configurable,id,sku,name,unit,ncm,cest,price_cents,status,revision,category_id,structure_colors,swing_arm_colors,finishing_palette,upholstery_colors,plate_holder_colors,plate_holder_types,plate_holder_type,photo_data_url,(COALESCE(photo_data_url,'')<>'' OR EXISTS(SELECT 1 FROM product_catalog_profiles WHERE tenant_id=products.tenant_id AND product_id=products.id AND main_media_id IS NOT NULL)) AS has_photo"
@@ -62,7 +62,7 @@ export function registerProductRoutes(app: FastifyInstance, dependencies: AppDep
   })
 
   app.get<{ Params: { id: string } }>("/api/v1/products/:id", async (request, reply) => {
-    if (!z.string().uuid().safeParse(request.params.id).success) throw new Problem(404, "not_found", "Produto não encontrado")
+    if (!z.guid().safeParse(request.params.id).success) throw new Problem(404, "not_found", "Produto não encontrado")
     const body = await authorizeRequest(request, dependencies, async context => {
       requirePermission(context, "catalog.products.read")
       const loaded = await context.client.query(`SELECT ${projection} FROM products WHERE tenant_id=$1 AND id=$2`, [context.tenantId, request.params.id])
@@ -97,7 +97,7 @@ export function registerProductRoutes(app: FastifyInstance, dependencies: AppDep
 
   app.put<{ Params: { id: string } }>("/api/v1/products/:id", { bodyLimit: 2_097_152 }, async (request, reply) => {
     const expected = revision(request.headers["if-match"]), parsed = productInputSchema.safeParse(request.body)
-    if (!parsed.success || !z.string().uuid().safeParse(request.params.id).success) throw new Problem(422, "invalid_input", "Cadastro inválido ou campos desconhecidos")
+    if (!parsed.success || !z.guid().safeParse(request.params.id).success) throw new Problem(422, "invalid_input", "Cadastro inválido ou campos desconhecidos")
     const body = await authorizeRequest(request, dependencies, async context => {
       requirePermission(context, "catalog.products.manage")
       requirePermission(context, "catalog.products.read")
