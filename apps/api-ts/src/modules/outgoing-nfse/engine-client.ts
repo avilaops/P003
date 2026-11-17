@@ -12,12 +12,26 @@ const resultSchema = z.object({
 
 export type FiscalEngineResult = z.infer<typeof resultSchema>
 export type CertificateMaterial = { pkcs12Base64: string; password: string }
+export type InspectedOutgoingNfse = {
+  accessKey: string
+  environment: "production" | "homologation"
+  number: string
+  issuedAt: string
+  provider: { kind: string; value: string; name: string | null }
+  recipient: { kind: string; value: string; name: string | null }
+  serviceCode: string
+  description: string
+  serviceCents: string
+  xml: string
+  xmlSha256: string
+}
 
 export interface OutgoingNfseEngine {
   prepare(input: Record<string, unknown>): Promise<Record<string, unknown>>
   issue(input: Record<string, unknown>): Promise<FiscalEngineResult>
   consult(input: Record<string, unknown>): Promise<FiscalEngineResult>
   cancel(input: Record<string, unknown>): Promise<FiscalEngineResult>
+  inspectOutgoing(input: { xml: string; providerTaxId: string }): Promise<InspectedOutgoingNfse>
 }
 
 export class HttpOutgoingNfseEngine implements OutgoingNfseEngine {
@@ -46,4 +60,5 @@ export class HttpOutgoingNfseEngine implements OutgoingNfseEngine {
   async issue(input: Record<string, unknown>) { return resultSchema.parse(await this.call("v1/issue-nfse", input)) }
   async consult(input: Record<string, unknown>) { return resultSchema.parse(await this.call("v1/consult-nfse", input)) }
   async cancel(input: Record<string, unknown>) { return resultSchema.parse(await this.call("v1/cancel-nfse", input)) }
+  async inspectOutgoing(input: { xml: string; providerTaxId: string }) { return this.call("v1/inspect-nfse", input) as Promise<InspectedOutgoingNfse> }
 }
