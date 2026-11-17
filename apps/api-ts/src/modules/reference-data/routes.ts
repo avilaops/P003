@@ -29,7 +29,7 @@ const inputSchemas = {
   "product-categories": baseInput.extend({ parentId: databaseId.nullable().optional().default(null), sortOrder: z.number().int().min(0).max(999_999) }).strict(),
   "product-groups": baseInput,
   "tag-groups": baseInput,
-  tags: baseInput.extend({ groupId: z.string().uuid().nullable().optional().default(null) }).strict(),
+  tags: baseInput.extend({ groupId: z.guid().nullable().optional().default(null) }).strict(),
 } as const
 
 function singleHeader(value: string | string[] | undefined) {
@@ -82,7 +82,7 @@ async function validateRelations(context: AuthorizedContext, resource: string, i
 export function registerReferenceRoutes(app: FastifyInstance, dependencies: AppDependencies) {
   for (const [resource, definition] of Object.entries(definitions)) {
     const schema = inputSchemas[resource as keyof typeof inputSchemas]
-    const idSchema = resource === "product-categories" ? databaseId : z.string().uuid()
+    const idSchema = databaseId
     const projection = ["id", "revision", "code", "name", "status", "notes", ...definition.extras].join(",")
     const load = async (client: Parameters<Parameters<typeof authorizeRequest>[2]>[0]["client"], tenantId: string, id: string) => {
       const result = await client.query<Record<string, unknown>>(`SELECT ${projection} FROM ${definition.table} WHERE tenant_id=$1 AND id=$2`, [tenantId, id])

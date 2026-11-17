@@ -31,6 +31,8 @@ mod danfe_tests;
 #[cfg(test)]
 mod dashboard_tests;
 #[cfg(test)]
+mod document_packet_tests;
+#[cfg(test)]
 mod domain_tests;
 #[cfg(test)]
 mod emission_tests;

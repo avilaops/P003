@@ -25,6 +25,8 @@ import { CommercialCheckout, type CheckoutHandle, type CheckoutProposalSnapshot 
 import { paymentToday, type CheckoutInput } from "./commercial-payment-model"
 import { checkoutEntryIssue } from "./commercial-payment-mobile-model"
 import { OrderWeightSummary } from "./order-weight-summary"
+import { OrderEquipmentList } from "./order-equipment-list"
+import { requiredOrderFinishParts } from "./order-equipment-model"
 import { useOrderProductDetails, type ProductFinishes } from "./order-product-details"
 import { OrderCustomerForm, type OrderCustomerHandle } from "./order-customer-form"
 import { CommercialOrderLayout, OrderEquipmentSearch, OrderSection, OrderTotals } from "./commercial-order-layout"
@@ -181,10 +183,12 @@ function Simulator({ table: initialTable, initialSourceLine, initialProduct, ini
   const invalidDiscount = parseAmount(discount.raw) === null
   const discountField = discount.kind === "total" ? "discount.total" : "discount.percent"
   const invalidPricingField = entryIssue || invalidFreight || invalidDiscount || unavailableItems.length || items.some(item => !validOrderQuantity(item.quantity))
+  const unfinishedEquipment = orderMode ? items.filter(item => requiredOrderFinishParts(item, productDetails.products[item.productId.toLowerCase()]).length > 0) : []
   const orderIssues = orderedOrderIssues([
     ...(!items.length ? [{ field: "equipment.search", section: "equipment" as const, message: "Adicione ao menos um equipamento." }] : []),
     ...items.filter(item => !validOrderQuantity(item.quantity)).map(item => ({ field: `equipment.quantity.${item.productId}`, section: "equipment" as const, message: `Confira a quantidade de ${table.data?.items.find(source => source.productId === item.productId)?.name || "equipamento"}.` })),
     ...(unavailableItems.length ? [{ field: "equipment.search", section: "equipment" as const, message: "Remova os equipamentos indisponíveis nesta tabela." }] : []),
+    ...(unfinishedEquipment.length ? [{ field: `equipment.finishes.${unfinishedEquipment[0].productId}`, section: "equipment" as const, message: unfinishedEquipment.length === 1 ? `Escolha os acabamentos de ${sourcePrice(unfinishedEquipment[0])?.name || "equipamento"}.` : `Escolha os acabamentos de ${unfinishedEquipment.length} equipamentos.` }] : []),
     ...customerProgress.issues,
     ...(entryIssue ? [entryIssue] : []),
     ...checkoutIssues.filter(issue => issue.field !== "checkout.entry" || !!result && !entryIssue),
@@ -197,7 +201,7 @@ function Simulator({ table: initialTable, initialSourceLine, initialProduct, ini
     if (issue.field.startsWith("customer.")) { customerForm.current?.focus(issue.field.slice(9)); return }
     if (issue.field.startsWith("checkout.")) { checkout.current?.focus(issue.field.slice(9)); return }
     const target = issue.field === "equipment.search" ? document.getElementById("order-equipment-search") : document.querySelector<HTMLElement>(`[data-order-field="${issue.field}"]`)
-    if (target) { target.focus({ preventScroll: true }); target.scrollIntoView({ block: "center" }) }
+    if (target) { target.focus({ preventScroll: true }); target.scrollIntoView({ block: "center" }); if (issue.field.startsWith("equipment.finishes.")) target.click() }
     else focusOrderSection(issue.section)
   }
   useEffect(() => {
@@ -352,23 +356,13 @@ function Simulator({ table: initialTable, initialSourceLine, initialProduct, ini
         renderOrder={({ payment, delivery }) => <CommercialOrderLayout
           equipment={<OrderSection id="order-equipment" title="Equipamentos" detail={quantityTotal === null ? "Confira as quantidades" : quantityTotal + " un."}>
             {table.sourceWarnings?.map(message => <p role="status" key={message} className="text-sm">{message} <Button type="button" variant="outline" disabled={frozen} onClick={refreshTable}>Atualizar tabelas</Button></p>)}
-            <OrderEquipmentSearch items={table.data!.items} selected={items.map(item => item.productId)} disabled={frozen} onAdd={add} />
-            {Object.keys(productDetails.errors).length > 1 && <div role="status" className="flex flex-wrap items-center gap-2 text-sm"><span>Acabamentos indisponíveis em {Object.keys(productDetails.errors).length} equipamentos.</span><Button type="button" variant="outline" disabled={frozen || !!productDetails.loadingIds.length} onClick={() => productDetails.retry()}>Tentar de novo para todos</Button></div>}
+            <OrderEquipmentSearch items={table.data!.items} selected={items} tenantId={table.tenantId} disabled={frozen} onAdd={add} />
             {unavailableItems.length > 0 && <p role="alert" className="text-sm">Há equipamentos indisponíveis nesta versão. Remova os itens indicados para continuar.</p>}
-            {items.length ? <div className="order-equipment-scroll" role="region" aria-label="Equipamentos do pedido" tabIndex={0}>
-              <DataTable className="order-equipment-table" aria-label="Equipamentos do pedido">
-                <thead><tr><th scope="col">Equipamento</th><th scope="col">Qtd.</th><th scope="col">Valor unit. s/ IPI</th><th scope="col">Desconto</th><th scope="col">Total c/ IPI</th><th scope="col"><span className="sr-only">Ações</span></th></tr></thead>
-                <tbody>{items.map((item, index) => <SelectedProduct key={item.productId} item={item}
-                  name={sourcePrice(item)?.name || "Equipamento indisponível"}
-                  sku={sourcePrice(item)?.sku || ""}
-                  tenant={table.tenantId} orderMode price={sourcePrice(item)}
-                  details={{ value: productDetails.products[item.productId.toLowerCase()] ? { tenantId: table.tenantId, data: productDetails.products[item.productId.toLowerCase()] } : null, loading: productDetails.loadingIds.includes(item.productId.toLowerCase()), error: productDetails.errors[item.productId.toLowerCase()] || "", status: 0, reload: () => productDetails.retry(item.productId) }}
-                  priced={sale?.items.find(source => source.productId === item.productId)} disabled={frozen}
-                  update={next => { setItems(current => current.map((source, position) => position === index ? next : source)); change() }}
-                  remove={() => { setItems(current => current.filter(source => source.productId !== item.productId)); change() }} />)}</tbody>
-                <tfoot><tr><th scope="row">Total</th><td>{quantityTotal === null ? "—" : quantityTotal + " un."}</td><td>{sale ? money(sale.tableTotalCents) : "—"}</td><td>{sale ? money(sale.discountCents) : "—"}</td><td>{sale ? money(sale.totalCents) : "—"}</td><td /></tr></tfoot>
-              </DataTable>
-            </div> : <div className="order-equipment-empty"><p>Nenhum equipamento ainda.</p><Button type="button" variant="outline" disabled={frozen} onClick={focusSearch}>Adicionar equipamento</Button></div>}
+            {items.length ? <OrderEquipmentList items={items} prices={table.data!.items} sale={sale} tenantId={table.tenantId} disabled={frozen} details={productDetails}
+              onUpdate={(id, next) => { if (frozen) return; setItems(current => current.map(source => source.productId === id ? next : source)); change() }}
+              onRemove={id => { if (frozen) return; setItems(current => current.filter(source => source.productId !== id)); change() }}
+              onUpdateMany={updates => { if (frozen) return; const byId = new Map(updates.map(item => [item.productId, item])); setItems(current => current.map(item => byId.get(item.productId) || item)); change() }}
+            /> : <div className="order-equipment-empty"><p>Nenhum equipamento ainda.</p><Button type="button" variant="outline" disabled={frozen} onClick={focusSearch}>Adicionar equipamento</Button></div>}
             {attempted && orderIssues.filter(issue => issue.section === "equipment").map(issue => <p key={issue.field} className="text-xs text-destructive">{issue.message}</p>)}
             <OrderWeightSummary tenantId={table.tenantId} loading={!!productDetails.loadingIds.length} unavailable={!!Object.keys(productDetails.errors).length} onRetry={() => productDetails.retry()} items={items.map(item => ({ ...item, equipmentWeight: productDetails.products[item.productId.toLowerCase()]?.weight ?? null, quantity: validOrderQuantity(item.quantity) ? String(Number(item.quantity)) : "" }))} />
           </OrderSection>}

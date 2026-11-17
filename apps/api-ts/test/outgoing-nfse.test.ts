@@ -111,7 +111,7 @@ test("private NFS-e HTTP command authenticates, authorizes, emits once and repla
   const app = buildApp({
     pool: { async connect() { return client } }, userinfoUrl: "https://auth.example.test/oauth/userinfo",
     fetchAuth: async () => Response.json({ sub: "service-app", email: "service@example.test", email_verified: true }),
-    outgoingNfse: { engine, async certificateProvider() { return { issuerTaxId: "04252011000110", certificate: { pkcs12Base64: "AQID", password: "secret" } } } },
+    outgoingNfse: { engine, automaticEnabled: true, async certificateProvider() { return { issuerTaxId: "04252011000110", certificate: { pkcs12Base64: "AQID", password: "secret" } } } },
   })
   const headers = { authorization: `Bearer erp_${tenant}_${"a".repeat(64)}`, "x-tenant-id": tenant, "idempotency-key": "33333333-3333-4333-8333-333333333333" }
   const first = await app.inject({ method: "POST", url: "/api/v1/integrations/nfse/issuances", headers, payload: input })
@@ -152,8 +152,11 @@ test("manual NFS-e prepares without certificate and authorizes only the matching
     async issue() { throw new Error("automatic issue must not run") }, async consult() { throw new Error("not called") }, async cancel() { throw new Error("not called") },
     async inspectOutgoing() { return { accessKey: "1".repeat(50), environment: "production", number: "15", issuedAt: "2026-11-17T12:00:00-03:00", provider: { kind: "CNPJ", value: "04252011000110", name: "Ávila Ops" }, recipient: { kind: "CPF", value: manualInput.customer.taxId, name: manualInput.customer.name }, serviceCode: manualInput.serviceCode, description: manualInput.description, serviceCents: "123456", xml, xmlSha256: "a".repeat(64) } },
   }
-  const app = buildApp({ pool: { async connect() { return client } }, userinfoUrl: "https://auth.example.test/oauth/userinfo", fetchAuth: async () => Response.json({ sub: "service-app", email: "service@example.test", email_verified: true }), outgoingNfse: { engine, async certificateProvider() { throw new Error("certificate must not load") } } })
+  const app = buildApp({ pool: { async connect() { return client } }, userinfoUrl: "https://auth.example.test/oauth/userinfo", fetchAuth: async () => Response.json({ sub: "service-app", email: "service@example.test", email_verified: true }), outgoingNfse: { engine, automaticEnabled: false, async certificateProvider() { throw new Error("certificate must not load") } } })
   const headers = { authorization: `Bearer erp_${tenant}_${"a".repeat(64)}`, "x-tenant-id": tenant, "idempotency-key": "33333333-3333-4333-8333-333333333333" }
+  const automatic = await app.inject({ method: "POST", url: "/api/v1/integrations/nfse/issuances", headers, payload: manualInput })
+  assert.equal(automatic.statusCode, 503)
+  assert.equal(automatic.json().type.endsWith("/nfse_automatic_disabled"), true)
   const prepared = await app.inject({ method: "POST", url: "/api/v1/integrations/nfse/manual-issuances", headers, payload: manualInput })
   assert.equal(prepared.statusCode, 201, prepared.body)
   assert.equal(prepared.json().data.id, savedIssuance)

@@ -1,8 +1,10 @@
 "use client"
 
-import { useState, type ReactNode } from "react"
-import { Button } from "@/components/ui/button"
+import { Combobox } from "@base-ui/react/combobox"
+import { Plus, Search } from "lucide-react"
+import { useMemo, useRef, useState, type ReactNode } from "react"
 import { Input } from "@/components/ui/input"
+import { ProductThumbnail } from "@/features/catalog/product-thumbnail"
 import { money, percent, type PriceItem, type Sale } from "./negotiation-types"
 import "./commercial-order.css"
 
@@ -20,18 +22,116 @@ export function CommercialOrderLayout({ equipment, customer, delivery, payment, 
   </div>
 }
 
-export function OrderEquipmentSearch({ items, selected, disabled, onAdd }: { items: PriceItem[]; selected: string[]; disabled: boolean; onAdd: (id: string, source?: PriceItem) => void }) {
+function normalizeEquipmentSearch(value: string) {
+  return value.normalize("NFD").replace(/\p{M}/gu, "").toLocaleLowerCase("pt-BR").trim()
+}
+
+export function OrderEquipmentSearch({ items, selected, tenantId, disabled, onAdd }: {
+  items: PriceItem[]
+  selected: Pick<PriceItem, "productId" | "line" | "versionId">[]
+  tenantId: string
+  disabled: boolean
+  onAdd: (id: string, source?: PriceItem) => void
+}) {
   const [query, setQuery] = useState("")
   const [open, setOpen] = useState(false)
-  const normalized = query.trim().toLocaleLowerCase("pt-BR")
-  const matches = items.filter(item => item.available !== false && `${item.name} ${item.sku}`.toLocaleLowerCase("pt-BR").includes(normalized)).slice(0, 12)
-  function add(id: string, source?: PriceItem) { onAdd(id, source); setQuery(""); setOpen(false) }
-  return <div className="order-equipment-search" onBlur={event => { if (!event.currentTarget.contains(event.relatedTarget)) setOpen(false) }} onKeyDown={event => { if (event.key === "Escape") setOpen(false) }}>
-    <label htmlFor="order-equipment-search">Buscar equipamento</label>
-    <Input id="order-equipment-search" type="search" autoComplete="off" maxLength={160} placeholder="Nome ou código" value={query} disabled={disabled} aria-expanded={open && !!normalized} aria-controls={open && normalized ? "order-equipment-results" : undefined} onChange={event => { setQuery(event.target.value); setOpen(true) }} onFocus={() => setOpen(true)} onKeyDown={event => { if (event.key === "Enter") { event.preventDefault(); if (normalized && matches.length === 1 && (selected.length < 100 || selected.includes(matches[0].productId))) add(matches[0].productId, matches[0]) } }} />
-    {open && normalized && <div className="order-equipment-results" id="order-equipment-results" aria-label="Equipamentos encontrados">
-      {matches.length ? <ul>{matches.map(item => <li key={`${item.productId}:${item.versionId || ""}`}><Button type="button" variant="ghost" disabled={disabled || selected.length >= 100 && !selected.includes(item.productId)} onClick={() => add(item.productId, item)}><span><strong>{item.name}</strong><small>{item.line && `${item.line === "national" ? "Nacional" : "Importada"} • `}{item.sku}{selected.includes(item.productId) ? " · Acrescentar uma unidade" : ""}</small></span><span>{money(item.priceWithIpiCents)}</span></Button></li>)}</ul> : <p role="status">Nenhum equipamento encontrado.</p>}
-    </div>}
+  const input = useRef<HTMLInputElement>(null)
+  const list = useRef<HTMLDivElement>(null)
+  const catalog = useMemo(() => items
+    .filter(item => item.available !== false)
+    .map(item => ({ item, search: normalizeEquipmentSearch(`${item.name} ${item.sku}`) })), [items])
+  const matches = useMemo(() => {
+    const words = normalizeEquipmentSearch(query).split(/\s+/).filter(Boolean)
+    return catalog.filter(entry => words.every(word => entry.search.includes(word))).map(entry => entry.item)
+  }, [catalog, query])
+  const selectedByProduct = new Map(selected.map(item => [item.productId, item]))
+  const atLimit = selected.length >= 100
+
+  function blockedReason(item: PriceItem) {
+    const existing = selectedByProduct.get(item.productId)
+    if (existing && (existing.line !== item.line || existing.versionId !== item.versionId)) return "Já incluído por outra tabela"
+    if (!existing && atLimit) return "Limite de 100 equipamentos"
+  }
+
+  function add(item: PriceItem) {
+    if (disabled || blockedReason(item)) return
+    onAdd(item.productId, item)
+    setQuery("")
+    setOpen(false)
+    list.current?.scrollTo({ top: 0 })
+    input.current?.focus({ preventScroll: true })
+  }
+
+  return <div className="order-equipment-search">
+    <Combobox.Root<PriceItem>
+      filteredItems={matches}
+      inputValue={query}
+      onInputValueChange={setQuery}
+      value={null}
+      itemToStringLabel={item => item.name}
+      disabled={disabled}
+      open={open && !disabled}
+      onOpenChange={setOpen}
+      onValueChange={(item, event) => {
+        // Cada escolha é uma ação de inclusão, sem registrar um valor no campo de busca.
+        event.cancel()
+        if (item) add(item)
+      }}
+      autoComplete="off"
+    >
+      <label htmlFor="order-equipment-search">Buscar equipamento</label>
+      <div className="order-equipment-field">
+        <Search aria-hidden="true" />
+        <Combobox.Input
+          render={<Input className="order-equipment-input" />}
+          ref={input}
+          id="order-equipment-search"
+          type="search"
+          maxLength={160}
+          placeholder="Nome ou código"
+          onFocus={() => setOpen(true)}
+          onKeyDown={event => {
+            if (event.key !== "Enter" || event.nativeEvent.isComposing) return
+            event.preventDefault()
+            if (event.currentTarget.getAttribute("aria-activedescendant")) return
+            event.preventBaseUIHandler()
+            if (open && query.trim() && matches.length === 1) add(matches[0])
+          }}
+        />
+      </div>
+      <Combobox.Portal>
+        <Combobox.Positioner className="order-equipment-positioner" align="start" sideOffset={6} collisionPadding={8}>
+          <Combobox.Popup className="order-equipment-results">
+            <div className="order-equipment-results-heading">
+              <Combobox.Status>{matches.length ? `${matches.length} ${matches.length === 1 ? "equipamento" : "equipamentos"}` : "Nenhum equipamento encontrado."}</Combobox.Status>
+              {matches.length > 0 && <span>Preço com IPI</span>}
+            </div>
+            <Combobox.List ref={list} className="order-equipment-list" aria-label="Equipamentos encontrados">
+              {(item: PriceItem) => {
+                const reason = blockedReason(item)
+                const line = item.line === "national" ? "Nacional" : item.line === "imported" ? "Importada" : ""
+                const hint = reason || (selectedByProduct.has(item.productId) ? "Acrescentar 1 un." : "")
+                return <Combobox.Item
+                  value={item}
+                  key={`${item.productId}:${item.line}:${item.versionId}`}
+                  className="order-equipment-option"
+                  disabled={Boolean(reason)}
+                >
+                  <span className="order-equipment-thumbnail"><ProductThumbnail id={item.productId} name={item.name} tenantId={tenantId} decorative /></span>
+                  <span className="order-equipment-option-copy">
+                    <strong>{item.name}</strong>
+                    <small>{[item.sku, line].filter(Boolean).join(" • ")}</small>
+                    {hint && <small className="order-equipment-option-hint">{hint}</small>}
+                  </span>
+                  <span className="order-equipment-option-price">{money(item.priceWithIpiCents)}</span>
+                  {!reason && <Plus className="order-equipment-option-add" aria-hidden="true" />}
+                </Combobox.Item>
+              }}
+            </Combobox.List>
+          </Combobox.Popup>
+        </Combobox.Positioner>
+      </Combobox.Portal>
+    </Combobox.Root>
   </div>
 }
 

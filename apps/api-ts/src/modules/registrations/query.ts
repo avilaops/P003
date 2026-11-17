@@ -10,7 +10,7 @@ export function queryInteger(minimum: number, maximum: number) {
 export const listQuerySchema = z.strictObject({
   q: searchQuery,
   status: z.enum(["active", "archived"]).optional(),
-  category_id: z.string().uuid().optional(),
+  category_id: z.guid().optional(),
   offset: queryInteger(0, 100_000).default(0),
   limit: queryInteger(1, 100).default(25),
 })

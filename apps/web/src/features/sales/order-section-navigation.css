@@ -1,0 +1,111 @@
+.commercial-order-page {
+  --order-header-height: 52px;
+  --order-navigation-height: 48px;
+}
+
+.commercial-order-page .order-section-navigation {
+  position: sticky;
+  top: var(--order-header-height);
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  box-sizing: border-box;
+  min-width: 0;
+  max-width: 100%;
+  height: var(--order-navigation-height);
+  margin-bottom: 12px;
+  padding: 1px 2px;
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
+  scrollbar-width: none;
+  border-block: 1px solid var(--border);
+  background: var(--background);
+}
+
+.order-section-navigation .order-section-nav-button {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 5px;
+  min-height: 44px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  color: var(--foreground);
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.order-section-nav-button:hover {
+  background: var(--muted);
+}
+
+.commercial-order-page .order-section-nav-button:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: -3px;
+}
+
+.order-section-navigation .order-section-nav-button[aria-current=step] {
+  background: var(--primary);
+  color: var(--primary-foreground);
+}
+
+.order-section-navigation .order-section-nav-count[aria-hidden=true] {
+  display: inline-grid;
+  place-items: center;
+  min-width: 1.4em;
+  padding-inline: 0.25em;
+  border: 1px solid currentColor;
+  border-radius: 1em;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.25;
+}
+
+.commercial-order-page :is(#order-equipment, #order-customer, #order-delivery, #order-discount, #order-payment) {
+  scroll-margin-top: calc(var(--order-header-height) + var(--order-navigation-height) + 8px);
+}
+
+.order-pending-review {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+  font-size: 12px;
+}
+
+.order-pending-review h3 {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.order-pending-review details {
+  min-width: 0;
+}
+
+.order-pending-review :is(summary, button) {
+  min-height: 44px;
+  padding-block: 8px;
+  overflow-wrap: anywhere;
+}
+
+.order-pending-review summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.order-pending-review ul {
+  padding-inline-start: 16px;
+  list-style: disc;
+}
+
+.order-pending-review button {
+  color: var(--primary);
+  text-align: start;
+  text-decoration: underline;
+}
+
+@media (min-width: 1024px) {
+  .commercial-order-page { --order-header-height: 64px; }
+}

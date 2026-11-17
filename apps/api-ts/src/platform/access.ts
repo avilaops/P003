@@ -15,7 +15,7 @@ export type AccessDependencies = {
 }
 
 export type AuthorizedContext = TenantContext & { identity: AuthenticatedIdentity }
-const tenantSchema = z.string().uuid()
+const tenantSchema = z.guid()
 const authenticatedRequests = new WeakMap<object, AuthenticatedIdentity>()
 
 function singleHeader(value: string | string[] | undefined): string | undefined {

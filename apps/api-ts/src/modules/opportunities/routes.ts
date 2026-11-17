@@ -11,7 +11,7 @@ import { validDocument } from "../parties/schema.js"
 import { queryInteger } from "../registrations/query.js"
 
 const stages = ["new", "contacted", "proposed", "negotiation", "won", "lost"]
-const uuid = z.string().uuid().transform(value => value.toLowerCase())
+const uuid = z.guid().transform(value => value.toLowerCase())
 const inputSchema = z.strictObject({ title: z.string(), estimatedCents: unsigned64, stage: z.string(), customerId: uuid.nullable().default(null), companyName: z.string(), companyTaxId: z.string(), contactName: z.string(), phone: z.string(), email: z.string(), source: z.string(), notes: z.string() })
 const querySchema = z.strictObject({ q: z.string().default(""), stage: z.string().default(""), offset: queryInteger(0, 100000).default(0), limit: queryInteger(1, 100).default(100) })
 const select = "SELECT o.data || jsonb_build_object('id',o.id,'revision',o.revision,'customerId',o.customer_id,'customerName',p.legal_name,'orderId',o.order_id,'proposalId',o.proposal_id,'createdAt',o.created_at,'updatedAt',o.updated_at) AS data FROM sales_opportunities o LEFT JOIN parties p ON p.tenant_id=o.tenant_id AND p.id=o.customer_id"

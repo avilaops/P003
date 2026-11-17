@@ -17,7 +17,7 @@ import { prepareNegotiation } from "./prepare.js"
 import { mixedInputSchema, type MixedInput } from "./mixed-model.js"
 import { prepareMixed } from "./mixed-prepare.js"
 
-const uuid = z.string().uuid().transform(value => value.toLowerCase())
+const uuid = z.guid().transform(value => value.toLowerCase())
 export const conversionInputSchema = z.strictObject({ simulation: negotiationInputSchema, digest: z.string(), customerId: uuid, dueDate: z.string(), opportunityId: uuid.nullable().default(null), opportunityRevision: signed64.nullable().default(null), checkout: checkoutInputSchema.nullable().default(null) })
 const mixedConversionSchema = conversionInputSchema.extend({ simulation: mixedInputSchema }).strict()
 async function linkOpportunity(context: AuthorizedContext, id: string, expected: Revision, customer: string, order: string) {
