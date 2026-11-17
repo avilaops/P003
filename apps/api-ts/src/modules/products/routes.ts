@@ -6,14 +6,16 @@ import { z } from "zod"
 
 import type { AppDependencies } from "../../app.js"
 import { authorizeRequest, requirePermission } from "../../platform/access.js"
+import { databaseId } from "../../platform/database-id.js"
 import { Problem } from "../../platform/problem.js"
 import { sameJson } from "../../platform/json.js"
 import { integer } from "../registrations/query.js"
+import { productPlateHolderTypes, registerProductFinishesRoute } from "./finishes.js"
 import { productInputSchema, materialize, type ProductInput as Input } from "./schema.js"
 
 const querySchema = z.strictObject({
   q: z.string().max(160).default(""), status: z.enum(["active", "archived"]).optional(),
-  category_id: z.string().uuid().optional(), offset: z.coerce.number().int().min(0).max(100_000).default(0),
+  category_id: databaseId.optional(), offset: z.coerce.number().int().min(0).max(100_000).default(0),
   limit: z.coerce.number().int().min(1).max(100).default(25),
 })
 
@@ -30,9 +32,7 @@ function price(cents: unknown) {
 }
 
 function product(row: Record<string, unknown>) {
-  const types = Array.isArray(row.plate_holder_types) ? [...row.plate_holder_types] as string[] : []
-  if (types.length === 0 && row.plate_holder_type === "standard") types.push("Standard")
-  if (types.length === 0 && row.plate_holder_type === "olympic") types.push("Olímpico")
+  const types = productPlateHolderTypes(row.plate_holder_types, row.plate_holder_type)
   const legacy = types.length === 1 ? types[0] === "Standard" ? "standard" : types[0] === "Olímpico" ? "olympic" : null : null
   return {
     photoUrl: row.main_media_id ? `/api/erp/products/${String(row.id)}/media/${String(row.main_media_id)}` : null,
@@ -47,6 +47,8 @@ function product(row: Record<string, unknown>) {
 }
 
 export function registerProductRoutes(app: FastifyInstance, dependencies: AppDependencies) {
+  registerProductFinishesRoute(app, dependencies)
+
   app.get("/api/v1/products", async (request, reply) => {
     const parsed = querySchema.safeParse(request.query)
     if (!parsed.success) throw new Problem(422, "invalid_input", "Filtros inválidos")
@@ -62,7 +64,7 @@ export function registerProductRoutes(app: FastifyInstance, dependencies: AppDep
   })
 
   app.get<{ Params: { id: string } }>("/api/v1/products/:id", async (request, reply) => {
-    if (!z.string().uuid().safeParse(request.params.id).success) throw new Problem(404, "not_found", "Produto não encontrado")
+    if (!databaseId.safeParse(request.params.id).success) throw new Problem(404, "not_found", "Produto não encontrado")
     const body = await authorizeRequest(request, dependencies, async context => {
       requirePermission(context, "catalog.products.read")
       const loaded = await context.client.query(`SELECT ${projection} FROM products WHERE tenant_id=$1 AND id=$2`, [context.tenantId, request.params.id])
@@ -97,7 +99,7 @@ export function registerProductRoutes(app: FastifyInstance, dependencies: AppDep
 
   app.put<{ Params: { id: string } }>("/api/v1/products/:id", { bodyLimit: 2_097_152 }, async (request, reply) => {
     const expected = revision(request.headers["if-match"]), parsed = productInputSchema.safeParse(request.body)
-    if (!parsed.success || !z.string().uuid().safeParse(request.params.id).success) throw new Problem(422, "invalid_input", "Cadastro inválido ou campos desconhecidos")
+    if (!parsed.success || !databaseId.safeParse(request.params.id).success) throw new Problem(422, "invalid_input", "Cadastro inválido ou campos desconhecidos")
     const body = await authorizeRequest(request, dependencies, async context => {
       requirePermission(context, "catalog.products.manage")
       requirePermission(context, "catalog.products.read")

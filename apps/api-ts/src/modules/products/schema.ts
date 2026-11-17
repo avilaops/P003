@@ -1,4 +1,5 @@
 import { z } from "zod"
+import { databaseId } from "../../platform/database-id.js"
 
 const optional = <T extends z.ZodType>(schema: T) => z.preprocess(value => value === null ? undefined : value, schema.optional())
 const asciiUpper = (value: string) => value.replace(/[a-z]/g, character => character.toUpperCase())
@@ -14,7 +15,7 @@ function validPhoto(value: string) {
 }
 
 export const productInputSchema = z.strictObject({
-  categoryId: optional(z.string().trim().refine(value => value === "" || z.string().uuid().safeParse(value).success)),
+  categoryId: optional(z.string().trim().pipe(z.union([z.literal(""), databaseId]))),
   photoDataUrl: optional(z.string().refine(validPhoto)),
   sku: z.string().trim().transform(asciiUpper).pipe(z.string().min(1).max(80).regex(/^[A-Z0-9._/-]+$/)),
   name: z.string().trim().refine(value => value.length > 0 && [...value].length <= 200),

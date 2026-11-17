@@ -9,7 +9,8 @@ import { verifySimulationPermissionReload } from "./simulation-permission-cases.
 export async function verifyCommercialMixed(app: FastifyInstance, seed: Pool, tenant: string, role: string) {
   const { parameters } = commercialFixture(), items = []
   for (const [index, line] of ["imported", "national"].entries()) {
-    const product = randomUUID(), version = randomUUID(), price = index ? 17003 : 30001, ipi = index ? 0 : 1300
+    const product = index ? randomUUID() : "aa000000-0000-3000-2000-000000000006"
+    const version = randomUUID(), price = index ? 17003 : 30001, ipi = index ? 0 : 1300
     const policy = { ...parameters, fixedOrderFeeCents: 101, ipiBps: ipi, minimumDownPaymentBps: index ? 3000 : 7000 }
     await seed.query("INSERT INTO products(id,tenant_id,sku,name,unit,price_cents,status) VALUES($1,$2,$3,'Equipamento misto','UN',$4,'active')", [product, tenant, `MIXED-${index}`, price])
     await seed.query("INSERT INTO product_costs(tenant_id,product_id,product_line,purchase_cost_cents,tax_credit_bps,packaging_cents,revision) VALUES($1,$2,$3,1000,0,0,1)", [tenant, product, line])
@@ -46,6 +47,7 @@ export async function verifyCommercialMixed(app: FastifyInstance, seed: Pool, te
   const order = created[0]!.json().id as string
   const detail = await app.inject({ method: "GET", url: `/api/v1/orders/${order}`, headers })
   assert.equal(detail.json().data.amount, "1527.15")
+  assert.deepEqual(detail.json().items.map((item: { productId: string }) => item.productId), items.map(item => item.productId))
   assert.deepEqual(detail.json().items.map((item: { unitPrice: string }) => item.unitPrice), ["339.02", "170.03"])
   assert.equal(detail.json().checkout.installments[0].amountCents, 66218)
   const versions = await seed.query("SELECT product_line FROM commercial_order_quote_versions WHERE tenant_id=$1 AND order_id=$2 ORDER BY product_line", [tenant, order])

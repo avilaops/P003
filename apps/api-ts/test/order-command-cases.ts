@@ -5,10 +5,10 @@ import type { Pool } from "pg"
 
 export async function verifyOrderCommands(app: FastifyInstance, seed: Pool, tenant: string, role: string) {
   await seed.query(`GRANT DELETE ON sales_order_lines TO ${role}`)
-  const product = randomUUID()
+  const product = "aa000000-0000-3000-2000-000000000003"
   await seed.query("INSERT INTO products(id,tenant_id,sku,name,unit,price_cents,status) VALUES($1,$2,'ORDER-ITEM','Item original','UN',10001,'active')", [product, tenant])
   const headers = { authorization: "Bearer operator", "x-tenant-id": tenant }
-  const input = { customerId: tenant, dueDate: "2027-01-01", items: [{ productId: product, quantity: "1.234567" }] }
+  const input = { customerId: tenant, dueDate: "2027-01-01", items: [{ productId: product.toUpperCase(), quantity: "1.234567" }] }
   const key = randomUUID()
   const creates = await Promise.all([1, 2].map(() => app.inject({ method: "POST", url: "/api/v1/orders", headers: { ...headers, "idempotency-key": key }, payload: input })))
   for (const response of creates) assert.equal(response.statusCode, 201, response.body)
@@ -16,6 +16,7 @@ export async function verifyOrderCommands(app: FastifyInstance, seed: Pool, tena
   const order = creates[0]!.json().data.id as string
   assert.equal(creates[0]!.json().data.amount, "123.47")
   assert.equal(creates[0]!.json().data.status, "draft")
+  assert.equal(creates[0]!.json().items[0].productId, product)
   assert.match(String(creates[0]!.headers["x-request-id"]), /^[a-f0-9-]{36}$/)
   const audit = (await seed.query("SELECT request_id FROM audit_log WHERE entity_id=$1", [order])).rows
   assert.equal(audit.length, 1)

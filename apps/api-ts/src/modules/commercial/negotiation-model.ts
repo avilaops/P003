@@ -1,4 +1,5 @@
 import { z } from "zod"
+import { normalizedDatabaseId } from "../../platform/database-id.js"
 import { revisionValue, type Revision } from "../../platform/revision.js"
 import { selectPlateHolderType } from "../sales/finishes.js"
 import { commercialCents as cents, invalidCommercial as invalid, rounded, up, simulateParameters, unsigned32, unsigned64, type CommercialParameters } from "./parameters.js"
@@ -8,7 +9,7 @@ export const negotiationInputSchema = z.strictObject({
   line: z.string(), versionId: uuid, destinationState: z.string(), taxpayer: z.boolean(),
   discount: z.discriminatedUnion("kind", [z.strictObject({ kind: z.literal("percent"), value: unsigned32 }), z.strictObject({ kind: z.literal("amount"), value: unsigned64 }), z.strictObject({ kind: z.literal("total"), value: unsigned64 })]),
   freightCents: unsigned64, downPaymentCents: unsigned64.nullable().default(null),
-  items: z.array(z.strictObject({ productId: uuid, quantity: unsigned32, structureColor: nullableText, swingArmColor: z.preprocess(value => value === null ? undefined : value, z.string().optional()), plateHolderColor: nullableText, plateHolderType: nullableText, upholsteryColor: nullableText })),
+  items: z.array(z.strictObject({ productId: normalizedDatabaseId, quantity: unsigned32, structureColor: nullableText, swingArmColor: z.preprocess(value => value === null ? undefined : value, z.string().optional()), plateHolderColor: nullableText, plateHolderType: nullableText, upholsteryColor: nullableText })),
 })
 export type NegotiationInput = z.infer<typeof negotiationInputSchema>
 export type SourceItem = { productId: string; sku: string; name: string; unit: string; productRevision: Revision; costRevision: Revision | null; priceCents: number | bigint; purchaseCents: number | bigint; creditBps: number; packagingCents: number | bigint }

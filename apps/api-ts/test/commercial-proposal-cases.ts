@@ -5,7 +5,7 @@ import type { Pool } from "pg"
 import { commercialFixture } from "./commercial-fixture.js"
 
 export async function verifyCommercialProposals(app: FastifyInstance, seed: Pool, databaseRole: string) {
-  const tenant = randomUUID(), product = randomUUID(), version = randomUUID()
+  const tenant = randomUUID(), product = "aa000000-0000-3000-2000-000000000007", version = randomUUID()
   const { parameters, rules } = commercialFixture()
   const headers = { authorization: "Bearer operator", "x-tenant-id": tenant }
   await seed.query("INSERT INTO tenants(id,legal_name,tax_id) VALUES($1,'Orçamentos completos','99999999000100')", [tenant])
@@ -36,6 +36,7 @@ export async function verifyCommercialProposals(app: FastifyInstance, seed: Pool
   assert.equal(created.statusCode, 201, created.body)
   assert.equal(created.json().commercial.sale.totalCents, 1419645)
   assert.equal(created.json().commercial.personType, "fisica")
+  assert.equal(created.json().items[0].productId, product)
   assert.equal(created.json().items[0].technical.weightStack, "100 kg")
   assert.deepEqual(created.json().items[0].technical.dimensionsMm, [1500, 1200, 1400])
   const removedProfile = (await seed.query("DELETE FROM product_catalog_profiles c WHERE tenant_id=$1 AND product_id=$2 RETURNING to_jsonb(c) AS data", [tenant, product])).rows[0].data

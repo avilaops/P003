@@ -1,4 +1,5 @@
 import { z } from "zod"
+import { normalizedDatabaseId } from "../../platform/database-id.js"
 import { Problem } from "../../platform/problem.js"
 import { mixedInputSchema } from "../commercial/mixed-model.js"
 import { checkoutInputSchema } from "../orders/checkout-save.js"
@@ -10,7 +11,7 @@ export const proposalInputSchema = z.strictObject({
   commercial: z.strictObject({ simulation: mixedInputSchema, digest: z.string() }).optional(),
   checkout: checkoutInputSchema.optional(),
   items: z.array(z.strictObject({
-    productId: z.string().uuid().transform(value => value.toLowerCase()), quantity: z.string(), unitPrice: nullable, structureColor: nullable, upholsteryColor: nullable,
+    productId: normalizedDatabaseId, quantity: z.string(), unitPrice: nullable, structureColor: nullable, upholsteryColor: nullable,
     swingArmColor: optional, armColor: optional, plateHolderColor: optional, plateHolderType: optional,
   })),
 }).transform(input => {

@@ -1,4 +1,5 @@
 import { installEmptyNationalTable } from "./helpers/empty-national-table"
+import { installProductFinishesFixture } from "./helpers/product-finishes-fixture"
 import { expect, test, type Page } from "@playwright/test"
 import { installFrontendFixture, tenant, record } from "./helpers/frontend-fixture"
 import type { MixedSimulationInput } from "../src/features/sales/negotiation-types"
@@ -10,6 +11,7 @@ const pix = "66666666-6666-4666-8666-666666666666"
 const boleto = "77777777-7777-4777-8777-777777777777"
 const customerId = "44444444-4444-4444-8444-444444444444"
 async function fixture(page: Page, options: { authority?: string; limit?: number; approval?: boolean; failure?: boolean } = {}) {
+  await installProductFinishesFixture(page, tenant, [{ id: product, name: "Mesa flexora", weight: "25.5" }])
   await installEmptyNationalTable(page, options.authority || "seller")
   await page.route("**/api/erp/me", route => route.fulfill({ json: { tenant: { id: tenant, legalName: "LUDUS EQUIPAMENTOS PARA MUSCULACAO LTDA" }, permissions: ["sales.orders.read", "sales.orders.manage", "catalog.parties.read", "catalog.parties.manage", "catalog.products.read"] } }))
   await page.route(/\/api\/erp\/parties\?/, route => route.fulfill({ json: { tenantId: tenant, canEdit: true, data: [], total: 0 } }))
