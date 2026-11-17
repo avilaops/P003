@@ -69,7 +69,7 @@ export function calculateNegotiation(p: CommercialParameters, rules: ApprovalRul
   const discount = table - net, reasons: string[] = []
   const freeNet = input.items.reduce((sum, item, index) => sum + rounded(BigInt(sources[index]!.priceCents) * BigInt(10000 - p.freeDiscountBps), 10000n) * BigInt(item.quantity), 0n)
   if (net < freeNet) reasons.push("desconto-acima-do-livre")
-  if (profit < 0n || rules.belowTarget && band !== "atTarget") reasons.push("fora-da-meta")
+  if (band !== "atTarget") reasons.push("fora-da-meta")
   if (rules.freight && BigInt(input.freightCents) > 0n) reasons.push("frete-por-nossa-conta")
   if (entry < minimumEntry) reasons.push("entrada-abaixo-da-politica")
   const retained = BigInt(10000 - p.incomeTaxBps), available = BigInt(10000 - tax - difal) * retained

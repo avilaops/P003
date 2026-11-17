@@ -43,10 +43,10 @@
 
 **Interfaces:** Consome cotação versionada; produz `commercial_order_quotes`, associação de versões e snapshot/checkout preservados na mesma conversão.
 
-- [ ] Testar desconto fora da alçada, aprovação gerência/diretoria, tabela alterada, replay concorrente e rollback sem pedido órfão.
-- [ ] Revalidar formalização e transferir a cotação para o pedido; exigir nova versão para acordo alterado.
-- [ ] Rodar suíte API completa e typecheck. Expected: tudo passa.
-- [ ] Commit do incremento testado.
+- [x] Testar desconto fora da alçada, aprovação gerência/diretoria, tabela alterada, replay concorrente e rollback sem pedido órfão.
+- [x] Revalidar formalização e transferir a cotação para o pedido; exigir nova versão para acordo alterado.
+- [x] Rodar suíte API completa e typecheck. Expected: tudo passa.
+- [x] Commit do incremento testado.
 
 ### Task 3: Editor e documento de orçamento
 

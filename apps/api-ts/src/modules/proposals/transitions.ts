@@ -10,6 +10,7 @@ import { validateDate } from "../sales/fixed.js"
 import { proposalId, proposalText, proposalTransition } from "./schema.js"
 import { loadProposal } from "./snapshot.js"
 import type { CommandHeaders } from "../orders/receivables.js"
+import { formalizeProposal, transferProposalAgreement } from "./formalize.js"
 
 async function revise(context: AuthorizedContext, id: string, version: number, next: Revision) {
   if (version === 2147483647) throw new Problem(409, "domain_conflict", "Limite de versões atingido")
@@ -18,6 +19,8 @@ async function revise(context: AuthorizedContext, id: string, version: number, n
   await client.query("INSERT INTO sales_proposal_lines(tenant_id,proposal_id,version,line_number,product_id,sku,name,unit,quantity_micros,catalog_price_cents,price_cents,amount_cents,structure_color,upholstery_color,plate_holder_color,plate_holder_type,swing_arm_color) SELECT tenant_id,proposal_id,$4,line_number,product_id,sku,name,unit,quantity_micros,catalog_price_cents,price_cents,amount_cents,structure_color,upholstery_color,plate_holder_color,plate_holder_type,swing_arm_color FROM sales_proposal_lines WHERE tenant_id=$1 AND proposal_id=$2 AND version=$3", [tenantId, id, version, nextVersion])
   await client.query("UPDATE sales_proposal_versions SET status='superseded' WHERE tenant_id=$1 AND proposal_id=$2 AND version=$3", [tenantId, id, version])
   await client.query("UPDATE sales_proposals SET current_version=$3,revision=$4,updated_at=now() WHERE tenant_id=$1 AND id=$2", [tenantId, id, nextVersion, next])
+  await client.query("UPDATE sales_proposal_versions target SET commercial_public=source.commercial_public,commercial_private=source.commercial_private,customer_snapshot=source.customer_snapshot,checkout_snapshot=source.checkout_snapshot FROM sales_proposal_versions source WHERE target.tenant_id=$1 AND target.proposal_id=$2 AND target.version=$4 AND source.tenant_id=target.tenant_id AND source.proposal_id=target.proposal_id AND source.version=$3", [tenantId, id, version, nextVersion])
+  await client.query("UPDATE sales_proposal_lines target SET technical_snapshot=source.technical_snapshot FROM sales_proposal_lines source WHERE target.tenant_id=$1 AND target.proposal_id=$2 AND target.version=$4 AND source.tenant_id=target.tenant_id AND source.proposal_id=target.proposal_id AND source.version=$3 AND source.line_number=target.line_number", [tenantId, id, version, nextVersion])
   return { version: nextVersion, revision: next, previousVersion: version }
 }
 
@@ -26,6 +29,7 @@ async function convert(context: AuthorizedContext, headers: CommandHeaders, curr
   const active = (await client.query("SELECT EXISTS(SELECT 1 FROM parties WHERE tenant_id=$1 AND id=$2 AND status='active' AND is_customer) AS active", [tenantId, current.data.customerId])).rows[0]?.active
   const invalid = (await client.query("SELECT EXISTS(SELECT 1 FROM sales_proposal_lines l JOIN products p ON p.tenant_id=l.tenant_id AND p.id=l.product_id WHERE l.tenant_id=$1 AND l.proposal_id=$2 AND l.version=$3 AND (p.status<>'active' OR p.unit<>l.unit)) AS invalid", [tenantId, id, version])).rows[0]?.invalid
   if (!active || invalid) throw new Problem(409, "domain_conflict", "Cliente ou produtos mudaram; revise os cadastros antes de converter")
+  const commercial = await formalizeProposal(context, String(id), version)
   if (approve && current.data.status !== "accepted") {
     await client.query("UPDATE sales_proposal_versions SET status='accepted',sent_at=COALESCE(sent_at,now()),decided_at=now(),decided_by=$4,decision_reason='Aprovação e criação de pedido' WHERE tenant_id=$1 AND proposal_id=$2 AND version=$3", [tenantId, id, version, context.authSubject])
     await record(context, headers, "sales_proposal", String(id), "proposal.accepted", { version, revision: next, from: current.data.status, to: "accepted", approvalAndOrder: true })
@@ -34,6 +38,10 @@ async function convert(context: AuthorizedContext, headers: CommandHeaders, curr
   await client.query("INSERT INTO sales_orders(id,tenant_id,customer_id,customer_name,customer_tax_id,due_date,amount_cents,status) SELECT $4,tenant_id,customer_id,customer_name,customer_tax_id,$5,amount_cents,'draft' FROM sales_proposal_versions WHERE tenant_id=$1 AND proposal_id=$2 AND version=$3", [tenantId, id, version, order, due])
   await client.query("INSERT INTO sales_order_lines(tenant_id,order_id,line_number,product_id,sku,name,unit,quantity_micros,price_cents,amount_cents,structure_color,upholstery_color,plate_holder_color,plate_holder_type,swing_arm_color) SELECT tenant_id,$4,line_number,product_id,sku,name,unit,quantity_micros,price_cents,amount_cents,structure_color,upholstery_color,plate_holder_color,plate_holder_type,swing_arm_color FROM sales_proposal_lines WHERE tenant_id=$1 AND proposal_id=$2 AND version=$3", [tenantId, id, version, order])
   await client.query("UPDATE sales_proposals SET order_id=$3,revision=$4,updated_at=now() WHERE tenant_id=$1 AND id=$2", [tenantId, id, order, next])
+  if (commercial) {
+    await transferProposalAgreement(context, order, commercial)
+    await client.query("UPDATE sales_order_lines target SET technical_snapshot=source.technical_snapshot FROM sales_proposal_lines source WHERE target.tenant_id=$1 AND target.order_id=$4 AND source.tenant_id=target.tenant_id AND source.proposal_id=$2 AND source.version=$3 AND source.line_number=target.line_number", [tenantId, id, version, order])
+  }
   await record(context, headers, "sales_order", order, "order.created", { proposalId: id, proposalVersion: version, revision: 1 })
   return { version, revision: next, orderId: order }
 }
@@ -70,6 +78,7 @@ export function registerProposalTransitions(app: FastifyInstance, dependencies: 
       if (current.data.revision !== expected) throw new Problem(412, "revision_conflict", "Outra pessoa alterou o cadastro. Sua edição foi preservada")
       const today = String((await context.client.query("SELECT (CURRENT_TIMESTAMP AT TIME ZONE 'America/Sao_Paulo')::date::text AS today")).rows[0]!.today)
       const status = proposalTransition(String(current.data.status), action, validateDate(String(current.data.validUntil)), today, current.data.orderId !== null), next = nextRevision(expected)
+      if (action === "send" || action === "accept") await formalizeProposal(context, id, current.data.version)
       let details: unknown
       if (conversion) details = await convert(context, request.headers, current, due!, action === "approve-order", next)
       else if (action === "revise") details = await revise(context, id, current.data.version, next)

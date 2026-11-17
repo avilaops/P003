@@ -4,7 +4,7 @@ import type { FastifyInstance } from "fastify"
 import type { Pool } from "pg"
 import { commercialFixture } from "./commercial-fixture.js"
 
-export async function verifyCommercialProposals(app: FastifyInstance, seed: Pool) {
+export async function verifyCommercialProposals(app: FastifyInstance, seed: Pool, databaseRole: string) {
   const tenant = randomUUID(), product = randomUUID(), version = randomUUID()
   const { parameters, rules } = commercialFixture()
   const headers = { authorization: "Bearer operator", "x-tenant-id": tenant }
@@ -59,4 +59,50 @@ export async function verifyCommercialProposals(app: FastifyInstance, seed: Pool
   assert.equal(sent.statusCode, 200, sent.body)
   await assert.rejects(seed.query("UPDATE sales_proposal_lines SET technical_snapshot='{}' WHERE tenant_id=$1 AND proposal_id=$2", [tenant, id]), /immutable|Published proposal lines/)
   await assert.rejects(seed.query("UPDATE sales_proposal_versions SET commercial_private='{}' WHERE tenant_id=$1 AND proposal_id=$2", [tenant, id]), /immutable/)
+  const convert = (key = randomUUID()) => app.inject({ method: "POST", url: `/api/v1/proposals/${id}/approve-order`, headers: { ...headers, "idempotency-key": key, "if-match": '"2"' }, payload: { dueDate: "2027-01-01" } })
+  await seed.query("UPDATE parties SET revision=2 WHERE tenant_id=$1 AND id=$1", [tenant])
+  assert.equal((await convert()).statusCode, 409, "A changed customer must be reviewed before approving the old agreement")
+  await seed.query("UPDATE parties SET revision=1 WHERE tenant_id=$1 AND id=$1", [tenant])
+  await seed.query("UPDATE commercial_settings SET revision=2 WHERE tenant_id=$1 AND product_line='national'", [tenant])
+  assert.equal((await convert()).statusCode, 409, "A stale published policy must not be formalized")
+  await seed.query("UPDATE commercial_settings SET revision=1 WHERE tenant_id=$1 AND product_line='national'", [tenant])
+  const before = (await seed.query("SELECT count(*)::int AS count FROM sales_orders WHERE tenant_id=$1", [tenant])).rows[0].count
+  await seed.query(`REVOKE INSERT ON commercial_order_quotes FROM ${databaseRole}`)
+  const failed = await convert()
+  assert.equal(failed.statusCode, 500, failed.body)
+  assert.equal((await seed.query("SELECT order_id FROM sales_proposals WHERE id=$1", [id])).rows[0].order_id, null)
+  assert.equal((await seed.query("SELECT count(*)::int AS count FROM sales_orders WHERE tenant_id=$1", [tenant])).rows[0].count, before)
+  await seed.query(`GRANT INSERT ON commercial_order_quotes TO ${databaseRole}`)
+  const conversionKey = randomUUID(), converted = await Promise.all([convert(conversionKey), convert(conversionKey)])
+  for (const response of converted) assert.equal(response.statusCode, 200, response.body)
+  assert.deepEqual(converted[0].json(), converted[1].json())
+  const orderId = converted[0].json().data.orderId
+  const orderQuote = await app.inject({ url: `/api/v1/commercial/orders/${orderId}`, headers })
+  assert.equal(orderQuote.statusCode, 200, orderQuote.body)
+  assert.equal(orderQuote.json().data.sale.totalCents, 1419645)
+  assert.equal(orderQuote.json().approvalStatus, "not_required")
+  const order = await app.inject({ url: `/api/v1/orders/${orderId}`, headers })
+  assert.equal(order.json().pricingOrigin, true)
+  assert.equal(order.json().items[0].unitPrice, "14196.45")
+  assert.equal((await seed.query("SELECT count(*)::int AS count FROM sales_orders WHERE tenant_id=$1", [tenant])).rows[0].count, before + 1)
+  const discounted = { ...simulation, discount: { kind: "percent", value: 5000 } }
+  const discountedQuote = await app.inject({ method: "POST", url: "/api/v1/commercial/mixed/simulate", headers: sellerHeaders, payload: discounted })
+  assert.equal(discountedQuote.statusCode, 200, discountedQuote.body)
+  const excess = await app.inject({ method: "POST", url: "/api/v1/proposals", headers: { ...sellerHeaders, "idempotency-key": randomUUID() }, payload: { ...input, items: [{ ...input.items[0], unitPrice: null }], commercial: { simulation: discounted, digest: discountedQuote.json().digest } } })
+  assert.equal(excess.statusCode, 201, excess.body)
+  const excessId = excess.json().data.id
+  const sendExcess = (auth: string) => app.inject({ method: "POST", url: `/api/v1/proposals/${excessId}/send`, headers: { ...headers, authorization: `Bearer ${auth}`, "idempotency-key": randomUUID(), "if-match": '"1"' }, payload: {} })
+  assert.equal((await sendExcess("proposal-seller")).statusCode, 409, "Seller must not formalize a proposal beyond commercial authority")
+  const directorSent = await sendExcess("operator")
+  assert.equal(directorSent.statusCode, 200, directorSent.body)
+  const accepted = await app.inject({ method: "POST", url: `/api/v1/proposals/${excessId}/accept`, headers: { ...sellerHeaders, "idempotency-key": randomUUID(), "if-match": '"2"' }, payload: {} })
+  assert.equal(accepted.statusCode, 200, accepted.body)
+  const revised = await app.inject({ method: "POST", url: `/api/v1/proposals/${excessId}/revise`, headers: { ...headers, "idempotency-key": randomUUID(), "if-match": '"3"' } })
+  assert.equal(revised.statusCode, 200, revised.body)
+  assert.equal(revised.json().data.version, 2)
+  assert.equal(revised.json().items[0].technical.weightStack, "120 kg")
+  const sendRevised = await app.inject({ method: "POST", url: `/api/v1/proposals/${excessId}/send`, headers: { ...sellerHeaders, "idempotency-key": randomUUID(), "if-match": '"4"' }, payload: {} })
+  assert.equal(sendRevised.statusCode, 409, "A new proposal version requires its own commercial approval")
+  const fiscalBypass = await app.inject({ method: "POST", url: "/api/v1/commercial/mixed/orders", headers: { ...headers, "idempotency-key": randomUUID() }, payload: { customerId: tenant, dueDate: "2027-01-01", simulation: dishonest, digest: dishonestQuote.json().digest } })
+  assert.equal(fiscalBypass.statusCode, 409, "Direct order conversion must apply the same PF fiscal rule as proposals")
 }

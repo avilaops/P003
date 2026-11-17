@@ -394,7 +394,7 @@ for (const backend of backends) test(`${backend}: PostgreSQL migrations and RLS 
     await verifyCommercialMixed(app, seed, other, role)
     await verifyOpportunities(app, seed, other, role)
     await verifyCommercialMetrics(app, seed)
-    if (backend !== "rust") await verifyCommercialProposals(app, seed)
+    if (backend !== "rust") await verifyCommercialProposals(app, seed, role)
     if (backend === "typescript") await verifyMcpDispatch(app, seed)
     if (backend === "gateway") await verifyMcpDispatch(app, seed, true)
     await seed.query("UPDATE platform_administrators SET active=false WHERE auth_subject='operator'")

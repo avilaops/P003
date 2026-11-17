@@ -3,9 +3,9 @@ import { canonicalJson } from "../../platform/json.js"
 import { Problem } from "../../platform/problem.js"
 import { prepareMixed } from "../commercial/mixed-prepare.js"
 import type { ProposalInput } from "./schema.js"
+import { customerSnapshotSql, validateFiscalCustomer } from "../sales/customer-fiscal.js"
 
 function conflict(message: string): never { throw new Problem(409, "domain_conflict", message) }
-export const customerSnapshotSql = "SELECT jsonb_build_object('id',id,'revision',revision,'personType',person_type,'legalName',legal_name,'tradeName',trade_name,'taxId',tax_id,'email',email,'phone',phone,'addresses',addresses,'contacts',contacts,'fiscal',fiscal) AS data FROM parties WHERE tenant_id=$1 AND id=$2 AND is_customer AND status='active'"
 
 export async function prepareProposalCommercial(context: AuthorizedContext, input: ProposalInput) {
   const { client, tenantId } = context
@@ -24,14 +24,6 @@ export async function prepareProposalCommercial(context: AuthorizedContext, inpu
     public: { kind: "mixed", input: input.commercial.simulation, sale: prepared.sale, digest: prepared.digest, customerRevision: customer.revision, personType: customer.personType },
     private: { director: prepared.director, rules: prepared.rules, policies: prepared.policies, sources: prepared.sources },
   }
-}
-
-export function validateFiscalCustomer(customer: Record<string, unknown>, input: { destinationState: string; taxpayer: boolean }) {
-  const fiscal = customer.fiscal as { taxpayerIndicator?: string; stateRegistration?: string } | null
-  const taxpayer = customer.personType === "juridica" && fiscal?.taxpayerIndicator === "1" && Boolean(fiscal.stateRegistration)
-  if (input.taxpayer !== taxpayer) conflict("A condição de contribuinte da cotação diverge do cadastro fiscal do cliente. Atualize o cadastro ou recalcule")
-  const states = Array.isArray(customer.addresses) ? customer.addresses.map(address => (address as { state?: string }).state).filter(Boolean) : []
-  if (states.length && !states.includes(input.destinationState)) conflict("A UF da cotação deve corresponder ao endereço de entrega cadastrado do cliente")
 }
 
 type ProposalLine = { productId: string; quantity: bigint; price: bigint; amount: bigint; structure: string | null; swing: string | null; holderColor: string | null; holderType: string | null; upholstery: string | null }

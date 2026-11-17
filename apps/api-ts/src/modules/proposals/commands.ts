@@ -37,7 +37,7 @@ export function registerProposalCommands(app: FastifyInstance, dependencies: App
         await client.query("UPDATE sales_proposals SET revision=$3,updated_at=now() WHERE tenant_id=$1 AND id=$2", [tenantId, id, next])
       }
       await storeProposalLines(context, id, version, prepared.lines)
-      await client.query("UPDATE sales_proposal_versions SET commercial_public=$4,commercial_private=$5,customer_snapshot=$6,checkout_snapshot=$7 WHERE tenant_id=$1 AND proposal_id=$2 AND version=$3", [tenantId, id, version, prepared.commercial?.public ?? null, prepared.commercial?.private ?? null, prepared.commercial?.customer ?? null, parsed.data.checkout ?? null])
+      await client.query("UPDATE sales_proposal_versions SET commercial_public=$4,commercial_private=$5,customer_snapshot=$6,checkout_snapshot=$7,commercial_approval=NULL WHERE tenant_id=$1 AND proposal_id=$2 AND version=$3", [tenantId, id, version, prepared.commercial?.public ?? null, prepared.commercial?.private ?? null, prepared.commercial?.customer ?? null, parsed.data.checkout ?? null])
       await record(context, request.headers, "sales_proposal", id, existingId ? "proposal.updated" : "proposal.created", { revision: next, version, amount: decimal(prepared.total, 2), items: prepared.lines.length })
       const body = await loadProposal(context, id)
       await remember(context, key, scope, input, body)
