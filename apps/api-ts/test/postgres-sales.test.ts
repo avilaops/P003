@@ -44,7 +44,9 @@ for (const backend of backends) test(`${backend}: PostgreSQL migrations and RLS 
     }
     await seed.query(`CREATE ROLE ${role} NOLOGIN NOSUPERUSER NOBYPASSRLS`)
     await seed.query(`GRANT USAGE ON SCHEMA public TO ${role}; GRANT SELECT ON ALL TABLES IN SCHEMA public TO ${role}`)
-    const tenant = randomUUID(), other = randomUUID(), identity = randomUUID(), membership = randomUUID(), readerRole = randomUUID(), product = randomUUID(), order = randomUUID(), proposal = randomUUID(), foreignOrder = randomUUID()
+    const tenant = randomUUID(), other = randomUUID(), identity = randomUUID(), membership = randomUUID(), readerRole = randomUUID(), order = randomUUID(), proposal = randomUUID(), foreignOrder = randomUUID()
+    // Historical catalog identifiers have the PostgreSQL UUID shape with a non-RFC variant.
+    const product = "aa000000-0000-3000-2000-000000000001"
     await seed.query("INSERT INTO tenants(id,legal_name,tax_id) VALUES($1,'Empresa A','04252011000110'),($2,'Empresa B','52998224725')", [tenant, other])
     await seed.query("INSERT INTO identities(id,auth_subject,email,display_name) VALUES($1,'reader','reader@example.test','Leitor')", [identity])
     await seed.query("INSERT INTO tenant_memberships(id,tenant_id,identity_id) VALUES($1,$2,$3)", [membership, tenant, identity])
@@ -181,6 +183,39 @@ for (const backend of backends) test(`${backend}: PostgreSQL migrations and RLS 
     assert.deepEqual(untouchedSettings.json().data, { requireEmail: false, requirePhone: false })
     const refs = new Map<string, string>()
     await seed.query(`GRANT INSERT ON outbox_events TO ${role}`)
+    const legacyCategory = "aa000000-0000-3000-2000-000000000002"
+    await seed.query("INSERT INTO product_categories(id,tenant_id,code,name,status,revision,sort_order) VALUES($1,$2,'LEGADO','Categoria histórica','active',1,0)", [legacyCategory, tenant])
+    const legacyProductUrl = `/api/v1/products/${product}`
+    const historicalProduct = await app.inject({ method: "GET", url: legacyProductUrl, headers })
+    assert.equal(historicalProduct.statusCode, 200, historicalProduct.body)
+    assert.equal(historicalProduct.json().data.id, product)
+    assert.equal((await app.inject({ method: "GET", url: legacyProductUrl, headers: operatorHeaders })).statusCode, 404)
+    const historicalUpdate = await app.inject({ method: "PUT", url: legacyProductUrl, headers: { ...headers, "if-match": historicalProduct.headers.etag as string }, payload: { ...productInput, sku: "LD-1", categoryId: legacyCategory } })
+    assert.equal(historicalUpdate.statusCode, 200, historicalUpdate.body)
+    assert.equal(historicalUpdate.json().data.id, product)
+    assert.equal(historicalUpdate.json().data.categoryId, legacyCategory)
+    const categoryFiltered = await app.inject({ method: "GET", url: `/api/v1/products?category_id=${legacyCategory}`, headers })
+    assert.equal(categoryFiltered.statusCode, 200, categoryFiltered.body)
+    assert.deepEqual(categoryFiltered.json().data.map((row: { id: string }) => row.id), [product])
+    const categoryHeaders = { ...operatorHeaders, "x-tenant-id": tenant }
+    const categoryUrl = `/api/v1/product-categories/${legacyCategory}`
+    const categoryRead = await app.inject({ method: "GET", url: categoryUrl, headers: categoryHeaders })
+    assert.equal(categoryRead.statusCode, 200, categoryRead.body)
+    const legacyChild = { code: "LEGADO-FILHA", name: "Subcategoria", status: "active", parentId: legacyCategory, sortOrder: 1 }
+    const historicalChild = await app.inject({ method: "POST", url: "/api/v1/product-categories", headers: { ...categoryHeaders, "idempotency-key": randomUUID() }, payload: legacyChild })
+    assert.equal(historicalChild.statusCode, 201, historicalChild.body)
+    assert.equal(historicalChild.json().data.parentId, legacyCategory)
+    const categoryEdit = await app.inject({ method: "PUT", url: categoryUrl, headers: { ...categoryHeaders, "idempotency-key": randomUUID(), "if-match": '"1"' }, payload: { code: "LEGADO", name: "Categoria atualizada", status: "active", sortOrder: 0 } })
+    assert.equal(categoryEdit.statusCode, 200, categoryEdit.body)
+    assert.equal(categoryEdit.json().data.id, legacyCategory)
+    if (backend !== "rust") {
+      const malformedProduct = product.slice(1)
+      assert.equal((await app.inject({ method: "GET", url: `/api/v1/products/${malformedProduct}`, headers })).statusCode, 404)
+      assert.equal((await app.inject({ method: "GET", url: `/api/v1/products?category_id=${legacyCategory.slice(1)}`, headers })).statusCode, 422)
+      const invalidCommand = await app.inject({ method: "POST", url: "/api/v1/products", headers: { ...headers, "idempotency-key": product }, payload: { ...productInput, sku: "INVALID-COMMAND" } })
+      assert.equal(invalidCommand.statusCode, 422, invalidCommand.body)
+      assert.equal(invalidCommand.json().title, "Chave de idempotência inválida")
+    }
     for (const [resource, input] of [
       ["product-categories", { code: "FORCA", name: "Força", status: "active", notes: null, parentId: null, sortOrder: 1 }],
       ["product-groups", { code: "GRUPO", name: "Grupo", status: "active", notes: null }],

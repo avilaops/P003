@@ -6,7 +6,7 @@ import { verifyProposalPermissions } from "./proposal-permission-cases.js"
 
 export async function verifyProposalCommands(app: FastifyInstance, seed: Pool, tenant: string, role: string) {
   await seed.query(`GRANT DELETE ON sales_proposal_lines TO ${role}`)
-  const product = randomUUID(), headers = { authorization: "Bearer operator", "x-tenant-id": tenant }
+  const product = "aa000000-0000-3000-2000-000000000004", headers = { authorization: "Bearer operator", "x-tenant-id": tenant }
   await seed.query("INSERT INTO products(id,tenant_id,sku,name,unit,price_cents,status) VALUES($1,$2,'PROPOSAL','Equipamento original','UN',10001,'active')", [product, tenant])
   const input = { customerId: tenant, validUntil: "2100-01-01", paymentTerms: "  À vista  ", deliveryTerms: "  Retirada  ", notes: "", items: [{ productId: product, quantity: "1.000000", unitPrice: "90.00" }] }
   const key = randomUUID()
@@ -16,6 +16,7 @@ export async function verifyProposalCommands(app: FastifyInstance, seed: Pool, t
   const id = creates[0]!.json().data.id as string
   assert.equal(creates[0]!.json().data.paymentTerms, "À vista")
   assert.equal(creates[0]!.json().data.amount, "90.00")
+  assert.equal(creates[0]!.json().items[0].productId, product)
   assert.equal(creates[0]!.json().items[0].catalogPrice, "100.01")
   const currentCustomer = creates[0]!.json().data.customerName
   const command = (action: string, revision: number, payload?: unknown, commandKey = randomUUID(), authorization = "Bearer operator") => app.inject({ method: "POST", url: `/api/v1/proposals/${id}/${action}`, headers: { ...headers, authorization, "idempotency-key": commandKey, "if-match": `"${revision}"` }, ...(payload === undefined ? {} : { payload: payload as object }) })

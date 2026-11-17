@@ -6,6 +6,7 @@ import { z } from "zod"
 
 import type { AppDependencies } from "../../app.js"
 import { authorizeRequest, requirePermission, type AuthorizedContext } from "../../platform/access.js"
+import { databaseId } from "../../platform/database-id.js"
 import { Problem } from "../../platform/problem.js"
 import { sameJson } from "../../platform/json.js"
 import { integer, parseListQuery } from "../registrations/query.js"
@@ -25,7 +26,7 @@ const baseInput = z.object({
 }).strict()
 
 const inputSchemas = {
-  "product-categories": baseInput.extend({ parentId: z.string().uuid().nullable().optional().default(null), sortOrder: z.number().int().min(0).max(999_999) }).strict(),
+  "product-categories": baseInput.extend({ parentId: databaseId.nullable().optional().default(null), sortOrder: z.number().int().min(0).max(999_999) }).strict(),
   "product-groups": baseInput,
   "tag-groups": baseInput,
   tags: baseInput.extend({ groupId: z.string().uuid().nullable().optional().default(null) }).strict(),
@@ -81,6 +82,7 @@ async function validateRelations(context: AuthorizedContext, resource: string, i
 export function registerReferenceRoutes(app: FastifyInstance, dependencies: AppDependencies) {
   for (const [resource, definition] of Object.entries(definitions)) {
     const schema = inputSchemas[resource as keyof typeof inputSchemas]
+    const idSchema = resource === "product-categories" ? databaseId : z.string().uuid()
     const projection = ["id", "revision", "code", "name", "status", "notes", ...definition.extras].join(",")
     const load = async (client: Parameters<Parameters<typeof authorizeRequest>[2]>[0]["client"], tenantId: string, id: string) => {
       const result = await client.query<Record<string, unknown>>(`SELECT ${projection} FROM ${definition.table} WHERE tenant_id=$1 AND id=$2`, [tenantId, id])
@@ -99,7 +101,7 @@ export function registerReferenceRoutes(app: FastifyInstance, dependencies: AppD
     })
 
     app.get<{ Params: { id: string } }>(`/api/v1/${resource}/:id`, async (request, reply) => {
-      if (!z.string().uuid().safeParse(request.params.id).success) throw new Problem(404, "not_found", "Registro não encontrado nesta empresa")
+      if (!idSchema.safeParse(request.params.id).success) throw new Problem(404, "not_found", "Registro não encontrado nesta empresa")
       const data = await authorizeRequest(request, dependencies, async context => {
         requirePermission(context, definition.read)
         const row = await load(context.client, context.tenantId, request.params.id)
@@ -149,7 +151,7 @@ export function registerReferenceRoutes(app: FastifyInstance, dependencies: AppD
       const key = commandKey(request.headers["idempotency-key"])
       const expected = expectedRevision(request.headers["if-match"])
       const parsed = schema.safeParse(request.body)
-      if (!z.string().uuid().safeParse(request.params.id).success) throw new Problem(404, "not_found", "Registro não encontrado nesta empresa")
+      if (!idSchema.safeParse(request.params.id).success) throw new Problem(404, "not_found", "Registro não encontrado nesta empresa")
       if (!parsed.success) throw new Problem(422, "invalid_input", "Cadastro inválido ou campos desconhecidos")
       const scope = `${definition.event}.updated`
       const data = await authorizeRequest(request, dependencies, async context => {

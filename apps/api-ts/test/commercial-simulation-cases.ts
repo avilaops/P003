@@ -7,7 +7,7 @@ import { verifyCommercialConversion } from "./commercial-conversion-cases.js"
 import { verifySimulationPermissionReload } from "./simulation-permission-cases.js"
 
 export async function verifyCommercialSimulation(app: FastifyInstance, seed: Pool, tenant: string, role: string) {
-  const { parameters, input } = commercialFixture(), product = randomUUID(), version = randomUUID()
+  const { parameters, input } = commercialFixture(), product = "aa000000-0000-3000-2000-000000000005", version = randomUUID()
   await seed.query("INSERT INTO products(id,tenant_id,sku,name,unit,price_cents,status) VALUES($1,$2,'SIMULATOR','Simulador','UN',1256323,'active')", [product, tenant])
   await seed.query("INSERT INTO product_costs(tenant_id,product_id,product_line,purchase_cost_cents,tax_credit_bps,packaging_cents,revision) VALUES($1,$2,'national',530606,2780,0,1)", [tenant, product])
   await seed.query("INSERT INTO commercial_settings(tenant_id,product_line,parameters,revision) VALUES($1,'national',$2,1)", [tenant, parameters])
@@ -20,6 +20,7 @@ export async function verifyCommercialSimulation(app: FastifyInstance, seed: Poo
   const response = await simulate()
   assert.equal(response.statusCode, 200, response.body)
   assert.equal(response.json().sale.totalCents, 1419645)
+  assert.equal(response.json().sale.items[0].productId, product)
   assert.equal(response.json().director, null)
   assert.match(response.json().digest, /^[a-f0-9]{64}$/)
   const privileged = await simulate(input, "Bearer operator")
@@ -29,6 +30,7 @@ export async function verifyCommercialSimulation(app: FastifyInstance, seed: Poo
   assert.deepEqual((await simulate()).json(), response.json())
   await verifySimulationPermissionReload(app, seed, tenant, "/api/v1/commercial/simulate", input)
   assert.equal((await simulate({ ...input, versionId: randomUUID() })).statusCode, 412)
+  assert.equal((await simulate({ ...input, items: [{ ...input.items[0], productId: product.slice(1) }] })).statusCode, 422)
   assert.equal((await simulate({ ...input, items: [{ ...input.items[0], quantity: 0 }] })).statusCode, 422)
   assert.equal((await simulate({ ...input, unknown: true })).statusCode, 422)
   await seed.query("UPDATE commercial_approval_settings SET revision=revision+1 WHERE tenant_id=$1", [tenant])

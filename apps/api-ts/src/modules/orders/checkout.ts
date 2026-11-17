@@ -1,8 +1,9 @@
 import type { TenantContext } from "../../platform/database.js"
+import { databaseId } from "../../platform/database-id.js"
 import { integer } from "../registrations/query.js"
 import { z } from "zod"
 
-const paymentMethod = z.object({ id: z.guid(), code: z.string(), name: z.string(), modality: z.string() })
+const paymentMethod = z.object({ id: databaseId, code: z.string(), name: z.string(), modality: z.string() })
 function decodePaymentMethod(value: unknown) {
   const decoded = paymentMethod.safeParse(value)
   if (!decoded.success) throw Error("Invalid saved checkout payment method")

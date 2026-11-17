@@ -6,7 +6,8 @@ import type { NegotiationInput } from "../src/modules/commercial/negotiation-mod
 
 export async function verifyCommercialConversion(app: FastifyInstance, seed: Pool, tenant: string, input: NegotiationInput, digest: string, role: string) {
   const headers = { authorization: "Bearer operator", "x-tenant-id": tenant }, key = randomUUID(), opportunity = randomUUID()
-  const method = (await seed.query("SELECT id FROM payment_methods WHERE tenant_id=$1 AND status='active' ORDER BY id LIMIT 1", [tenant])).rows[0].id
+  const method = "ffffffff-ffff-3fff-2fff-ffffffffffff"
+  await seed.query("INSERT INTO payment_methods(id,tenant_id,code,name,status,revision,modality,settlement_days) VALUES($1,$2,'LEGACY-PIX','Pix histórico','active',1,'pix',0)", [method, tenant])
   await seed.query("INSERT INTO sales_opportunities(id,tenant_id,data,created_by) SELECT $1,$2,'{\"title\":\"Negociação\",\"stage\":\"negotiation\"}',id FROM identities WHERE auth_subject='operator'", [opportunity, tenant])
   const checkout = { entry: { paymentMethodId: method, dueOn: null }, installments: [{ paymentMethodId: method, dueOn: "2027-01-01", amountCents: 425893 }], manufacturingDays: 45, deliveryNotes: "  Entrega combinada  ", paymentNotes: "Entrada e saldo", notes: "", stateRegistration: " ISENTO " }
   const payload = { simulation: input, digest, customerId: tenant, dueDate: "2027-01-01", opportunityId: opportunity, opportunityRevision: 1, checkout }
@@ -37,6 +38,7 @@ export async function verifyCommercialConversion(app: FastifyInstance, seed: Poo
   const detail = await app.inject({ method: "GET", url: `/api/v1/orders/${order}`, headers })
   assert.equal(detail.statusCode, 200, detail.body)
   assert.equal(detail.json().data.amount, "14196.45")
+  assert.equal(detail.json().items[0].productId, input.items[0]!.productId)
   assert.equal(detail.json().items[0].unitPrice, "14196.45")
   assert.equal(detail.json().checkout.entry.amountCents, 993752)
   assert.equal(detail.json().checkout.installments[0].amountCents, 425893)
