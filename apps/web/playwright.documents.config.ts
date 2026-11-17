@@ -13,7 +13,7 @@ const documentsConfig = {
     ...server,
     command: "pnpm start --hostname 127.0.0.1 --port 33190",
     url: `${origin}/entrar`,
-    env: { ...server.env, ERP_NEXT_DIST_DIR: process.env.ERP_DOCUMENT_TEST_DIST || ".next-documents-release", ERP_WEB_ORIGIN: origin, ERP_API_URL: "http://127.0.0.1:33191" },
+    env: { ...server.env, ERP_NEXT_DIST_DIR: process.env.ERP_DOCUMENT_TEST_DIST || ".next-documents-release", ERP_WEB_ORIGIN: origin, ERP_API_URL: "http://127.0.0.1:33191", ERP_TYPESCRIPT_API_URL: "http://127.0.0.1:33191" },
   },
 }
 

@@ -15,6 +15,6 @@ export default defineConfig({
     ...server,
     command: process.env.ERP_BROWSER_DEV === "1" ? "pnpm dev --hostname 127.0.0.1 --port 33190" : "pnpm start --hostname 127.0.0.1 --port 33190",
     url: `${origin}/entrar`,
-    env: { ...server.env, ERP_WEB_ORIGIN: origin, ERP_API_URL: "http://127.0.0.1:33191" },
+    env: { ...server.env, ERP_WEB_ORIGIN: origin, ERP_API_URL: "http://127.0.0.1:33191", ERP_TYPESCRIPT_API_URL: "http://127.0.0.1:33191" },
   },
 })
