@@ -1,24 +1,38 @@
 import Link from "next/link"
-import {
-  FileText,
-  Landmark,
-  MonitorCheck,
-  ReceiptText,
-} from "lucide-react"
 import { NfeDrafts } from "./nfe-drafts"
 import { PageHeader } from "@/components/page-header"
 
 type Kind = "overview" | "nfce" | "guides"
 
-const shortcuts = [
-  ["Notas recebidas e importação de XML", "/fiscal/monitor", "Consultar documentos recebidos", MonitorCheck],
-  ["CT-e recebidos", "/fiscal/ctes", "Consultar distribuição de CT-e", FileText],
-  ["NFS-e recebidas", "/fiscal/nfses", "Consultar documentos recebidos", FileText],
-  ["Configurações fiscais", "/preferencias/fiscal", "Configurar empresa ativa", FileText],
-  ["DANFE de XML autorizado", "/fiscal/danfe", "Baixar DANFE a partir de XML", ReceiptText],
-  ["Notas fiscais de saída", "/fiscal/notas-saida", "Preparar e consultar NF-e", FileText],
-  ["NFC-e", "/fiscal/nfce", "Preparar NFC-e modelo 65", ReceiptText],
-  ["Guias tributárias", "/fiscal/guias", "Capacidade ainda indisponível", Landmark],
+const fiscalGroups = [
+  {
+    title: "Documentos recebidos",
+    shortcuts: [
+      ["Monitor fiscal e importação de XML", "/fiscal/monitor", "Consultar notas recebidas e importar XML"],
+      ["CT-e recebidos", "/fiscal/ctes", "Consultar documentos de transporte"],
+      ["NFS-e recebidas", "/fiscal/nfses", "Consultar notas de serviço"],
+    ],
+  },
+  {
+    title: "Documentos de saída",
+    shortcuts: [
+      ["NF-e", "/fiscal/notas-saida", "Preparar e consultar notas de saída"],
+      ["NFC-e", "/fiscal/nfce", "Preparar e consultar documentos modelo 65"],
+    ],
+  },
+  {
+    title: "Documentos auxiliares",
+    shortcuts: [
+      ["DANFE de XML autorizado", "/fiscal/danfe", "Gerar DANFE a partir do XML"],
+    ],
+  },
+  {
+    title: "Configuração e guias",
+    shortcuts: [
+      ["Configurações fiscais", "/preferencias/fiscal", "Configurar a empresa ativa"],
+      ["Guias tributárias", "/fiscal/guias", "Indisponível"],
+    ],
+  },
 ] as const
 
 export function FiscalScreen({ kind }: { kind: Kind }) {
@@ -46,18 +60,24 @@ export function FiscalCapabilityUnavailable() {
 function FiscalOverview() {
   return (
     <Shell title="Fiscal" description="Configurações e documentos fiscais da empresa ativa.">
-      <p className="rounded-xl border bg-card p-4 text-sm text-muted-foreground">
-        Importe XMLs recebidos, consulte documentos armazenados e prepare
-        documentos fiscais. A transmissão depende da configuração fiscal, do
-        ambiente autorizado e da prontidão do emitente.
-      </p>
-      <nav className="mt-7 grid gap-3 sm:grid-cols-2" aria-label="Áreas fiscais">
-        {shortcuts.map(([label, href, description, Icon]) => (
-          <Link className="rounded-2xl border border-border bg-card p-5 transition hover:border-primary/40 hover:bg-muted/30" href={href} key={href}>
-            <Icon className="size-5 text-primary" />
-            <strong className="mt-4 block">{label}</strong>
-            <span className="mt-1 block text-sm text-muted-foreground">{description}</span>
-          </Link>
+      <nav className="grid items-start gap-4 lg:grid-cols-2" aria-label="Áreas fiscais">
+        {fiscalGroups.map(({ title, shortcuts }) => (
+          <section key={title} className="rounded-lg border bg-card">
+            <h2 className="border-b px-3 py-2 text-sm font-semibold">{title}</h2>
+            <ul className="divide-y">
+              {shortcuts.map(([label, href, description]) => (
+                <li key={href}>
+                  <Link
+                    className="flex min-h-11 flex-wrap items-center justify-between gap-x-3 gap-y-1 px-3 py-2 text-sm hover:bg-muted/50 focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-primary"
+                    href={href}
+                  >
+                    <span className="font-medium">{label}</span>
+                    <span className="text-muted-foreground">{description}</span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </section>
         ))}
       </nav>
     </Shell>
