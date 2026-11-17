@@ -1,6 +1,8 @@
+#![cfg_attr(not(any(test, feature = "migration-reference")), allow(unused_imports))]
 //! Accountant-declared reusable defaults. No inference of CFOP, origin or tax incidence.
 use crate::domains::DomainError;
 use serde::{Deserialize, Serialize};
+#[cfg(any(test, feature = "migration-reference"))]
 #[derive(Clone, Deserialize, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct TaxProfile {
@@ -46,6 +48,7 @@ pub struct TaxProfileDefaults {
     pub icms_out_of_contributions: Option<bool>,
 }
 
+#[cfg(any(test, feature = "migration-reference"))]
 #[derive(Clone, Deserialize, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct LineTaxRules {
@@ -68,6 +71,7 @@ pub struct LineTaxRules {
     pub additional_information: String,
 }
 
+#[cfg(any(test, feature = "migration-reference"))]
 impl LineTaxRules {
     fn validate(&mut self) -> Result<(), DomainError> {
         for (cfop, prefix) in [
@@ -124,6 +128,7 @@ impl LineTaxRules {
         Ok(())
     }
 }
+#[cfg(any(test, feature = "migration-reference"))]
 fn normalize_profile_rate(rate: &str) -> Result<String, DomainError> {
     let (whole, fraction) = match rate.split_once('.') {
         Some((_, "")) => return Err(DomainError::Invalid("Alíquota decimal inválida")),
@@ -137,6 +142,7 @@ fn normalize_profile_rate(rate: &str) -> Result<String, DomainError> {
     Ok(crate::domains::decimal(value, 4))
 }
 
+#[cfg(any(test, feature = "migration-reference"))]
 impl TaxProfile {
     pub fn validate(&mut self) -> Result<(), DomainError> {
         if self

@@ -1,4 +1,6 @@
+#![cfg_attr(not(any(test, feature = "migration-reference")), allow(unused_imports))]
 //! Mixed-price negotiation uses the same authorization and immutable order lifecycle.
+#[cfg(any(test, feature = "migration-reference"))]
 use super::{
     mixed_model::{self as model, MixedDirector, MixedSale, MixedSimulationInput, Policy},
     negotiation,
@@ -22,11 +24,16 @@ use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
 use sqlx::{Postgres, Transaction};
 use uuid::Uuid;
+#[cfg(any(test, feature = "migration-reference"))]
 const READ: &str = "sales.orders.read";
+#[cfg(any(test, feature = "migration-reference"))]
 const MANAGE: &str = "sales.orders.manage";
+#[cfg(any(test, feature = "migration-reference"))]
 const DIRECTOR: &str = "sales.approvals.director";
+#[cfg(any(test, feature = "migration-reference"))]
 const POLICY: &str = "platform.company.manage";
 
+#[cfg(any(test, feature = "migration-reference"))]
 #[derive(Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct MixedSimulation {
@@ -35,6 +42,7 @@ pub struct MixedSimulation {
     sale: MixedSale,
     director: Option<MixedDirector>,
 }
+#[cfg(any(test, feature = "migration-reference"))]
 struct Prepared {
     sale: MixedSale,
     director: MixedDirector,
@@ -43,6 +51,7 @@ struct Prepared {
     sources: Vec<SourceItem>,
     digest: String,
 }
+#[cfg(any(test, feature = "migration-reference"))]
 async fn prepare(
     tx: &mut Transaction<'_, Postgres>,
     tenant: Uuid,
@@ -96,6 +105,7 @@ async fn prepare(
     })
 }
 
+#[cfg(any(test, feature = "migration-reference"))]
 #[utoipa::path(post,path="/api/v1/commercial/mixed/simulate",operation_id="mixed_commercial_simulate",tag="Sales",request_body=MixedSimulationInput,security(("bearerAuth"=[])),params(("X-Tenant-Id"=Uuid,Header)),responses((status=200,body=MixedSimulation),(status=409,description="Políticas ou fontes incompatíveis"),(status=412,description="Tabela desatualizada")))]
 pub async fn simulate(
     State(state): State<AppState>,
@@ -132,6 +142,7 @@ pub async fn simulate(
     ))
 }
 
+#[cfg(any(test, feature = "migration-reference"))]
 #[derive(Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct MixedConvertInput {
@@ -143,6 +154,7 @@ pub struct MixedConvertInput {
     opportunity_id: Option<Uuid>,
     opportunity_revision: Option<i64>,
 }
+#[cfg(any(test, feature = "migration-reference"))]
 #[utoipa::path(post,path="/api/v1/commercial/mixed/orders",operation_id="mixed_commercial_convert",tag="Sales",request_body=MixedConvertInput,security(("bearerAuth"=[])),params(("X-Tenant-Id"=Uuid,Header),("Idempotency-Key"=Uuid,Header)),responses((status=201,body=Value),(status=412,description="Simulação divergente")))]
 pub async fn convert(
     State(state): State<AppState>,
@@ -299,3 +311,9 @@ pub async fn convert(
     tx.commit().await.map_err(db)?;
     Ok(response(StatusCode::CREATED, Some(1), value))
 }
+
+// Production keeps the canonical transport name; business rules live in TypeScript.
+#[cfg(not(any(test, feature = "migration-reference")))]
+pub use crate::platform::typescript_gateway::dispatch as simulate;
+#[cfg(not(any(test, feature = "migration-reference")))]
+pub use crate::platform::typescript_gateway::dispatch as convert;

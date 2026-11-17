@@ -1,8 +1,11 @@
+#![cfg_attr(not(any(test, feature = "migration-reference")), allow(unused_imports))]
 //! Pure commercial invariants shared by proposal commands.
 use crate::domains::{DomainError, fixed};
 
+#[cfg(any(test, feature = "migration-reference"))]
 pub(super) const MAX_AMOUNT: i64 = 99_999_999_999_999;
 
+#[cfg(any(test, feature = "migration-reference"))]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum Action {
     Send,
@@ -15,6 +18,7 @@ pub(super) enum Action {
 }
 
 /// Expiration uses the business date supplied by the caller, never a browser clock.
+#[cfg(any(test, feature = "migration-reference"))]
 pub(super) fn transition(
     status: &str,
     action: Action,
@@ -47,6 +51,7 @@ pub(super) fn transition(
     }
 }
 
+#[cfg(any(test, feature = "migration-reference"))]
 pub(super) fn line_amount(quantity: &str, price: &str) -> Result<(i64, i64, i64), DomainError> {
     let quantity = fixed(quantity, 6)?;
     let price = fixed(price, 2)?;
@@ -60,6 +65,7 @@ pub(super) fn line_amount(quantity: &str, price: &str) -> Result<(i64, i64, i64)
     Ok((quantity, price, amount as i64))
 }
 
+#[cfg(any(test, feature = "migration-reference"))]
 pub(super) fn total(amounts: impl IntoIterator<Item = i64>) -> Result<i64, DomainError> {
     let mut count = 0;
     let mut total = 0_i64;
@@ -78,6 +84,7 @@ pub(super) fn total(amounts: impl IntoIterator<Item = i64>) -> Result<i64, Domai
     Ok(total)
 }
 
+#[cfg(any(test, feature = "migration-reference"))]
 pub(super) fn text(raw: &str, maximum: usize, required: bool) -> Result<String, DomainError> {
     let value = raw.trim();
     if (required && value.is_empty()) || value.chars().count() > maximum || value.contains('\0') {

@@ -1,3 +1,4 @@
+#![cfg_attr(not(any(test, feature = "migration-reference")), allow(unused_imports))]
 //! Commercial commitment and title origination, without physical stock effects.
 use super::{OrderSnapshot, checkout, negotiation, pricing_orders, settings};
 use crate::domains::{
@@ -17,6 +18,7 @@ use uuid::Uuid;
 
 // Private to the sales domain: both initial commercial commitments use these
 // guards. Physical availability remains the confirmation orchestrator's concern.
+#[cfg(any(test, feature = "migration-reference"))]
 pub(super) async fn validate_commercial_acceptance(
     tx: &mut Transaction<'_, Postgres>,
     tenant: Uuid,
@@ -37,6 +39,7 @@ pub(super) async fn validate_commercial_acceptance(
 
 // Commercial conditions are frozen at acceptance. Fulfillment still checks
 // the current product identity/status/unit without repricing that agreement.
+#[cfg(any(test, feature = "migration-reference"))]
 pub(super) async fn validate_products(
     tx: &mut Transaction<'_, Postgres>,
     tenant: Uuid,
@@ -58,6 +61,7 @@ pub(super) async fn validate_products(
     Ok(())
 }
 
+#[cfg(any(test, feature = "migration-reference"))]
 #[utoipa::path(post,path="/api/v1/orders/{id}/accept",tag="Sales",security(("bearerAuth"=[])),params(("id"=Uuid,Path),("X-Tenant-Id"=Uuid,Header),("If-Match"=String,Header),("Idempotency-Key"=Uuid,Header)),responses((status=200,body=OrderSnapshot),(status=403,description="Sem permissão"),(status=409,description="Checkout ou condições comerciais em conflito"),(status=412,description="Revisão divergente"),(status=428,description="Precondições obrigatórias")))]
 pub async fn accept(
     State(state): State<AppState>,
@@ -126,3 +130,7 @@ pub async fn accept(
     tx.commit().await.map_err(db)?;
     Ok(response(StatusCode::OK, Some(next), value))
 }
+
+// Production keeps the canonical transport name; business rules live in TypeScript.
+#[cfg(not(any(test, feature = "migration-reference")))]
+pub use crate::platform::typescript_gateway::dispatch as accept;

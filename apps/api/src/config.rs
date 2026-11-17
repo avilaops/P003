@@ -7,6 +7,7 @@ use uuid::Uuid;
 pub struct Config {
     pub bind_address: SocketAddr,
     pub auth_userinfo_url: String,
+    pub typescript: crate::platform::typescript_gateway::TypescriptGateway,
     pub database_url: String,
     pub database_max_connections: u32,
     pub nfe_production_enabled: bool,
@@ -61,6 +62,10 @@ impl Config {
         Ok(Self {
             bind_address,
             auth_userinfo_url,
+            typescript: crate::platform::typescript_gateway::TypescriptGateway::new(
+                &env::var("ERP_TYPESCRIPT_API_URL")
+                    .unwrap_or_else(|_| "http://127.0.0.1:8081".to_owned()),
+            )?,
             database_url,
             database_max_connections,
             nfe_production_enabled,

@@ -1,4 +1,4 @@
-"""Validate the optional private API using Compose's actual config parser."""
+"""Validate the permanent private API using Compose's actual config parser."""
 import json
 import os
 from pathlib import Path
@@ -12,7 +12,7 @@ COMMAND = [os.environ['ERP_TEST_COMPOSE_BINARY']] if os.environ.get('ERP_TEST_CO
 
 
 class TypeScriptComposeTests(unittest.TestCase):
-    def test_profile_uses_same_validated_image_and_separate_private_environment(self):
+    def test_default_stack_uses_same_validated_image_and_separate_private_environment(self):
         if not shutil.which(COMMAND[0]):
             self.skipTest('Compose CLI is unavailable; no container is required')
         version = subprocess.run([*COMMAND, 'version'], capture_output=True, timeout=15)
@@ -29,7 +29,7 @@ class TypeScriptComposeTests(unittest.TestCase):
             envfile = root / 'release.env'
             envfile.write_text('\n'.join(key + '=' + value for key, value in values.items()))
             command = [*COMMAND, '--project-directory', str(root), '--env-file', str(envfile),
-                       '--file', str(ROOT / 'deploy/compose.yaml'), '--profile', 'typescript', 'config', '--format', 'json']
+                       '--file', str(ROOT / 'deploy/compose.yaml'), 'config', '--format', 'json']
             result = subprocess.run(command, capture_output=True, text=True, timeout=15)
             self.assertEqual(result.returncode, 0, result.stderr)
             config = json.loads(result.stdout)
@@ -41,6 +41,8 @@ class TypeScriptComposeTests(unittest.TestCase):
             self.assertNotIn('SMTP_PASSWORD', api['environment'])
             self.assertNotIn('ERP_SESSION_SECRET', api['environment'])
             self.assertEqual(api['command'], ['node', 'apps/api-ts/dist/server.js'])
+            self.assertEqual(config['services']['api']['environment']['ERP_TYPESCRIPT_API_URL'], 'http://127.0.0.1:8081')
+            self.assertEqual(config['services']['web']['environment']['ERP_TYPESCRIPT_API_URL'], 'http://127.0.0.1:8081')
 
 
 if __name__ == '__main__':

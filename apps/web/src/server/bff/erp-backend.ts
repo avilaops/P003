@@ -1,7 +1,7 @@
 import "server-only"
 
-// Pure selection only. Session/auth headers and the single upstream request stay
-// in the server-only proxy. Unsupported resources always keep their Rust route.
+// Permanent ownership after the four-module transition. The previous release,
+// rather than traffic flags, is the operational return path.
 export type MigratedModule = "preferences" | "registrations" | "sales" | "reports"
 export type BackendEnvironment = { ERP_TYPESCRIPT_API_URL?: string | undefined; ERP_TYPESCRIPT_MODULES?: string | undefined }
 const uuid = "[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}"
@@ -25,12 +25,6 @@ const routes: { module: MigratedModule; methods: readonly string[]; path: RegExp
   { module: "reports", methods: ["GET", "POST"], path: /^\/system\/custom-reports$/ },
   { module: "reports", methods: ["PUT"], path: new RegExp(`^/system/custom-reports/${uuid}$`, "i") },
 ]
-function enabledModules(environment: BackendEnvironment) {
-  const rawModules = environment.ERP_TYPESCRIPT_MODULES?.trim() ?? ""
-  const enabled = rawModules === "" ? [] : rawModules.split(",").map(value => value.trim())
-  if (enabled.some(value => !["preferences", "registrations", "sales", "reports"].includes(value)) || enabled.length !== new Set(enabled).size) throw Error("Configuração dos módulos TypeScript inválida")
-  return enabled
-}
 function typescriptOrigin(environment: BackendEnvironment) {
   if (!environment.ERP_TYPESCRIPT_API_URL) throw Error("API TypeScript não configurada para o módulo ativo")
   const url = new URL(environment.ERP_TYPESCRIPT_API_URL)
@@ -38,11 +32,10 @@ function typescriptOrigin(environment: BackendEnvironment) {
   return url.origin
 }
 export function erpHealthOrigins(rustOrigin: string, environment: BackendEnvironment) {
-  return enabledModules(environment).length ? [rustOrigin, typescriptOrigin(environment)] : [rustOrigin]
+  return [rustOrigin, typescriptOrigin(environment)]
 }
 export function selectErpBackend(method: string, resource: string, rustOrigin: string, environment: BackendEnvironment) {
   const route = routes.find(route => route.methods.includes(method.toUpperCase()) && route.path.test(resource))
   if (!route) return { origin: rustOrigin, backend: "rust" as const, module: null }
-  if (!enabledModules(environment).includes(route.module)) return { origin: rustOrigin, backend: "rust" as const, module: route.module }
   return { origin: typescriptOrigin(environment), backend: "typescript" as const, module: route.module }
 }

@@ -8,6 +8,7 @@ services:
     env_file: api.env
     environment:
       ERP_CNPJ_WS_ENABLED: "true"
+      ERP_TYPESCRIPT_API_URL: http://127.0.0.1:8081
     extra_hosts:
       - host.docker.internal:host-gateway
     networks: [erp]
@@ -18,7 +19,6 @@ services:
     cap_drop: [ALL]
   api-ts:
     image: ${ERP_WEB_IMAGE:?CI image required}
-    profiles: [typescript]
     command: [node, apps/api-ts/dist/server.js]
     restart: unless-stopped
     logging:
@@ -26,7 +26,7 @@ services:
       options: {max-size: "10m", max-file: "3"}
     env_file:
       - path: api-ts.env
-        required: false
+        required: true
     environment:
       NODE_ENV: production
       API_TS_HOST: 127.0.0.1
@@ -53,6 +53,7 @@ services:
     env_file: web.env
     environment:
       ERP_API_URL: http://127.0.0.1:8080
+      ERP_TYPESCRIPT_API_URL: http://127.0.0.1:8081
       ERP_WEB_ORIGIN: https://erp.avilaops.com
       AUTH_ISSUER: https://auth.avilaops.com
       ERP_RELEASE_SHA: ${ERP_RELEASE_SHA:?CI revision required}

@@ -1,3 +1,4 @@
+#![cfg_attr(not(any(test, feature = "migration-reference")), allow(unused_imports))]
 //! Company-scoped operational indicators. Missing permission is never a zero.
 use crate::{
     domains::{DomainError, db, response},
@@ -13,6 +14,7 @@ use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
 use uuid::Uuid;
 
+#[cfg(any(test, feature = "migration-reference"))]
 #[derive(Deserialize, utoipa::IntoParams)]
 #[into_params(parameter_in = Query)]
 #[serde(deny_unknown_fields)]
@@ -20,6 +22,7 @@ pub struct DashboardQuery {
     period: Option<String>,
 }
 
+#[cfg(any(test, feature = "migration-reference"))]
 #[derive(Serialize, FromRow, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct DashboardSales {
@@ -29,6 +32,7 @@ pub struct DashboardSales {
     pub average: String,
 }
 
+#[cfg(any(test, feature = "migration-reference"))]
 #[derive(Serialize, FromRow, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct DashboardMonth {
@@ -38,6 +42,7 @@ pub struct DashboardMonth {
     pub average: String,
 }
 
+#[cfg(any(test, feature = "migration-reference"))]
 #[derive(Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct DashboardSnapshot {
@@ -53,6 +58,7 @@ pub struct DashboardSnapshot {
     customers: Option<i64>,
 }
 
+#[cfg(any(test, feature = "migration-reference"))]
 #[utoipa::path(get,path="/api/v1/dashboard",tag="Sales",params(DashboardQuery,("X-Tenant-Id"=Uuid,Header)),security(("bearerAuth"=[])),responses((status=200,body=DashboardSnapshot),(status=403,description="Sem acesso à empresa"),(status=422,description="Período inválido")))]
 pub async fn get(
     State(state): State<AppState>,
@@ -121,3 +127,7 @@ pub async fn get(
     tx.commit().await.map_err(db)?;
     Ok(response(StatusCode::OK, None, result))
 }
+
+// Production keeps the canonical transport name; business rules live in TypeScript.
+#[cfg(not(any(test, feature = "migration-reference")))]
+pub use crate::platform::typescript_gateway::dispatch as get;

@@ -1,4 +1,6 @@
-# Migração da API para TypeScript • evidências e pendências
+# Migração da API para TypeScript • evidências da primeira etapa
+
+Este documento registra a etapa publicada em 16/11. A entrega de conclusão, que inclui MCP e retirada dos handlers de produção, está descrita em [Conclusão dos quatro módulos](typescript-api-transition-finalization.md). O retorno por flags registrado abaixo pertence à primeira etapa; a nova entrega usa recuperação por release completa.
 
 Atualizado em 16/11/2026 • horário de Brasília • implementação integrada à `main` pelos PRs #229, #230 e #231.
 

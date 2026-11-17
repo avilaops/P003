@@ -6,14 +6,17 @@ use utoipa::{
 
 use super::health;
 use crate::domains::{
-    assistant, catalog, catalog_publication, commissions, contracts, dashboard, finance,
-    financial_account_ledger, fiscal, inventory, legacy, parties, payables, pos, price_lists,
-    production, purchasing, reference_data, registry_lookup, returns, sales, staff, staff_payroll,
+    assistant, catalog_publication, commissions, contracts, finance, financial_account_ledger,
+    fiscal, inventory, legacy, payables, pos, price_lists, production, purchasing, reference_data,
+    registry_lookup, returns, sales, staff, staff_payroll,
 };
+#[cfg(any(test, feature = "migration-reference"))]
+use crate::domains::{catalog, dashboard, parties};
 use crate::platform::{
     access, access_management, company, invitations, onboarding, service_auth, workflows,
 };
 
+#[cfg(any(test, feature = "migration-reference"))]
 #[derive(OpenApi)]
 #[openapi(
     info(title = "Ávila ERP API", version = "0.1.0", description = "Contrato gerado dos recursos implementados. Sem dados demonstrativos."),
@@ -130,6 +133,9 @@ use crate::platform::{
 )]
 struct ApiDoc;
 
+#[cfg(not(any(test, feature = "migration-reference")))]
+include!("openapi_production.rs");
+
 #[cfg(test)]
 include!("openapi_export.rs");
 
@@ -188,16 +194,75 @@ impl Modify for Security {
 }
 
 pub async fn document() -> Json<utoipa::openapi::OpenApi> {
-    Json(ApiDoc::openapi())
+    Json(serde_json::from_value(value()).expect("OpenAPI contract is valid"))
 }
 
 pub(crate) fn value() -> serde_json::Value {
-    serde_json::to_value(ApiDoc::openapi()).expect("OpenAPI serializes")
+    #[allow(unused_mut)]
+    let mut document = serde_json::to_value(ApiDoc::openapi()).expect("OpenAPI serializes");
+    #[cfg(not(any(test, feature = "migration-reference")))]
+    merge_migrated_contract(&mut document);
+    document
+}
+
+#[cfg(not(any(test, feature = "migration-reference")))]
+fn merge_migrated_contract(document: &mut serde_json::Value) {
+    let fragment: serde_json::Value =
+        serde_json::from_str(include_str!("fixtures/migrated_operations.json"))
+            .expect("versioned migrated contract");
+    for (path, operations) in fragment["paths"].as_object().expect("paths") {
+        let target = document["paths"]
+            .as_object_mut()
+            .expect("paths")
+            .entry(path.clone())
+            .or_insert_with(|| serde_json::json!({}));
+        for (method, operation) in operations.as_object().expect("operations") {
+            assert!(
+                target.get(method).is_none(),
+                "Migrated operation must have a single owner: {method} {path}"
+            );
+            target[method] = operation.clone();
+        }
+    }
+    for (name, schema) in fragment["components"]["schemas"]
+        .as_object()
+        .expect("schemas")
+    {
+        let schemas = document["components"]["schemas"]
+            .as_object_mut()
+            .expect("schemas");
+        // Utoipa's reference resolves colliding component names by registration
+        // order (for example POS and Sales both declare CheckoutInput). Keep
+        // that canonical wire definition; comparing the complete production and
+        // reference documents prevents this extraction from changing the MCP.
+        schemas.insert(name.clone(), schema.clone());
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn migrated_operations_match_the_explicit_reference_contract() {
+        let reference = value();
+        let fragment: serde_json::Value =
+            serde_json::from_str(include_str!("fixtures/migrated_operations.json")).unwrap();
+        let mut operations = 0;
+        for (path, methods) in fragment["paths"].as_object().unwrap() {
+            for (method, operation) in methods.as_object().unwrap() {
+                assert_eq!(
+                    &reference["paths"][path][method], operation,
+                    "{method} {path}"
+                );
+                operations += 1;
+            }
+        }
+        assert_eq!(operations, 65);
+        for (name, schema) in fragment["components"]["schemas"].as_object().unwrap() {
+            assert_eq!(&reference["components"]["schemas"][name], schema, "{name}");
+        }
+    }
 
     #[test]
     fn reference_catalog_contracts_preserve_existing_response_schemas() {

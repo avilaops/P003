@@ -15,8 +15,7 @@
       "ERP_AUTH_VERIFIED": "false",
       "POSTGRES_ALLOWED_HOST": "",
       "DATABASE_MAX_CONNECTIONS": "5",
-      "ERP_BACKGROUND_WORKERS_ENABLED": "false",
-      "ERP_TYPESCRIPT_MODULES": ""
+      "ERP_BACKGROUND_WORKERS_ENABLED": "false"
     },
     "observability": {
       "enabled": true,

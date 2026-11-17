@@ -1,3 +1,4 @@
+#![cfg_attr(not(any(test, feature = "migration-reference")), allow(unused_imports))]
 use crate::domains::{DomainChange, DomainError, db, decimal, fixed, record, response, revision};
 use crate::platform::{access, auth::AuthenticatedIdentity, state::AppState};
 use axum::{
@@ -158,6 +159,7 @@ pub async fn put(
     ))
 }
 
+#[cfg(any(test, feature = "migration-reference"))]
 pub(super) async fn validate_confirmation(
     tx: &mut Transaction<'_, Postgres>,
     tenant: Uuid,

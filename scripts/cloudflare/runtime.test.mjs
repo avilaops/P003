@@ -215,8 +215,9 @@ test('supervisor starts API without migration and waits before spawning web', as
   assert.equal(f.launches[0].command, '/usr/local/bin/erp-next-api');
   release();
   await f.supervisor.ready;
-  assert.equal(f.launches.length, 2);
-  assert.deepEqual(f.launches[1].args, ['apps/web/server.js']);
+  assert.equal(f.launches.length, 3);
+  assert.deepEqual(f.launches[1].args, ['apps/api-ts/dist/server.js']);
+  assert.deepEqual(f.launches[2].args, ['apps/web/server.js']);
   f.supervisor.stop();
   assert.equal(await f.supervisor.done, 0);
 });
@@ -237,12 +238,12 @@ test('unexpected child exit terminates its sibling and produces a failed runtime
   assert.deepEqual(f.children[1].kills, ['SIGTERM']);
 });
 
-test('graceful shutdown stops both processes without restart or migration', async () => {
+test('graceful shutdown stops all processes without restart or migration', async () => {
   const f = supervisorFixture();
   await f.supervisor.ready;
   f.supervisor.stop();
   assert.equal(await f.supervisor.done, 0);
-  assert.equal(f.launches.length, 2);
+  assert.equal(f.launches.length, 3);
   assert.ok(f.children.every(child => child.kills.length === 1));
 });
 
@@ -256,8 +257,9 @@ test('enabled TypeScript modules receive an isolated private API process without
   assert.equal(config.processes.apiTs.AUTH_USERINFO_URL, env.AUTH_USERINFO_URL);
   for (const key of ['SMTP_PASSWORD', 'ERP_CERT_KEY', 'ERP_SESSION_SECRET', 'ERP_AUTH_CLIENT_SECRET']) assert.equal(config.processes.apiTs[key], undefined);
   assert.equal(config.processes.web.ERP_TYPESCRIPT_API_URL, 'http://127.0.0.1:8081');
-  assert.equal(config.processes.web.ERP_TYPESCRIPT_MODULES, 'preferences,sales');
-  for (const modules of ['unknown', 'sales,sales', 'sales,']) assert.equal(runtimeConfiguration({ ...env, ERP_TYPESCRIPT_MODULES: modules }), null);
+  assert.equal(config.processes.api.ERP_TYPESCRIPT_API_URL, 'http://127.0.0.1:8081');
+  assert.equal(config.processes.web.ERP_TYPESCRIPT_MODULES, undefined);
+  for (const modules of ['', 'unknown', 'sales,sales', 'sales,']) assert.ok(runtimeConfiguration({ ...env, ERP_TYPESCRIPT_MODULES: modules }).processes.apiTs);
 });
 
 test('supervisor waits for both private APIs before starting web and stops all on TS failure', async () => {

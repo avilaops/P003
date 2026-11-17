@@ -30,3 +30,12 @@ test("readiness checks the real database, releases its connection and exposes no
     assert.match(unavailable.headers["cache-control"]!, /no-store/)
   } finally { await app.close() }
 })
+
+test("MCP resource uses the validated ERP origin without credentials, path or insecure remote transport", () => {
+  const environment = { DATABASE_URL: "postgresql://app@localhost/test", AUTH_ISSUER: "https://auth.example.test" }
+  assert.equal(loadConfiguration(environment).mcpResource, "https://erp.avilaops.com/mcp")
+  assert.equal(loadConfiguration({ ...environment, ERP_MCP_ORIGIN: "http://127.0.0.1:3333" }).mcpResource, "http://127.0.0.1:3333/mcp")
+  for (const origin of ["https://user:secret@erp.example.test", "https://erp.example.test/path", "https://erp.example.test?query=1", "https://erp.example.test#fragment", "http://outside.example.test"]) {
+    assert.throws(() => loadConfiguration({ ...environment, ERP_MCP_ORIGIN: origin }))
+  }
+})

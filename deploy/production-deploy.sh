@@ -129,24 +129,21 @@ config["services"]["fiscal-mcp"] = {
 }
 
 web = environment(config["services"]["web"])
-raw_modules = web.get("ERP_TYPESCRIPT_MODULES", "").strip()
-modules = [value.strip() for value in raw_modules.split(",")] if raw_modules else []
-if len(set(modules)) != len(modules) or any(value not in ("preferences", "registrations", "sales", "reports") for value in modules):
-    raise SystemExit("Invalid TypeScript modules")
-if modules or "api-ts" in config["services"]:
-    # Reuse the validated web image, which carries the production-only TS package.
-    # Preserve an existing optional process during traffic rollback; no command is retried.
-    settings = {key: api[key] for key in ("DATABASE_URL", "DATABASE_MAX_CONNECTIONS", "AUTH_ISSUER", "AUTH_USERINFO_URL") if api.get(key)}
-    settings.setdefault("AUTH_ISSUER", web.get("AUTH_ISSUER", ""))
-    settings.update({"NODE_ENV": "production", "API_TS_HOST": "127.0.0.1", "API_TS_PORT": "8081"})
-    config["services"]["api-ts"] = {
-        "image": "erp-next-web:sha-" + sys.argv[2], "restart": "unless-stopped",
-        "command": ["node", "apps/api-ts/dist/server.js"], "environment": settings,
-        "network_mode": "service:api", "depends_on": {"api": {"condition": "service_healthy"}},
-        "healthcheck": {"test": ["CMD", "node", "-e", "fetch('http://127.0.0.1:8081/health/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"], "interval": "15s", "timeout": "5s", "start_period": "30s"},
-        "security_opt": ["no-new-privileges:true"], "cap_drop": ["ALL"], "mem_limit": "384m", "pids_limit": 128,
-    }
-    web["ERP_TYPESCRIPT_API_URL"] = "http://127.0.0.1:8081"
+# Migrated handlers are absent from production Rust. Always start their private
+# process from the validated web image; recovery selects a whole prior release.
+settings = {key: api[key] for key in ("DATABASE_URL", "DATABASE_MAX_CONNECTIONS", "AUTH_ISSUER", "AUTH_USERINFO_URL", "ERP_MCP_ORIGIN") if api.get(key)}
+settings.setdefault("AUTH_ISSUER", web.get("AUTH_ISSUER", ""))
+settings.update({"NODE_ENV": "production", "API_TS_HOST": "127.0.0.1", "API_TS_PORT": "8081"})
+config["services"]["api-ts"] = {
+    "image": "erp-next-web:sha-" + sys.argv[2], "restart": "unless-stopped",
+    "command": ["node", "apps/api-ts/dist/server.js"], "environment": settings,
+    "network_mode": "service:api", "depends_on": {"api": {"condition": "service_healthy"}},
+    "healthcheck": {"test": ["CMD", "node", "-e", "fetch('http://127.0.0.1:8081/health/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"], "interval": "15s", "timeout": "5s", "start_period": "30s"},
+    "security_opt": ["no-new-privileges:true"], "cap_drop": ["ALL"], "mem_limit": "384m", "pids_limit": 128,
+}
+api["ERP_TYPESCRIPT_API_URL"] = "http://127.0.0.1:8081"
+web["ERP_TYPESCRIPT_API_URL"] = "http://127.0.0.1:8081"
+web.pop("ERP_TYPESCRIPT_MODULES", None)
 
 for service in config["services"].values():
     service["logging"] = {"driver": "json-file", "options": {"max-size": "10m", "max-file": "3"}}

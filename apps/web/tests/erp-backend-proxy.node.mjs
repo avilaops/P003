@@ -21,9 +21,10 @@ test("BFF selects one backend per module and never retries commands on Rust", as
   try {
     process.env.ERP_TYPESCRIPT_MODULES = "preferences,registrations,sales,reports";
     process.env.ERP_TYPESCRIPT_API_URL = "http://127.0.0.1:8081";
-    globalThis.fetch = async (url, init) => { calls.push({ url: new URL(url), init }); return new Response('{"ok":true}', { status: 201, headers: { etag: '"8"', "idempotency-replayed": "true", "x-request-id": "fixture-request" } }); };
+    globalThis.fetch = async (url, init) => { calls.push({ url: new URL(url), init }); return new Response('{"ok":true}', { status: 201, headers: { etag: '"8"', "idempotency-replayed": "true", "x-request-id": "fixture-request", "x-erp-backend": "typescript" } }); };
     const response = await forwardErp(command("/orders"), "/orders");
     assert.equal(response.status, 201);
+    assert.equal(response.headers.get("x-erp-backend"), "typescript");
     assert.equal(calls.length, 1);
     assert.equal(calls[0].url.origin, "http://127.0.0.1:8081");
     assert.equal(calls[0].init.headers.get("authorization"), "Bearer session-token");
@@ -50,7 +51,7 @@ test("BFF selects one backend per module and never retries commands on Rust", as
     process.env.ERP_TYPESCRIPT_MODULES = "preferences,reports";
     calls.length = 0;
     await forwardErp(command("/orders"), "/orders");
-    assert.equal(calls[0].url.origin, "http://rust.local", "Explicit sales rollback selects Rust before the request");
+    assert.equal(calls[0].url.origin, "http://127.0.0.1:8081", "Retired flags cannot restore Rust business handlers");
     process.env.ERP_TYPESCRIPT_MODULES = "preferences,registrations,sales,reports";
     calls.length = 0;
     await forwardErp(new Request("http://fixture.local/receivables"), "/receivables");

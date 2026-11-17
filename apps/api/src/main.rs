@@ -68,6 +68,7 @@ async fn run() -> anyhow::Result<()> {
         .with_contract_validator(config.contract_validator)
         .with_invitations(config.invitations);
     state = state.with_mail(config.mail);
+    state.typescript = Some(config.typescript);
     state.catalog_media = domains::catalog_publication::MediaGateway::from_env()?;
     let workers_enabled = match std::env::var("ERP_BACKGROUND_WORKERS_ENABLED").as_deref() {
         Ok("false") => false,

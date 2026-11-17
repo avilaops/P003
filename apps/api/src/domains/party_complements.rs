@@ -1,3 +1,4 @@
+#![cfg_attr(not(any(test, feature = "migration-reference")), allow(unused_imports))]
 use super::DomainError;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
@@ -19,6 +20,7 @@ pub struct PartyAddress {
     pub primary: bool,
 }
 
+#[cfg(any(test, feature = "migration-reference"))]
 #[derive(Clone, Deserialize, Serialize, ToSchema)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct PartyContact {
@@ -30,6 +32,7 @@ pub struct PartyContact {
     pub primary: bool,
 }
 
+#[cfg(any(test, feature = "migration-reference"))]
 fn text(value: &mut String, max: usize) -> Result<(), DomainError> {
     *value = value.trim().to_owned();
     if value.is_empty() || value.chars().count() > max || value.chars().any(char::is_control) {
@@ -40,6 +43,7 @@ fn text(value: &mut String, max: usize) -> Result<(), DomainError> {
     Ok(())
 }
 
+#[cfg(any(test, feature = "migration-reference"))]
 fn optional(value: &mut Option<String>, max: usize) -> Result<(), DomainError> {
     *value = value
         .as_deref()
@@ -52,6 +56,7 @@ fn optional(value: &mut Option<String>, max: usize) -> Result<(), DomainError> {
     Ok(())
 }
 
+#[cfg(any(test, feature = "migration-reference"))]
 pub fn validate(
     addresses: &mut Option<Vec<PartyAddress>>,
     contacts: &mut Option<Vec<PartyContact>>,

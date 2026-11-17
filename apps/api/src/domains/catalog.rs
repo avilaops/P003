@@ -1,3 +1,4 @@
+#![cfg_attr(not(any(test, feature = "migration-reference")), allow(unused_imports))]
 use super::{
     DomainChange, DomainError, authorized, command_key, db, decimal, fixed, record, remember,
     replay, response, revision,
@@ -306,6 +307,7 @@ impl From<ProductRow> for Product {
         }
     }
 }
+#[cfg(any(test, feature = "migration-reference"))]
 #[derive(Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ProductSnapshot {
@@ -313,6 +315,7 @@ pub struct ProductSnapshot {
     can_edit: bool,
     data: Product,
 }
+#[cfg(any(test, feature = "migration-reference"))]
 #[derive(Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ProductList {
@@ -328,6 +331,8 @@ pub struct ProductList {
 #[into_params(parameter_in = Query)]
 #[serde(deny_unknown_fields)]
 pub struct ProductQuery {
+    // Stock still exposes this shared query schema; product filtering is in TS.
+    #[cfg_attr(not(any(test, feature = "migration-reference")), allow(dead_code))]
     pub category_id: Option<Uuid>,
     pub q: Option<String>,
     pub status: Option<String>,
@@ -360,6 +365,7 @@ pub async fn load(
     sqlx::query_as::<_,ProductRow>("SELECT (SELECT main_media_id FROM product_catalog_profiles WHERE tenant_id=products.tenant_id AND product_id=products.id) AS main_media_id,COALESCE((SELECT (data->>'upholsteryConfigurable')::boolean FROM registration_settings WHERE tenant_id=products.tenant_id AND section='products'),true) AS upholstery_configurable,id,sku,name,unit,ncm,cest,price_cents,status,revision,category_id,structure_colors,swing_arm_colors,finishing_palette,upholstery_colors,plate_holder_colors,plate_holder_types,plate_holder_type,photo_data_url,(COALESCE(photo_data_url,'')<>'' OR EXISTS(SELECT 1 FROM product_catalog_profiles WHERE tenant_id=products.tenant_id AND product_id=products.id AND main_media_id IS NOT NULL)) AS has_photo FROM products WHERE tenant_id=$1 AND id=$2")
         .bind(tenant).bind(id).fetch_optional(&mut **tx).await.map_err(db)?.map(Into::into).ok_or(DomainError::NotFound)
 }
+#[cfg(any(test, feature = "migration-reference"))]
 fn product_error(error: sqlx::Error) -> DomainError {
     if error
         .as_database_error()
@@ -371,6 +377,7 @@ fn product_error(error: sqlx::Error) -> DomainError {
     }
 }
 
+#[cfg(any(test, feature = "migration-reference"))]
 fn legacy_plate_holder_type(types: Option<&[String]>) -> &'static str {
     match types {
         Some([kind]) if kind == "Standard" => "standard",
@@ -379,6 +386,7 @@ fn legacy_plate_holder_type(types: Option<&[String]>) -> &'static str {
     }
 }
 
+#[cfg(any(test, feature = "migration-reference"))]
 fn category_uuid(input: &ProductInput) -> Option<Uuid> {
     input
         .category_id
@@ -386,6 +394,7 @@ fn category_uuid(input: &ProductInput) -> Option<Uuid> {
         .and_then(|id| Uuid::parse_str(id).ok())
 }
 
+#[cfg(any(test, feature = "migration-reference"))]
 async fn validate_category(
     tx: &mut Transaction<'_, Postgres>,
     tenant: Uuid,
@@ -403,6 +412,7 @@ async fn validate_category(
     Ok(())
 }
 
+#[cfg(any(test, feature = "migration-reference"))]
 #[utoipa::path(get,path="/api/v1/products",tag="Catalog",security(("bearerAuth"=[])),params(ProductQuery,("X-Tenant-Id"=Uuid,Header)),responses((status=200,body=ProductList),(status=401,description="Credencial inválida"),(status=403,description="Sem permissão"),(status=422,description="Filtros inválidos")))]
 pub async fn list(
     State(state): State<AppState>,
@@ -443,6 +453,7 @@ pub async fn list(
         },
     ))
 }
+#[cfg(any(test, feature = "migration-reference"))]
 #[utoipa::path(get,path="/api/v1/products/{id}",tag="Catalog",security(("bearerAuth"=[])),params(("id"=Uuid,Path),("X-Tenant-Id"=Uuid,Header)),responses((status=200,body=ProductSnapshot),(status=404,description="Produto não encontrado"),(status=403,description="Sem permissão")))]
 pub async fn get(
     State(state): State<AppState>,
@@ -471,6 +482,7 @@ pub async fn get(
         },
     ))
 }
+#[cfg(any(test, feature = "migration-reference"))]
 #[utoipa::path(post,path="/api/v1/products",tag="Catalog",request_body=ProductInput,security(("bearerAuth"=[])),params(("X-Tenant-Id"=Uuid,Header),("Idempotency-Key"=Uuid,Header)),responses((status=201,body=ProductSnapshot),(status=409,description="SKU ou chave em conflito"),(status=422,description="Cadastro inválido"),(status=428,description="Chave obrigatória"),(status=403,description="Sem permissão")))]
 pub async fn create(
     State(state): State<AppState>,
@@ -562,6 +574,7 @@ pub async fn create(
     tx.commit().await.map_err(db)?;
     Ok(response(StatusCode::CREATED, Some(1), result))
 }
+#[cfg(any(test, feature = "migration-reference"))]
 #[utoipa::path(put,path="/api/v1/products/{id}",tag="Catalog",request_body=ProductInput,security(("bearerAuth"=[])),params(("id"=Uuid,Path),("X-Tenant-Id"=Uuid,Header),("If-Match"=String,Header)),responses((status=200,body=ProductSnapshot),(status=404,description="Produto não encontrado"),(status=409,description="SKU, unidade ou saldo em conflito"),(status=412,description="Revisão divergente"),(status=422,description="Cadastro inválido"),(status=428,description="Revisão obrigatória"),(status=403,description="Sem permissão")))]
 pub async fn update(
     State(state): State<AppState>,
@@ -692,3 +705,13 @@ pub async fn update(
         },
     ))
 }
+
+// Production keeps the canonical transport name; business rules live in TypeScript.
+#[cfg(not(any(test, feature = "migration-reference")))]
+pub use crate::platform::typescript_gateway::dispatch as list;
+#[cfg(not(any(test, feature = "migration-reference")))]
+pub use crate::platform::typescript_gateway::dispatch as get;
+#[cfg(not(any(test, feature = "migration-reference")))]
+pub use crate::platform::typescript_gateway::dispatch as create;
+#[cfg(not(any(test, feature = "migration-reference")))]
+pub use crate::platform::typescript_gateway::dispatch as update;

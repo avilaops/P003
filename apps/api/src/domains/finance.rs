@@ -1,3 +1,4 @@
+#![cfg_attr(not(any(test, feature = "migration-reference")), allow(unused_imports))]
 mod document;
 pub mod email;
 pub mod settings;
@@ -19,6 +20,7 @@ use utoipa::ToSchema;
 use uuid::Uuid;
 
 /// Called by the authorized sales orchestrator in the same transaction; finance owns its records and outbox.
+#[cfg(any(test, feature = "migration-reference"))]
 pub(super) async fn originate_order_receivable(
     tx: &mut Transaction<'_, Postgres>,
     tenant: Uuid,

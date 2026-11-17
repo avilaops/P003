@@ -1,3 +1,4 @@
+#![cfg_attr(not(any(test, feature = "migration-reference")), allow(unused_imports))]
 use super::{
     DomainChange, DomainError, authorized, catalog, command_key, db, decimal, fixed, record,
     remember, replay, response, revision,
@@ -179,6 +180,7 @@ pub struct OrderQuery {
     pub offset: Option<u32>,
     pub limit: Option<u32>,
 }
+#[cfg(any(test, feature = "migration-reference"))]
 #[derive(Default, Deserialize, IntoParams)]
 #[into_params(parameter_in = Query)]
 #[serde(deny_unknown_fields)]
@@ -200,6 +202,7 @@ pub enum SalesListSort {
     Created,
     Updated,
 }
+#[cfg(any(test, feature = "migration-reference"))]
 #[derive(Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct OrderList {
@@ -259,6 +262,7 @@ pub(super) async fn reserved(
         .bind(tenant).bind(product).fetch_one(&mut **tx).await.map_err(db)
 }
 
+#[cfg(any(test, feature = "migration-reference"))]
 #[derive(FromRow)]
 pub(super) struct ReceivableOrigin {
     pub order_id: Uuid,
@@ -267,6 +271,7 @@ pub(super) struct ReceivableOrigin {
     pub amount_cents: i64,
 }
 
+#[cfg(any(test, feature = "migration-reference"))]
 pub(super) async fn receivable_origin(
     tx: &mut Transaction<'_, Postgres>,
     tenant: Uuid,
@@ -276,6 +281,7 @@ pub(super) async fn receivable_origin(
         .bind(tenant).bind(id).fetch_optional(&mut **tx).await.map_err(db)?.ok_or(DomainError::Conflict("A origem do recebível exige um pedido confirmado desta empresa"))
 }
 
+#[cfg(any(test, feature = "migration-reference"))]
 pub(super) async fn reserved_line(
     tx: &mut Transaction<'_, Postgres>,
     tenant: Uuid,
@@ -314,6 +320,7 @@ async fn load(
 
 const ORDER_SUMMARY: &str = "SELECT id,number::text AS number,customer_id,customer_name,customer_tax_id,due_date::text AS due_date,(amount_cents::numeric/100)::numeric(16,2)::text AS amount,status,revision,to_json(updated_at)#>>'{}' AS updated_at,(EXISTS(SELECT 1 FROM order_pricing_snapshots s WHERE s.tenant_id=sales_orders.tenant_id AND s.order_id=sales_orders.id) OR EXISTS(SELECT 1 FROM commercial_order_quotes q WHERE q.tenant_id=sales_orders.tenant_id AND q.order_id=sales_orders.id)) AS pricing_origin FROM sales_orders";
 
+#[cfg(any(test, feature = "migration-reference"))]
 #[utoipa::path(get,path="/api/v1/orders",tag="Sales",security(("bearerAuth"=[])),params(SalesOrderQuery,("X-Tenant-Id"=Uuid,Header)),responses((status=200,body=OrderList),(status=403,description="Sem permissão"),(status=422,description="Filtros inválidos")))]
 pub async fn list(
     State(state): State<AppState>,
@@ -409,6 +416,7 @@ pub async fn list(
         },
     ))
 }
+#[cfg(any(test, feature = "migration-reference"))]
 #[utoipa::path(get,path="/api/v1/orders/{id}",tag="Sales",security(("bearerAuth"=[])),params(("id"=Uuid,Path),("X-Tenant-Id"=Uuid,Header)),responses((status=200,body=OrderSnapshot),(status=403,description="Sem permissão"),(status=404,description="Pedido não encontrado")))]
 pub async fn get(
     State(state): State<AppState>,
@@ -721,6 +729,7 @@ async fn store_lines(
     Ok(())
 }
 
+#[cfg(any(test, feature = "migration-reference"))]
 #[utoipa::path(post,path="/api/v1/orders",tag="Sales",request_body=OrderInput,security(("bearerAuth"=[])),params(("X-Tenant-Id"=Uuid,Header),("Idempotency-Key"=Uuid,Header)),responses((status=201,body=OrderSnapshot),(status=403,description="Sem permissão"),(status=409,description="Cadastros ou comando em conflito"),(status=422,description="Pedido inválido"),(status=428,description="Chave obrigatória")))]
 pub async fn create(
     State(state): State<AppState>,
@@ -777,6 +786,7 @@ pub async fn create(
     Ok(response(StatusCode::CREATED, Some(1), value))
 }
 
+#[cfg(any(test, feature = "migration-reference"))]
 #[utoipa::path(put,path="/api/v1/orders/{id}",tag="Sales",request_body=OrderInput,security(("bearerAuth"=[])),params(("id"=Uuid,Path),("X-Tenant-Id"=Uuid,Header),("If-Match"=String,Header),("Idempotency-Key"=Uuid,Header)),responses((status=200,body=OrderSnapshot),(status=403,description="Sem permissão"),(status=404,description="Pedido ou produto não encontrado"),(status=409,description="Somente rascunho e cadastros compatíveis"),(status=412,description="Revisão divergente"),(status=422,description="Pedido inválido"),(status=428,description="Revisão e chave obrigatórias")))]
 pub async fn update(
     State(state): State<AppState>,
@@ -864,11 +874,13 @@ pub async fn update(
     Ok(response(StatusCode::OK, Some(next), value))
 }
 
+#[cfg(any(test, feature = "migration-reference"))]
 enum Action {
     Confirm,
     Cancel,
     Complete,
 }
+#[cfg(any(test, feature = "migration-reference"))]
 async fn transition(
     state: AppState,
     identity: AuthenticatedIdentity,
@@ -1015,6 +1027,7 @@ async fn transition(
     tx.commit().await.map_err(db)?;
     Ok(response(StatusCode::OK, Some(next), value))
 }
+#[cfg(any(test, feature = "migration-reference"))]
 #[utoipa::path(post,path="/api/v1/orders/{id}/confirm",tag="Sales",security(("bearerAuth"=[])),params(("id"=Uuid,Path),("X-Tenant-Id"=Uuid,Header),("If-Match"=String,Header),("Idempotency-Key"=Uuid,Header)),responses((status=200,body=OrderSnapshot),(status=403,description="Sem permissão"),(status=409,description="Saldo ou estado em conflito"),(status=412,description="Revisão divergente"),(status=428,description="Precondições obrigatórias")))]
 pub async fn confirm(
     State(state): State<AppState>,
@@ -1024,6 +1037,7 @@ pub async fn confirm(
 ) -> Result<Response, DomainError> {
     transition(state, identity, headers, id, Action::Confirm).await
 }
+#[cfg(any(test, feature = "migration-reference"))]
 #[utoipa::path(post,path="/api/v1/orders/{id}/cancel",tag="Sales",security(("bearerAuth"=[])),params(("id"=Uuid,Path),("X-Tenant-Id"=Uuid,Header),("If-Match"=String,Header),("Idempotency-Key"=Uuid,Header)),responses((status=200,body=OrderSnapshot),(status=403,description="Sem permissão"),(status=409,description="Estado em conflito"),(status=412,description="Revisão divergente"),(status=428,description="Precondições obrigatórias")))]
 pub async fn cancel(
     State(state): State<AppState>,
@@ -1033,6 +1047,7 @@ pub async fn cancel(
 ) -> Result<Response, DomainError> {
     transition(state, identity, headers, id, Action::Cancel).await
 }
+#[cfg(any(test, feature = "migration-reference"))]
 #[utoipa::path(post,path="/api/v1/orders/{id}/complete",tag="Sales",security(("bearerAuth"=[])),params(("id"=Uuid,Path),("X-Tenant-Id"=Uuid,Header),("If-Match"=String,Header),("Idempotency-Key"=Uuid,Header)),responses((status=200,body=OrderSnapshot),(status=403,description="Sem permissão"),(status=409,description="Estado ou cadastros em conflito"),(status=412,description="Revisão divergente"),(status=428,description="Precondições obrigatórias")))]
 pub async fn complete(
     State(state): State<AppState>,
@@ -1042,3 +1057,19 @@ pub async fn complete(
 ) -> Result<Response, DomainError> {
     transition(state, identity, headers, id, Action::Complete).await
 }
+
+// Production keeps the canonical transport name; business rules live in TypeScript.
+#[cfg(not(any(test, feature = "migration-reference")))]
+pub use crate::platform::typescript_gateway::dispatch as list;
+#[cfg(not(any(test, feature = "migration-reference")))]
+pub use crate::platform::typescript_gateway::dispatch as get;
+#[cfg(not(any(test, feature = "migration-reference")))]
+pub use crate::platform::typescript_gateway::dispatch as create;
+#[cfg(not(any(test, feature = "migration-reference")))]
+pub use crate::platform::typescript_gateway::dispatch as update;
+#[cfg(not(any(test, feature = "migration-reference")))]
+pub use crate::platform::typescript_gateway::dispatch as confirm;
+#[cfg(not(any(test, feature = "migration-reference")))]
+pub use crate::platform::typescript_gateway::dispatch as cancel;
+#[cfg(not(any(test, feature = "migration-reference")))]
+pub use crate::platform::typescript_gateway::dispatch as complete;

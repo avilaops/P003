@@ -1,3 +1,4 @@
+#![cfg_attr(not(any(test, feature = "migration-reference")), allow(unused_imports))]
 use super::{auth::AuthenticatedIdentity, state::AppState};
 use crate::domains::{DomainChange, DomainError, authorized, db, record, response, revision};
 use axum::{
@@ -12,6 +13,7 @@ use sqlx::FromRow;
 use std::collections::HashSet;
 use uuid::Uuid;
 
+#[cfg(any(test, feature = "migration-reference"))]
 #[derive(FromRow, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct CustomReport {
@@ -25,6 +27,7 @@ pub struct CustomReport {
     created_at: String,
 }
 
+#[cfg(any(test, feature = "migration-reference"))]
 #[derive(Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct CustomReportInput {
@@ -37,10 +40,12 @@ pub struct CustomReportInput {
     visibility: String,
 }
 
+#[cfg(any(test, feature = "migration-reference"))]
 fn private_visibility() -> String {
     "private".into()
 }
 
+#[cfg(any(test, feature = "migration-reference"))]
 fn dataset_contract(dataset: &str) -> Option<(&'static str, &'static [&'static str])> {
     match dataset {
         "products" => Some(("catalog.products.read", &["code", "name", "status"])),
@@ -64,6 +69,7 @@ fn dataset_contract(dataset: &str) -> Option<(&'static str, &'static [&'static s
     }
 }
 
+#[cfg(any(test, feature = "migration-reference"))]
 fn validate(input: &mut CustomReportInput) -> Result<&'static str, DomainError> {
     input.name = input.name.trim().to_string();
     if input.name.is_empty() || input.name.len() > 120 || input.name.chars().any(char::is_control) {
@@ -105,6 +111,7 @@ fn validate(input: &mut CustomReportInput) -> Result<&'static str, DomainError> 
     Ok(permission)
 }
 
+#[cfg(any(test, feature = "migration-reference"))]
 async fn require_dataset_permission(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     tenant: Uuid,
@@ -116,6 +123,7 @@ async fn require_dataset_permission(
     Ok(())
 }
 
+#[cfg(any(test, feature = "migration-reference"))]
 async fn row(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     tenant: Uuid,
@@ -125,6 +133,7 @@ async fn row(
         .bind(tenant).bind(id).fetch_optional(&mut **tx).await.map_err(db)?.ok_or(DomainError::NotFound)
 }
 
+#[cfg(any(test, feature = "migration-reference"))]
 #[utoipa::path(get,path="/api/v1/system/custom-reports",tag="Platform",security(("bearerAuth"=[])),params(("X-Tenant-Id"=Uuid,Header)),responses((status=200,body=serde_json::Value),(status=403,description="Sem permissão")))]
 pub async fn list(
     State(state): State<AppState>,
@@ -150,6 +159,7 @@ pub async fn list(
     ))
 }
 
+#[cfg(any(test, feature = "migration-reference"))]
 #[utoipa::path(post,path="/api/v1/system/custom-reports",tag="Platform",security(("bearerAuth"=[])),request_body=CustomReportInput,responses((status=201,body=CustomReport),(status=422,description="Dados inválidos")))]
 pub async fn create(
     State(state): State<AppState>,
@@ -198,6 +208,7 @@ pub async fn create(
     ))
 }
 
+#[cfg(any(test, feature = "migration-reference"))]
 #[utoipa::path(put,path="/api/v1/system/custom-reports/{id}",tag="Platform",security(("bearerAuth"=[])),request_body=CustomReportInput,responses((status=200,body=CustomReport),(status=412,description="Revisão alterada")))]
 pub async fn update(
     State(state): State<AppState>,
@@ -239,3 +250,11 @@ pub async fn update(
         json!({"tenantId":tenant,"data":data}),
     ))
 }
+
+// Production keeps the canonical transport name; business rules live in TypeScript.
+#[cfg(not(any(test, feature = "migration-reference")))]
+pub use crate::platform::typescript_gateway::dispatch as list;
+#[cfg(not(any(test, feature = "migration-reference")))]
+pub use crate::platform::typescript_gateway::dispatch as create;
+#[cfg(not(any(test, feature = "migration-reference")))]
+pub use crate::platform::typescript_gateway::dispatch as update;
