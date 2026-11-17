@@ -14,6 +14,9 @@ import { supplementSimplifiedNfe } from "./lib/fiscal/simplified-nfe.ts";
 import { createNfceQrPayload } from "./lib/fiscal/nfce-qr.ts";
 import { queryCteDistribution } from "./lib/fiscal/cte-distribution-client.ts";
 import { inspectReceivedNationalNfse } from "./lib/fiscal/nfse-received.ts";
+import { prepareNationalNfse } from "./lib/fiscal/nfse-issuance.ts";
+import { cancelNationalNfse, consultNationalNfse, issueNationalNfse, sendToSefin, SefinNfseError } from "./lib/fiscal/nfse-sefin.ts";
+import type { SefinTransport } from "./lib/fiscal/nfse-sefin.ts";
 import { NationalNfseXmlError } from "./lib/fiscal/nfse-layout.ts";
 import { inspectReceivedCte, CteInspectionError } from "./lib/fiscal/cte-received.ts";
 import type { RecipientManifestKind } from "./lib/fiscal/recipient-manifest.ts";
@@ -469,7 +472,7 @@ function material(input: ObjectValue, expected: string) {
 }
 
 /** Only fixed authority endpoints exist here. No URL from a request is used. */
-export async function dispatch(operation: string, value: unknown, send: Send = sendToSefaz): Promise<ObjectValue> {
+export async function dispatch(operation: string, value: unknown, send: Send = sendToSefaz, sefin: SefinTransport = sendToSefin): Promise<ObjectValue> {
   const input = object(value);
   if (operation === "inspect-cte") {
     try { return { ...await inspectReceivedCte(input as { xml: string; companyTaxId: string; environment: "homologation" }) }; }
@@ -482,6 +485,17 @@ export async function dispatch(operation: string, value: unknown, send: Send = s
     try { return { ...await inspectReceivedNationalNfse(input as { xml: string; recipientTaxId: string }) }; }
     catch (error) {
       if (error instanceof NationalNfseXmlError) refuse(error.message, error.code === "invalid" ? "invalid_nfse_xml" : "nfse_layout_unavailable");
+      throw error;
+    }
+  }
+  if (operation === "prepare-nfse") return { ...await prepareNationalNfse(input) };
+  if (["issue-nfse", "consult-nfse", "cancel-nfse"].includes(operation)) {
+    try {
+      if (operation === "issue-nfse") return { ...await issueNationalNfse(input as Parameters<typeof issueNationalNfse>[0], sefin) };
+      if (operation === "consult-nfse") return { ...await consultNationalNfse(input as Parameters<typeof consultNationalNfse>[0], sefin) };
+      return { ...await cancelNationalNfse(input as Parameters<typeof cancelNationalNfse>[0], sefin) };
+    } catch (error) {
+      if (error instanceof SefinNfseError) refuse(error.message, error.code);
       throw error;
     }
   }

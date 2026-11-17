@@ -45,9 +45,12 @@ function cents(value: string): string {
 }
 
 /** Read-only, deterministic inspection of a source file; no certificate, cursor, transport or writes. */
-export async function inspectReceivedNationalNfse(input: { xml: string; recipientTaxId: string }): Promise<InspectedNationalNfse> {
-  if (!input || typeof input !== "object" || Array.isArray(input) || Object.keys(input).some(key => !["xml", "recipientTaxId"].includes(key))) throw invalid("Campo desconhecido na inspeção de NFS-e.");
-  if (!isNumericCnpj(input.recipientTaxId)) throw invalid("CNPJ do tomador da NFS-e inválido.");
+export async function inspectReceivedNationalNfse(input: { xml: string; recipientTaxId?: string; providerTaxId?: string }): Promise<InspectedNationalNfse> {
+  if (!input || typeof input !== "object" || Array.isArray(input) || Object.keys(input).some(key => !["xml", "recipientTaxId", "providerTaxId"].includes(key))) throw invalid("Campo desconhecido na inspeção de NFS-e.");
+  const expectedParties = [input.recipientTaxId, input.providerTaxId].filter(Boolean);
+  if (expectedParties.length !== 1) throw invalid("Informe exatamente um CNPJ esperado para a inspeção da NFS-e.");
+  if (input.recipientTaxId && !isNumericCnpj(input.recipientTaxId)) throw invalid("CNPJ do tomador da NFS-e inválido.");
+  if (input.providerTaxId && !isNumericCnpj(input.providerTaxId)) throw invalid("CNPJ do prestador da NFS-e inválido.");
   const xml = input.xml;
   if (typeof xml !== "string" || !xml || Buffer.byteLength(xml, "utf8") > 1_048_576 || /\0|<!\s*(?:DOCTYPE|ENTITY)\b/i.test(xml)) throw invalid("XML de NFS-e inválido ou acima do limite de 1 MiB.");
   const sourceBytes = Buffer.from(xml, "utf8");
@@ -70,8 +73,9 @@ export async function inspectReceivedNationalNfse(input: { xml: string; recipien
   const detail = child(dps, "infDPS")!, recipientElement = child(detail, "toma", false);
   if (!/^[0-9]{1,5}$/.test(field(detail, "serie"))) throw invalid("Série da DPS fora do recorte numérico de 1 a 5 posições.");
   if (!recipientElement) throw invalid("NFS-e sem tomador identificável da empresa.");
-  const recipient = party(recipientElement);
-  if (recipient.kind !== "CNPJ" || recipient.value !== input.recipientTaxId) throw invalid("Tomador da NFS-e não corresponde ao CNPJ da empresa.");
+  const recipient = party(recipientElement), provider = party(child(detail, "prest")!);
+  if (input.recipientTaxId && (recipient.kind !== "CNPJ" || recipient.value !== input.recipientTaxId)) throw invalid("Tomador da NFS-e não corresponde ao CNPJ da empresa.");
+  if (input.providerTaxId && (provider.kind !== "CNPJ" || provider.value !== input.providerTaxId)) throw invalid("Prestador da NFS-e não corresponde ao CNPJ da empresa.");
   const id = info.getAttribute("Id") ?? "";
   if (!/^NFS[0-9]{50}$/.test(id)) throw invalid("Chave nacional da NFS-e inválida.");
   const environment = field(detail, "tpAmb");
@@ -80,7 +84,7 @@ export async function inspectReceivedNationalNfse(input: { xml: string; recipien
   return {
     source: "nfse_nacional", schemaVersion: version, accessKey: id.slice(3), environment: environment === "1" ? "production" : "homologation",
     number: field(info, "nNFSe"), municipalityCode: field(detail, "cLocEmi"), issuedAt: field(detail, "dhEmi"), processedAt: field(info, "dhProc"), processingCode: field(info, "cStat"),
-    issuer: party(child(info, "emit")!), provider: party(child(detail, "prest")!), recipient,
+    issuer: party(child(info, "emit")!), provider, recipient,
     serviceCode: field(service, "cTribNac"), description: field(service, "xDescServ"), serviceCents: cents(field(child(child(detail, "valores")!, "vServPrest")!, "vServ")), netCents: cents(field(child(info, "valores")!, "vLiq")),
     xml, xmlSha256: createHash("sha256").update(sourceBytes).digest("hex"), verification: { ...validation, signature: "not_verified", currentStatus: "not_queried" },
   };

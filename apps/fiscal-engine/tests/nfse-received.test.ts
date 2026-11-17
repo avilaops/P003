@@ -58,6 +58,15 @@ test("national NFS-e source environment and processing code are data, never NF-e
   await assert.rejects(() => dispatch("inspect-nfse", { xml, recipientTaxId, certificate: "must-not-reflect" }), /Campo desconhecido/);
 });
 
+test("outgoing national NFS-e inspection binds the XML to the expected provider", async () => {
+  const xml = nationalNfseXml();
+  const result = await inspectReceivedNationalNfse({ xml, providerTaxId: issuerTaxId });
+  assert.equal(result.provider.value, issuerTaxId);
+  assert.equal(result.recipient.value, recipientTaxId);
+  await assert.rejects(() => inspectReceivedNationalNfse({ xml, providerTaxId: recipientTaxId }), /prestador|empresa/i);
+  await assert.rejects(() => inspectReceivedNationalNfse({ xml, providerTaxId: issuerTaxId, recipientTaxId }), /exatamente um/i);
+});
+
 test("NFS-e amounts remain exact beyond Number safe integer precision and accept the schema's whole monetary values", async () => {
   const large = await inspect(nationalNfseXml().replace("<vServ>123.45</vServ>", "<vServ>999999999999999.99</vServ>"));
   assert.equal(large.serviceCents, "99999999999999999");
@@ -125,7 +134,7 @@ test("hostile or excessive XML fails while literal comments, CDATA, UTF-8 BOM an
 test("NFS-e schema bundles are versioned, hash-pinned and closed to missing, changed or remote files", async () => {
   for (const version of ["1.00", "1.01"]) {
     const bundle = await readNationalNfseSchemas(version);
-    assert.equal(bundle.files.length, 4);
+    assert.equal(bundle.files.length, version === "1.01" ? 5 : 4);
     assert.equal(bundle.entry, `NFSe_v${version}.xsd`);
     const read = (name: string) => readFile(new URL(`../src/lib/fiscal/schemas/nfse-national/${version}/${name}`, import.meta.url), "utf8");
     await assert.rejects(() => readNationalNfseSchemas(version, async name => name.startsWith("tiposSimples") ? (await read(name)) + " " : read(name)), /schema|leiaute|indisponível/i);

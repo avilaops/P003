@@ -65,3 +65,45 @@ test("BFF selects one backend per module and never retries commands on Rust", as
     for (const [key, value] of Object.entries(previous)) { if (value === undefined) delete process.env[key]; else process.env[key] = value; }
   }
 });
+
+test("BFF sends only the product finishes GET and its single IDs filter to TypeScript", async () => {
+  const previousFetch = globalThis.fetch;
+  const previousOrigin = process.env.ERP_TYPESCRIPT_API_URL;
+  const resource = "/products/finishes";
+  const ids = "aa000000-0000-3000-2000-000000000001,bb000000-0000-3000-2000-000000000002";
+  const request = (query, method = "GET", signal) => new Request(`http://fixture.local${resource}${query}`, {
+    method, signal, headers: { authorization: "Bearer forged", "x-tenant-id": "forged" },
+  });
+  const calls = [];
+  try {
+    process.env.ERP_TYPESCRIPT_API_URL = "http://127.0.0.1:8081";
+    globalThis.fetch = async (url, init) => {
+      calls.push({ url: new URL(url), init });
+      return Response.json({ tenantId: tenant, data: [], missingIds: ids.split(",") });
+    };
+    const controller = new AbortController();
+    const response = await forwardErp(request(`?ids=${encodeURIComponent(ids)}`, "GET", controller.signal), resource);
+    assert.equal(response.status, 200);
+    assert.equal(response.headers.get("cache-control"), "no-store, no-transform");
+    assert.deepEqual(await response.json(), { tenantId: tenant, data: [], missingIds: ids.split(",") });
+    assert.equal(calls.length, 1);
+    const [{ url, init }] = calls;
+    assert.equal(url.origin + url.pathname, "http://127.0.0.1:8081/api/v1/products/finishes");
+    assert.deepEqual([...url.searchParams], [["ids", ids]]);
+    assert.equal(init.cache, "no-store");
+    assert.equal(init.headers.get("authorization"), "Bearer session-token");
+    assert.equal(init.headers.get("x-tenant-id"), tenant);
+    controller.abort();
+    assert.equal(init.signal.aborted, true);
+
+    for (const query of ["", `?ids=${ids}&ids=${ids}`, `?ids=${ids}&extra=1`]) {
+      assert.equal((await forwardErp(request(query), resource)).status, 400);
+    }
+    assert.equal((await forwardErp(request(`?ids=${ids}`, "PUT"), resource)).status, 405);
+    assert.equal(calls.length, 1);
+  } finally {
+    globalThis.fetch = previousFetch;
+    if (previousOrigin === undefined) delete process.env.ERP_TYPESCRIPT_API_URL;
+    else process.env.ERP_TYPESCRIPT_API_URL = previousOrigin;
+  }
+});

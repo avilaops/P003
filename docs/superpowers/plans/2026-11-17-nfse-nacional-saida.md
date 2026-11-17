@@ -4,9 +4,9 @@
 
 **Goal:** Fazer o ERP P003 emitir, consultar e cancelar NFS-e Nacional de MEI por comandos idempotentes autenticados de serviço.
 
-**Architecture:** A API Rust é a autoridade de tenant, idempotência, persistência e auditoria. O `fiscal-engine` TypeScript monta, assina, valida e transmite DPS/NFS-e v1.01; certificado e transporte nunca chegam ao app consumidor.
+**Architecture:** A API TypeScript é a autoridade de tenant, idempotência, persistência e auditoria. O `fiscal-engine` TypeScript monta, assina, valida e transmite DPS/NFS-e v1.01; certificado e transporte nunca chegam ao app consumidor. Nenhum código novo desta iniciativa será adicionado à API Rust em retirada.
 
-**Tech Stack:** Rust 1.99 • Axum • SQLx/PostgreSQL • Node 24 • TypeScript • XMLDSig • XSD NFS-e Nacional v1.01 • SEFIN Nacional.
+**Tech Stack:** Node 24 • TypeScript • Fastify 5 • PostgreSQL/pg • Zod 4 • XMLDSig • XSD NFS-e Nacional v1.01 • SEFIN Nacional.
 
 **Spec:** `C:\Users\nicol\source\app.avilaops.com\docs\superpowers\specs\2026-11-17-cobranca-personalizada-nfse-design.md`
 
@@ -68,27 +68,28 @@
 
 **Files:**
 - Create: `migrations/202611170001_outgoing_nfse.sql`
-- Create: `apps/api/src/domains/fiscal/outgoing_nfse_model.rs`
-- Create: `apps/api/src/domains/fiscal/outgoing_nfse_tests.rs`
-- Modify: `apps/api/src/domains/fiscal/mod.rs`
+- Create: `apps/api-ts/src/modules/outgoing-nfse/model.ts`
+- Create: `apps/api-ts/test/outgoing-nfse-model.test.ts`
 
 **Interfaces:**
 - Consumes: tenant UUID, `external_id`, snapshot e hash da requisição.
 - Produces: estados `pending|processing|authorized|rejected|uncertain|cancelled`, comandos e eventos append-only.
 
 - [ ] **Step 1: Testar constraints, unicidade `(tenant_id, external_id)`, snapshot imutável e eventos append-only**
-- [ ] **Step 2: Rodar testes SQL/Rust e confirmar falha sem migration/modelo**
-- [ ] **Step 3: Criar tabelas, RLS, índices, permissões e mapeamentos Rust**
-- [ ] **Step 4: Rodar `cargo test -p erp-api outgoing_nfse`**
+- [ ] **Step 2: Rodar o teste TypeScript e confirmar falha sem migration/modelo**
+- [ ] **Step 3: Criar tabelas, RLS, índices, permissões e mapeamentos TypeScript**
+- [ ] **Step 4: Rodar `pnpm --filter api-ts test --test-name-pattern outgoing_nfse` e `pnpm --filter api-ts typecheck`**
 - [ ] **Step 5: Commit `feat(fiscal): persistir NFS-e de saída`**
 
 ### Task 4: API privada idempotente
 
 **Files:**
-- Create: `apps/api/src/domains/fiscal/outgoing_nfse_service.rs`
-- Create: `apps/api/src/http/outgoing_nfse_service_tests.rs`
-- Modify: `apps/api/src/domains/fiscal/mod.rs`
-- Modify: `apps/api/src/http/openapi.rs`
+- Create: `apps/api-ts/src/modules/outgoing-nfse/schema.ts`
+- Create: `apps/api-ts/src/modules/outgoing-nfse/service.ts`
+- Create: `apps/api-ts/src/modules/outgoing-nfse/routes.ts`
+- Create: `apps/api-ts/test/outgoing-nfse.test.ts`
+- Modify: `apps/api-ts/src/app.ts`
+- Modify: `apps/api-ts/src/platform/config.ts`
 
 **Interfaces:**
 - Consumes: `ServiceIdentity`, `Idempotency-Key`, cliente do motor e modelo da Task 3.
@@ -96,8 +97,8 @@
 
 - [ ] **Step 1: Testar 401, tenant, idempotência, conflito, estados incertos, XML e cancelamento**
 - [ ] **Step 2: Confirmar falha antes das rotas**
-- [ ] **Step 3: Implementar rotas em `service_routes()` com transações e auditoria**
-- [ ] **Step 4: Rodar `cargo test -p erp-api outgoing_nfse_service` e validar OpenAPI**
+- [ ] **Step 3: Implementar rotas Fastify privadas com transações e auditoria**
+- [ ] **Step 4: Rodar testes, typecheck e a matriz contratual aplicável da API TypeScript**
 - [ ] **Step 5: Commit `feat(api): expor emissão privada de NFS-e`**
 
 ### Task 5: Operação e homologação segura
@@ -114,7 +115,7 @@
 
 - [ ] **Step 1: Testar que produção permanece bloqueada sem flag, certificado e cadastro completos**
 - [ ] **Step 2: Documentar provisionamento, rollback, consulta de estado e evidências de homologação**
-- [ ] **Step 3: Rodar `cargo test --workspace`, `pnpm --dir apps/fiscal-engine test`, `pnpm verify:erp` e arquitetura**
+- [ ] **Step 3: Rodar `pnpm --filter api-ts test`, `pnpm --filter api-ts typecheck`, `pnpm --dir apps/fiscal-engine test`, `pnpm verify:erp` e arquitetura**
 - [ ] **Step 4: Executar Produção Restrita com fixture autorizada pelo usuário; não ativar produção sem sucesso verificável**
 - [ ] **Step 5: Commit `docs(fiscal): preparar homologação da NFS-e Nacional`**
 

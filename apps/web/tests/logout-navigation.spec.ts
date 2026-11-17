@@ -3,15 +3,15 @@ import { createServer } from "node:http"
 import { origin } from "../playwright.danfe.config"
 import { installFrontendFixture, tenant } from "./helpers/frontend-fixture"
 
-const issuer = "http://127.0.0.1:33120"
-const logouts: URL[] = []
+const issuer = process.env.ERP_TEST_LOGOUT_ISSUER || "http://127.0.0.1:33120"
+const logouts: { url: URL; method: string | undefined; origin: string | undefined }[] = []
 const auth = createServer((request, response) => {
   const url = new URL(request.url || "/", issuer)
   if (url.pathname === "/.well-known/openid-configuration") {
     response.writeHead(200, { "Content-Type": "application/json" })
     response.end(JSON.stringify({ issuer, code_challenge_methods_supported: ["S256"], authorization_endpoint: `${issuer}/authorize`, token_endpoint: `${issuer}/token`, end_session_endpoint: `${issuer}/end-session` }))
   } else if (url.pathname === "/end-session") {
-    logouts.push(url)
+    logouts.push({ url, method: request.method, origin: request.headers.origin })
     response.writeHead(303, { Location: `${origin}/api/auth/logout/central/callback` })
     response.end()
   } else {
@@ -21,12 +21,13 @@ const auth = createServer((request, response) => {
 })
 
 test.beforeAll(async () => {
-  await new Promise<void>((resolve, reject) => { auth.once("error", reject); auth.listen(33120, "127.0.0.1", resolve) })
+  await new Promise<void>((resolve, reject) => { auth.once("error", reject); auth.listen(Number(new URL(issuer).port), "127.0.0.1", resolve) })
 })
 test.afterAll(async () => { await new Promise<void>(resolve => auth.close(() => resolve())) })
 test.beforeEach(async ({ context, page }) => {
   logouts.length = 0
   await installFrontendFixture(context)
+  await context.route("https://avilaops.com/", route => route.fulfill({ contentType: "text/html", body: "<!doctype html><title>Ávila Ops</title>" }))
   await context.route("**/api/erp/products**", route => route.fulfill({ json: { tenantId: tenant, canEdit: true, data: [], total: 0 } }))
   await page.setViewportSize({ width: 390, height: 844 })
   await page.goto("/cadastros/produtos/novo")
@@ -52,14 +53,21 @@ test("confirmar a saída pede confirmação uma vez e conclui o logout central",
   const dialogs: string[] = []
   page.on("dialog", async dialog => { dialogs.push(dialog.type()); await dialog.accept() })
   const request = page.waitForRequest(request => request.url() === `${origin}/api/auth/logout` && request.method() === "POST")
+  const continuation = page.waitForResponse(response => response.url() === `${origin}/api/auth/logout/central`)
   await page.getByRole("button", { name: "Sair", exact: true }).click()
   expect((await request).headers().origin).toBe(origin)
-  await expect(page).toHaveURL(`${origin}/entrar`)
+  await expect(page).toHaveURL("https://avilaops.com/")
   expect(dialogs).toEqual(["confirm"])
   expect(logouts).toHaveLength(1)
-  expect(logouts[0].searchParams.get("client_id")).toBe("browser-fixture-client")
-  expect(logouts[0].searchParams.get("post_logout_redirect_uri")).toBe(`${origin}/api/auth/logout/central/callback`)
+  expect(logouts[0].url.searchParams.get("client_id")).toBe("browser-fixture-client")
+  expect(logouts[0].url.searchParams.get("post_logout_redirect_uri")).toBe(`${origin}/api/auth/logout/central/callback`)
+  expect(logouts[0].method).toBe("POST")
+  expect(logouts[0].origin).toBe(origin)
+  const security = (await continuation).headers()
+  expect(security["referrer-policy"]).toBe("origin")
+  expect(security["content-security-policy"]).toMatch(/script-src 'nonce-/)
   expect((await context.cookies(origin)).filter(cookie => cookie.name.startsWith("erp_"))).toEqual([])
+  await page.goto(`${origin}/entrar`)
   expect(await page.evaluate(() => Object.keys(sessionStorage).filter(key => key.startsWith("erp:party-draft:")))).toEqual([])
 })
 

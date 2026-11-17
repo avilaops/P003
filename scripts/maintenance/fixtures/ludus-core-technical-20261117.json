@@ -1,0 +1,934 @@
+{
+  "title": "LUDUS • Fotos, medidas e preços • planilha original",
+  "url": "https://docs.google.com/spreadsheets/d/1S--qUG8amnAVEsTz7MJ5cSmKK-qG2w5_/edit",
+  "csvSha256": "32b71a6817374a8229c83f294ed48b153b604c4b3e775879edc86203550ef6da",
+  "pdfTitle": "Ludus Core • Catálogo por Grupo Corporal",
+  "pdfUrl": "https://drive.google.com/file/d/16v8UsmppZ7wegFcHQuF1tlO_DlPOhGaj/view",
+  "colorsApplicable": false,
+  "products": [
+    {
+      "sku": "LD-WH001",
+      "name": "Agachamento Búlgaro",
+      "dimensionsMm": [
+        1200,
+        1000,
+        900
+      ],
+      "weight": "50 kg",
+      "weightStack": "",
+      "muscleGroup": "Pernas e glúteos",
+      "technicalCategory": "Peso livre",
+      "pdfPage": 7
+    },
+    {
+      "sku": "LD-WH002",
+      "name": "Agachamento Pêndulo",
+      "dimensionsMm": [
+        2400,
+        1250,
+        1650
+      ],
+      "weight": "100 kg",
+      "weightStack": "",
+      "muscleGroup": "Pernas e glúteos",
+      "technicalCategory": "Peso livre",
+      "pdfPage": 8
+    },
+    {
+      "sku": "LD-WH003",
+      "name": "Agachamento Sumô",
+      "dimensionsMm": [
+        1650,
+        1000,
+        1100
+      ],
+      "weight": "50 kg",
+      "weightStack": "",
+      "muscleGroup": "Pernas e glúteos",
+      "technicalCategory": "Peso livre",
+      "pdfPage": 9
+    },
+    {
+      "sku": "LD-WH004",
+      "name": "Banco Extensor Lombar",
+      "dimensionsMm": [
+        1300,
+        900,
+        1000
+      ],
+      "weight": "50 kg",
+      "weightStack": "",
+      "muscleGroup": "Abdômen e lombar",
+      "technicalCategory": "Bancos e suportes",
+      "pdfPage": 65
+    },
+    {
+      "sku": "LD-WH005",
+      "name": "Banco Scott Com Regulagem",
+      "dimensionsMm": [
+        1100,
+        900,
+        1150
+      ],
+      "weight": "50 kg",
+      "weightStack": "",
+      "muscleGroup": "Braços",
+      "technicalCategory": "Bancos e suportes",
+      "pdfPage": 61
+    },
+    {
+      "sku": "LD-WH006",
+      "name": "Banco Sissy Agachamento",
+      "dimensionsMm": [
+        1100,
+        600,
+        700
+      ],
+      "weight": "50 kg",
+      "weightStack": "",
+      "muscleGroup": "Pernas e glúteos",
+      "technicalCategory": "Bancos e suportes",
+      "pdfPage": 10
+    },
+    {
+      "sku": "LD-WH007",
+      "name": "Banco Supino Declinado Para Barra",
+      "dimensionsMm": [
+        1600,
+        1100,
+        1500
+      ],
+      "weight": "40 kg",
+      "weightStack": "",
+      "muscleGroup": "Peitoral",
+      "technicalCategory": "Bancos e suportes",
+      "pdfPage": 38
+    },
+    {
+      "sku": "LD-WH008",
+      "name": "Banco Supino Inclinado Para Barra",
+      "dimensionsMm": [
+        1500,
+        1100,
+        1500
+      ],
+      "weight": "30 kg",
+      "weightStack": "",
+      "muscleGroup": "Peitoral",
+      "technicalCategory": "Bancos e suportes",
+      "pdfPage": 39
+    },
+    {
+      "sku": "LD-WH009",
+      "name": "Banco Supino Reto Para Barra",
+      "dimensionsMm": [
+        1500,
+        1100,
+        1500
+      ],
+      "weight": "40 kg",
+      "weightStack": "",
+      "muscleGroup": "Peitoral",
+      "technicalCategory": "Bancos e suportes",
+      "pdfPage": 40
+    },
+    {
+      "sku": "LD-WH010",
+      "name": "Banco Supino 2 em 1",
+      "dimensionsMm": [
+        1500,
+        1100,
+        1500
+      ],
+      "weight": "30 kg",
+      "weightStack": "",
+      "muscleGroup": "Peitoral",
+      "technicalCategory": "Bancos e suportes",
+      "pdfPage": 41
+    },
+    {
+      "sku": "LD-WH011",
+      "name": "Banco Regulável de 0 a 90º",
+      "dimensionsMm": [
+        1500,
+        500,
+        480
+      ],
+      "weight": "30 kg",
+      "weightStack": "",
+      "muscleGroup": "Multifuncionais",
+      "technicalCategory": "Bancos e suportes",
+      "pdfPage": 69
+    },
+    {
+      "sku": "LD-WH012",
+      "name": "Banco Regulável 3 em 1",
+      "dimensionsMm": [
+        1500,
+        500,
+        480
+      ],
+      "weight": "30 kg",
+      "weightStack": "",
+      "muscleGroup": "Multifuncionais",
+      "technicalCategory": "Bancos e suportes",
+      "pdfPage": 70
+    },
+    {
+      "sku": "LD-WH013",
+      "name": "Barra Guiada Tradicional",
+      "dimensionsMm": [
+        1200,
+        2000,
+        2300
+      ],
+      "weight": "100 kg",
+      "weightStack": "",
+      "muscleGroup": "Multifuncionais",
+      "technicalCategory": "Peso livre",
+      "pdfPage": 71
+    },
+    {
+      "sku": "LD-WH014",
+      "name": "Barra Guiada Parede",
+      "dimensionsMm": [
+        500,
+        2000,
+        2300
+      ],
+      "weight": "50 kg",
+      "weightStack": "",
+      "muscleGroup": "Multifuncionais",
+      "technicalCategory": "Peso livre",
+      "pdfPage": 72
+    },
+    {
+      "sku": "LD-WH015",
+      "name": "Bíceps Máquina - Bateria de Pesos",
+      "dimensionsMm": [
+        1400,
+        1000,
+        1500
+      ],
+      "weight": "150 kg",
+      "weightStack": "100 kg",
+      "muscleGroup": "Braços",
+      "technicalCategory": "Bateria de pesos",
+      "pdfPage": 62
+    },
+    {
+      "sku": "LD-WH016",
+      "name": "Bíceps e Tríceps - Bateria de Pesos",
+      "dimensionsMm": [
+        1400,
+        1000,
+        1500
+      ],
+      "weight": "150 kg",
+      "weightStack": "100 kg",
+      "muscleGroup": "Braços",
+      "technicalCategory": "Bateria de pesos",
+      "pdfPage": 63
+    },
+    {
+      "sku": "LD-WH017",
+      "name": "Cadeira Abdutora - Bateria de Pesos",
+      "dimensionsMm": [
+        1400,
+        1200,
+        1500
+      ],
+      "weight": "150 kg",
+      "weightStack": "100 kg",
+      "muscleGroup": "Pernas e glúteos",
+      "technicalCategory": "Bateria de pesos",
+      "pdfPage": 11
+    },
+    {
+      "sku": "LD-WH018",
+      "name": "Cadeira Adutora - Bateria de Pesos",
+      "dimensionsMm": [
+        1400,
+        1200,
+        1500
+      ],
+      "weight": "150 kg",
+      "weightStack": "100 kg",
+      "muscleGroup": "Pernas e glúteos",
+      "technicalCategory": "Bateria de pesos",
+      "pdfPage": 12
+    },
+    {
+      "sku": "LD-WH019",
+      "name": "Cadeira Adutora e Abdutora - Bateria de Pesos",
+      "dimensionsMm": [
+        1200,
+        900,
+        1500
+      ],
+      "weight": "150 kg",
+      "weightStack": "100 kg",
+      "muscleGroup": "Pernas e glúteos",
+      "technicalCategory": "Bateria de pesos",
+      "pdfPage": 13
+    },
+    {
+      "sku": "LD-WH020",
+      "name": "Cadeira Extensora Articulada",
+      "dimensionsMm": [
+        1000,
+        1550,
+        1000
+      ],
+      "weight": "80 kg",
+      "weightStack": "",
+      "muscleGroup": "Pernas e glúteos",
+      "technicalCategory": "Peso livre",
+      "pdfPage": 14
+    },
+    {
+      "sku": "LD-WH021",
+      "name": "Cadeira Extensora - Bateria de Pesos",
+      "dimensionsMm": [
+        1100,
+        900,
+        2300
+      ],
+      "weight": "150 kg",
+      "weightStack": "100 kg",
+      "muscleGroup": "Pernas e glúteos",
+      "technicalCategory": "Bateria de pesos",
+      "pdfPage": 15
+    },
+    {
+      "sku": "LD-WH022",
+      "name": "Cadeira Extensora e Flexora - Bateria de Pesos",
+      "dimensionsMm": [
+        1200,
+        900,
+        1500
+      ],
+      "weight": "150 kg",
+      "weightStack": "100 kg",
+      "muscleGroup": "Pernas e glúteos",
+      "technicalCategory": "Bateria de pesos",
+      "pdfPage": 16
+    },
+    {
+      "sku": "LD-WH023",
+      "name": "Cadeira Flexora - Bateria de Pesos",
+      "dimensionsMm": [
+        1200,
+        900,
+        1500
+      ],
+      "weight": "150 kg",
+      "weightStack": "100 kg",
+      "muscleGroup": "Pernas e glúteos",
+      "technicalCategory": "Bateria de pesos",
+      "pdfPage": 17
+    },
+    {
+      "sku": "LD-WH024",
+      "name": "Cross Over Angular Com Regulagem e Barra Fixa  - Bateria de Pesos",
+      "dimensionsMm": [
+        1000,
+        2000,
+        2300
+      ],
+      "weight": "300 kg",
+      "weightStack": "200 kg",
+      "muscleGroup": "Multifuncionais",
+      "technicalCategory": "Bateria de pesos",
+      "pdfPage": 73
+    },
+    {
+      "sku": "LD-WH025",
+      "name": "Cross Over Com Regulagem e Barra Fixa - Bateria de Pesos",
+      "dimensionsMm": [
+        3000,
+        800,
+        2300
+      ],
+      "weight": "300 kg",
+      "weightStack": "200 kg",
+      "muscleGroup": "Multifuncionais",
+      "technicalCategory": "Bateria de pesos",
+      "pdfPage": 74
+    },
+    {
+      "sku": "LD-WH026",
+      "name": "Cross Smith Com Regulagem e Barra Fixa - Bateria de Pesos",
+      "dimensionsMm": [
+        1100,
+        2000,
+        2300
+      ],
+      "weight": "350 kg",
+      "weightStack": "200 kg",
+      "muscleGroup": "Multifuncionais",
+      "technicalCategory": "Bateria de pesos",
+      "pdfPage": 75
+    },
+    {
+      "sku": "LD-WH027",
+      "name": "Desenvolvimento de Ombros Articulado",
+      "dimensionsMm": [
+        1000,
+        1550,
+        1400
+      ],
+      "weight": "80 kg",
+      "weightStack": "",
+      "muscleGroup": "Ombros",
+      "technicalCategory": "Peso livre",
+      "pdfPage": 58
+    },
+    {
+      "sku": "LD-WH028",
+      "name": "Desenvolvimento de Ombros Livre",
+      "dimensionsMm": [
+        1000,
+        1100,
+        1500
+      ],
+      "weight": "60 kg",
+      "weightStack": "",
+      "muscleGroup": "Ombros",
+      "technicalCategory": "Peso livre",
+      "pdfPage": 59
+    },
+    {
+      "sku": "LD-WH029",
+      "name": "Elevação Pélvica",
+      "dimensionsMm": [
+        1600,
+        1500,
+        1300
+      ],
+      "weight": "80 kg",
+      "weightStack": "",
+      "muscleGroup": "Pernas e glúteos",
+      "technicalCategory": "Peso livre",
+      "pdfPage": 18
+    },
+    {
+      "sku": "LD-WH030",
+      "name": "Elevação Pélvica 2D",
+      "dimensionsMm": [
+        1550,
+        1500,
+        1200
+      ],
+      "weight": "120 kg",
+      "weightStack": "",
+      "muscleGroup": "Pernas e glúteos",
+      "technicalCategory": "Peso livre",
+      "pdfPage": 19
+    },
+    {
+      "sku": "LD-WH031",
+      "name": "Flexora em Pé - Bateria de Pesos",
+      "dimensionsMm": [
+        1200,
+        900,
+        1500
+      ],
+      "weight": "150 kg",
+      "weightStack": "100 kg",
+      "muscleGroup": "Pernas e glúteos",
+      "technicalCategory": "Bateria de pesos",
+      "pdfPage": 20
+    },
+    {
+      "sku": "LD-WH032",
+      "name": "Flexora em Pé Articulada Unilateral",
+      "dimensionsMm": [
+        1100,
+        1550,
+        1700
+      ],
+      "weight": "80 kg",
+      "weightStack": "",
+      "muscleGroup": "Pernas e glúteos",
+      "technicalCategory": "Peso livre",
+      "pdfPage": 21
+    },
+    {
+      "sku": "LD-WH033",
+      "name": "Gráviton - Bateria de Pesos",
+      "dimensionsMm": [
+        1700,
+        1150,
+        2300
+      ],
+      "weight": "150 kg",
+      "weightStack": "100 kg",
+      "muscleGroup": "Multifuncionais",
+      "technicalCategory": "Bateria de pesos",
+      "pdfPage": 76
+    },
+    {
+      "sku": "LD-WH034",
+      "name": "Hack 45º Para Agachamento",
+      "dimensionsMm": [
+        2050,
+        1500,
+        1600
+      ],
+      "weight": "120 kg",
+      "weightStack": "",
+      "muscleGroup": "Pernas e glúteos",
+      "technicalCategory": "Peso livre",
+      "pdfPage": 22
+    },
+    {
+      "sku": "LD-WH035",
+      "name": "Hack Agachamento Com Apoio Lombar",
+      "dimensionsMm": [
+        2050,
+        1500,
+        1600
+      ],
+      "weight": "120 kg",
+      "weightStack": "",
+      "muscleGroup": "Pernas e glúteos",
+      "technicalCategory": "Peso livre",
+      "pdfPage": 23
+    },
+    {
+      "sku": "LD-WH036",
+      "name": "Hack Agachamento Squat",
+      "dimensionsMm": [
+        1600,
+        1500,
+        1700
+      ],
+      "weight": "80 kg",
+      "weightStack": "",
+      "muscleGroup": "Pernas e glúteos",
+      "technicalCategory": "Peso livre",
+      "pdfPage": 24
+    },
+    {
+      "sku": "LD-WH037",
+      "name": "Leg Press 45º Com Suporte Para Anilhas",
+      "dimensionsMm": [
+        2050,
+        1500,
+        1600
+      ],
+      "weight": "100 kg",
+      "weightStack": "",
+      "muscleGroup": "Pernas e glúteos",
+      "technicalCategory": "Peso livre",
+      "pdfPage": 25
+    },
+    {
+      "sku": "LD-WH038",
+      "name": "Leg Press 90º Com Suporte Para Anilhas",
+      "dimensionsMm": [
+        1800,
+        1500,
+        1700
+      ],
+      "weight": "100 kg",
+      "weightStack": "",
+      "muscleGroup": "Pernas e glúteos",
+      "technicalCategory": "Peso livre",
+      "pdfPage": 26
+    },
+    {
+      "sku": "LD-WH039",
+      "name": "Leg Press Articulado",
+      "dimensionsMm": [
+        2100,
+        1000,
+        1400
+      ],
+      "weight": "120 kg",
+      "weightStack": "",
+      "muscleGroup": "Pernas e glúteos",
+      "technicalCategory": "Peso livre",
+      "pdfPage": 27
+    },
+    {
+      "sku": "LD-WH040",
+      "name": "Leg Press Horizontal - Bateria de Pesos",
+      "dimensionsMm": [
+        2000,
+        1200,
+        1800
+      ],
+      "weight": "160 kg",
+      "weightStack": "100 kg",
+      "muscleGroup": "Pernas e glúteos",
+      "technicalCategory": "Bateria de pesos",
+      "pdfPage": 28
+    },
+    {
+      "sku": "LD-WH041",
+      "name": "Máquina de Glúteo 4 Apoio - Bateria de Pesos",
+      "dimensionsMm": [
+        1100,
+        900,
+        1500
+      ],
+      "weight": "150 kg",
+      "weightStack": "100 kg",
+      "muscleGroup": "Pernas e glúteos",
+      "technicalCategory": "Bateria de pesos",
+      "pdfPage": 29
+    },
+    {
+      "sku": "LD-WH042",
+      "name": "Mesa Flexora - Bateria de Pesos",
+      "dimensionsMm": [
+        1500,
+        900,
+        1500
+      ],
+      "weight": "150 kg",
+      "weightStack": "100 kg",
+      "muscleGroup": "Pernas e glúteos",
+      "technicalCategory": "Bateria de pesos",
+      "pdfPage": 30
+    },
+    {
+      "sku": "LD-WH043",
+      "name": "Mesa Flexora e Extensora 2 em 1 - Bateria de Pesos",
+      "dimensionsMm": [
+        1500,
+        900,
+        1500
+      ],
+      "weight": "150 kg",
+      "weightStack": "100 kg",
+      "muscleGroup": "Pernas e glúteos",
+      "technicalCategory": "Bateria de pesos",
+      "pdfPage": 31
+    },
+    {
+      "sku": "LD-WH044",
+      "name": "Mesa Flexora 3 em 1 - Bateria de Pesos",
+      "dimensionsMm": [
+        1500,
+        900,
+        1500
+      ],
+      "weight": "150 kg",
+      "weightStack": "100 kg",
+      "muscleGroup": "Pernas e glúteos",
+      "technicalCategory": "Bateria de pesos",
+      "pdfPage": 32
+    },
+    {
+      "sku": "LD-WH045",
+      "name": "Panturrilha em Pé Com Agachamento - Bateria de Pesos",
+      "dimensionsMm": [
+        1500,
+        1000,
+        1800
+      ],
+      "weight": "150 kg",
+      "weightStack": "100 kg",
+      "muscleGroup": "Pernas e glúteos",
+      "technicalCategory": "Bateria de pesos",
+      "pdfPage": 33
+    },
+    {
+      "sku": "LD-WH046",
+      "name": "Panturrilha Sentada (Burrinho)",
+      "dimensionsMm": [
+        1000,
+        500,
+        600
+      ],
+      "weight": "50 kg",
+      "weightStack": "",
+      "muscleGroup": "Pernas e glúteos",
+      "technicalCategory": "Peso livre",
+      "pdfPage": 34
+    },
+    {
+      "sku": "LD-WH047",
+      "name": "Paralela Para Abdominal",
+      "dimensionsMm": [
+        1000,
+        800,
+        1500
+      ],
+      "weight": "50 kg",
+      "weightStack": "",
+      "muscleGroup": "Abdômen e lombar",
+      "technicalCategory": "Bancos e suportes",
+      "pdfPage": 66
+    },
+    {
+      "sku": "LD-WH048",
+      "name": "Peitoral Dorsal - Bateria de Pesos",
+      "dimensionsMm": [
+        1400,
+        1200,
+        2000
+      ],
+      "weight": "150 kg",
+      "weightStack": "100 kg",
+      "muscleGroup": "Multifuncionais",
+      "technicalCategory": "Bateria de pesos",
+      "pdfPage": 77
+    },
+    {
+      "sku": "LD-WH049",
+      "name": "Peck Fly Articulado",
+      "dimensionsMm": [
+        1850,
+        1200,
+        1100
+      ],
+      "weight": "60 kg",
+      "weightStack": "",
+      "muscleGroup": "Peitoral",
+      "technicalCategory": "Peso livre",
+      "pdfPage": 42
+    },
+    {
+      "sku": "LD-WH050",
+      "name": "Peck Fly - Bateria de Pesos",
+      "dimensionsMm": [
+        1400,
+        1200,
+        2000
+      ],
+      "weight": "150 kg",
+      "weightStack": "100 kg",
+      "muscleGroup": "Peitoral",
+      "technicalCategory": "Bateria de pesos",
+      "pdfPage": 43
+    },
+    {
+      "sku": "LD-WH051",
+      "name": "Prancha Para Abdominal",
+      "dimensionsMm": [
+        1800,
+        800,
+        1500
+      ],
+      "weight": "40 kg",
+      "weightStack": "",
+      "muscleGroup": "Abdômen e lombar",
+      "technicalCategory": "Bancos e suportes",
+      "pdfPage": 67
+    },
+    {
+      "sku": "LD-WH052",
+      "name": "Polia Mono Cross - Bateria de Pesos",
+      "dimensionsMm": [
+        800,
+        1000,
+        2300
+      ],
+      "weight": "160 kg",
+      "weightStack": "100 kg",
+      "muscleGroup": "Multifuncionais",
+      "technicalCategory": "Bateria de pesos",
+      "pdfPage": 78
+    },
+    {
+      "sku": "LD-WH053",
+      "name": "Puxada Alta Articulada",
+      "dimensionsMm": [
+        1400,
+        1100,
+        2200
+      ],
+      "weight": "60 kg",
+      "weightStack": "",
+      "muscleGroup": "Costas",
+      "technicalCategory": "Peso livre",
+      "pdfPage": 49
+    },
+    {
+      "sku": "LD-WH054",
+      "name": "Puxador 2 em 1 ( horizontal e vertical ) - Bateria de Pesos",
+      "dimensionsMm": [
+        1700,
+        900,
+        2300
+      ],
+      "weight": "150 kg",
+      "weightStack": "100 kg",
+      "muscleGroup": "Costas",
+      "technicalCategory": "Bateria de pesos",
+      "pdfPage": 50
+    },
+    {
+      "sku": "LD-WH055",
+      "name": "Puxador Horizontal - Bateria de Pesos",
+      "dimensionsMm": [
+        1700,
+        900,
+        2300
+      ],
+      "weight": "150 kg",
+      "weightStack": "100 kg",
+      "muscleGroup": "Costas",
+      "technicalCategory": "Bateria de pesos",
+      "pdfPage": 51
+    },
+    {
+      "sku": "LD-WH056",
+      "name": "Puxador Vertical - Bateria de Pesos",
+      "dimensionsMm": [
+        1300,
+        900,
+        2300
+      ],
+      "weight": "150 kg",
+      "weightStack": "100 kg",
+      "muscleGroup": "Costas",
+      "technicalCategory": "Bateria de pesos",
+      "pdfPage": 52
+    },
+    {
+      "sku": "LD-WH057",
+      "name": "Remada Cavalinho Com Apoio",
+      "dimensionsMm": [
+        1800,
+        1000,
+        1100
+      ],
+      "weight": "80 kg",
+      "weightStack": "",
+      "muscleGroup": "Costas",
+      "technicalCategory": "Peso livre",
+      "pdfPage": 53
+    },
+    {
+      "sku": "LD-WH058",
+      "name": "Remada Sentada Articulada",
+      "dimensionsMm": [
+        1300,
+        1000,
+        1000
+      ],
+      "weight": "50 kg",
+      "weightStack": "",
+      "muscleGroup": "Costas",
+      "technicalCategory": "Peso livre",
+      "pdfPage": 54
+    },
+    {
+      "sku": "LD-WH059",
+      "name": "Remada Sentada - Bateria de Pesos",
+      "dimensionsMm": [
+        1400,
+        1000,
+        1500
+      ],
+      "weight": "150 kg",
+      "weightStack": "100 kg",
+      "muscleGroup": "Costas",
+      "technicalCategory": "Bateria de pesos",
+      "pdfPage": 55
+    },
+    {
+      "sku": "LD-WH060",
+      "name": "Supino Declinado Linha Articulado",
+      "dimensionsMm": [
+        2100,
+        1500,
+        1100
+      ],
+      "weight": "80 kg",
+      "weightStack": "",
+      "muscleGroup": "Peitoral",
+      "technicalCategory": "Peso livre",
+      "pdfPage": 44
+    },
+    {
+      "sku": "LD-WH061",
+      "name": "Supino Inclinado Linha Articulado",
+      "dimensionsMm": [
+        1800,
+        1600,
+        1250
+      ],
+      "weight": "80 kg",
+      "weightStack": "",
+      "muscleGroup": "Peitoral",
+      "technicalCategory": "Peso livre",
+      "pdfPage": 45
+    },
+    {
+      "sku": "LD-WH062",
+      "name": "Supino Reto Linha Articulado",
+      "dimensionsMm": [
+        1650,
+        1600,
+        1100
+      ],
+      "weight": "80 kg",
+      "weightStack": "",
+      "muscleGroup": "Peitoral",
+      "technicalCategory": "Peso livre",
+      "pdfPage": 46
+    },
+    {
+      "sku": "LD-WH063",
+      "name": "Supino Vertical Linha Articulado",
+      "dimensionsMm": [
+        1200,
+        1000,
+        1800
+      ],
+      "weight": "50 kg",
+      "weightStack": "",
+      "muscleGroup": "Peitoral",
+      "technicalCategory": "Peso livre",
+      "pdfPage": 47
+    },
+    {
+      "sku": "LD-WH064",
+      "name": "Suporte Agachamento",
+      "dimensionsMm": [
+        1100,
+        1100,
+        1800
+      ],
+      "weight": "50 kg",
+      "weightStack": "",
+      "muscleGroup": "Pernas e glúteos",
+      "technicalCategory": "Bancos e suportes",
+      "pdfPage": 35
+    },
+    {
+      "sku": "LD-WH065",
+      "name": "Panturrilha em Pé Com Agachamento",
+      "dimensionsMm": [
+        1650,
+        1300,
+        1700
+      ],
+      "weight": "100 kg",
+      "weightStack": "",
+      "muscleGroup": "Pernas e glúteos",
+      "technicalCategory": "Peso livre",
+      "pdfPage": 36
+    },
+    {
+      "sku": "LD-WH066",
+      "name": "Suporte Remada Solo",
+      "dimensionsMm": [
+        2000,
+        900,
+        300
+      ],
+      "weight": "50 kg",
+      "weightStack": "",
+      "muscleGroup": "Costas",
+      "technicalCategory": "Bancos e suportes",
+      "pdfPage": 56
+    }
+  ]
+}

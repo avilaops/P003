@@ -1,14 +1,14 @@
 import { randomUUID } from "node:crypto"
 import { z } from "zod"
 import type { AuthorizedContext } from "../../platform/access.js"
+import { normalizedDatabaseId } from "../../platform/database-id.js"
 import { signed64 } from "../../platform/numbers.js"
 import { Problem } from "../../platform/problem.js"
 import { validateDate } from "../sales/fixed.js"
 
-const uuid = z.guid().transform(value => value.toLowerCase())
 export const checkoutInputSchema = z.strictObject({
-  entry: z.strictObject({ paymentMethodId: uuid.nullable().default(null), dueOn: z.string().nullable().default(null) }),
-  installments: z.array(z.strictObject({ paymentMethodId: uuid, dueOn: z.string(), amountCents: signed64 })),
+  entry: z.strictObject({ paymentMethodId: normalizedDatabaseId.nullable().default(null), dueOn: z.string().nullable().default(null) }),
+  installments: z.array(z.strictObject({ paymentMethodId: normalizedDatabaseId, dueOn: z.string(), amountCents: signed64 })),
   manufacturingDays: z.number().int().min(0).max(65535).nullable().default(null), deliveryNotes: z.string(), paymentNotes: z.string(), notes: z.string(), stateRegistration: z.string().nullable().default(null),
 })
 export type CheckoutInput = z.infer<typeof checkoutInputSchema>

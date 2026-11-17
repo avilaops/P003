@@ -20,9 +20,11 @@ import { ProposalDocument, type ProposalIssuer } from "./proposal-document"
 import { ProposalEmail } from "./proposal-email"
 import { catalogPaletteFor } from "@/features/catalog/catalog-color-photo-model"
 import { CatalogPaletteReference } from "@/features/catalog/catalog-color-photos"
+import { ProposalCommercialFields } from "./proposal-commercial"
+import type { ProposalCommercial, ProposalPricingState, ProposalTechnical } from "./proposal-commercial-model"
 import "./proposals-print.css"
 
-type Detail = Schema<"ProposalSnapshot">
+type Detail = Omit<Schema<"ProposalSnapshot">, "items"> & { commercial?: ProposalCommercial; items: (Schema<"ProposalSnapshot">["items"][number] & { technical?: ProposalTechnical })[] }
 type Listing = Schema<"ProposalList">
 type Selected = Choice & { quantity: string; structureColor: string; swingArmColor: string; upholsteryColor: string; plateHolderColor: string; plateHolderType: string }
 const labels: Record<string, string> = { draft: "Rascunho", sent: "Enviada", accepted: "Aceita", rejected: "Rejeitada", cancelled: "Cancelada", expired: "Expirada", superseded: "Substituída" }
@@ -66,6 +68,7 @@ function ProposalForm({ initial, tenantId, etag, reload }: { initial?: Detail; t
   const [notes, setNotes] = useState(initial?.data.notes || "")
   const [dirty, setDirty] = useState(false)
   const [error, setError] = useState("")
+  const [pricing, setPricing] = useState<ProposalPricingState>({ status: "loading" })
   const frozen = command.busy || command.uncertain || command.stale
   useNavigationGuard(dirty || command.uncertain ? "Sair sem confirmar as alterações desta proposta?" : null)
   useEffect(() => {
@@ -90,8 +93,9 @@ function ProposalForm({ initial, tenantId, etag, reload }: { initial?: Detail; t
       }} /></div>
       <form className="space-y-2" onSubmit={async event => {
         event.preventDefault(); setError("")
+        if (pricing.status === "loading" || pricing.status === "error") { setError("Confira a cotação comercial antes de salvar."); return }
         if (!customer || !items.length || items.some(item => !quantity(item.quantity) || !normalizeCommercialMoney(item.basePrice || ""))) { setError("Selecione cliente e itens com quantidades e preços válidos."); return }
-        const value = await command.send<Detail>(initial ? `/api/erp/proposals/${initial.data.id}` : "/api/erp/proposals", tenantId, { customerId: customer.id, validUntil, paymentTerms, deliveryTerms, notes, items: items.map(item => ({ productId: item.id, quantity: quantity(item.quantity), unitPrice: normalizeCommercialMoney(item.basePrice || ""), structureColor: item.structureColor || null, swingArmColor: item.swingArmColor || null, upholsteryColor: item.upholsteryColor || null, plateHolderColor: null, plateHolderType: item.plateHolderType || null })) }, initial ? etag : "", initial ? "PUT" : "POST")
+        const value = await command.send<Detail>(initial ? `/api/erp/proposals/${initial.data.id}` : "/api/erp/proposals", tenantId, { customerId: customer.id, validUntil, paymentTerms, deliveryTerms, notes, ...(pricing.status === "ready" ? { commercial: { simulation: pricing.quote.simulation, digest: pricing.quote.digest } } : {}), items: items.map(item => ({ productId: item.id, quantity: quantity(item.quantity), unitPrice: pricing.status === "ready" ? null : normalizeCommercialMoney(item.basePrice || ""), structureColor: item.structureColor || null, swingArmColor: item.swingArmColor || null, upholsteryColor: item.upholsteryColor || null, plateHolderColor: null, plateHolderType: item.plateHolderType || null })) }, initial ? etag : "", initial ? "PUT" : "POST")
         if (value) { setDirty(false); router.replace(`/vendas/propostas/${value.data.id}`) }
       }}>
         <fieldset disabled={frozen} className="min-w-0 space-y-2" onChange={() => setDirty(true)}>
@@ -104,20 +108,21 @@ function ProposalForm({ initial, tenantId, etag, reload }: { initial?: Detail; t
               <Button type="button" variant="ghost" size="sm" className="h-8 shrink-0 px-2 text-xs" aria-label={`Remover ${item.name}`} onClick={() => { setItems(previous => previous.filter(value => value.id !== item.id)); setDirty(true) }}>Remover</Button>
             </div>
             <div className="grid grid-cols-[minmax(0,3fr)_minmax(0,2fr)] items-end gap-2 sm:gap-3">
-              <label className="grid min-w-0 gap-1 text-xs">Unitário (R$)<Input className="h-9" aria-label={`Preço unitário de ${item.name}`} title="Preço unitário somente para consulta nesta proposta." readOnly value={item.basePrice || ""} /></label>
+              <label className="grid min-w-0 gap-1 text-xs">Unitário (R$)<Input className="h-9" aria-label={`Preço unitário de ${item.name}`} title="Preço unitário calculado para esta proposta." readOnly value={pricing.status === "ready" && pricing.quote.sale.items.find(line => line.productId === item.id)?.unitTotalCents !== undefined ? commercialMoneyInput((pricing.quote.sale.items.find(line => line.productId === item.id)!.unitTotalCents! / 100).toFixed(2)) : item.basePrice || ""} /></label>
               <label className="grid min-w-0 gap-1 text-xs">Quantidade<Input className="h-9" aria-label={`Quantidade de ${item.name}`} inputMode="decimal" required value={item.quantity} onChange={event => changeItem(item.id, { quantity: event.target.value })} /></label>
             </div>
-            <details className="min-w-0" onInvalidCapture={event => { event.currentTarget.open = true }}>
+            {Boolean(item.structureColors?.length || item.swingArmColors?.length || item.upholsteryColors?.length || item.structureColor || item.swingArmColor || item.upholsteryColor || item.plateHolderTypes?.length || item.plateHolderType) && <details className="min-w-0" onInvalidCapture={event => { event.currentTarget.open = true }}>
               <summary className="cursor-pointer py-1 text-sm font-medium">Acabamentos<span className="ml-2 break-words text-xs font-normal text-muted-foreground">{[item.structureColor, item.swingArmColor, item.upholsteryColor, item.plateHolderType || "Não se aplica"].filter(Boolean).join(" · ")}</span></summary>
               <div className="mt-2 grid min-w-0 gap-3 sm:grid-cols-2">
-                <ColorChoice part="structure" palette={catalogPaletteFor(item.finishingPalette)} label={`Estrutura de ${item.name}`} catalog={{ productId: item.id, tenantId, field: "structureColors" }} options={item.structureColors} value={item.structureColor} onChange={value => changeItem(item.id, { structureColor: value })} />
-                <ColorChoice part="swingArm" optional={Boolean(initial?.items.some(line => line.productId === item.id && !line.swingArmColor))} palette={catalogPaletteFor(item.finishingPalette)} label={`Braços de ${item.name}`} catalog={{ productId: item.id, tenantId, field: "swingArmColors" }} options={item.swingArmColors} value={item.swingArmColor} onChange={value => changeItem(item.id, { swingArmColor: value })} />
-                {(item.upholsteryConfigurable !== false || item.upholsteryColor) && <ColorChoice part="upholstery" palette={catalogPaletteFor(item.finishingPalette)} label={`Estofado de ${item.name}`} catalog={{ productId: item.id, tenantId, field: "upholsteryColors" }} options={item.upholsteryConfigurable === false ? [] : item.upholsteryColors} value={item.upholsteryColor} onChange={value => changeItem(item.id, { upholsteryColor: value })} />}
+                {Boolean(item.structureColors?.length || item.structureColor) && <ColorChoice part="structure" palette={catalogPaletteFor(item.finishingPalette)} label={`Estrutura de ${item.name}`} catalog={{ productId: item.id, tenantId, field: "structureColors" }} options={item.structureColors} value={item.structureColor} onChange={value => changeItem(item.id, { structureColor: value })} />}
+                {Boolean(item.swingArmColors?.length || item.swingArmColor) && <ColorChoice part="swingArm" optional={Boolean(initial?.items.some(line => line.productId === item.id && !line.swingArmColor))} palette={catalogPaletteFor(item.finishingPalette)} label={`Braços de ${item.name}`} catalog={{ productId: item.id, tenantId, field: "swingArmColors" }} options={item.swingArmColors} value={item.swingArmColor} onChange={value => changeItem(item.id, { swingArmColor: value })} />}
+                {Boolean(item.upholsteryColors?.length || item.upholsteryColor) && (item.upholsteryConfigurable !== false || item.upholsteryColor) && <ColorChoice part="upholstery" palette={catalogPaletteFor(item.finishingPalette)} label={`Estofado de ${item.name}`} catalog={{ productId: item.id, tenantId, field: "upholsteryColors" }} options={item.upholsteryConfigurable === false ? [] : item.upholsteryColors} value={item.upholsteryColor} onChange={value => changeItem(item.id, { upholsteryColor: value })} />}
                 <PlateHolderChoice label={`Tipo de anilheiro de ${item.name}`} value={item.plateHolderType} onChange={value => changeItem(item.id, { plateHolderType: value })} />
               </div>
               <CatalogPaletteReference palette={catalogPaletteFor(item.finishingPalette)} />
-            </details>
+            </details>}
           </section>)}
+          <ProposalCommercialFields tenantId={tenantId} customerId={customer?.id} items={items} initial={initial?.commercial} disabled={frozen} onChange={setPricing} />
           <details className="min-w-0 border-y py-2" onInvalidCapture={event => { event.currentTarget.open = true }}>
             <summary className="cursor-pointer py-1 text-sm font-medium">Condições comerciais<span className="ml-2 hidden text-xs font-normal text-muted-foreground sm:inline">Validade, pagamento e entrega</span></summary>
             <div className="mt-2 grid min-w-0 grid-cols-2 items-end gap-2">
@@ -131,7 +136,7 @@ function ProposalForm({ initial, tenantId, etag, reload }: { initial?: Detail; t
         {(error || command.error) && <p role="alert"><RequestError message={error || command.error} status={error ? undefined : command.status} /></p>}
         {command.stale && <Button type="button" variant="outline" onClick={() => { if (window.confirm("Recarregar e descartar as alterações locais?")) { command.reset(); reload() } }}>Recarregar proposta</Button>}
         {command.uncertain && <p role="status">Resultado pendente. Repita a confirmação para conferir o mesmo comando.</p>}
-        <Button type="submit" className="h-9 px-3" disabled={command.busy || command.stale || !customer || !items.length}>{command.busy ? "Confirmando…" : command.uncertain ? "Repetir confirmação" : "Salvar proposta"}</Button>
+        <Button type="submit" className="h-9 px-3" disabled={command.busy || command.stale || !customer || !items.length || pricing.status === "loading" || pricing.status === "error"}>{command.busy ? "Confirmando…" : command.uncertain ? "Repetir confirmação" : "Salvar proposta"}</Button>
       </form>
     </section>
   </>

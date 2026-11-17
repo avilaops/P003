@@ -29,7 +29,7 @@ def validate_manifest(value, expected_sha):
 def owned_reference(reference):
     return isinstance(reference, str) and any(
         re.fullmatch(re.escape(REGISTRY + component) + r'(?:@sha256:[a-f0-9]{64}|:[a-zA-Z0-9_.-]+)', reference)
-        or re.fullmatch(re.escape('erp-next-' + component) + r':sha-[a-f0-9]{40}', reference)
+        or re.fullmatch(re.escape('erp-next-' + component) + r'(?:@sha256:[a-f0-9]{64}|:sha-[a-f0-9]{40})', reference)
         for component in COMPONENTS
     )
 

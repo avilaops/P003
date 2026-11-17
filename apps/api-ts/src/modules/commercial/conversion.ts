@@ -11,6 +11,7 @@ import { checkoutInputSchema, saveCheckout } from "../orders/checkout-save.js"
 import { storeLines } from "../orders/prepare.js"
 import { decimal, validateDate } from "../sales/fixed.js"
 import { loadSaleProduct, selectFinishes } from "../sales/finishes.js"
+import { customerSnapshotSql, validateFiscalCustomer } from "../sales/customer-fiscal.js"
 import { negotiationInputSchema, type NegotiationInput } from "./negotiation-model.js"
 import { prepareNegotiation } from "./prepare.js"
 import { mixedInputSchema, type MixedInput } from "./mixed-model.js"
@@ -44,6 +45,9 @@ export function registerCommercialConversion(app: FastifyInstance, dependencies:
       const due = validateDate(input.dueDate), { client, tenantId } = context
       const customer = (await client.query("SELECT legal_name,tax_id FROM parties WHERE tenant_id=$1 AND id=$2 AND is_customer AND status='active'", [tenantId, input.customerId])).rows[0]
       if (!customer) throw new Problem(409, "domain_conflict", "Selecione um cliente ativo desta empresa")
+      const fiscalCustomer = (await client.query<{ data: Record<string, unknown> }>(customerSnapshotSql, [tenantId, input.customerId])).rows[0]?.data
+      if (!fiscalCustomer) throw new Problem(409, "domain_conflict", "Selecione um cliente ativo desta empresa")
+      validateFiscalCustomer(fiscalCustomer, input.simulation)
       const lines = []
       for (const item of prepared.sale.items) {
         const product = await loadSaleProduct(context, item.productId)

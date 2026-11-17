@@ -172,6 +172,8 @@ pub struct OrderSnapshot {
     items: Vec<OrderLine>,
     #[serde(skip_serializing_if = "Option::is_none")]
     checkout: Option<checkout::CheckoutSnapshot>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    proposal_agreement: Option<serde_json::Value>,
 }
 #[derive(Deserialize, IntoParams)]
 #[into_params(parameter_in = Query)]
@@ -305,9 +307,15 @@ async fn load(
             .await
             .map_err(db)?
             .ok_or(DomainError::NotFound)?;
-    let items=sqlx::query_as::<_,OrderLine>("SELECT product_id,sku,name,unit,(quantity_micros::numeric/1000000)::numeric(19,6)::text AS quantity,(price_cents::numeric/100)::numeric(16,2)::text AS unit_price,(amount_cents::numeric/100)::numeric(16,2)::text AS amount,structure_color,swing_arm_color,plate_holder_color,plate_holder_type,upholstery_color,(SELECT c.weight FROM product_catalog_profiles c WHERE c.tenant_id=sales_order_lines.tenant_id AND c.product_id=sales_order_lines.product_id) AS equipment_weight FROM sales_order_lines WHERE tenant_id=$1 AND order_id=$2 ORDER BY line_number")
+    let items=sqlx::query_as::<_,OrderLine>("SELECT product_id,sku,name,unit,(quantity_micros::numeric/1000000)::numeric(19,6)::text AS quantity,(price_cents::numeric/100)::numeric(16,2)::text AS unit_price,(amount_cents::numeric/100)::numeric(16,2)::text AS amount,structure_color,swing_arm_color,plate_holder_color,plate_holder_type,upholstery_color,CASE WHEN technical_snapshot IS NULL THEN (SELECT c.weight FROM product_catalog_profiles c WHERE c.tenant_id=sales_order_lines.tenant_id AND c.product_id=sales_order_lines.product_id) ELSE technical_snapshot->>'weight' END AS equipment_weight FROM sales_order_lines WHERE tenant_id=$1 AND order_id=$2 ORDER BY line_number")
         .bind(tenant).bind(id).fetch_all(&mut **tx).await.map_err(db)?;
     let pricing_origin = data.pricing_origin;
+    let proposal_agreement = if pricing_origin {
+        sqlx::query_scalar("SELECT jsonb_build_object('proposalId',p.id,'proposalNumber',p.number::text,'proposalVersion',v.version,'customer',COALESCE(v.customer_snapshot,jsonb_build_object('legalName',v.customer_name,'taxId',v.customer_tax_id)),'paymentTerms',v.payment_terms,'deliveryTerms',v.delivery_terms,'notes',v.notes) FROM sales_proposals p JOIN sales_proposal_versions v ON v.tenant_id=p.tenant_id AND v.proposal_id=p.id AND v.version=p.current_version WHERE p.tenant_id=$1 AND p.order_id=$2 AND EXISTS(SELECT 1 FROM commercial_order_quotes q WHERE q.tenant_id=p.tenant_id AND q.order_id=p.order_id)")
+            .bind(tenant).bind(id).fetch_optional(&mut **tx).await.map_err(db)?
+    } else {
+        None
+    };
     Ok(OrderSnapshot {
         tenant_id: tenant,
         can_edit,
@@ -315,6 +323,7 @@ async fn load(
         data,
         items,
         checkout: checkout::load(tx, tenant, id).await?,
+        proposal_agreement,
     })
 }
 

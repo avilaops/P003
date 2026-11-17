@@ -9,9 +9,21 @@ import { proposalSummary, queryInput } from "../sales/shared.js"
 
 import { loadProposal, summary } from "./snapshot.js"
 import { registerProposalCommands } from "./commands.js"
+import { formalizeProposal } from "./formalize.js"
 
 export function registerProposalRoutes(app: FastifyInstance, dependencies: AppDependencies) {
   registerProposalCommands(app, dependencies)
+  app.post<{ Params: { id: string } }>("/api/v1/proposals/:id/commercial-validation", async (request, reply) => {
+    const body = await authorizeRequest(request, dependencies, async context => {
+      requirePermission(context, "sales.proposals.read")
+      requirePermission(context, "sales.proposals.manage")
+      if (!z.strictObject({}).safeParse(request.body ?? {}).success || !z.string().uuid().safeParse(request.params.id).success) throw new Problem(422, "invalid_input", "Solicitação de validação inválida")
+      const current = await loadProposal(context, request.params.id)
+      const checked = await formalizeProposal(context, request.params.id, current.data.version, false)
+      return { tenantId: context.tenantId, revision: current.data.revision, approvalCandidate: checked?.approval ?? null }
+    }, false)
+    return reply.header("cache-control", "no-store").header("etag", `"${body.revision}"`).send(body)
+  })
   app.get<{ Params: { id: string } }>("/api/v1/proposals/:id", async (request, reply) => {
     const body = await authorizeRequest(request, dependencies, async context => {
       requirePermission(context, "sales.proposals.read")

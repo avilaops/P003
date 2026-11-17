@@ -305,6 +305,40 @@ async fn email_unconfigured_never_publishes_or_records_delivery(admin: PgPool) {
 }
 
 #[sqlx::test(migrations = "../../migrations")]
+async fn priced_email_cannot_fall_back_to_unvalidated_native_delivery(admin: PgPool) {
+    let (router, application, server, role) = super::company_tests::setup(&admin).await;
+    seed(&admin).await;
+    let created = create(&router).await;
+    let id = created["data"]["id"].as_str().unwrap();
+    sqlx::query("UPDATE sales_proposal_versions SET commercial_public='{\"sale\":{\"approvalReasons\":[\"fora-da-meta\"]}}',commercial_private='{}' WHERE proposal_id=$1::uuid")
+        .bind(id).execute(&admin).await.unwrap();
+    let url = format!("/api/v1/proposals/{id}/email");
+    let status = call(&router, "GET", &url, "editor", None, None, Value::Null).await;
+    assert_eq!(status.0, StatusCode::OK);
+    assert_eq!(
+        status.1["canSend"], false,
+        "Commercial proposals require the TypeScript authority check even through native SMTP"
+    );
+    let sent = call(
+        &router,
+        "POST",
+        &url,
+        "editor",
+        Some(1),
+        Some(Uuid::now_v7()),
+        json!({"recipient":"cliente@example.test","subject":"Proposta","message":"Confira."}),
+    )
+    .await;
+    assert_eq!(sent.0, StatusCode::SERVICE_UNAVAILABLE);
+    let count: i64 = sqlx::query_scalar("SELECT count(*) FROM sales_proposal_email_deliveries")
+        .fetch_one(&admin)
+        .await
+        .unwrap();
+    assert_eq!(count, 0);
+    super::company_tests::cleanup(&admin, application, server, &role).await;
+}
+
+#[sqlx::test(migrations = "../../migrations")]
 async fn replaying_uncertain_email_returns_same_receipt_without_resending(admin: PgPool) {
     let (router, application, server, role) = super::company_tests::setup(&admin).await;
     seed(&admin).await;

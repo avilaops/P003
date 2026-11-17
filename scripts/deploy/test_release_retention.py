@@ -82,6 +82,15 @@ class RetentionTests(unittest.TestCase):
         ]
         self.assertEqual(retention.image_candidates(images, {'active', 'rollback', 'busy'}), ['old'])
 
+    def test_local_digest_aliases_are_owned_and_busy_or_foreign_images_stay_protected(self):
+        digest = 'a' * 64
+        refs = ['erp-next-web@sha256:' + digest, 'ghcr.io/avilaops/erp-next-web@sha256:' + digest]
+        images = [{'Id': 'old', 'RepoTags': ['erp-next-web:sha-' + C], 'RepoDigests': refs},
+                  {'Id': 'busy', 'RepoTags': [], 'RepoDigests': refs},
+                  {'Id': 'foreign', 'RepoTags': [], 'RepoDigests': refs + ['other-app@sha256:' + digest]}]
+        self.assertEqual(retention.image_candidates(images, {'busy'}), ['old'])
+        self.assertFalse(retention.owned_reference('erp-next-web-unrelated@sha256:' + digest))
+
     def test_symlinked_release_root_is_rejected(self):
         original = self.root / 'releases'
         original.rename(self.root / 'outside')

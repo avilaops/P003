@@ -1771,13 +1771,13 @@
     {
       "path": "/api/auth/logout/central",
       "method": "GET",
-      "action": "Validar fluxo cifrado iniciado pelo POST e redirecionar ao end_session_endpoint do discovery do issuer configurado",
+      "action": "Validar fluxo cifrado iniciado pelo POST e enviar formulário POST automático ao end_session_endpoint do discovery do issuer configurado",
       "recovery": "Fluxo ausente, expirado ou sessão posterior retorna 403 sem apagar cookies; discovery indisponível retorna 503 e não comprova saída global."
     },
     {
       "path": "/api/auth/logout/central/callback",
       "method": "GET",
-      "action": "Consumir marcador cifrado do retorno da saída central e redirecionar para a entrada sem apagar sessão posterior",
+      "action": "Consumir marcador cifrado do retorno da saída central e redirecionar para https://avilaops.com/ sem apagar sessão posterior",
       "recovery": "Marcador ausente, expirado, inválido ou já consumido retorna 403 sem alterar a sessão."
     },
     {
@@ -30405,6 +30405,63 @@
           "failure",
           "response"
         ]
+      }
+    },
+    {
+      "id": "post-api-v1-proposals-id-commercial-validation",
+      "flow": "proposals",
+      "status": "implemented",
+      "operation": {
+        "method": "POST",
+        "path": "/api/v1/proposals/{id}/commercial-validation"
+      },
+      "actor": "active_tenant_member",
+      "permissions": ["sales.proposals.read", "sales.proposals.manage"],
+      "input": {
+        "headers": ["Authorization", "X-Tenant-Id"],
+        "pathParameters": ["id"],
+        "query": null
+      },
+      "preconditions": [
+        "Empresa ativa, proposta da empresa e permissões atuais de consulta e gestão.",
+        "Corpo vazio; revalidar cliente, fontes de preço, perfil fiscal e alçada sem adquirir o bloqueio de escrita já mantido pelo envio SMTP."
+      ],
+      "transition": {
+        "from": "Versão atual da proposta comercial",
+        "to": "Cotação conferida e eventual aprovação candidata devolvida sem persistência"
+      },
+      "effects": {
+        "writes": [],
+        "external": [],
+        "excludes": [
+          "Não envia e-mail, não aprova em transação separada e não devolve custos ou lucro da diretoria."
+        ]
+      },
+      "concurrency": {
+        "revision": false,
+        "idempotency": false,
+        "rule": "Consulta repetível sem escrita; retorna a revisão para o chamador conferir dentro da transação de envio."
+      },
+      "response": {
+        "successStatuses": [200],
+        "errorStatuses": [400, 401, 403, 404, 409, 422, 503],
+        "action": "Validar a proposta antes do envio nativo"
+      },
+      "recovery": "Revisar cadastro ou cotação quando alterados; solicitar aprovação conforme a alçada. Indisponibilidade não autoriza envio sem validação.",
+      "ui": {
+        "pages": [],
+        "bff": null,
+        "gap": "Operação interna consumida pelo envio nativo; não possui comando independente na interface."
+      },
+      "sources": [
+        "apps/api/src/domains/sales/proposal_commercial_check.rs",
+        "apps/api-ts/src/modules/proposals/routes.ts",
+        "apps/api-ts/src/modules/proposals/formalize.ts",
+        "apps/api-ts/test/commercial-proposal-cases.ts"
+      ],
+      "verification": {
+        "status": "not_verified_by_catalog",
+        "criteria": ["interface", "request", "authorization", "domain", "persistence", "effects", "failure", "response"]
       }
     },
     {

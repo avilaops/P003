@@ -1,7 +1,8 @@
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
 import type { AppDependencies } from "../../app.js"
-import { authorizeRequest, requirePermission } from "../../platform/access.js"
+import { authorizeRequest } from "../../platform/access.js"
+import { requireCommercialRead } from "./access.js"
 import { reloadTenantPermissions } from "../../platform/database.js"
 import { Problem } from "../../platform/problem.js"
 import { revisionValue } from "../../platform/revision.js"
@@ -13,7 +14,7 @@ import { authorityKind, tableProjection } from "./table-model.js"
 export function registerCommercialTables(app: FastifyInstance, dependencies: AppDependencies) {
   app.get<{ Params: { line: string } }>("/api/v1/commercial/tables/:line", async (request, reply) => {
     const body = await authorizeRequest(request, dependencies, async context => {
-      requirePermission(context, "sales.orders.read")
+      requireCommercialRead(context)
       const { line } = request.params
       if (!["imported", "national"].includes(line)) throw new Problem(422, "invalid_input", "Linha comercial inválida")
       const query = z.strictObject({ destinationState: z.string().optional(), taxpayer: z.enum(["true", "false"]).transform(value => value === "true").optional() }).safeParse(request.query)
@@ -21,7 +22,7 @@ export function registerCommercialTables(app: FastifyInstance, dependencies: App
       if (query.data.destinationState !== undefined && !STATES.some(state => state === query.data.destinationState)) throw new Problem(422, "invalid_input", "UF de destino inválida")
       await context.client.query("SELECT id FROM tenants WHERE id=$1 FOR SHARE", [context.tenantId])
       await reloadTenantPermissions(context)
-      requirePermission(context, "sales.orders.read")
+      requireCommercialRead(context)
       const { client, tenantId } = context, allowed = (permission: string) => context.permissions.includes(permission)
       const authority = { manager: allowed("sales.approvals.manage"), director: allowed("sales.approvals.director") }
       const savedRules = (await client.query("SELECT rules FROM commercial_approval_settings WHERE tenant_id=$1", [tenantId])).rows[0]
