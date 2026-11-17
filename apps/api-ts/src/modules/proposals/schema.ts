@@ -1,10 +1,14 @@
 import { z } from "zod"
 import { Problem } from "../../platform/problem.js"
+import { mixedInputSchema } from "../commercial/mixed-model.js"
+import { checkoutInputSchema } from "../orders/checkout-save.js"
 
 const optional = z.preprocess(value => value === null ? undefined : value, z.string().optional())
 const nullable = z.string().nullable().default(null)
 export const proposalInputSchema = z.strictObject({
   customerId: z.string().uuid().transform(value => value.toLowerCase()), validUntil: z.string(), paymentTerms: z.string(), deliveryTerms: z.string(), notes: z.string(),
+  commercial: z.strictObject({ simulation: mixedInputSchema, digest: z.string() }).optional(),
+  checkout: checkoutInputSchema.optional(),
   items: z.array(z.strictObject({
     productId: z.string().uuid().transform(value => value.toLowerCase()), quantity: z.string(), unitPrice: nullable, structureColor: nullable, upholsteryColor: nullable,
     swingArmColor: optional, armColor: optional, plateHolderColor: optional, plateHolderType: optional,

@@ -6,12 +6,12 @@ import Image from "next/image"
 import { ImageIcon } from "lucide-react"
 import { useEffect, useRef, useState } from "react"
 
-export function ProductThumbnail({ id, name, tenantId, hasPhoto, decorative = false, eager = false }: { id: string; name: string; tenantId: string; hasPhoto?: boolean; decorative?: boolean; eager?: boolean }) {
+export function ProductThumbnail({ id, name, tenantId, hasPhoto, decorative = false, eager = false, snapshot }: { id: string; name: string; tenantId: string; hasPhoto?: boolean; decorative?: boolean; eager?: boolean; snapshot?: { photoDataUrl?: string | null; photoUrl?: string | null } }) {
   const root = useRef<HTMLSpanElement>(null)
   const [photo, setPhoto] = useState("")
   const [failed, setFailed] = useState(false)
   useEffect(() => {
-    if (hasPhoto === false || !root.current) return
+    if (snapshot || hasPhoto === false || !root.current) return
     const controller = new AbortController()
     function loadPhoto() {
       void erpFetch(`/api/erp/products/${id}`, { cache: "no-store", signal: controller.signal }).then(async response => {
@@ -32,8 +32,9 @@ export function ProductThumbnail({ id, name, tenantId, hasPhoto, decorative = fa
     }, { rootMargin: "100px" })
     observer.observe(root.current)
     return () => { observer.disconnect(); controller.abort() }
-  }, [id, tenantId, hasPhoto, eager])
+  }, [id, tenantId, hasPhoto, eager, snapshot])
+  const displayedPhoto = snapshot ? failed ? "" : snapshot.photoUrl || snapshot.photoDataUrl || "" : photo
   return <span ref={root} className="grid size-14 shrink-0 place-items-center overflow-hidden rounded-lg border bg-muted/40" title={failed ? "Não foi possível carregar a foto" : hasPhoto === false ? "Sem foto cadastrada" : undefined}>
-    {photo ? <Image unoptimized loading={eager ? "eager" : undefined} src={photo} alt={decorative ? "" : `Foto de ${name}`} width={56} height={56} className="size-14 object-contain" onError={() => { setPhoto(""); setFailed(true) }} /> : <ImageIcon className="size-5 text-muted-foreground" aria-hidden="true" />}
+    {displayedPhoto ? <Image unoptimized loading={eager ? "eager" : undefined} src={displayedPhoto} alt={decorative ? "" : `Foto de ${name}`} width={56} height={56} className="size-14 object-contain" onError={() => { setPhoto(""); setFailed(true) }} /> : <ImageIcon className="size-5 text-muted-foreground" aria-hidden="true" />}
   </span>
 }

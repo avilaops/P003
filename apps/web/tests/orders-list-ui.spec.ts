@@ -7,6 +7,20 @@ const order = { id: record, number: "17", customerName: "Cliente da pesquisa", c
 
 test.beforeEach(async ({ context }) => { await installFrontendFixture(context) })
 
+test("pedido de proposta preserva condições e cliente sem inventar parcelamento", async ({ page }) => {
+  await page.route("**/api/erp/me", route => route.fulfill({ json: { tenant: { id: tenant }, permissions: ["sales.orders.read", "catalog.parties.read"] } }))
+  await page.route(`**/api/erp/orders/${record}`, route => route.fulfill({ headers: { ETag: '"1"' }, json: { tenantId: tenant, canEdit: false, pricingOrigin: true, data: { ...order, customerId: record }, items: [], proposalAgreement: { proposalId: record, proposalNumber: "8", proposalVersion: 1, customer: { legalName: "Cliente aprovado", email: "preservado@example.test" }, paymentTerms: "30% de entrada, saldo na entrega", deliveryTerms: "45 dias úteis após aprovação", notes: "Condição preservada na proposta" } } }))
+  await page.route(`**/api/erp/parties/${record}`, route => route.fulfill({ json: { tenantId: tenant, data: { legalName: "Cadastro posterior", email: "posterior@example.test" } } }))
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.goto(`/vendas/pedidos/${record}`)
+  const agreement = page.getByRole("region", { name: "Condições aprovadas na proposta" })
+  await expect(agreement).toContainText("30% de entrada, saldo na entrega")
+  await expect(agreement).toContainText("45 dias úteis após aprovação")
+  await expect(agreement).toContainText("Condição preservada na proposta")
+  await expect(page.locator("main")).toContainText("preservado@example.test")
+  await expect(page.locator("main")).not.toContainText("posterior@example.test")
+})
+
 test("lista de pedidos mantém identificação e valor visíveis sem rolagem lateral no celular", async ({ page }, info) => {
   await page.route(/\/api\/erp\/orders\?/, route => route.fulfill({ json: { tenantId: tenant, canEdit: true, total: 1, data: [{ ...order, customerName: "COLISEU EQUIPAMENTOS PARA MUSCULACAO LTDA" }] } }))
   await page.goto("/vendas/pedidos")

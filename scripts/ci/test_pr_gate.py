@@ -32,6 +32,17 @@ class ScopeTests(unittest.TestCase):
     def test_frontend_does_not_rebuild_api(self):
         self.assertEqual(gate.plan(["apps/web/src/page.tsx"]), {"web": True, "api": False, "fiscal": False})
 
+    def test_typescript_api_does_not_rebuild_unrelated_domains_or_rust(self):
+        for path in ("apps/api-ts/src/modules/proposals/commands.ts", "apps/api-ts/test/commercial-proposal-cases.ts"):
+            self.assertEqual(gate.plan([path]), {"web": False, "api": True, "fiscal": False})
+            self.assertFalse(gate.native_api_required([path]))
+
+    def test_native_and_shared_integration_changes_keep_rust_validation(self):
+        for path in ("apps/api/src/main.rs", "migrations/123.sql", "Cargo.lock", "queries/users.sql", "apps/api-ts/scripts/contract-tests.mjs", "apps/api-ts/src/platform/mcp-dispatch.ts", ".github/workflows/ci.yml", "new-service/main.py"):
+            self.assertTrue(gate.native_api_required([path]), path)
+        self.assertTrue(gate.native_api_required(["apps/api-ts/src/modules/proposals/commands.ts", "migrations/123.sql"]))
+        self.assertFalse(gate.native_api_required(["apps/web/src/page.tsx", "docs/design.md"]))
+
     def test_migrations_and_rust_select_api(self):
         for path in ("migrations/123.sql", "apps/api/src/main.rs", "Cargo.lock", "queries/users.sql"):
             with self.subTest(path=path):

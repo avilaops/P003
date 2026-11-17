@@ -8,8 +8,58 @@ const summary = { id: record, number: "1", version: 1, revision: 1, customerId: 
 const item = { productId: product, sku: "TEST", name: "Produto de teste", unit: "UN", quantity: "2.500000", unitPrice: "19.99", catalogPrice: "19.99", amount: "49.98", structureColor: null, upholsteryColor: null }
 const detail = () => ({ tenantId: tenant, canEdit: true, data: { ...summary }, items: [{ ...item }], versions: [{ ...summary }] })
 
+for (const width of [390, 1440]) test(`orçamento completo preserva ficha e foto da versão em ${width}px`, async ({ page }) => {
+  const photo = await page.evaluate(() => { const c = document.createElement("canvas"); c.width = 32; c.height = 32; return c.toDataURL("image/jpeg") })
+  const snapshot = { ...detail(), items: [{ ...item, technical: { dimensionsMm: [1500, 1200, 1400], weight: "150 kg", weightStack: "100 kg", category: "Bateria de pesos", photoDataUrl: photo } }] }
+  await page.route(`**/api/erp/proposals/${record}`, route => route.fulfill({ headers: { ETag: '"1"' }, json: snapshot }))
+  await page.setViewportSize({ width, height: 900 })
+  await page.goto(`/vendas/propostas/${record}`)
+  const proposalDoc = page.locator("[data-proposal-document]")
+  await expect(proposalDoc.getByText("1.500 × 1.200 × 1.400 mm", { exact: true })).toBeVisible()
+  await expect(proposalDoc.getByText("Bateria: 100 kg", { exact: true })).toBeVisible()
+  await expect(proposalDoc.getByText("Peso: 150 kg", { exact: true })).toBeVisible()
+  await expect(proposalDoc.getByRole("img", { name: "Foto de Produto de teste", exact: true })).toHaveAttribute("src", photo)
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+  await page.emulateMedia({ media: "print" })
+  await expect(proposalDoc.getByText("Bateria: 100 kg", { exact: true })).toBeVisible()
+})
+
+test("orçamento completo calcula desconto e perfil fiscal sem solicitar cores da linha nacional", async ({ page }) => {
+  const version = "66666666-6666-4666-8666-666666666666"
+  const current = { ...detail(), data: { ...summary, amount: "100.00" }, items: [{ ...item, quantity: "1.000000", unitPrice: "100.00", catalogPrice: "100.00", amount: "100.00" }] }
+  let saved: Record<string, unknown> | undefined
+  await page.route(`**/api/erp/proposals/${record}`, async route => {
+    if (route.request().method() === "PUT") saved = route.request().postDataJSON()
+    await route.fulfill({ headers: { ETag: '"1"' }, json: current })
+  })
+  await page.route(`**/api/erp/parties/${customer}`, route => route.fulfill({ json: { tenantId: tenant, data: { id: customer, revision: 1, personType: "fisica", legalName: summary.customerName, fiscal: null, addresses: [{ state: "SP", primary: true }] } } }))
+  await page.route(`**/api/erp/products/${product}`, route => route.fulfill({ json: { tenantId: tenant, data: { id: product, name: item.name, sku: item.sku, basePrice: "100.00", unit: "UN", structureColors: [], swingArmColors: [], upholsteryColors: [], plateHolderTypes: [], hasPhoto: false } } }))
+  await page.route("**/api/erp/commercial/tables/**", route => {
+    const national = new URL(route.request().url()).pathname.endsWith("national")
+    return route.fulfill({ json: { tenantId: tenant, line: national ? "national" : "imported", canManage: false, authority: "seller", data: national ? { id: version, version: 1, originState: "SP", freeDiscountBps: 2000, minimumDownPaymentBps: 7000, items: [{ productId: product, sku: item.sku, name: item.name, unit: "UN", priceWithoutIpiCents: 10000, priceWithIpiCents: 10000, ipiBps: 0, maxOwnDiscountBps: 2000, available: true }] } : null } })
+  })
+  await page.route("**/api/erp/commercial/mixed/simulate", route => {
+    const input = route.request().postDataJSON()
+    expect(input.taxpayer).toBe(false)
+    expect(input.destinationState).toBe("SP")
+    const total = input.discount.value === 1000 ? 9000 : 10000
+    return route.fulfill({ json: { tenantId: tenant, digest: `priced-${input.discount.value}`, director: null, sale: { calculatorVersion: "fixture", items: [{ productId: product, quantity: 1, unitTotalCents: total, totalCents: total }], totalCents: total, discountBps: input.discount.value, discountCents: 10000 - total, tableTotalCents: 10000, netSaleCents: total, ipiCents: 0, ipiBps: 0, freeDiscountBps: 2000, maximumAtTargetDiscountBps: 2500, minimumDownPaymentCents: 7000, minimumDownPaymentBps: 7000, downPaymentCents: 7000, freightCents: 0, approvalReasons: [] } } })
+  })
+  await page.setViewportSize({ width: 390, height: 900 })
+  await page.goto(`/vendas/propostas/${record}/editar`)
+  await expect(page.getByText("Pessoa física • Não contribuinte", { exact: true })).toBeVisible()
+  await page.getByLabel("Desconto (%)", { exact: true }).fill("10")
+  await expect(page.getByText("Total calculado: R$ 90,00", { exact: true })).toBeVisible()
+  await expect(page.getByLabel(`Estrutura de ${item.name}`, { exact: true })).toHaveCount(0)
+  await page.getByRole("button", { name: "Salvar proposta", exact: true }).click()
+  await expect.poll(() => saved?.commercial).toMatchObject({ digest: "priced-1000", simulation: { destinationState: "SP", taxpayer: false, discount: { kind: "percent", value: 1000 }, items: [{ productId: product, line: "national", versionId: version, quantity: 1 }] } })
+  expect((saved?.items as { unitPrice: unknown }[])[0].unitPrice).toBeNull()
+})
+
 test.beforeEach(async ({ context, page }) => {
   await installFrontendFixture(context)
+  await page.route("**/api/erp/commercial/tables/**", route => route.fulfill({ json: { tenantId: tenant, data: null } }))
+  await page.route("**/api/erp/parties/*", route => route.fulfill({ json: { tenantId: tenant, data: { personType: "fisica", fiscal: null, addresses: [] } } }))
   await page.route("**/api/erp/me", route => route.fulfill({ json: { tenant: { id: tenant, legalName: "Empresa de teste" }, permissions: ["sales.proposals.read", "sales.proposals.manage"] } }))
 })
 

@@ -3,6 +3,7 @@ import { CommercialDocument, DocumentSection, type DocumentIssuer } from "@/comp
 import { ProductThumbnail } from "@/features/catalog/product-thumbnail"
 import type { Schema } from "@/lib/api/types"
 import { commercialMoney, commercialQuantity } from "./order-presentation"
+import { proposalTechnicalSummary, type ProposalTechnical } from "./proposal-commercial-model"
 
 export type ProposalIssuer = DocumentIssuer
 const labels: Record<string, string> = { draft: "Rascunho", sent: "Enviada", accepted: "Aceita", rejected: "Rejeitada", cancelled: "Cancelada", expired: "Expirada", superseded: "Substituída" }
@@ -11,7 +12,7 @@ function date(value: string) {
   return match ? `${match[3]}/${match[2]}/${match[1]}` : value
 }
 
-export function ProposalDocument({ snapshot, issuer, issuerName }: { snapshot: Schema<"ProposalSnapshot">; issuer?: ProposalIssuer; issuerName?: string }) {
+export function ProposalDocument({ snapshot, issuer, issuerName }: { snapshot: Omit<Schema<"ProposalSnapshot">, "items"> & { items: (Schema<"ProposalSnapshot">["items"][number] & { technical?: ProposalTechnical })[] }; issuer?: ProposalIssuer; issuerName?: string }) {
   const { data, items } = snapshot
   const name = issuer?.legalName || issuerName
   const status = data.expired ? "expired" : data.status
@@ -34,9 +35,9 @@ export function ProposalDocument({ snapshot, issuer, issuerName }: { snapshot: S
       <thead><tr><th scope="col">Produto</th><th scope="col" className="proposal-quantity-column">Quantidade</th><th scope="col" className="proposal-unit-price-column">Unitário</th><th scope="col">Total</th></tr></thead>
       <tbody>{items.map(item => <tr key={item.productId}>
         <td><div className="proposal-product-identity flex flex-col gap-2 sm:flex-row">
-          <ProductThumbnail key={`${snapshot.tenantId}:${item.productId}`} id={item.productId} name={item.name} tenantId={snapshot.tenantId} eager />
+          <ProductThumbnail key={`${snapshot.tenantId}:${item.productId}`} id={item.productId} name={item.name} tenantId={snapshot.tenantId} eager snapshot={item.technical} />
           <div className="min-w-0"><p className="proposal-item-name">{item.name}</p><p className="proposal-aux">{item.sku}</p><p className="proposal-mobile-pricing proposal-aux"><span>Qtd. {commercialQuantity(item.quantity)} {item.unit}</span><span>Unit. {commercialMoney(item.unitPrice)}</span></p><p className="proposal-aux">{[item.structureColor && `Estrutura: ${item.structureColor}`, item.swingArmColor && `Braços: ${item.swingArmColor}`, `Tipo de anilheiro: ${item.plateHolderType || "Não se aplica"}`, item.upholsteryColor && `Estofado: ${item.upholsteryColor}`].filter(Boolean).join(" • ")}</p></div>
-        </div></td>
+        </div>{item.technical && <div className="proposal-aux mt-2 space-y-0.5"><p aria-label="Dimensões • comprimento, largura e altura">{proposalTechnicalSummary(item.technical).dimensions}</p><p>{proposalTechnicalSummary(item.technical).weight}</p><p>{proposalTechnicalSummary(item.technical).stack}</p></div>}</td>
         <td className="proposal-quantity-column">{commercialQuantity(item.quantity)} {item.unit}</td><td className="proposal-unit-price-column">{commercialMoney(item.unitPrice)}</td><td>{commercialMoney(item.amount)}</td>
       </tr>)}</tbody>
     </DataTable></DocumentSection>

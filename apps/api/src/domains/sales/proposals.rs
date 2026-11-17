@@ -1,4 +1,6 @@
 #![cfg_attr(not(any(test, feature = "migration-reference")), allow(unused_imports))]
+#[path = "proposal_commercial_check.rs"]
+pub mod commercial_check;
 #[path = "proposal_email.rs"]
 pub mod email;
 
@@ -55,6 +57,10 @@ pub struct ProposalInput {
     delivery_terms: String,
     notes: String,
     items: Vec<ProposalItemInput>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    commercial: Option<serde_json::Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    checkout: Option<serde_json::Value>,
 }
 
 #[cfg(any(test, feature = "migration-reference"))]
@@ -127,6 +133,9 @@ pub struct ProposalLine {
     plate_holder_color: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     plate_holder_type: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[sqlx(default, rename = "technical_snapshot")]
+    technical: Option<serde_json::Value>,
 }
 
 #[derive(Serialize, ToSchema)]
@@ -137,6 +146,14 @@ pub struct ProposalSnapshot {
     data: ProposalSummary,
     items: Vec<ProposalLine>,
     versions: Vec<ProposalSummary>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    commercial: Option<serde_json::Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    customer: Option<serde_json::Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    checkout: Option<serde_json::Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    director: Option<serde_json::Value>,
 }
 
 #[cfg(any(test, feature = "migration-reference"))]
@@ -192,7 +209,7 @@ async fn load_version(
     .await
     .map_err(db)?
     .ok_or(DomainError::NotFound)?;
-    let items = sqlx::query_as::<_, ProposalLine>("SELECT product_id,sku,name,unit,(quantity_micros::numeric/1000000)::numeric(19,6)::text AS quantity,(price_cents::numeric/100)::numeric(16,2)::text AS unit_price,(catalog_price_cents::numeric/100)::numeric(16,2)::text AS catalog_price,(amount_cents::numeric/100)::numeric(16,2)::text AS amount,structure_color,upholstery_color,plate_holder_color,plate_holder_type,swing_arm_color FROM sales_proposal_lines WHERE tenant_id=$1 AND proposal_id=$2 AND version=$3 ORDER BY line_number")
+    let items = sqlx::query_as::<_, ProposalLine>("SELECT product_id,sku,name,unit,(quantity_micros::numeric/1000000)::numeric(19,6)::text AS quantity,(price_cents::numeric/100)::numeric(16,2)::text AS unit_price,(catalog_price_cents::numeric/100)::numeric(16,2)::text AS catalog_price,(amount_cents::numeric/100)::numeric(16,2)::text AS amount,technical_snapshot,structure_color,upholstery_color,plate_holder_color,plate_holder_type,swing_arm_color FROM sales_proposal_lines WHERE tenant_id=$1 AND proposal_id=$2 AND version=$3 ORDER BY line_number")
         .bind(tenant).bind(id).bind(data.version).fetch_all(&mut **tx).await.map_err(db)?;
     let versions = sqlx::query_as::<_, ProposalSummary>(&format!(
         "{SUMMARY} WHERE p.tenant_id=$1 AND p.id=$2 ORDER BY v.version DESC"
@@ -202,12 +219,18 @@ async fn load_version(
     .fetch_all(&mut **tx)
     .await
     .map_err(db)?;
+    let agreement: (Option<serde_json::Value>, Option<serde_json::Value>, Option<serde_json::Value>) = sqlx::query_as("SELECT commercial_public,customer_snapshot,checkout_snapshot FROM sales_proposal_versions WHERE tenant_id=$1 AND proposal_id=$2 AND version=$3")
+        .bind(tenant).bind(id).bind(data.version).fetch_one(&mut **tx).await.map_err(db)?;
     Ok(ProposalSnapshot {
         tenant_id: tenant,
         can_edit,
         data,
         items,
         versions,
+        commercial: agreement.0,
+        customer: agreement.1,
+        checkout: agreement.2,
+        director: None,
     })
 }
 

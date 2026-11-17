@@ -143,6 +143,7 @@
         reference_data::update_payment_method,
         sales::proposals::email::get,
         sales::proposals::email::send,
+        sales::proposals::commercial_check::validate,
         sales::order_email::get,
         sales::order_email::send,
         sales::order_document::get,

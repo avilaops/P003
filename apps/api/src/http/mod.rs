@@ -488,6 +488,10 @@ pub fn router(state: AppState) -> Router {
             get(sales::proposals::email::get).post(sales::proposals::email::send),
         )
         .route(
+            "/api/v1/proposals/{id}/commercial-validation",
+            axum::routing::post(sales::proposals::commercial_check::validate),
+        )
+        .route(
             "/api/v1/proposals/{id}/{action}",
             axum::routing::post(sales::proposals::decide),
         )
