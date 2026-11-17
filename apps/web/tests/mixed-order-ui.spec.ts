@@ -66,6 +66,8 @@ test("seletor navega por teclado, mantém a busca aberta e rola sem deslocar o p
   await expect(quantity).toHaveValue("1")
   await expect(search).toBeFocused()
   await expect(search).toHaveValue("")
+  await expect(results).toBeHidden()
+  await search.press("ArrowDown")
   await expect(importedOption).toContainText("Acrescentar 1 un.")
 
   await search.fill("imp-01")

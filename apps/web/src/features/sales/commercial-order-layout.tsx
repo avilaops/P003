@@ -57,6 +57,7 @@ export function OrderEquipmentSearch({ items, selected, tenantId, disabled, onAd
     if (disabled || blockedReason(item)) return
     onAdd(item.productId, item)
     setQuery("")
+    setOpen(false)
     list.current?.scrollTo({ top: 0 })
     input.current?.focus({ preventScroll: true })
   }
