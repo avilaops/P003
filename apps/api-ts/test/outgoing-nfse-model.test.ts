@@ -37,9 +37,14 @@ test("outgoing NFS-e status transitions never retransmit an uncertain issuance",
 
 test("outgoing NFS-e migration enforces tenant identity, immutable snapshots and append-only events", async () => {
   const sql = await readFile(new URL("../../../migrations/202611170001_outgoing_nfse.sql", import.meta.url), "utf8")
+  const privileges = await readFile(new URL("../../../migrations/202611170002_outgoing_nfse_runtime_privileges.sql", import.meta.url), "utf8")
   assert.match(sql, /UNIQUE\s*\(tenant_id,\s*external_id\)/i)
   assert.match(sql, /request_snapshot_immutable/i)
   assert.match(sql, /outgoing_nfse_events_append_only/i)
   assert.match(sql, /ENABLE ROW LEVEL SECURITY/gi)
   assert.match(sql, /current_setting\('app\.tenant_id'/i)
+  assert.match(sql, /GRANT SELECT,\s*INSERT,\s*UPDATE ON fiscal_outgoing_nfse_issuances,\s*fiscal_outgoing_nfse_sequences TO erp_next_app/i)
+  assert.match(sql, /GRANT SELECT,\s*INSERT ON fiscal_outgoing_nfse_events TO erp_next_app/i)
+  assert.match(privileges, /GRANT SELECT,\s*INSERT,\s*UPDATE ON fiscal_outgoing_nfse_issuances,\s*fiscal_outgoing_nfse_sequences TO erp_next_app/i)
+  assert.match(privileges, /GRANT SELECT,\s*INSERT ON fiscal_outgoing_nfse_events TO erp_next_app/i)
 })
