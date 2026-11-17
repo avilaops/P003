@@ -3,6 +3,7 @@ import { z } from "zod"
 import { authenticate, type AuthenticatedIdentity } from "./auth.js"
 import { withTenantTransaction, type DatabasePool, type TenantContext } from "./database.js"
 import { Problem } from "./problem.js"
+import { currentVerifiedMcpIdentity } from "./request-identity.js"
 
 type RequestLike = { method?: string; headers: Record<string, string | string[] | undefined> }
 
@@ -10,6 +11,7 @@ export type AccessDependencies = {
   pool: DatabasePool
   userinfoUrl: string
   fetchAuth?: typeof fetch
+  mcpResource?: string
 }
 
 export type AuthorizedContext = TenantContext & { identity: AuthenticatedIdentity }
@@ -23,7 +25,7 @@ function singleHeader(value: string | string[] | undefined): string | undefined 
 export async function authenticateRequest(request: RequestLike, dependencies: AccessDependencies) {
   const cached = authenticatedRequests.get(request)
   if (cached) return cached
-  const identity = await authenticate(singleHeader(request.headers.authorization), dependencies.userinfoUrl, dependencies.fetchAuth)
+  const identity = currentVerifiedMcpIdentity() ?? await authenticate(singleHeader(request.headers.authorization), dependencies.userinfoUrl, dependencies.fetchAuth)
   authenticatedRequests.set(request, identity)
   return identity
 }

@@ -21,6 +21,7 @@ import { verifyLegacyPricing } from "./legacy-pricing-cases.js"
 import { startRustContractBackend } from "./rust-contract-backend.js"
 import { authContractProfile } from "./auth-contract-fixture.js"
 import { verifyAuthContract } from "./auth-contract-cases.js"
+import { verifyMcpDispatch } from "./mcp-dispatch-cases.js"
 
 // Opt in with a disposable PostgreSQL administrator URL. The generated database
 // and NOLOGIN role belong exclusively to this test and are removed afterwards.
@@ -65,7 +66,7 @@ for (const backend of backends) test(`${backend}: PostgreSQL migrations and RLS 
       await client.query(`SET ROLE ${role}`)
       return new PgClientAdapter(client)
     } }
-    app = backend === "rust" ? await startRustContractBackend(process.env.API_TS_TEST_RUST_BINARY!, url.toString(), role) : buildApp({ pool, userinfoUrl: "http://auth.test/userinfo", fetchAuth: async (_url, init) => { const fixture = authContractProfile(new Headers(init?.headers).get("authorization")!.slice(7)); return Response.json(fixture.profile, { status: fixture.status }) } })
+    app = backend === "rust" ? await startRustContractBackend(process.env.API_TS_TEST_RUST_BINARY!, url.toString(), role) : buildApp({ pool, userinfoUrl: "http://auth.test/userinfo", mcpResource: "https://erp.avilaops.com/mcp", fetchAuth: async (_url, init) => { const fixture = authContractProfile(new Headers(init?.headers).get("authorization")!.slice(7)); return Response.json(fixture.profile, { status: fixture.status }) } })
     await verifyAuthContract(app, tenant)
     const headers = { authorization: "Bearer reader", "x-tenant-id": tenant }
     const detail = await app.inject({ method: "GET", url: `/api/v1/orders/${order}`, headers })
@@ -385,6 +386,7 @@ for (const backend of backends) test(`${backend}: PostgreSQL migrations and RLS 
     await verifyCommercialMixed(app, seed, other, role)
     await verifyOpportunities(app, seed, other, role)
     await verifyCommercialMetrics(app, seed)
+    if (backend === "typescript") await verifyMcpDispatch(app, seed)
     await seed.query("UPDATE platform_administrators SET active=false WHERE auth_subject='operator'")
     assert.equal((await app.inject({ method: "GET", url: `/api/v1/orders/${foreignOrder}`, headers: operatorHeaders })).statusCode, 403)
     // A manage grant alone does not imply the read grant required by Rust writes.

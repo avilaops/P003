@@ -19,6 +19,7 @@ import { registerRegistrationSettingsRoutes } from "./modules/registration-setti
 import { authenticateRequest, type AccessDependencies } from "./platform/access.js"
 import { Problem } from "./platform/problem.js"
 import { parseJson, stringifyJson } from "./platform/json.js"
+import { registerMcpDispatch } from "./platform/mcp-dispatch.js"
 
 export type AppDependencies = AccessDependencies
 
@@ -40,7 +41,10 @@ export function buildApp(_dependencies: AppDependencies): FastifyInstance {
     const requestId = Array.isArray(provided) ? provided[0] ?? "" : provided ?? randomUUID()
     request.headers["x-request-id"] = requestId
     reply.header("x-request-id", requestId)
-    if (request.routeOptions.url?.startsWith("/api/v1/")) await authenticateRequest(request, _dependencies)
+    if (request.routeOptions.url?.startsWith("/api/v1/")) {
+      reply.header("x-erp-backend", "typescript")
+      await authenticateRequest(request, _dependencies)
+    }
   })
   app.get("/health/live", async () => ({ status: "ok" }))
   app.get("/health/ready", async (_request, reply) => {
@@ -79,5 +83,6 @@ export function buildApp(_dependencies: AppDependencies): FastifyInstance {
   registerProposalRoutes(app, _dependencies)
   registerReferenceRoutes(app, _dependencies)
   registerRegistrationSettingsRoutes(app, _dependencies)
+  registerMcpDispatch(app, _dependencies)
   return app
 }
