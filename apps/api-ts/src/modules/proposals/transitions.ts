@@ -40,7 +40,7 @@ async function convert(context: AuthorizedContext, headers: CommandHeaders, curr
   await client.query("UPDATE sales_proposals SET order_id=$3,revision=$4,updated_at=now() WHERE tenant_id=$1 AND id=$2", [tenantId, id, order, next])
   if (commercial) {
     await transferProposalAgreement(context, order, commercial)
-    await client.query("UPDATE sales_order_lines target SET technical_snapshot=source.technical_snapshot FROM sales_proposal_lines source WHERE target.tenant_id=$1 AND target.order_id=$4 AND source.tenant_id=target.tenant_id AND source.proposal_id=$2 AND source.version=$3 AND source.line_number=target.line_number", [tenantId, id, version, order])
+    await client.query("UPDATE sales_order_lines target SET technical_snapshot=COALESCE(source.technical_snapshot,'{}'::jsonb) FROM sales_proposal_lines source WHERE target.tenant_id=$1 AND target.order_id=$4 AND source.tenant_id=target.tenant_id AND source.proposal_id=$2 AND source.version=$3 AND source.line_number=target.line_number", [tenantId, id, version, order])
   }
   await record(context, headers, "sales_order", order, "order.created", { proposalId: id, proposalVersion: version, revision: 1 })
   return { version, revision: next, orderId: order }

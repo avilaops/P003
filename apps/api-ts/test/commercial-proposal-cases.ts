@@ -38,6 +38,17 @@ export async function verifyCommercialProposals(app: FastifyInstance, seed: Pool
   assert.equal(created.json().commercial.personType, "fisica")
   assert.equal(created.json().items[0].technical.weightStack, "100 kg")
   assert.deepEqual(created.json().items[0].technical.dimensionsMm, [1500, 1200, 1400])
+  const removedProfile = (await seed.query("DELETE FROM product_catalog_profiles c WHERE tenant_id=$1 AND product_id=$2 RETURNING to_jsonb(c) AS data", [tenant, product])).rows[0].data
+  const unknownTechnical = await save({ ...input, commercial })
+  assert.equal(unknownTechnical.statusCode, 201, unknownTechnical.body)
+  assert.ok(unknownTechnical.json().items[0].technical, "New quoted equipment without a profile must freeze unknown technical data")
+  const unknownId = unknownTechnical.json().data.id
+  await seed.query("UPDATE sales_proposal_lines SET technical_snapshot=NULL WHERE tenant_id=$1 AND proposal_id=$2", [tenant, unknownId])
+  const unknownConversion = await app.inject({ method: "POST", url: `/api/v1/proposals/${unknownId}/approve-order`, headers: { ...headers, "idempotency-key": randomUUID(), "if-match": '"1"' }, payload: { dueDate: "2027-01-01" } })
+  assert.equal(unknownConversion.statusCode, 200, unknownConversion.body)
+  await seed.query("INSERT INTO product_catalog_profiles SELECT (jsonb_populate_record(NULL::product_catalog_profiles,$1::jsonb)).*", [removedProfile])
+  const unknownOrder = await app.inject({ url: `/api/v1/orders/${unknownConversion.json().data.orderId}`, headers })
+  assert.equal(unknownOrder.json().items[0].equipmentWeight, null, "Previously unknown quoted data must not adopt a profile added later")
   const id = created.json().data.id
   const sellerRole = randomUUID(), membership = randomUUID()
   await seed.query("INSERT INTO tenant_memberships(id,tenant_id,identity_id) SELECT $1,$2,id FROM identities WHERE auth_subject='proposal-seller'", [membership, tenant])

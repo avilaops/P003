@@ -38,7 +38,7 @@ export function verifyProposalCommercialLines(quote: NonNullable<Awaited<ReturnT
 }
 
 export async function captureTechnical(context: AuthorizedContext, productId: string) {
-  return (await context.client.query<{ data: Record<string, unknown> }>("SELECT jsonb_build_object('revision',c.revision,'dimensionsMm',c.dimensions_mm,'weight',c.weight,'weightStack',c.weight_stack,'category',c.technical_category,'description',c.description,'manufacturer',c.manufacturer,'manufacturerModel',c.manufacturer_model,'sources',c.catalog_sources,'photoDataUrl',p.photo_data_url,'photoUrl',CASE WHEN c.main_media_id IS NOT NULL THEN '/api/erp/products/'||p.id||'/media/'||c.main_media_id ELSE NULL END) AS data FROM product_catalog_profiles c JOIN products p ON p.tenant_id=c.tenant_id AND p.id=c.product_id WHERE c.tenant_id=$1 AND c.product_id=$2", [context.tenantId, productId])).rows[0]?.data ?? null
+  return (await context.client.query<{ data: Record<string, unknown> }>("SELECT jsonb_build_object('revision',c.revision,'dimensionsMm',c.dimensions_mm,'weight',c.weight,'weightStack',c.weight_stack,'category',c.technical_category,'description',c.description,'manufacturer',c.manufacturer,'manufacturerModel',c.manufacturer_model,'sources',c.catalog_sources,'photoDataUrl',p.photo_data_url,'photoUrl',CASE WHEN c.main_media_id IS NOT NULL THEN '/api/erp/products/'||p.id||'/media/'||c.main_media_id ELSE NULL END) AS data FROM products p LEFT JOIN product_catalog_profiles c ON c.tenant_id=p.tenant_id AND c.product_id=p.id WHERE p.tenant_id=$1 AND p.id=$2", [context.tenantId, productId])).rows[0]?.data ?? null
 }
 
 export function sameSnapshot(left: unknown, right: unknown) { return canonicalJson(left) === canonicalJson(right) }
