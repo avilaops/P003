@@ -33,3 +33,11 @@ Após conferir a identidade do recibo de um último pacote legado, foi removido 
 O espaço livre observado após a limpeza foi de 8,0 GB no volume da aplicação. Outros processos também operam no servidor, portanto a variação total do disco não deve ser atribuída exclusivamente à limpeza. Dados, mídias, volumes e backups de negócio não fizeram parte da remoção. As cinco aplicações do conjunto ERP estavam saudáveis na conferência posterior.
 
 Os 33 artefatos do último workflow somaram 94.166.256 bytes no GitHub. O maior, o build web, expira em um dia; evidências de navegador expiram em sete dias. Esses artefatos remotos não ocupam o disco do servidor de produção.
+
+## Imagens e correção da retenção
+
+A regra de propriedade não reconhecia referências locais como `erp-next-web@sha256:…`, registradas pelo Docker junto à referência do registro. Por isso, imagens antigas legítimas eram conservadas como se fossem compartilhadas. A correção aceita apenas os nomes exatos dos quatro componentes do ERP e digests completos; imagens em containers, de produção, de rollback ou com referências de outros sistemas continuam protegidas.
+
+Após ensaio e verificação da regra em 11 testes rápidos, foram removidas 32 imagens antigas com o procedimento de retenção, sem força e sob o bloqueio de deploy. Restaram oito imagens do registro do ERP, correspondentes aos quatro componentes das duas releases. A API TypeScript utiliza a imagem web da release ativa. A regra corrigida foi instalada nas duas releases mantidas, com cópia privada dos scripts anteriores.
+
+O volume da aplicação ficou com aproximadamente 12 GB livres e 85% de ocupação. A partição do sistema permaneceu com 94% de ocupação; arquivos dos outros serviços não foram removidos.
