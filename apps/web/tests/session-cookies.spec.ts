@@ -208,7 +208,7 @@ test("verified logout follows the discovered Auth endpoint and consumes its flow
     const flow = (await context.cookies(origin)).find(cookie => cookie.name === "__Host-erp_logout")!
     const callback = await context.request.get(`${server}/api/auth/logout/central/callback`, { maxRedirects: 0, headers: { Cookie: `${flow.name}=${flow.value}` } })
     expect(callback.status()).toBe(303)
-    expect(callback.headers().location).toBe(`${origin}/entrar`)
+    expect(callback.headers().location).toBe("https://avilaops.com/")
     const callbackType = await page.evaluate(async () => (await fetch("/api/auth/logout/central/callback", { redirect: "manual" })).type)
     expect(callbackType).toBe("opaqueredirect")
     expect((await context.cookies(origin)).filter(cookie => cookie.name.startsWith("__Host-erp_"))).toEqual([])
