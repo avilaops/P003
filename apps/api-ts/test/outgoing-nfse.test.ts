@@ -90,6 +90,7 @@ test("private NFS-e HTTP command authenticates, authorizes, emits once and repla
   const client: DatabaseClient = {
     async query<T extends Record<string, unknown>>(sql: string, values: readonly unknown[] = []) {
       if (sql.includes("FROM tenants tenant") && sql.includes("permissions")) return { rows: [{ tenant_id: tenant, permissions: ["fiscal.outgoing_nfse.issue"] }] as unknown as T[] }
+      if (sql.startsWith("SELECT id FROM service_api_keys")) return { rows: [{ id: "44444444-4444-4444-8444-444444444444" }] as unknown as T[] }
       if (sql.startsWith("SELECT scope,request,result")) return { rows: command ? [command] as unknown as T[] : [] }
       if (sql.startsWith("SELECT tax_id,legal_name")) return { rows: [{ tax_id: "04252011000110", legal_name: "Ávila Ops" }] as unknown as T[] }
       if (sql.startsWith("INSERT INTO fiscal_outgoing_nfse_sequences")) return { rows: [{ number: "1" }] as unknown as T[] }
@@ -110,7 +111,7 @@ test("private NFS-e HTTP command authenticates, authorizes, emits once and repla
     fetchAuth: async () => Response.json({ sub: "service-app", email: "service@example.test", email_verified: true }),
     outgoingNfse: { engine, async certificateProvider() { return { issuerTaxId: "04252011000110", certificate: { pkcs12Base64: "AQID", password: "secret" } } } },
   })
-  const headers = { authorization: "Bearer service", "x-tenant-id": tenant, "idempotency-key": "33333333-3333-4333-8333-333333333333" }
+  const headers = { authorization: `Bearer erp_${tenant}_${"a".repeat(64)}`, "x-tenant-id": tenant, "idempotency-key": "33333333-3333-4333-8333-333333333333" }
   const first = await app.inject({ method: "POST", url: "/api/v1/integrations/nfse/issuances", headers, payload: input })
   assert.equal(first.statusCode, 200, first.body)
   assert.equal(first.json().data.id, savedIssuance)
@@ -119,5 +120,7 @@ test("private NFS-e HTTP command authenticates, authorizes, emits once and repla
   assert.equal(replayed.statusCode, 200, replayed.body)
   assert.equal(replayed.headers["idempotency-replayed"], "true")
   assert.equal(issueCalls, 1)
+  const wrongTenant = await app.inject({ method: "POST", url: "/api/v1/integrations/nfse/issuances", headers: { ...headers, "x-tenant-id": "55555555-5555-4555-8555-555555555555" }, payload: input })
+  assert.equal(wrongTenant.statusCode, 403)
   await app.close()
 })
