@@ -3,9 +3,10 @@ import { z } from "zod"
 import type { FastifyInstance } from "fastify"
 
 import type { AppDependencies } from "../../app.js"
-import { authorizeRequest, requirePermission, type AuthorizedContext } from "../../platform/access.js"
+import { requirePermission, type AuthorizedContext } from "../../platform/access.js"
 import { commandKey, record, remember, replay } from "../../platform/commands.js"
 import { Problem } from "../../platform/problem.js"
+import { authorizeServiceRequest } from "../../platform/service-auth.js"
 import type { CertificateMaterial, FiscalEngineResult, OutgoingNfseEngine } from "./engine-client.js"
 import { finishIssuance, fiscalTimestamp, parseIssuanceInput, startIssuance, type IssuanceSnapshot } from "./service.js"
 
@@ -19,11 +20,12 @@ const cancelSchema = z.object({ reasonCode: z.enum(["1", "2", "9"]), reason: z.s
 const unavailable = () => { throw new Problem(503, "fiscal_engine_unavailable", "Emissão de NFS-e não configurada") }
 
 export function registerOutgoingNfseRoutes(app: FastifyInstance, dependencies: AppDependencies) {
+  const authorize = <T>(request: Parameters<typeof authorizeServiceRequest<T>>[0], operation: Parameters<typeof authorizeServiceRequest<T>>[2]) => authorizeServiceRequest(request, dependencies.pool, operation)
   app.post("/api/v1/integrations/nfse/issuances", async (request, reply) => {
     const fiscal = dependencies.outgoingNfse ?? unavailable()
     const input = parseIssuanceInput(request.body)
     const key = commandKey(request.headers["idempotency-key"])
-    const started = await authorizeRequest(request, dependencies, context => startIssuance(context, request.headers, key, input, fiscal.engine, fiscal.certificateProvider))
+    const started = await authorize(request, context => startIssuance(context, request.headers, key, input, fiscal.engine, fiscal.certificateProvider))
     if (started.replayed) return reply.header("idempotency-replayed", "true").header("cache-control", "no-store").send(started.replayed)
     let result: FiscalEngineResult
     try {
@@ -31,14 +33,14 @@ export function registerOutgoingNfseRoutes(app: FastifyInstance, dependencies: A
     } catch {
       result = { status: "uncertain", code: "fiscal_operation_uncertain", reason: "Operação fiscal não confirmada; consulte a situação antes de repetir" }
     }
-    const body = await authorizeRequest(request, dependencies, context => finishIssuance(context, request.headers, started.id!, key, result), true)
+    const body = await authorize(request, context => finishIssuance(context, request.headers, started.id!, key, result))
     return reply.code(result.status === "uncertain" || result.status === "pending" ? 202 : 200).header("cache-control", "no-store").send(body)
   })
 
   app.get("/api/v1/integrations/nfse/issuances/:id", async (request, reply) => {
     const id = idSchema.safeParse((request.params as { id?: string }).id)
     if (!id.success) throw new Problem(400, "invalid_id", "Identificador da emissão inválido")
-    const body = await authorizeRequest(request, dependencies, async context => {
+    const body = await authorize(request, async context => {
       requirePermission(context, "fiscal.outgoing_nfse.read")
       const row = (await context.client.query<Record<string, unknown>>("SELECT id,external_id AS \"externalId\",status,revision,access_key AS \"accessKey\",error_message AS reason,created_at AS \"createdAt\",updated_at AS \"updatedAt\" FROM fiscal_outgoing_nfse_issuances WHERE tenant_id=$1 AND id=$2", [context.tenantId, id.data])).rows[0]
       if (!row) throw new Problem(404, "not_found", "Emissão de NFS-e não encontrada")
@@ -50,7 +52,7 @@ export function registerOutgoingNfseRoutes(app: FastifyInstance, dependencies: A
   app.get("/api/v1/integrations/nfse/issuances/:id/xml", async (request, reply) => {
     const id = idSchema.safeParse((request.params as { id?: string }).id)
     if (!id.success) throw new Problem(400, "invalid_id", "Identificador da emissão inválido")
-    const xml = await authorizeRequest(request, dependencies, async context => {
+    const xml = await authorize(request, async context => {
       requirePermission(context, "fiscal.outgoing_nfse.read")
       const row = (await context.client.query<{ xml: string | null }>("SELECT xml FROM fiscal_outgoing_nfse_issuances WHERE tenant_id=$1 AND id=$2", [context.tenantId, id.data])).rows[0]
       if (!row) throw new Problem(404, "not_found", "Emissão de NFS-e não encontrada")
@@ -65,7 +67,7 @@ export function registerOutgoingNfseRoutes(app: FastifyInstance, dependencies: A
     const id = idSchema.safeParse((request.params as { id?: string }).id)
     if (!id.success) throw new Problem(400, "invalid_id", "Identificador da emissão inválido")
     const key = commandKey(request.headers["idempotency-key"])
-    const prepared = await authorizeRequest(request, dependencies, async context => {
+    const prepared = await authorize(request, async context => {
       requirePermission(context, "fiscal.outgoing_nfse.issue")
       const prior = await replay(context, key, "fiscal.outgoing_nfse.reconcile", { id: id.data }) as IssuanceSnapshot | undefined
       if (prior) return { replayed: prior }
@@ -86,7 +88,7 @@ export function registerOutgoingNfseRoutes(app: FastifyInstance, dependencies: A
     }
     const normalized = result.status === "pending" ? { ...result, status: "uncertain" as const } : result
     if (!["authorized", "rejected", "uncertain"].includes(normalized.status) || normalized.status === "authorized" && (!normalized.accessKey || !normalized.xml)) throw new Problem(502, "invalid_fiscal_engine_response", "Motor fiscal retornou uma consulta inválida")
-    const body = await authorizeRequest(request, dependencies, async context => {
+    const body = await authorize(request, async context => {
       requirePermission(context, "fiscal.outgoing_nfse.issue")
       const revision = BigInt(prepared.row.revision) + 1n
       const xmlHash = normalized.xml ? createHash("sha256").update(normalized.xml).digest("hex") : null
@@ -96,7 +98,7 @@ export function registerOutgoingNfseRoutes(app: FastifyInstance, dependencies: A
       await context.client.query("UPDATE domain_commands SET result=$4 WHERE tenant_id=$1 AND auth_subject=$2 AND command_key=$3", [context.tenantId, context.authSubject, key, snapshot])
       await record(context, request.headers, "outgoing_nfse", id.data, `fiscal.outgoing_nfse.${normalized.status}`, { previousStatus: prepared.row.status, revision: revision.toString() })
       return snapshot
-    }, true)
+    })
     return reply.code(normalized.status === "uncertain" ? 202 : 200).send(body)
   })
 
@@ -106,7 +108,7 @@ export function registerOutgoingNfseRoutes(app: FastifyInstance, dependencies: A
     const input = cancelSchema.safeParse(request.body)
     if (!id.success || !input.success) throw new Problem(422, "invalid_input", "Cancelamento de NFS-e inválido")
     const key = commandKey(request.headers["idempotency-key"])
-    const prepared = await authorizeRequest(request, dependencies, async context => {
+    const prepared = await authorize(request, async context => {
       requirePermission(context, "fiscal.outgoing_nfse.cancel")
       const prior = await replay(context, key, "fiscal.outgoing_nfse.cancel", { id: id.data, ...input.data }) as IssuanceSnapshot | undefined
       if (prior) return { replayed: prior }
@@ -125,7 +127,7 @@ export function registerOutgoingNfseRoutes(app: FastifyInstance, dependencies: A
     } catch {
       result = { status: "uncertain", accessKey: prepared.row.access_key, code: "fiscal_operation_uncertain", reason: "Cancelamento não confirmado; consulte a situação antes de repetir" }
     }
-    const body = await authorizeRequest(request, dependencies, async context => {
+    const body = await authorize(request, async context => {
       requirePermission(context, "fiscal.outgoing_nfse.cancel")
       if (result.status === "cancelled") {
         await context.client.query("UPDATE fiscal_outgoing_nfse_issuances SET status='cancelled',error_code=NULL,error_message=$3,revision=revision+1 WHERE tenant_id=$1 AND id=$2 AND status='authorized'", [context.tenantId, id.data, result.reason])
@@ -135,7 +137,7 @@ export function registerOutgoingNfseRoutes(app: FastifyInstance, dependencies: A
       await context.client.query("UPDATE domain_commands SET result=$4 WHERE tenant_id=$1 AND auth_subject=$2 AND command_key=$3", [context.tenantId, context.authSubject, key, snapshot])
       await record(context, request.headers, "outgoing_nfse", id.data, `fiscal.outgoing_nfse.${result.status}`, { reason: result.reason })
       return snapshot
-    }, true)
+    })
     return reply.code(result.status === "uncertain" ? 202 : 200).send(body)
   })
 }

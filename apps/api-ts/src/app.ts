@@ -42,7 +42,7 @@ export function buildApp(_dependencies: AppDependencies): FastifyInstance {
     const requestId = Array.isArray(provided) ? provided[0] ?? "" : provided ?? randomUUID()
     request.headers["x-request-id"] = requestId
     reply.header("x-request-id", requestId)
-    if (request.routeOptions.url?.startsWith("/api/v1/")) {
+    if (request.routeOptions.url?.startsWith("/api/v1/") && !request.routeOptions.url.startsWith("/api/v1/integrations/nfse/")) {
       reply.header("x-erp-backend", "typescript")
       await authenticateRequest(request, _dependencies)
     }
