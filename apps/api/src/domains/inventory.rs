@@ -1,3 +1,4 @@
+#![cfg_attr(not(any(test, feature = "migration-reference")), allow(unused_imports))]
 use super::{
     DomainChange, DomainError, authorized, catalog, command_key, db, decimal, fixed, record,
     remember, replay, response,
@@ -17,6 +18,7 @@ use sqlx::{FromRow, Postgres, Transaction};
 use utoipa::{IntoParams, ToSchema};
 use uuid::Uuid;
 
+#[cfg(any(test, feature = "migration-reference"))]
 pub(super) struct OrderIssue {
     pub order_id: Uuid,
     pub product_id: Uuid,
@@ -66,6 +68,7 @@ pub(super) async fn receive_purchase_item(
 }
 
 /// The sales orchestrator supplies its authorized tenant transaction; inventory owns the ledger writes.
+#[cfg(any(test, feature = "migration-reference"))]
 pub(super) async fn issue_reserved_order(
     tx: &mut Transaction<'_, Postgres>,
     tenant: Uuid,

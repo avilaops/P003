@@ -1,3 +1,4 @@
+#![cfg_attr(not(any(test, feature = "migration-reference")), allow(unused_imports))]
 use super::{access, auth::AuthenticatedIdentity, state::AppState};
 use crate::domains::{DomainError, db, response, revision};
 use axum::{
@@ -12,6 +13,7 @@ use sha2::{Digest, Sha256};
 use sqlx::{Postgres, Transaction};
 use uuid::Uuid;
 
+#[cfg(any(test, feature = "migration-reference"))]
 #[derive(Clone, Deserialize, Serialize, utoipa::ToSchema)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct DashboardLayout {
@@ -20,6 +22,7 @@ pub struct DashboardLayout {
     pub period: String,
 }
 
+#[cfg(any(test, feature = "migration-reference"))]
 impl DashboardLayout {
     fn validate(&self) -> Result<(), DomainError> {
         let allowed = [
@@ -56,6 +59,7 @@ impl DashboardLayout {
     }
 }
 
+#[cfg(any(test, feature = "migration-reference"))]
 #[derive(Deserialize, utoipa::ToSchema)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct Preferences {
@@ -66,6 +70,7 @@ pub struct Preferences {
     dashboard_layout: Option<DashboardLayout>,
 }
 
+#[cfg(any(test, feature = "migration-reference"))]
 #[derive(Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct PreferenceData {
@@ -73,6 +78,7 @@ pub struct PreferenceData {
     dashboard_layout: DashboardLayout,
 }
 
+#[cfg(any(test, feature = "migration-reference"))]
 #[derive(Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct PreferencesSnapshot {
@@ -82,6 +88,7 @@ pub struct PreferencesSnapshot {
     data: PreferenceData,
 }
 
+#[cfg(any(test, feature = "migration-reference"))]
 fn owner_key(tenant: Uuid, subject: &str) -> String {
     format!(
         "{:x}",
@@ -89,6 +96,7 @@ fn owner_key(tenant: Uuid, subject: &str) -> String {
     )
 }
 
+#[cfg(any(test, feature = "migration-reference"))]
 async fn transaction<'a>(
     state: &'a AppState,
     headers: &HeaderMap,
@@ -113,6 +121,7 @@ async fn transaction<'a>(
     Ok((tenant, tx))
 }
 
+#[cfg(any(test, feature = "migration-reference"))]
 async fn load(
     tx: &mut Transaction<'_, Postgres>,
     tenant: Uuid,
@@ -129,6 +138,7 @@ async fn load(
     Ok((revision, size, layout))
 }
 
+#[cfg(any(test, feature = "migration-reference"))]
 #[utoipa::path(get,path="/api/v1/preferences",tag="Platform",security(("bearerAuth"=[])),params(("X-Tenant-Id"=Uuid,Header)),responses((status=200,body=PreferencesSnapshot),(status=403,description="Sem vínculo ativo")))]
 pub async fn get(
     State(state): State<AppState>,
@@ -153,6 +163,7 @@ pub async fn get(
     ))
 }
 
+#[cfg(any(test, feature = "migration-reference"))]
 #[utoipa::path(put,path="/api/v1/preferences",tag="Platform",security(("bearerAuth"=[])),params(("X-Tenant-Id"=Uuid,Header),("If-Match"=String,Header)),request_body=Preferences,responses((status=200,body=PreferencesSnapshot),(status=412,description="Revisão alterada"),(status=422,description="Preferência inválida")))]
 pub async fn put(
     State(state): State<AppState>,
@@ -207,3 +218,9 @@ pub async fn put(
         },
     ))
 }
+
+// Production keeps the canonical transport name; business rules live in TypeScript.
+#[cfg(not(any(test, feature = "migration-reference")))]
+pub use crate::platform::typescript_gateway::dispatch as get;
+#[cfg(not(any(test, feature = "migration-reference")))]
+pub use crate::platform::typescript_gateway::dispatch as put;

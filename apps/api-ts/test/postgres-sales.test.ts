@@ -25,7 +25,7 @@ import { verifyMcpDispatch } from "./mcp-dispatch-cases.js"
 
 // Opt in with a disposable PostgreSQL administrator URL. The generated database
 // and NOLOGIN role belong exclusively to this test and are removed afterwards.
-const backends = process.env.API_TS_TEST_RUST_BINARY ? ["typescript", "rust"] : ["typescript"]
+const backends = ["typescript", ...(process.env.API_TS_TEST_RUST_BINARY ? ["rust"] : []), ...(process.env.API_TS_TEST_GATEWAY_BINARY ? ["gateway"] : [])]
 for (const backend of backends) test(`${backend}: PostgreSQL migrations and RLS preserve registration and sales workflows across tenants`, { skip: !process.env.API_TS_TEST_ADMIN_URL }, async () => {
   const url = new URL(process.env.API_TS_TEST_ADMIN_URL!)
   const suffix = randomUUID().replaceAll("-", ""), database = `api_ts_test_${suffix}`, role = `api_ts_role_${suffix}`
@@ -35,6 +35,7 @@ for (const backend of backends) test(`${backend}: PostgreSQL migrations and RLS 
   const seed = new Pool({ connectionString: url.toString() })
   const apiConnections = new Pool({ connectionString: url.toString() })
   let app: ReturnType<typeof buildApp> | undefined
+  let privateApp: ReturnType<typeof buildApp> | undefined
   try {
     const directory = new URL("../../../migrations/", import.meta.url)
     for (const file of (await readdir(directory)).filter(name => name.endsWith(".sql")).sort()) {
@@ -66,9 +67,15 @@ for (const backend of backends) test(`${backend}: PostgreSQL migrations and RLS 
       await client.query(`SET ROLE ${role}`)
       return new PgClientAdapter(client)
     } }
-    app = backend === "rust" ? await startRustContractBackend(process.env.API_TS_TEST_RUST_BINARY!, url.toString(), role) : buildApp({ pool, userinfoUrl: "http://auth.test/userinfo", mcpResource: "https://erp.avilaops.com/mcp", fetchAuth: async (_url, init) => { const fixture = authContractProfile(new Headers(init?.headers).get("authorization")!.slice(7)); return Response.json(fixture.profile, { status: fixture.status }) } })
-    await verifyAuthContract(app, tenant)
     const headers = { authorization: "Bearer reader", "x-tenant-id": tenant }
+    if (backend !== "rust") privateApp = buildApp({ pool, userinfoUrl: "http://auth.test/userinfo", mcpResource: "https://erp.avilaops.com/mcp", fetchAuth: async (_url, init) => { const fixture = authContractProfile(new Headers(init?.headers).get("authorization")!.slice(7)); return Response.json(fixture.profile, { status: fixture.status }) } })
+    if (backend === "gateway") {
+      const origin = await privateApp!.listen({ port: 0, host: "127.0.0.1" })
+      app = await startRustContractBackend(process.env.API_TS_TEST_GATEWAY_BINARY!, url.toString(), role, origin)
+      const proof = await app.inject({ url: "/api/v1/preferences", headers })
+      assert.equal(proof.headers["x-erp-backend"], "typescript", "Production Rust must dispatch migrated operations to TypeScript")
+    } else app = backend === "rust" ? await startRustContractBackend(process.env.API_TS_TEST_RUST_BINARY!, url.toString(), role) : privateApp!
+    await verifyAuthContract(app, tenant)
     const detail = await app.inject({ method: "GET", url: `/api/v1/orders/${order}`, headers })
     assert.equal(detail.statusCode, 200, detail.body)
     assert.equal(detail.json().items[0].unitPrice, "100.00")
@@ -387,6 +394,7 @@ for (const backend of backends) test(`${backend}: PostgreSQL migrations and RLS 
     await verifyOpportunities(app, seed, other, role)
     await verifyCommercialMetrics(app, seed)
     if (backend === "typescript") await verifyMcpDispatch(app, seed)
+    if (backend === "gateway") await verifyMcpDispatch(app, seed, true)
     await seed.query("UPDATE platform_administrators SET active=false WHERE auth_subject='operator'")
     assert.equal((await app.inject({ method: "GET", url: `/api/v1/orders/${foreignOrder}`, headers: operatorHeaders })).statusCode, 403)
     // A manage grant alone does not imply the read grant required by Rust writes.
@@ -395,6 +403,7 @@ for (const backend of backends) test(`${backend}: PostgreSQL migrations and RLS 
     assert.equal(manageOnly.statusCode, 403, manageOnly.body)
   } finally {
     await app?.close()
+    if (privateApp && privateApp !== app) await privateApp.close()
     await apiConnections.end()
     await seed.end()
     await admin.query(`DROP DATABASE ${database}`)

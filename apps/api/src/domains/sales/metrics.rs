@@ -1,3 +1,4 @@
+#![cfg_attr(not(any(test, feature = "migration-reference")), allow(unused_imports))]
 use crate::{
     domains::{DomainError, authorized, db, response},
     platform::{auth::AuthenticatedIdentity, state::AppState},
@@ -12,12 +13,14 @@ use serde::Deserialize;
 use serde_json::{Value, json};
 use utoipa::IntoParams;
 
+#[cfg(any(test, feature = "migration-reference"))]
 #[derive(Deserialize, IntoParams)]
 #[into_params(parameter_in=Query)]
 #[serde(deny_unknown_fields)]
 pub struct MetricsQuery {
     pub month: Option<String>,
 }
+#[cfg(any(test, feature = "migration-reference"))]
 fn month(
     query: Result<Query<MetricsQuery>, QueryRejection>,
 ) -> Result<Option<time::Date>, DomainError> {
@@ -34,6 +37,7 @@ fn month(
         .transpose()
 }
 
+#[cfg(any(test, feature = "migration-reference"))]
 #[utoipa::path(get,path="/api/v1/commercial/metrics/orders",operation_id="get_commercial_metrics_orders",tag="Sales",params(MetricsQuery,("X-Tenant-Id"=uuid::Uuid,Header)),security(("bearerAuth"=[])),responses((status=200,body=Value)))]
 pub async fn orders(
     State(state): State<AppState>,
@@ -61,6 +65,7 @@ pub async fn orders(
     ))
 }
 
+#[cfg(any(test, feature = "migration-reference"))]
 #[utoipa::path(get,path="/api/v1/commercial/metrics/commissions",operation_id="get_commercial_metrics_commissions",tag="Finance",params(MetricsQuery,("X-Tenant-Id"=uuid::Uuid,Header)),security(("bearerAuth"=[])),responses((status=200,body=Value)))]
 pub async fn commissions(
     State(state): State<AppState>,
@@ -87,3 +92,9 @@ pub async fn commissions(
         json!({"tenantId":tenant,"data":data}),
     ))
 }
+
+// Production keeps the canonical transport name; business rules live in TypeScript.
+#[cfg(not(any(test, feature = "migration-reference")))]
+pub use crate::platform::typescript_gateway::dispatch as orders;
+#[cfg(not(any(test, feature = "migration-reference")))]
+pub use crate::platform::typescript_gateway::dispatch as commissions;

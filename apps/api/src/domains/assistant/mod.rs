@@ -155,6 +155,7 @@ impl IntoResponse for ChatError {
 pub async fn chat(
     State(state): State<AppState>,
     Extension(identity): Extension<AuthenticatedIdentity>,
+    mcp: Option<Extension<crate::platform::typescript_gateway::McpDispatchCredential>>,
     headers: HeaderMap,
     input: Result<Json<ChatInput>, JsonRejection>,
 ) -> Result<Response, ChatError> {
@@ -223,7 +224,15 @@ pub async fn chat(
             let mut results = Vec::new();
             for (name, args) in plan {
                 send(&sender, json!({"type":"tool","name":name})).await;
-                let result = tools::execute(&state, &identity, &headers, &name, args).await?;
+                let result = tools::execute(
+                    &state,
+                    &identity,
+                    &headers,
+                    mcp.as_ref().map(|value| &value.0),
+                    &name,
+                    args,
+                )
+                .await?;
                 send(&sender, json!({"type":"source","source":result})).await;
                 results.push(result);
             }

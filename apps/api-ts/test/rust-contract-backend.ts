@@ -7,7 +7,7 @@ import type { FastifyInstance, LightMyRequestResponse } from "fastify"
 import { stringifyJson } from "../src/platform/json.js"
 import { authContractProfile } from "./auth-contract-fixture.js"
 
-export async function startRustContractBackend(binary: string, databaseUrl: string, role: string): Promise<FastifyInstance> {
+export async function startRustContractBackend(binary: string, databaseUrl: string, role: string, typescriptOrigin?: string): Promise<FastifyInstance> {
   const auth = createServer((request, response) => {
     const authorization = request.headers.authorization ?? ""
     response.setHeader("content-type", "application/json")
@@ -28,6 +28,7 @@ export async function startRustContractBackend(binary: string, databaseUrl: stri
   url.searchParams.set("options", `-c role=${role}`)
   const environment: NodeJS.ProcessEnv = Object.fromEntries(["PATH", "Path", "SystemRoot", "WINDIR", "TEMP", "TMP"].filter(key => process.env[key] !== undefined).map(key => [key, process.env[key]]))
   Object.assign(environment, { DATABASE_URL: url.toString(), DATABASE_MAX_CONNECTIONS: "5", API_BIND_ADDRESS: `127.0.0.1:${address.port}`, AUTH_USERINFO_URL: `http://127.0.0.1:${authAddress.port}/userinfo`, ERP_BACKGROUND_WORKERS_ENABLED: "false", NFE_PRODUCTION_ENABLED: "false", RUST_LOG: "error" })
+  if (typescriptOrigin) environment.ERP_TYPESCRIPT_API_URL = typescriptOrigin
   const child = spawn(resolve(binary), [], { cwd: fileURLToPath(new URL("../../../", import.meta.url)), env: environment, windowsHide: true, stdio: ["ignore", "pipe", "pipe"] })
   let output = "", failure: Error | undefined, exited = false
   child.stdout.on("data", chunk => { output = (output + String(chunk)).slice(-4000) })

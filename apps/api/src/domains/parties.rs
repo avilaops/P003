@@ -1,4 +1,7 @@
-use super::party_complements::{self, PartyAddress, PartyContact};
+#![cfg_attr(not(any(test, feature = "migration-reference")), allow(unused_imports))]
+#[cfg(any(test, feature = "migration-reference"))]
+use super::party_complements::PartyContact;
+use super::party_complements::{self, PartyAddress};
 use super::{
     DomainChange, DomainError, authorized, command_key, db, record, remember, replay, response,
     revision,
@@ -47,6 +50,7 @@ impl TaxpayerIndicator {
     }
 }
 
+#[cfg(any(test, feature = "migration-reference"))]
 #[derive(Clone, Deserialize, Serialize, ToSchema)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct PartyFiscal {
@@ -54,6 +58,7 @@ pub struct PartyFiscal {
     pub state_registration: Option<String>,
 }
 
+#[cfg(any(test, feature = "migration-reference"))]
 #[derive(Clone, Deserialize, Serialize, ToSchema)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct PartyInput {
@@ -90,6 +95,7 @@ pub struct PartyInput {
     pub contacts: Option<Vec<PartyContact>>,
 }
 
+#[cfg(any(test, feature = "migration-reference"))]
 fn present_optional<'de, D, T>(deserializer: D) -> Result<Option<Option<T>>, D::Error>
 where
     D: serde::Deserializer<'de>,
@@ -98,6 +104,7 @@ where
     Option::<T>::deserialize(deserializer).map(Some)
 }
 
+#[cfg(any(test, feature = "migration-reference"))]
 fn present_collection<'de, D, T>(deserializer: D) -> Result<Option<Vec<T>>, D::Error>
 where
     D: serde::Deserializer<'de>,
@@ -106,6 +113,7 @@ where
     Vec::<T>::deserialize(deserializer).map(Some)
 }
 
+#[cfg(any(test, feature = "migration-reference"))]
 fn optional_text(value: &mut Option<String>, maximum: usize) -> Result<(), DomainError> {
     *value = value
         .as_deref()
@@ -123,6 +131,7 @@ fn optional_text(value: &mut Option<String>, maximum: usize) -> Result<(), Domai
     Ok(())
 }
 
+#[cfg(any(test, feature = "migration-reference"))]
 impl PartyInput {
     fn validate(&mut self) -> Result<(), DomainError> {
         self.legal_name = self.legal_name.trim().to_owned();
@@ -193,6 +202,7 @@ impl PartyInput {
     }
 }
 
+#[cfg(any(test, feature = "migration-reference"))]
 #[derive(Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct Party {
@@ -201,6 +211,7 @@ pub struct Party {
     #[serde(flatten)]
     data: PartyInput,
 }
+#[cfg(any(test, feature = "migration-reference"))]
 #[derive(FromRow)]
 struct PartyRow {
     id: Uuid,
@@ -218,6 +229,7 @@ struct PartyRow {
     addresses: sqlx::types::Json<Vec<PartyAddress>>,
     contacts: sqlx::types::Json<Vec<PartyContact>>,
 }
+#[cfg(any(test, feature = "migration-reference"))]
 impl From<PartyRow> for Party {
     fn from(row: PartyRow) -> Self {
         Self {
@@ -240,6 +252,7 @@ impl From<PartyRow> for Party {
         }
     }
 }
+#[cfg(any(test, feature = "migration-reference"))]
 #[derive(Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct PartySnapshot {
@@ -247,6 +260,7 @@ pub struct PartySnapshot {
     can_edit: bool,
     data: Party,
 }
+#[cfg(any(test, feature = "migration-reference"))]
 #[derive(Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct PartyList {
@@ -257,6 +271,7 @@ pub struct PartyList {
     offset: u32,
     limit: u32,
 }
+#[cfg(any(test, feature = "migration-reference"))]
 #[derive(Deserialize, IntoParams)]
 #[into_params(parameter_in = Query)]
 #[serde(deny_unknown_fields)]
@@ -268,6 +283,7 @@ pub struct PartyQuery {
     limit: Option<u32>,
 }
 
+#[cfg(any(test, feature = "migration-reference"))]
 async fn load(
     tx: &mut Transaction<'_, Postgres>,
     tenant: Uuid,
@@ -276,6 +292,7 @@ async fn load(
     sqlx::query_as::<_, PartyRow>("SELECT id,revision,person_type,legal_name,trade_name,tax_id,email,phone,is_customer,is_supplier,status,addresses,contacts,fiscal FROM parties WHERE tenant_id=$1 AND id=$2")
         .bind(tenant).bind(id).fetch_optional(&mut **tx).await.map_err(db)?.map(Into::into).ok_or(DomainError::NotFound)
 }
+#[cfg(any(test, feature = "migration-reference"))]
 fn party_error(error: sqlx::Error) -> DomainError {
     if error
         .as_database_error()
@@ -289,6 +306,7 @@ fn party_error(error: sqlx::Error) -> DomainError {
     }
 }
 
+#[cfg(any(test, feature = "migration-reference"))]
 #[utoipa::path(get,path="/api/v1/parties",tag="Catalog",security(("bearerAuth"=[])),params(PartyQuery,("X-Tenant-Id"=Uuid,Header)),responses((status=200,body=PartyList),(status=401,description="Credencial inválida"),(status=403,description="Sem permissão"),(status=422,description="Filtros inválidos")))]
 pub async fn list(
     State(state): State<AppState>,
@@ -346,6 +364,7 @@ pub async fn list(
     ))
 }
 
+#[cfg(any(test, feature = "migration-reference"))]
 #[utoipa::path(get,path="/api/v1/parties/{id}",tag="Catalog",security(("bearerAuth"=[])),params(("id"=Uuid,Path),("X-Tenant-Id"=Uuid,Header)),responses((status=200,body=PartySnapshot),(status=401,description="Credencial inválida"),(status=403,description="Sem permissão"),(status=404,description="Cadastro não encontrado")))]
 pub async fn get(
     State(state): State<AppState>,
@@ -375,6 +394,7 @@ pub async fn get(
     ))
 }
 
+#[cfg(any(test, feature = "migration-reference"))]
 #[utoipa::path(post,path="/api/v1/parties",tag="Catalog",request_body=PartyInput,security(("bearerAuth"=[])),params(("X-Tenant-Id"=Uuid,Header),("Idempotency-Key"=Uuid,Header)),responses((status=201,body=PartySnapshot),(status=401,description="Credencial inválida"),(status=403,description="Sem permissão"),(status=409,description="Documento ou chave em conflito"),(status=422,description="Cadastro inválido"),(status=428,description="Chave obrigatória")))]
 pub async fn create(
     State(state): State<AppState>,
@@ -448,6 +468,7 @@ pub async fn create(
     Ok(response(StatusCode::CREATED, Some(1), result))
 }
 
+#[cfg(any(test, feature = "migration-reference"))]
 #[utoipa::path(put,path="/api/v1/parties/{id}",tag="Catalog",request_body=PartyInput,security(("bearerAuth"=[])),params(("id"=Uuid,Path),("X-Tenant-Id"=Uuid,Header),("If-Match"=String,Header)),responses((status=200,body=PartySnapshot),(status=401,description="Credencial inválida"),(status=403,description="Sem permissão"),(status=404,description="Cadastro não encontrado"),(status=409,description="Documento em conflito"),(status=412,description="Revisão divergente"),(status=422,description="Cadastro inválido"),(status=428,description="Revisão obrigatória")))]
 pub async fn update(
     State(state): State<AppState>,
@@ -606,3 +627,13 @@ mod tests {
         assert!(person.validate().is_err());
     }
 }
+
+// Production keeps the canonical transport name; business rules live in TypeScript.
+#[cfg(not(any(test, feature = "migration-reference")))]
+pub use crate::platform::typescript_gateway::dispatch as list;
+#[cfg(not(any(test, feature = "migration-reference")))]
+pub use crate::platform::typescript_gateway::dispatch as get;
+#[cfg(not(any(test, feature = "migration-reference")))]
+pub use crate::platform::typescript_gateway::dispatch as create;
+#[cfg(not(any(test, feature = "migration-reference")))]
+pub use crate::platform::typescript_gateway::dispatch as update;

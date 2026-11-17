@@ -1,4 +1,6 @@
+#![cfg_attr(not(any(test, feature = "migration-reference")), allow(unused_imports))]
 //! Mixed published policies with a common rational discount and exact allocation.
+#[cfg(any(test, feature = "migration-reference"))]
 use super::negotiation_model::{
     self as legacy, ApprovalRules, Discount, QuotedLine, SimulationInput, SimulationItem,
     SourceItem,
@@ -8,6 +10,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use uuid::Uuid;
 
+#[cfg(any(test, feature = "migration-reference"))]
 #[derive(Clone, Debug, Deserialize, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct MixedItem {
@@ -21,6 +24,7 @@ pub struct MixedItem {
     pub plate_holder_type: Option<String>,
     pub upholstery_color: Option<String>,
 }
+#[cfg(any(test, feature = "migration-reference"))]
 impl MixedItem {
     fn legacy(&self) -> SimulationItem {
         SimulationItem {
@@ -34,6 +38,7 @@ impl MixedItem {
         }
     }
 }
+#[cfg(any(test, feature = "migration-reference"))]
 #[derive(Clone, Debug, Deserialize, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct MixedSimulationInput {
@@ -44,6 +49,7 @@ pub struct MixedSimulationInput {
     pub down_payment_cents: Option<u64>,
     pub items: Vec<MixedItem>,
 }
+#[cfg(any(test, feature = "migration-reference"))]
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub(super) struct Policy {
@@ -52,6 +58,7 @@ pub(super) struct Policy {
     pub version: i64,
     pub parameters: CommercialParameters,
 }
+#[cfg(any(test, feature = "migration-reference"))]
 #[derive(Debug, Serialize, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct MixedQuotedLine {
@@ -61,6 +68,7 @@ pub struct MixedQuotedLine {
     pub version_id: Uuid,
     pub ipi_bps: u32,
 }
+#[cfg(any(test, feature = "migration-reference"))]
 #[derive(Debug, Serialize, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct MixedSale {
@@ -74,6 +82,7 @@ pub struct MixedSale {
     #[serde(flatten)]
     pub details: serde_json::Map<String, Value>,
 }
+#[cfg(any(test, feature = "migration-reference"))]
 #[derive(Debug, Serialize, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct MixedDirector {
@@ -82,6 +91,7 @@ pub struct MixedDirector {
     pub details: serde_json::Map<String, Value>,
 }
 
+#[cfg(any(test, feature = "migration-reference"))]
 fn cents(value: i128) -> Result<i64, DomainError> {
     if !(0..=99_999_999_999_999).contains(&value) {
         Err(DomainError::Invalid("Valor comercial fora do limite"))
@@ -89,12 +99,15 @@ fn cents(value: i128) -> Result<i64, DomainError> {
         Ok(value as i64)
     }
 }
+#[cfg(any(test, feature = "migration-reference"))]
 fn round(n: i128, d: i128) -> i128 {
     (n + d / 2) / d
 }
+#[cfg(any(test, feature = "migration-reference"))]
 fn up(n: i128, d: i128) -> i128 {
     (n + d - 1) / d
 }
+#[cfg(any(test, feature = "migration-reference"))]
 fn allocation(value: u64, weights: &[i128]) -> Vec<u64> {
     let sum: i128 = weights.iter().sum();
     let mut amounts: Vec<u64> = weights
@@ -109,6 +122,7 @@ fn allocation(value: u64, weights: &[i128]) -> Vec<u64> {
     }
     amounts
 }
+#[cfg(any(test, feature = "migration-reference"))]
 fn common(values: impl Iterator<Item = u32>) -> Option<u32> {
     let values: Vec<_> = values.collect();
     values
@@ -117,6 +131,7 @@ fn common(values: impl Iterator<Item = u32>) -> Option<u32> {
         .filter(|first| values.iter().all(|v| v == first))
 }
 
+#[cfg(any(test, feature = "migration-reference"))]
 fn core(
     input: &MixedSimulationInput,
     policies: &[Policy],
@@ -383,6 +398,7 @@ fn core(
     ))
 }
 
+#[cfg(any(test, feature = "migration-reference"))]
 pub(super) fn calculate(
     input: &MixedSimulationInput,
     policies: &[Policy],

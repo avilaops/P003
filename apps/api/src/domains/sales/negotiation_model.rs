@@ -1,12 +1,16 @@
+#![cfg_attr(not(any(test, feature = "migration-reference")), allow(unused_imports))]
 //! Legacy managerial formula, adapted to integer cents and explicit rounding.
 //! The published version supplies prices, costs and policy; the client supplies no totals.
 use crate::{domains::DomainError, platform::commercial_settings_model::CommercialParameters};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+#[cfg(any(test, feature = "migration-reference"))]
 pub const CALCULATOR: &str = "ludus-order-v2-integer-cents";
+#[cfg(any(test, feature = "migration-reference"))]
 const LIMIT: i128 = 99_999_999_999_999;
 
+#[cfg(any(test, feature = "migration-reference"))]
 #[derive(Clone, Debug, Deserialize, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct SimulationItem {
@@ -20,6 +24,7 @@ pub struct SimulationItem {
     pub upholstery_color: Option<String>,
 }
 
+#[cfg(any(test, feature = "migration-reference"))]
 #[derive(Clone, Debug, Deserialize, Serialize, utoipa::ToSchema)]
 #[serde(
     tag = "kind",
@@ -33,6 +38,7 @@ pub enum Discount {
     Total(u64),
 }
 
+#[cfg(any(test, feature = "migration-reference"))]
 #[derive(Clone, Debug, Deserialize, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct SimulationInput {
@@ -47,6 +53,7 @@ pub struct SimulationInput {
     pub items: Vec<SimulationItem>,
 }
 
+#[cfg(any(test, feature = "migration-reference"))]
 #[derive(Clone, Debug, Deserialize, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ApprovalRules {
@@ -56,6 +63,7 @@ pub struct ApprovalRules {
     pub manager_limit: ManagerLimit,
 }
 
+#[cfg(any(test, feature = "migration-reference"))]
 #[derive(Clone, Debug, Deserialize, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub enum ManagerLimit {
@@ -63,6 +71,7 @@ pub enum ManagerLimit {
     Target,
 }
 
+#[cfg(any(test, feature = "migration-reference"))]
 #[derive(Clone, Debug, sqlx::FromRow, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SourceItem {
@@ -100,6 +109,7 @@ pub struct QuotedLine {
     pub upholstery_color: Option<String>,
 }
 
+#[cfg(any(test, feature = "migration-reference"))]
 #[derive(Debug, Serialize, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct SaleQuote {
@@ -124,6 +134,7 @@ pub struct SaleQuote {
     pub approval_reasons: Vec<String>,
 }
 
+#[cfg(any(test, feature = "migration-reference"))]
 #[derive(Debug, Serialize, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct DirectorQuote {
@@ -150,6 +161,7 @@ pub struct DirectorQuote {
     pub requires_director: bool,
 }
 
+#[cfg(any(test, feature = "migration-reference"))]
 fn cents(value: i128) -> Result<i64, DomainError> {
     if !(-LIMIT..=LIMIT).contains(&value) {
         return Err(DomainError::Invalid("Valor comercial fora do limite"));
@@ -158,14 +170,17 @@ fn cents(value: i128) -> Result<i64, DomainError> {
 }
 
 /// Half up for nonnegative rationals, avoiding floating point altogether.
+#[cfg(any(test, feature = "migration-reference"))]
 fn rounded(numerator: i128, denominator: i128) -> i128 {
     (numerator + denominator / 2) / denominator
 }
 
+#[cfg(any(test, feature = "migration-reference"))]
 fn up(numerator: i128, denominator: i128) -> i128 {
     (numerator + denominator - 1) / denominator
 }
 
+#[cfg(any(test, feature = "migration-reference"))]
 pub fn calculate(
     p: &CommercialParameters,
     rules: &ApprovalRules,

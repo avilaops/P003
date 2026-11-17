@@ -1,17 +1,21 @@
 use axum::{
     Extension,
     body::to_bytes,
-    extract::{Path, Query, State},
+    extract::{Query, State},
     http::HeaderMap,
 };
 use serde::Deserialize;
 use serde_json::{Value, json};
 use uuid::Uuid;
 
+#[cfg(any(test, feature = "migration-reference"))]
+use crate::domains::{parties, sales};
 use crate::{
-    domains::{DomainError, catalog, inventory, parties, sales},
+    domains::{DomainError, catalog, inventory},
     platform::{access, auth::AuthenticatedIdentity, state::AppState},
 };
+#[cfg(any(test, feature = "migration-reference"))]
+use axum::extract::Path;
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -203,11 +207,13 @@ pub(super) async fn execute(
     state: &AppState,
     identity: &AuthenticatedIdentity,
     headers: &HeaderMap,
+    _mcp: Option<&crate::platform::typescript_gateway::McpDispatchCredential>,
     name: &str,
     args: CallArguments,
 ) -> Result<Value, super::ChatError> {
     let args = match (name, args) {
         ("listar_pedidos", CallArguments::RecentOrders) => {
+            #[cfg(any(test, feature = "migration-reference"))]
             let response = sales::list(
                 State(state.clone()),
                 Extension(identity.clone()),
@@ -220,6 +226,15 @@ pub(super) async fn execute(
                 })),
             )
             .await?;
+            #[cfg(not(any(test, feature = "migration-reference")))]
+            let response = migrated_get(
+                state,
+                headers,
+                _mcp,
+                "/api/v1/orders",
+                &[("offset", "0"), ("limit", "5")],
+            )
+            .await?;
             let value = read_response(response).await?;
             let data = records(&value)?
                 .iter()
@@ -230,6 +245,7 @@ pub(super) async fn execute(
             );
         }
         ("consultar_pedido", CallArguments::Order(id)) => {
+            #[cfg(any(test, feature = "migration-reference"))]
             let response = sales::get(
                 State(state.clone()),
                 Extension(identity.clone()),
@@ -237,6 +253,9 @@ pub(super) async fn execute(
                 Path(id),
             )
             .await;
+            #[cfg(not(any(test, feature = "migration-reference")))]
+            let response =
+                migrated_get(state, headers, _mcp, &format!("/api/v1/orders/{id}"), &[]).await;
             let data = match response {
                 Ok(response) => vec![order_record(&read_response(response).await?["data"])?],
                 Err(DomainError::NotFound) => vec![],
@@ -261,15 +280,31 @@ pub(super) async fn execute(
     };
     if name == "buscar_clientes" {
         // Reuse the domain handler, including authorization, tenant RLS and validation.
+        #[cfg(any(test, feature = "migration-reference"))]
         let query = serde_json::from_value::<parties::PartyQuery>(
             json!({"q":args.q,"role":"customer","offset":0,"limit":5}),
         )
         .map_err(|_| super::ChatError::invalid("Busca de cliente inválida."))?;
+        #[cfg(any(test, feature = "migration-reference"))]
         let response = parties::list(
             State(state.clone()),
             Extension(identity.clone()),
             headers.clone(),
             Ok(Query(query)),
+        )
+        .await?;
+        #[cfg(not(any(test, feature = "migration-reference")))]
+        let response = migrated_get(
+            state,
+            headers,
+            _mcp,
+            "/api/v1/parties",
+            &[
+                ("q", &args.q),
+                ("role", "customer"),
+                ("offset", "0"),
+                ("limit", "5"),
+            ],
         )
         .await?;
         let value = read_response(response).await?;
@@ -310,20 +345,34 @@ pub(super) async fn execute(
     }
     let query = Ok(Query(catalog::ProductQuery {
         category_id: None,
-        q: Some(args.q),
+        q: Some(args.q.clone()),
         status: None,
         offset: Some(0),
         limit: Some(5),
     }));
     let response = match name {
         "buscar_produtos" => {
-            catalog::list(
-                State(state.clone()),
-                Extension(identity.clone()),
-                headers.clone(),
-                query,
-            )
-            .await?
+            #[cfg(any(test, feature = "migration-reference"))]
+            {
+                catalog::list(
+                    State(state.clone()),
+                    Extension(identity.clone()),
+                    headers.clone(),
+                    query,
+                )
+                .await?
+            }
+            #[cfg(not(any(test, feature = "migration-reference")))]
+            {
+                migrated_get(
+                    state,
+                    headers,
+                    _mcp,
+                    "/api/v1/products",
+                    &[("q", &args.q), ("offset", "0"), ("limit", "5")],
+                )
+                .await?
+            }
         }
         "consultar_estoque" => {
             inventory::balances(
@@ -361,6 +410,45 @@ async fn read_response(response: axum::response::Response) -> Result<Value, supe
         .map_err(|_| super::ChatError::unavailable("Resposta do ERP excedeu o limite."))?;
     serde_json::from_slice(&bytes)
         .map_err(|_| super::ChatError::unavailable("Resposta do ERP inválida."))
+}
+
+#[cfg(not(any(test, feature = "migration-reference")))]
+async fn migrated_get(
+    state: &AppState,
+    headers: &HeaderMap,
+    mcp: Option<&crate::platform::typescript_gateway::McpDispatchCredential>,
+    resource: &str,
+    query: &[(&str, &str)],
+) -> Result<axum::response::Response, DomainError> {
+    let mut url = reqwest::Url::parse("http://erp.internal").expect("static origin");
+    url.set_path(resource);
+    if !query.is_empty() {
+        url.query_pairs_mut().extend_pairs(query.iter().copied());
+    }
+    let uri = format!(
+        "{}{}",
+        url.path(),
+        url.query()
+            .map(|query| format!("?{query}"))
+            .unwrap_or_default()
+    );
+    let mut request = axum::http::Request::builder()
+        .uri(uri)
+        .body(axum::body::Body::empty())
+        .map_err(|_| access::AccessError::Internal)?;
+    *request.headers_mut() = headers.clone();
+    if let Some(credential) = mcp {
+        request.extensions_mut().insert(credential.clone());
+    }
+    let response =
+        crate::platform::typescript_gateway::dispatch(State(state.clone()), request).await;
+    match response.status().as_u16() {
+        200 => Ok(response),
+        403 => Err(access::AccessError::Forbidden.into()),
+        404 => Err(DomainError::NotFound),
+        422 => Err(DomainError::Invalid("Consulta inválida.")),
+        _ => Err(access::AccessError::Internal.into()),
+    }
 }
 
 fn records(value: &Value) -> Result<&Vec<Value>, super::ChatError> {

@@ -1,3 +1,4 @@
+#![cfg_attr(not(any(test, feature = "migration-reference")), allow(unused_imports))]
 use crate::{
     domains::{
         DomainChange, DomainError, authorized, command_key, db, record, remember, replay, response,
@@ -20,10 +21,14 @@ use sqlx::{Postgres, Transaction};
 use utoipa::IntoParams;
 use uuid::Uuid;
 
+#[cfg(any(test, feature = "migration-reference"))]
 const READ: &str = "sales.orders.read";
+#[cfg(any(test, feature = "migration-reference"))]
 const MANAGE: &str = "sales.orders.manage";
+#[cfg(any(test, feature = "migration-reference"))]
 const SELECT: &str = "SELECT o.data || jsonb_build_object('id',o.id,'revision',o.revision,'customerId',o.customer_id,'customerName',p.legal_name,'orderId',o.order_id,'proposalId',o.proposal_id,'createdAt',o.created_at,'updatedAt',o.updated_at) FROM sales_opportunities o LEFT JOIN parties p ON p.tenant_id=o.tenant_id AND p.id=o.customer_id";
 
+#[cfg(any(test, feature = "migration-reference"))]
 #[derive(Deserialize, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct OpportunityInput {
@@ -39,6 +44,7 @@ pub struct OpportunityInput {
     pub source: String,
     pub notes: String,
 }
+#[cfg(any(test, feature = "migration-reference"))]
 impl OpportunityInput {
     fn validate(&self) -> Result<(), DomainError> {
         if self.title.trim().is_empty()
@@ -86,6 +92,7 @@ impl OpportunityInput {
         Ok(())
     }
 }
+#[cfg(any(test, feature = "migration-reference"))]
 async fn customer(
     tx: &mut Transaction<'_, Postgres>,
     tenant: Uuid,
@@ -101,6 +108,7 @@ async fn customer(
     }
     Ok(())
 }
+#[cfg(any(test, feature = "migration-reference"))]
 async fn load(
     tx: &mut Transaction<'_, Postgres>,
     tenant: Uuid,
@@ -115,6 +123,7 @@ async fn load(
         .ok_or(DomainError::NotFound)
 }
 
+#[cfg(any(test, feature = "migration-reference"))]
 #[derive(Deserialize, IntoParams)]
 #[into_params(parameter_in=Query)]
 #[serde(deny_unknown_fields)]
@@ -125,6 +134,7 @@ pub struct OpportunityQuery {
     limit: Option<u32>,
 }
 
+#[cfg(any(test, feature = "migration-reference"))]
 #[utoipa::path(get,path="/api/v1/opportunities",operation_id="list_sales_opportunities",tag="Sales",params(OpportunityQuery,("X-Tenant-Id"=Uuid,Header)),security(("bearerAuth"=[])),responses((status=200,body=Value)))]
 pub async fn list(
     State(state): State<AppState>,
@@ -182,6 +192,7 @@ pub async fn list(
     ))
 }
 
+#[cfg(any(test, feature = "migration-reference"))]
 #[utoipa::path(get,path="/api/v1/opportunities/{id}",operation_id="get_sales_opportunity",tag="Sales",params(("id"=Uuid,Path),("X-Tenant-Id"=Uuid,Header)),security(("bearerAuth"=[])),responses((status=200,body=Value)))]
 pub async fn get(
     State(state): State<AppState>,
@@ -201,6 +212,7 @@ pub async fn get(
     ))
 }
 
+#[cfg(any(test, feature = "migration-reference"))]
 #[utoipa::path(post,path="/api/v1/opportunities",operation_id="create_sales_opportunity",tag="Sales",request_body=OpportunityInput,params(("X-Tenant-Id"=Uuid,Header),("Idempotency-Key"=Uuid,Header)),security(("bearerAuth"=[])),responses((status=201,body=Value)))]
 pub async fn create(
     State(state): State<AppState>,
@@ -211,6 +223,7 @@ pub async fn create(
     write(state, identity, headers, None, payload).await
 }
 
+#[cfg(any(test, feature = "migration-reference"))]
 #[utoipa::path(put,path="/api/v1/opportunities/{id}",operation_id="update_sales_opportunity",tag="Sales",request_body=OpportunityInput,params(("id"=Uuid,Path),("X-Tenant-Id"=Uuid,Header),("If-Match"=String,Header),("Idempotency-Key"=Uuid,Header)),security(("bearerAuth"=[])),responses((status=200,body=Value)))]
 pub async fn update(
     State(state): State<AppState>,
@@ -222,6 +235,7 @@ pub async fn update(
     write(state, identity, headers, Some(id), payload).await
 }
 
+#[cfg(any(test, feature = "migration-reference"))]
 async fn write(
     state: AppState,
     identity: AuthenticatedIdentity,
@@ -306,6 +320,7 @@ async fn write(
     Ok(response(status, rev, value))
 }
 
+#[cfg(any(test, feature = "migration-reference"))]
 pub(super) async fn link_order(
     tx: &mut Transaction<'_, Postgres>,
     tenant: Uuid,
@@ -328,3 +343,13 @@ pub(super) async fn link_order(
     sqlx::query("UPDATE sales_opportunities SET customer_id=$3,order_id=$4,revision=revision+1,updated_at=now() WHERE tenant_id=$1 AND id=$2").bind(tenant).bind(id).bind(customer).bind(order).execute(&mut **tx).await.map_err(db)?;
     Ok(())
 }
+
+// Production keeps the canonical transport name; business rules live in TypeScript.
+#[cfg(not(any(test, feature = "migration-reference")))]
+pub use crate::platform::typescript_gateway::dispatch as list;
+#[cfg(not(any(test, feature = "migration-reference")))]
+pub use crate::platform::typescript_gateway::dispatch as get;
+#[cfg(not(any(test, feature = "migration-reference")))]
+pub use crate::platform::typescript_gateway::dispatch as create;
+#[cfg(not(any(test, feature = "migration-reference")))]
+pub use crate::platform::typescript_gateway::dispatch as update;

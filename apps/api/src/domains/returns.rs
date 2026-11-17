@@ -1,3 +1,4 @@
+#![cfg_attr(not(any(test, feature = "migration-reference")), allow(unused_imports))]
 //! Full commercial reversals. All effects share the tenant write lock and transaction.
 use super::{
     DomainChange, DomainError, authorized, command_key, db, decimal, record, remember, replay,
@@ -339,6 +340,7 @@ async fn cancel_title(
 /// Reconcile an unshipped cancellation initiated by the existing sales command.
 /// The caller owns the tenant lock, has checked the order state and updates its
 /// revision in this same transaction. No finished-product issue is reversed.
+#[cfg(any(test, feature = "migration-reference"))]
 pub(super) async fn reconcile_unshipped(
     tx: &mut Transaction<'_, Postgres>,
     tenant: Uuid,

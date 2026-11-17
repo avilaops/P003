@@ -1,3 +1,5 @@
+#![cfg_attr(not(any(test, feature = "migration-reference")), allow(unused_imports))]
+#[cfg(any(test, feature = "migration-reference"))]
 use super::negotiation_model::{
     self as model, ApprovalRules, DirectorQuote, SaleQuote, SimulationInput, SourceItem,
 };
@@ -26,12 +28,18 @@ use sha2::{Digest, Sha256};
 use sqlx::{Postgres, Transaction};
 use uuid::Uuid;
 
+#[cfg(any(test, feature = "migration-reference"))]
 const READ: &str = "sales.orders.read";
+#[cfg(any(test, feature = "migration-reference"))]
 const MANAGE: &str = "sales.orders.manage";
+#[cfg(any(test, feature = "migration-reference"))]
 const DIRECTOR: &str = "sales.approvals.director";
+#[cfg(any(test, feature = "migration-reference"))]
 const APPROVE: &str = "sales.approvals.manage";
+#[cfg(any(test, feature = "migration-reference"))]
 const POLICY: &str = "platform.company.manage";
 
+#[cfg(any(test, feature = "migration-reference"))]
 pub(super) async fn allowed(
     tx: &mut Transaction<'_, Postgres>,
     tenant: Uuid,
@@ -57,6 +65,7 @@ pub(super) async fn require_catalog_pricing(
     Ok(())
 }
 
+#[cfg(any(test, feature = "migration-reference"))]
 pub(super) async fn require_approval(
     tx: &mut Transaction<'_, Postgres>,
     tenant: Uuid,
@@ -101,6 +110,7 @@ pub(super) async fn require_approval(
     Ok(())
 }
 
+#[cfg(any(test, feature = "migration-reference"))]
 pub(super) async fn require_unquoted(
     tx: &mut Transaction<'_, Postgres>,
     tenant: Uuid,
@@ -122,6 +132,7 @@ pub(super) async fn require_unquoted(
     Ok(())
 }
 
+#[cfg(any(test, feature = "migration-reference"))]
 pub(super) async fn rules(
     tx: &mut Transaction<'_, Postgres>,
     tenant: Uuid,
@@ -142,6 +153,7 @@ pub(super) async fn rules(
     ))
 }
 
+#[cfg(any(test, feature = "migration-reference"))]
 struct Prepared {
     sale: SaleQuote,
     director: DirectorQuote,
@@ -152,6 +164,7 @@ struct Prepared {
     version: i64,
 }
 
+#[cfg(any(test, feature = "migration-reference"))]
 async fn prepare(
     tx: &mut Transaction<'_, Postgres>,
     tenant: Uuid,
@@ -195,6 +208,7 @@ async fn prepare(
     })
 }
 
+#[cfg(any(test, feature = "migration-reference"))]
 #[derive(Default, Deserialize, utoipa::IntoParams)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 #[into_params(parameter_in = Query)]
@@ -203,6 +217,7 @@ pub struct TableQuery {
     taxpayer: Option<bool>,
 }
 
+#[cfg(any(test, feature = "migration-reference"))]
 #[derive(sqlx::FromRow)]
 struct TableRow {
     #[sqlx(flatten)]
@@ -212,12 +227,14 @@ struct TableRow {
     available: bool,
 }
 
+#[cfg(any(test, feature = "migration-reference"))]
 #[derive(Clone, Copy)]
 struct TableAuthority {
     manager: bool,
     director: bool,
 }
 
+#[cfg(any(test, feature = "migration-reference"))]
 impl TableAuthority {
     fn kind(self, rules: Option<&ApprovalRules>) -> &'static str {
         if self.director {
@@ -241,6 +258,7 @@ impl TableAuthority {
 
 /// Only the quoted public price and the actor's usable percentage leave this helper.
 /// Cost, margin and director projections remain within this transaction.
+#[cfg(any(test, feature = "migration-reference"))]
 fn table_limit(
     parameters: &CommercialParameters,
     rules: &ApprovalRules,
@@ -268,6 +286,7 @@ fn table_limit(
     quote_at(input, low).map(|(sale, _)| (low, sale.total_cents))
 }
 
+#[cfg(any(test, feature = "migration-reference"))]
 struct TableContext<'a> {
     parameters: &'a CommercialParameters,
     rules: Option<&'a ApprovalRules>,
@@ -279,6 +298,7 @@ struct TableContext<'a> {
     authority: TableAuthority,
 }
 
+#[cfg(any(test, feature = "migration-reference"))]
 fn table_projection(context: TableContext<'_>, rows: &[TableRow]) -> (Vec<Value>, Vec<Value>) {
     let TableContext {
         parameters,
@@ -362,6 +382,7 @@ fn table_projection(context: TableContext<'_>, rows: &[TableRow]) -> (Vec<Value>
     (items, destinations)
 }
 
+#[cfg(any(test, feature = "migration-reference"))]
 #[utoipa::path(get,path="/api/v1/commercial/tables/{line}",operation_id="get_commercial_tables_line",tag="Sales",params(TableQuery,("line"=String,Path),("X-Tenant-Id"=Uuid,Header)),security(("bearerAuth"=[])),responses((status=200,body=Value),(status=403,description="Sem acesso comercial"),(status=422,description="Destino ou condição inválidos")))]
 pub async fn table(
     State(state): State<AppState>,
@@ -472,6 +493,7 @@ pub async fn table(
     ))
 }
 
+#[cfg(any(test, feature = "migration-reference"))]
 #[utoipa::path(post,path="/api/v1/commercial/simulate",operation_id="post_commercial_simulate",tag="Sales",request_body=SimulationInput,params(("X-Tenant-Id"=Uuid,Header)),security(("bearerAuth"=[])),responses((status=200,body=Value),(status=409,description="Configuração ou tabela desatualizada"),(status=422,description="Entradas inválidas")))]
 pub async fn simulate(
     State(state): State<AppState>,
@@ -503,6 +525,7 @@ pub async fn simulate(
     ))
 }
 
+#[cfg(any(test, feature = "migration-reference"))]
 #[derive(Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ConvertInput {
@@ -516,6 +539,7 @@ pub struct ConvertInput {
     checkout: Option<super::checkout::CheckoutInput>,
 }
 
+#[cfg(any(test, feature = "migration-reference"))]
 #[utoipa::path(post,path="/api/v1/commercial/orders",operation_id="post_commercial_orders",tag="Sales",request_body=ConvertInput,params(("X-Tenant-Id"=Uuid,Header),("Idempotency-Key"=Uuid,Header)),security(("bearerAuth"=[])),responses((status=201,body=Value),(status=412,description="Simulação desatualizada")))]
 pub async fn convert(
     State(state): State<AppState>,
@@ -669,6 +693,7 @@ pub async fn convert(
     Ok(response(StatusCode::CREATED, Some(1), value))
 }
 
+#[cfg(any(test, feature = "migration-reference"))]
 #[utoipa::path(get,path="/api/v1/commercial/approval-settings",operation_id="get_commercial_approval_settings",tag="Sales",params(("X-Tenant-Id"=Uuid,Header)),security(("bearerAuth"=[])),responses((status=200,body=Value)))]
 pub async fn get_rules(
     State(state): State<AppState>,
@@ -693,6 +718,7 @@ pub async fn get_rules(
     ))
 }
 
+#[cfg(any(test, feature = "migration-reference"))]
 #[utoipa::path(put,path="/api/v1/commercial/approval-settings",operation_id="put_commercial_approval_settings",tag="Sales",request_body=ApprovalRules,params(("X-Tenant-Id"=Uuid,Header),("If-Match"=String,Header)),security(("bearerAuth"=[])),responses((status=200,body=Value),(status=412,description="Revisão divergente")))]
 pub async fn put_rules(
     State(state): State<AppState>,
@@ -738,6 +764,7 @@ pub async fn put_rules(
     ))
 }
 
+#[cfg(any(test, feature = "migration-reference"))]
 #[utoipa::path(get,path="/api/v1/commercial/orders/{id}",operation_id="get_commercial_orders_id",tag="Sales",params(("id"=Uuid,Path),("X-Tenant-Id"=Uuid,Header)),security(("bearerAuth"=[])),responses((status=200,body=Value)))]
 pub async fn quote(
     State(state): State<AppState>,
@@ -776,6 +803,7 @@ pub async fn quote(
     ))
 }
 
+#[cfg(any(test, feature = "migration-reference"))]
 #[derive(Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct DecisionInput {
@@ -783,6 +811,7 @@ pub struct DecisionInput {
     reason: String,
 }
 
+#[cfg(any(test, feature = "migration-reference"))]
 #[utoipa::path(post,path="/api/v1/commercial/orders/{id}/decision",operation_id="post_commercial_orders_id_decision",tag="Sales",request_body=DecisionInput,params(("id"=Uuid,Path),("X-Tenant-Id"=Uuid,Header),("If-Match"=String,Header),("Idempotency-Key"=Uuid,Header)),security(("bearerAuth"=[])),responses((status=200,body=Value),(status=403,description="Fora da alçada")))]
 pub async fn decision(
     State(state): State<AppState>,
@@ -889,3 +918,19 @@ pub async fn decision(
     tx.commit().await.map_err(db)?;
     Ok(response(StatusCode::OK, Some(next), value))
 }
+
+// Production keeps the canonical transport name; business rules live in TypeScript.
+#[cfg(not(any(test, feature = "migration-reference")))]
+pub use crate::platform::typescript_gateway::dispatch as table;
+#[cfg(not(any(test, feature = "migration-reference")))]
+pub use crate::platform::typescript_gateway::dispatch as simulate;
+#[cfg(not(any(test, feature = "migration-reference")))]
+pub use crate::platform::typescript_gateway::dispatch as convert;
+#[cfg(not(any(test, feature = "migration-reference")))]
+pub use crate::platform::typescript_gateway::dispatch as quote;
+#[cfg(not(any(test, feature = "migration-reference")))]
+pub use crate::platform::typescript_gateway::dispatch as decision;
+#[cfg(not(any(test, feature = "migration-reference")))]
+pub use crate::platform::typescript_gateway::dispatch as get_rules;
+#[cfg(not(any(test, feature = "migration-reference")))]
+pub use crate::platform::typescript_gateway::dispatch as put_rules;

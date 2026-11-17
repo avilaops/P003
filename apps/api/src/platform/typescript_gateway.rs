@@ -38,7 +38,7 @@ const RESPONSE_HEADERS: &[&str] = &[
 /// An internal capability inserted after native MCP OAuth validation. Incoming
 /// HTTP headers cannot create this request extension. Never log its contents.
 #[derive(Clone)]
-pub(crate) struct McpDispatchCredential(String);
+pub struct McpDispatchCredential(String);
 impl McpDispatchCredential {
     pub(crate) fn validated(authorization: &str) -> Self {
         Self(authorization.to_owned())

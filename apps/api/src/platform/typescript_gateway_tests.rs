@@ -12,6 +12,29 @@ use std::{
     time::Duration,
 };
 
+#[tokio::test]
+async fn missing_gateway_fails_before_any_business_or_auth_call() {
+    let pool = sqlx::postgres::PgPoolOptions::new()
+        .connect_lazy("postgres://postgres@127.0.0.1:1/test")
+        .unwrap();
+    let state = crate::platform::state::AppState::new(
+        pool,
+        crate::platform::auth::AuthClient::new("http://127.0.0.1:1/userinfo".into()),
+    );
+    let request = Request::builder()
+        .method("POST")
+        .uri("/api/v1/orders")
+        .body(Body::from("{}"))
+        .unwrap();
+    let response = super::typescript_gateway::dispatch(axum::extract::State(state), request).await;
+    assert_eq!(response.status(), 503);
+    assert!(
+        String::from_utf8(to_bytes(response.into_body(), 4096).await.unwrap().to_vec())
+            .unwrap()
+            .contains("typescript_unavailable")
+    );
+}
+
 #[test]
 fn gateway_only_accepts_a_bare_trusted_origin() {
     for origin in [

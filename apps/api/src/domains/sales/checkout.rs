@@ -1,3 +1,4 @@
+#![cfg_attr(not(any(test, feature = "migration-reference")), allow(unused_imports))]
 //! Immutable negotiated conditions and titles created at commercial commitment.
 //! No payment, bank operation or production activation is performed here.
 use crate::domains::{DomainChange, DomainError, db, decimal, record};
@@ -9,6 +10,7 @@ use sqlx::{FromRow, Postgres, Transaction};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
+#[cfg(any(test, feature = "migration-reference"))]
 #[derive(Clone, Debug, Deserialize, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct CheckoutEntryInput {
@@ -16,6 +18,7 @@ pub struct CheckoutEntryInput {
     pub due_on: Option<String>,
 }
 
+#[cfg(any(test, feature = "migration-reference"))]
 #[derive(Clone, Debug, Deserialize, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct CheckoutInstallmentInput {
@@ -24,6 +27,7 @@ pub struct CheckoutInstallmentInput {
     pub amount_cents: i64,
 }
 
+#[cfg(any(test, feature = "migration-reference"))]
 #[derive(Clone, Debug, Deserialize, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct CheckoutInput {
@@ -80,6 +84,7 @@ pub struct CheckoutSnapshot {
     pub state_registration: Option<String>,
 }
 
+#[cfg(any(test, feature = "migration-reference"))]
 fn text(raw: &str, limit: usize) -> Result<String, DomainError> {
     let value = raw.trim();
     if value.chars().count() > limit
@@ -94,6 +99,7 @@ fn text(raw: &str, limit: usize) -> Result<String, DomainError> {
     Ok(value.to_owned())
 }
 
+#[cfg(any(test, feature = "migration-reference"))]
 async fn method(
     tx: &mut Transaction<'_, Postgres>,
     tenant: Uuid,
@@ -107,6 +113,7 @@ async fn method(
     .map_err(|_| crate::platform::access::AccessError::Internal.into())
 }
 
+#[cfg(any(test, feature = "migration-reference"))]
 pub async fn save(
     tx: &mut Transaction<'_, Postgres>,
     tenant: Uuid,
@@ -287,6 +294,7 @@ pub async fn load(
     }))
 }
 
+#[cfg(any(test, feature = "migration-reference"))]
 pub(crate) async fn exists(
     tx: &mut Transaction<'_, Postgres>,
     tenant: Uuid,
@@ -303,6 +311,7 @@ pub(crate) async fn exists(
 }
 
 /// The authorized sales orchestrator owns this transaction and the order revision.
+#[cfg(any(test, feature = "migration-reference"))]
 pub(super) async fn confirm(
     tx: &mut Transaction<'_, Postgres>,
     tenant: Uuid,
@@ -324,6 +333,7 @@ pub(super) async fn confirm(
     .await
 }
 
+#[cfg(any(test, feature = "migration-reference"))]
 pub(super) async fn originate_on_acceptance(
     tx: &mut Transaction<'_, Postgres>,
     tenant: Uuid,
@@ -347,6 +357,7 @@ pub(super) async fn originate_on_acceptance(
     .await
 }
 
+#[cfg(any(test, feature = "migration-reference"))]
 async fn originate(
     tx: &mut Transaction<'_, Postgres>,
     tenant: Uuid,
@@ -381,6 +392,7 @@ async fn originate(
     verify_receivables(tx, tenant, order).await
 }
 
+#[cfg(any(test, feature = "migration-reference"))]
 pub(crate) async fn verify_receivables(
     tx: &mut Transaction<'_, Postgres>,
     tenant: Uuid,
@@ -396,6 +408,7 @@ pub(crate) async fn verify_receivables(
     Ok(())
 }
 
+#[cfg(any(test, feature = "migration-reference"))]
 pub(super) async fn cancel_unpaid(
     tx: &mut Transaction<'_, Postgres>,
     tenant: Uuid,

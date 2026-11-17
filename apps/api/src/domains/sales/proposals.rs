@@ -1,3 +1,4 @@
+#![cfg_attr(not(any(test, feature = "migration-reference")), allow(unused_imports))]
 #[path = "proposal_email.rs"]
 pub mod email;
 
@@ -24,6 +25,7 @@ use uuid::Uuid;
 const READ: &str = "sales.proposals.read";
 const MANAGE: &str = "sales.proposals.manage";
 
+#[cfg(any(test, feature = "migration-reference"))]
 #[derive(Deserialize, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ProposalItemInput {
@@ -43,6 +45,7 @@ pub struct ProposalItemInput {
     plate_holder_type: Option<String>,
 }
 
+#[cfg(any(test, feature = "migration-reference"))]
 #[derive(Deserialize, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ProposalInput {
@@ -54,6 +57,7 @@ pub struct ProposalInput {
     items: Vec<ProposalItemInput>,
 }
 
+#[cfg(any(test, feature = "migration-reference"))]
 impl ProposalInput {
     fn normalize_legacy_component_colors(&mut self) -> Result<(), DomainError> {
         for item in &mut self.items {
@@ -135,6 +139,7 @@ pub struct ProposalSnapshot {
     versions: Vec<ProposalSummary>,
 }
 
+#[cfg(any(test, feature = "migration-reference"))]
 #[derive(Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ProposalList {
@@ -146,6 +151,7 @@ pub struct ProposalList {
     limit: u32,
 }
 
+#[cfg(any(test, feature = "migration-reference"))]
 #[derive(Deserialize, IntoParams)]
 #[into_params(parameter_in = Query)]
 #[serde(deny_unknown_fields)]
@@ -205,6 +211,7 @@ async fn load_version(
     })
 }
 
+#[cfg(any(test, feature = "migration-reference"))]
 #[utoipa::path(get,path="/api/v1/proposals",tag="Sales",security(("bearerAuth"=[])),params(ProposalQuery,("X-Tenant-Id"=Uuid,Header)),responses((status=200,body=ProposalList),(status=403,description="Sem permissão")))]
 pub async fn list(
     State(state): State<AppState>,
@@ -274,6 +281,7 @@ pub async fn list(
     ))
 }
 
+#[cfg(any(test, feature = "migration-reference"))]
 #[derive(Deserialize, IntoParams)]
 #[into_params(parameter_in = Query)]
 #[serde(deny_unknown_fields)]
@@ -281,6 +289,7 @@ pub struct ProposalVersionQuery {
     version: Option<i32>,
 }
 
+#[cfg(any(test, feature = "migration-reference"))]
 #[utoipa::path(get,path="/api/v1/proposals/{id}",tag="Sales",security(("bearerAuth"=[])),params(ProposalVersionQuery,("id"=Uuid,Path),("X-Tenant-Id"=Uuid,Header)),responses((status=200,body=ProposalSnapshot),(status=404,description="Proposta não encontrada")))]
 pub async fn get(
     State(state): State<AppState>,
@@ -300,6 +309,7 @@ pub async fn get(
     Ok(response(StatusCode::OK, Some(value.data.revision), value))
 }
 
+#[cfg(any(test, feature = "migration-reference"))]
 struct PreparedLine {
     product_id: Uuid,
     sku: String,
@@ -316,6 +326,7 @@ struct PreparedLine {
     plate_holder_type: Option<String>,
 }
 
+#[cfg(any(test, feature = "migration-reference"))]
 #[utoipa::path(post,path="/api/v1/proposals/{id}/revise",tag="Sales",security(("bearerAuth"=[])),params(("id"=Uuid,Path),("X-Tenant-Id"=Uuid,Header),("If-Match"=String,Header),("Idempotency-Key"=Uuid,Header)),responses((status=200,body=ProposalSnapshot),(status=409,description="Revisão não permitida"),(status=412,description="Versão divergente")))]
 pub async fn revise(
     State(state): State<AppState>,
@@ -390,12 +401,14 @@ pub async fn revise(
     Ok(response(StatusCode::OK, Some(expected + 1), value))
 }
 
+#[cfg(any(test, feature = "migration-reference"))]
 #[derive(Deserialize, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ProposalConversion {
     due_date: String,
 }
 
+#[cfg(any(test, feature = "migration-reference"))]
 #[utoipa::path(post,path="/api/v1/proposals/{id}/convert",tag="Sales",request_body=ProposalConversion,security(("bearerAuth"=[])),params(("id"=Uuid,Path),("X-Tenant-Id"=Uuid,Header),("If-Match"=String,Header),("Idempotency-Key"=Uuid,Header)),responses((status=200,body=ProposalSnapshot),(status=403,description="Exige gestão de propostas e pedidos"),(status=409,description="Conversão não permitida"),(status=412,description="Versão divergente")))]
 pub async fn convert(
     State(state): State<AppState>,
@@ -407,6 +420,7 @@ pub async fn convert(
     convert_command(state, identity, headers, id, payload, false).await
 }
 
+#[cfg(any(test, feature = "migration-reference"))]
 #[utoipa::path(post,path="/api/v1/proposals/{id}/approve-order",tag="Sales",request_body=ProposalConversion,security(("bearerAuth"=[])),params(("id"=Uuid,Path),("X-Tenant-Id"=Uuid,Header),("If-Match"=String,Header),("Idempotency-Key"=Uuid,Header)),responses((status=200,body=ProposalSnapshot),(status=403,description="Exige aprovação e gestão de propostas e pedidos"),(status=409,description="Aprovação não permitida"),(status=412,description="Versão divergente")))]
 pub async fn approve_order(
     State(state): State<AppState>,
@@ -418,6 +432,7 @@ pub async fn approve_order(
     convert_command(state, identity, headers, id, payload, true).await
 }
 
+#[cfg(any(test, feature = "migration-reference"))]
 async fn convert_command(
     state: AppState,
     identity: AuthenticatedIdentity,
@@ -514,12 +529,14 @@ async fn convert_command(
     Ok(response(StatusCode::OK, Some(expected + 1), value))
 }
 
+#[cfg(any(test, feature = "migration-reference"))]
 #[derive(Deserialize, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ProposalDecision {
     reason: Option<String>,
 }
 
+#[cfg(any(test, feature = "migration-reference"))]
 #[utoipa::path(post,path="/api/v1/proposals/{id}/{action}",tag="Sales",request_body=ProposalDecision,security(("bearerAuth"=[])),params(("id"=Uuid,Path),("action"=String,Path,description="send, accept, reject ou cancel"),("X-Tenant-Id"=Uuid,Header),("If-Match"=String,Header),("Idempotency-Key"=Uuid,Header)),responses((status=200,body=ProposalSnapshot),(status=403,description="Sem permissão"),(status=409,description="Transição não permitida"),(status=412,description="Versão divergente")))]
 pub async fn decide(
     State(state): State<AppState>,
@@ -607,6 +624,7 @@ pub async fn decide(
     Ok(response(StatusCode::OK, Some(expected + 1), value))
 }
 
+#[cfg(any(test, feature = "migration-reference"))]
 #[utoipa::path(post,path="/api/v1/proposals",tag="Sales",request_body=ProposalInput,security(("bearerAuth"=[])),params(("X-Tenant-Id"=Uuid,Header),("Idempotency-Key"=Uuid,Header)),responses((status=201,body=ProposalSnapshot),(status=403,description="Sem permissão"),(status=422,description="Proposta inválida")))]
 pub async fn create(
     State(state): State<AppState>,
@@ -617,6 +635,7 @@ pub async fn create(
     save_draft(state, identity, headers, None, payload).await
 }
 
+#[cfg(any(test, feature = "migration-reference"))]
 #[utoipa::path(put,path="/api/v1/proposals/{id}",tag="Sales",request_body=ProposalInput,security(("bearerAuth"=[])),params(("id"=Uuid,Path),("X-Tenant-Id"=Uuid,Header),("If-Match"=String,Header),("Idempotency-Key"=Uuid,Header)),responses((status=200,body=ProposalSnapshot),(status=409,description="Somente rascunhos podem ser editados"),(status=412,description="Versão divergente")))]
 pub async fn update(
     State(state): State<AppState>,
@@ -628,6 +647,7 @@ pub async fn update(
     save_draft(state, identity, headers, Some(id), payload).await
 }
 
+#[cfg(any(test, feature = "migration-reference"))]
 async fn save_draft(
     state: AppState,
     identity: AuthenticatedIdentity,
@@ -836,3 +856,21 @@ async fn save_draft(
     tx.commit().await.map_err(db)?;
     Ok(response(status, Some(new_revision), value))
 }
+
+// Production keeps the canonical transport name; business rules live in TypeScript.
+#[cfg(not(any(test, feature = "migration-reference")))]
+pub use crate::platform::typescript_gateway::dispatch as list;
+#[cfg(not(any(test, feature = "migration-reference")))]
+pub use crate::platform::typescript_gateway::dispatch as get;
+#[cfg(not(any(test, feature = "migration-reference")))]
+pub use crate::platform::typescript_gateway::dispatch as create;
+#[cfg(not(any(test, feature = "migration-reference")))]
+pub use crate::platform::typescript_gateway::dispatch as update;
+#[cfg(not(any(test, feature = "migration-reference")))]
+pub use crate::platform::typescript_gateway::dispatch as decide;
+#[cfg(not(any(test, feature = "migration-reference")))]
+pub use crate::platform::typescript_gateway::dispatch as revise;
+#[cfg(not(any(test, feature = "migration-reference")))]
+pub use crate::platform::typescript_gateway::dispatch as convert;
+#[cfg(not(any(test, feature = "migration-reference")))]
+pub use crate::platform::typescript_gateway::dispatch as approve_order;

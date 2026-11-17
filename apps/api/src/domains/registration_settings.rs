@@ -1,4 +1,6 @@
+#![cfg_attr(not(any(test, feature = "migration-reference")), allow(unused_imports))]
 //! Company-scoped registration preferences, with fiscal profile validation owned by Fiscal.
+#[cfg(any(test, feature = "migration-reference"))]
 use super::fiscal::tax_profiles::TaxProfile;
 use crate::domains::{DomainError, db, response, revision};
 use crate::platform::{access, auth::AuthenticatedIdentity, state::AppState};
@@ -12,6 +14,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use sqlx::{Postgres, Transaction};
 use uuid::Uuid;
+#[cfg(any(test, feature = "migration-reference"))]
 #[derive(Deserialize, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ProductSettings {
@@ -20,22 +23,26 @@ pub struct ProductSettings {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub upholstery_configurable: Option<bool>,
 }
+#[cfg(any(test, feature = "migration-reference"))]
 #[derive(Deserialize, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct PartySettings {
     pub require_email: bool,
     pub require_phone: bool,
 }
+#[cfg(any(test, feature = "migration-reference"))]
 #[derive(Deserialize, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ContactTypes {
     pub labels: Vec<String>,
 }
+#[cfg(any(test, feature = "migration-reference"))]
 #[derive(Deserialize, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct TaxProfiles {
     pub profiles: Vec<TaxProfile>,
 }
+#[cfg(any(test, feature = "migration-reference"))]
 #[derive(Deserialize, Serialize, utoipa::ToSchema)]
 #[serde(untagged)]
 pub enum RegistrationInput {
@@ -44,6 +51,7 @@ pub enum RegistrationInput {
     Contacts(ContactTypes),
     Taxes(TaxProfiles),
 }
+#[cfg(any(test, feature = "migration-reference"))]
 #[derive(Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct RegistrationSnapshot {
@@ -61,10 +69,12 @@ fn default_data(section: &str) -> Result<Value, DomainError> {
         _ => return Err(DomainError::NotFound),
     })
 }
+#[cfg(any(test, feature = "migration-reference"))]
 fn parse<T: serde::de::DeserializeOwned>(data: Value) -> Result<T, DomainError> {
     serde_json::from_value(data)
         .map_err(|_| DomainError::Invalid("Configuração inválida ou campos desconhecidos"))
 }
+#[cfg(any(test, feature = "migration-reference"))]
 fn validate(section: &str, data: Value) -> Result<Value, DomainError> {
     Ok(match section {
         "products" => json!(parse::<ProductSettings>(data)?),
@@ -122,6 +132,7 @@ pub async fn load(
     .map_err(db)?
     .unwrap_or((1, default)))
 }
+#[cfg(any(test, feature = "migration-reference"))]
 async fn transaction<'a>(
     state: &'a AppState,
     headers: &HeaderMap,
@@ -159,6 +170,7 @@ async fn transaction<'a>(
     }
     Ok((tenant, tx, can_edit))
 }
+#[cfg(any(test, feature = "migration-reference"))]
 #[utoipa::path(get,path="/api/v1/registration-settings/{section}",operation_id="get_registration_settings",tag="Catalog",security(("bearerAuth"=[])),params(("section"=String,Path),("X-Tenant-Id"=Uuid,Header)),responses((status=200,body=RegistrationSnapshot),(status=403,description="Sem acesso"),(status=404,description="Seção desconhecida")))]
 pub async fn get(
     State(state): State<AppState>,
@@ -181,6 +193,7 @@ pub async fn get(
         },
     ))
 }
+#[cfg(any(test, feature = "migration-reference"))]
 #[utoipa::path(put,path="/api/v1/registration-settings/{section}",operation_id="put_registration_settings",tag="Catalog",security(("bearerAuth"=[])),params(("section"=String,Path),("X-Tenant-Id"=Uuid,Header),("If-Match"=String,Header)),request_body=RegistrationInput,responses((status=200,body=RegistrationSnapshot),(status=403,description="Exige gestão da empresa"),(status=404,description="Seção desconhecida"),(status=412,description="Revisão alterada"),(status=422,description="Configuração inválida"),(status=428,description="If-Match obrigatório")))]
 pub async fn put(
     State(state): State<AppState>,
@@ -248,3 +261,9 @@ mod tests {
         assert!(validate("tax-profiles", invalid).is_err());
     }
 }
+
+// Production keeps the canonical transport name; business rules live in TypeScript.
+#[cfg(not(any(test, feature = "migration-reference")))]
+pub use crate::platform::typescript_gateway::dispatch as get;
+#[cfg(not(any(test, feature = "migration-reference")))]
+pub use crate::platform::typescript_gateway::dispatch as put;

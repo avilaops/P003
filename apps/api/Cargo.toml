@@ -6,6 +6,10 @@ default-run = "erp-next-api"
 license.workspace = true
 rust-version.workspace = true
 
+[features]
+# The previous handlers are a parity oracle, never part of a production build.
+migration-reference = []
+
 [dependencies]
 pdf-writer = "=0.15.0"
 ttf-parser = { version = "=0.25.1", default-features = false, features = ["std"] }

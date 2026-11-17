@@ -337,6 +337,11 @@ async fn handle(State(state): State<McpState>, headers: HeaderMap, body: Bytes) 
                 Ok(r) => r,
                 Err(message) => return failure(id, -32602, message),
             };
+            if !request.headers().contains_key("x-request-id")
+                && let Some(value) = headers.get("x-request-id")
+            {
+                request.headers_mut().insert("x-request-id", value.clone());
+            }
             request.extensions_mut().insert(AuthenticatedIdentity {
                 subject: credential.subject,
                 email: credential.email,

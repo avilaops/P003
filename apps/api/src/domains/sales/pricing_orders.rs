@@ -1,3 +1,4 @@
+#![cfg_attr(not(any(test, feature = "migration-reference")), allow(unused_imports))]
 //! Atomic draft creation and explicit approval of pricing exceptions.
 use super::{pricing, pricing_model::QuoteInput};
 use crate::domains::{
@@ -121,6 +122,7 @@ pub async fn create(
     Ok(response(StatusCode::CREATED, Some(1), result))
 }
 
+#[cfg(any(test, feature = "migration-reference"))]
 #[utoipa::path(get,path="/api/v1/orders/{id}/pricing",operation_id="get_order_pricing",tag="Sales",security(("bearerAuth"=[])),params(("id"=Uuid,Path),("X-Tenant-Id"=Uuid,Header)),responses((status=200,body=Value),(status=404,description="Pedido não encontrado")))]
 pub async fn get(
     State(state): State<AppState>,
@@ -169,12 +171,14 @@ pub async fn get(
     ))
 }
 
+#[cfg(any(test, feature = "migration-reference"))]
 #[derive(Deserialize, utoipa::ToSchema)]
 #[serde(deny_unknown_fields)]
 pub struct ApprovalInput {
     reason: String,
 }
 
+#[cfg(any(test, feature = "migration-reference"))]
 #[utoipa::path(post,path="/api/v1/orders/{id}/pricing/approve",operation_id="approve_order_pricing",tag="Sales",security(("bearerAuth"=[])),params(("id"=Uuid,Path),("X-Tenant-Id"=Uuid,Header),("If-Match"=String,Header),("Idempotency-Key"=Uuid,Header)),request_body=ApprovalInput,responses((status=200,body=Value),(status=403,description="Exige gestão da empresa"),(status=409,description="Sem exceção pendente"),(status=412,description="Pedido alterado")))]
 pub async fn approve(
     State(state): State<AppState>,
@@ -277,6 +281,7 @@ pub async fn approve(
     Ok(response(StatusCode::OK, Some(next), value))
 }
 
+#[cfg(any(test, feature = "migration-reference"))]
 pub(super) async fn validate_confirmation(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     tenant: Uuid,
@@ -291,3 +296,9 @@ pub(super) async fn validate_confirmation(
     }
     Ok(())
 }
+
+// Production keeps the canonical transport name; business rules live in TypeScript.
+#[cfg(not(any(test, feature = "migration-reference")))]
+pub use crate::platform::typescript_gateway::dispatch as get;
+#[cfg(not(any(test, feature = "migration-reference")))]
+pub use crate::platform::typescript_gateway::dispatch as approve;

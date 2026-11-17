@@ -111,6 +111,9 @@ pub struct TagInput {
     pub group_id: Option<Uuid>,
 }
 #[derive(Clone, Copy)]
+// Financial catalogs still share the typed storage adapter and its exhaustive
+// mapping. Migrated variants have no production handler that constructs them.
+#[cfg_attr(not(any(test, feature = "migration-reference")), allow(dead_code))]
 enum Kind {
     ProductCategory,
     FinancialCategory,
@@ -339,7 +342,9 @@ macro_rules! supply_reference {
     };
 }
 supply_reference!(WarehouseReference, location: Option<String>);
+#[cfg(any(test, feature = "migration-reference"))]
 supply_reference!(GroupReference);
+#[cfg(any(test, feature = "migration-reference"))]
 supply_reference!(TagReference, group_id: Option<Uuid>);
 
 #[derive(Serialize, ToSchema)]
@@ -738,7 +743,24 @@ macro_rules! endpoints {
         pub async fn $update(State(state):State<AppState>,Extension(identity):Extension<AuthenticatedIdentity>,headers:HeaderMap,Path(id):Path<Uuid>,payload:Result<Json<$input>,JsonRejection>)->Result<Response,DomainError>{write_record(state,identity,headers,Some(id),Kind::$variant,payload.map(|Json(v)|CatalogInput::$variant(v))).await}
     }
 }
-endpoints!(
+
+// The original financial and warehouse catalogs continue to use endpoints!.
+macro_rules! migrated_endpoints {
+    ($list:ident,$get:ident,$create:ident,$update:ident,$($rest:tt)*) => {
+        #[cfg(any(test, feature = "migration-reference"))]
+        endpoints!($list,$get,$create,$update,$($rest)*);
+        #[cfg(not(any(test, feature = "migration-reference")))]
+        pub use crate::platform::typescript_gateway::dispatch as $list;
+        #[cfg(not(any(test, feature = "migration-reference")))]
+        pub use crate::platform::typescript_gateway::dispatch as $get;
+        #[cfg(not(any(test, feature = "migration-reference")))]
+        pub use crate::platform::typescript_gateway::dispatch as $create;
+        #[cfg(not(any(test, feature = "migration-reference")))]
+        pub use crate::platform::typescript_gateway::dispatch as $update;
+    }
+}
+
+migrated_endpoints!(
     list_product_categories,
     get_product_category,
     create_product_category,
@@ -791,7 +813,7 @@ endpoints!(
     SupplySnapshot<WarehouseReference>,
     SupplyList<WarehouseReference>
 );
-endpoints!(
+migrated_endpoints!(
     list_product_groups,
     get_product_group,
     create_product_group,
@@ -803,7 +825,7 @@ endpoints!(
     SupplySnapshot<GroupReference>,
     SupplyList<GroupReference>
 );
-endpoints!(
+migrated_endpoints!(
     list_tag_groups,
     get_tag_group,
     create_tag_group,
@@ -815,7 +837,7 @@ endpoints!(
     SupplySnapshot<GroupReference>,
     SupplyList<GroupReference>
 );
-endpoints!(
+migrated_endpoints!(
     list_tags,
     get_tag,
     create_tag,
