@@ -125,7 +125,7 @@ test("hostile or excessive XML fails while literal comments, CDATA, UTF-8 BOM an
 test("NFS-e schema bundles are versioned, hash-pinned and closed to missing, changed or remote files", async () => {
   for (const version of ["1.00", "1.01"]) {
     const bundle = await readNationalNfseSchemas(version);
-    assert.equal(bundle.files.length, 4);
+    assert.equal(bundle.files.length, version === "1.01" ? 5 : 4);
     assert.equal(bundle.entry, `NFSe_v${version}.xsd`);
     const read = (name: string) => readFile(new URL(`../src/lib/fiscal/schemas/nfse-national/${version}/${name}`, import.meta.url), "utf8");
     await assert.rejects(() => readNationalNfseSchemas(version, async name => name.startsWith("tiposSimples") ? (await read(name)) + " " : read(name)), /schema|leiaute|indisponível/i);

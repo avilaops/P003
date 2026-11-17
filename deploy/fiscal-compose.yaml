@@ -9,6 +9,12 @@ services:
       DANFE_MCP_TOKEN: ${ERP_FISCAL_ENGINE_TOKEN:?Private fiscal token required}
       DANFE_MCP_TOOL_PREFIX: bare
       DANFE_CA_BUNDLE_FILE: /etc/ssl/certs/erp-icp-brasil-roots.pem
+  api-ts:
+    environment:
+      ERP_FISCAL_ENGINE_URL: http://127.0.0.1:8091
+      ERP_FISCAL_ENGINE_TOKEN: ${ERP_FISCAL_ENGINE_TOKEN:?Private fiscal token required}
+      FISCAL_A1_KEYRING: ${FISCAL_A1_KEYRING:?Fiscal A1 keyring required}
+      NFSE_ISSUANCE_ENABLED: ${NFSE_ISSUANCE_ENABLED:-false}
   fiscal-mcp:
     image: ${ERP_FISCAL_MCP_IMAGE:?Validated CI MCP image required}
     restart: unless-stopped

@@ -10,7 +10,7 @@ type SchemaFile = { fileName: string; contents: string };
 export type NationalNfseLayoutVerification = { layout: "official_schema_valid" | "local_profile_valid"; correction: string | null };
 const unavailable = () => new NationalNfseXmlError("unavailable", "Conferência local do schema de NFS-e nacional indisponível.");
 
-export async function readNationalNfseSchemas(version: string, read?: (name: string) => Promise<string>): Promise<{ entry: string; files: SchemaFile[] }> {
+export async function readNationalNfseSchemas(version: string, read?: (name: string) => Promise<string>, root: "NFSe" | "DPS" = "NFSe"): Promise<{ entry: string; files: SchemaFile[] }> {
   if (!Object.hasOwn(manifest.versions, version)) throw new NationalNfseXmlError("invalid", "Versão de NFS-e nacional não suportada.");
   const pack = manifest.versions[version as keyof typeof manifest.versions];
   try {
@@ -21,20 +21,21 @@ export async function readNationalNfseSchemas(version: string, read?: (name: str
       return { fileName: name, contents };
     }));
     const names = new Set(files.map(file => file.fileName));
-    if (!names.has(pack.entry)) throw unavailable();
+    const entry = root === "DPS" && "dpsEntry" in pack ? String(pack.dpsEntry) : root === "NFSe" ? pack.entry : "";
+    if (!entry || !names.has(entry)) throw unavailable();
     for (const file of files) for (const match of file.contents.matchAll(/schemaLocation\s*=\s*["']([^"']+)["']/g)) if (!names.has(match[1])) throw unavailable();
-    return { entry: pack.entry, files };
+    return { entry, files };
   } catch { throw unavailable(); }
 }
 
 let active = 0;
 /** Only layout validity is established here; XMLDSig cryptographic verification is separate. */
-export async function assertNationalNfseLayout(xml: string, version: string): Promise<NationalNfseLayoutVerification> {
+export async function assertNationalNfseLayout(xml: string, version: string, root: "NFSe" | "DPS" = "NFSe"): Promise<NationalNfseLayoutVerification> {
   if (typeof xml !== "string" || Buffer.byteLength(xml, "utf8") > 1_048_576 || /\0|<!\s*(?:DOCTYPE|ENTITY)\b/i.test(xml)) throw new NationalNfseXmlError("invalid", "XML de NFS-e inválido ou acima do limite de 1 MiB.");
   if (active >= 4) throw unavailable();
   active++;
   try {
-    const pack = await readNationalNfseSchemas(version);
+    const pack = await readNationalNfseSchemas(version, undefined, root);
     const correction = version === "1.01" ? manifest.localProfiles["1.01"] : null;
     if (correction) {
       // Preserve the downloaded XSD. Apply only this documented, exact-hash
