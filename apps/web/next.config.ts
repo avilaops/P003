@@ -51,7 +51,11 @@ const nextConfig: NextConfig = {
   },
   async headers() {
     return [
-      { source: "/:path*", headers: securityHeaders },
+      { source: "/:path*", headers: securityHeaders.filter(header => !["Content-Security-Policy", "Referrer-Policy"].includes(header.key)) },
+      { source: "/:path((?!api/auth/logout/central$).*)", headers: [
+        { key: "Content-Security-Policy", value: contentSecurityPolicy },
+        { key: "Referrer-Policy", value: "no-referrer" },
+      ] },
       {
         source: "/api/erp/commercial-contracts/:contractId/files/:fileId",
         headers: [
