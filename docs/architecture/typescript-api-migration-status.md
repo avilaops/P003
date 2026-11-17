@@ -1,21 +1,21 @@
 # Migração da API para TypeScript • evidências e pendências
 
-Atualizado em 16/11/2026 • implementação integrada à `main` pelos PRs #229 e #230.
+Atualizado em 16/11/2026 • horário de Brasília • implementação integrada à `main` pelos PRs #229, #230 e #231.
 
-Preferências pessoais, Cadastros, Vendas e Relatórios do escopo descrito abaixo estão implementados em `apps/api-ts`, com contratos HTTP compatíveis e roteamento gradual no BFF. A revisão e o CI dos dois PRs passaram. A release completa ainda precisa concluir o navegador e a implantação.
+Preferências pessoais, Cadastros, Vendas e Relatórios do escopo descrito abaixo estão implementados em `apps/api-ts`, com contratos HTTP compatíveis e roteamento gradual no BFF. A revisão, o CI e a release completa passaram. Os quatro módulos foram ativados em produção; o retorno operacional por configuração foi exercitado individualmente e os quatro ficaram habilitados ao final.
 
-O inventário de métodos, rotas, chamadas do frontend e dependências mantidas na Rust está em [Cobertura da migração](typescript-api-route-coverage.md). A revisão independente confirmou o fechamento do achado de revogação no commit `ac5cf072` e das correções de navegador no PR #230.
+O inventário de métodos, rotas, chamadas do frontend e dependências mantidas na Rust está em [Cobertura da migração](typescript-api-route-coverage.md). A revisão independente confirmou o fechamento do achado de revogação no commit `ac5cf072` e das correções de navegador nos PRs #230 e #231.
 
 ## Estado verificado
 
-| Área | Implementação atual | Verificação disponível | Trabalho restante |
+| Área | Implementação atual | Verificação disponível | Estado operacional |
 | --- | --- | --- | --- |
-| Fundação | Auth, empresa, permissões e transação com contexto RLS; escritas bloqueiam empresa antes de carregar permissões; administrador explícito por auth_subject | Testes de plataforma; role real sem bypass de RLS; revogação de permissão durante espera; administrador sem vínculo e revogação da concessão | Acompanhar operação após ativação |
-| Preferências | GET e PUT com revisão i64 exata e verificação de titular antes da revisão | Testes HTTP e PostgreSQL: gravações sucessivas/concorrentes, owner key, auditoria, isolamento e limites i64 | Ativação e retorno por configuração |
-| Cadastros | Listas, detalhes e comandos de parties, products e referências; configurações cadastrais; schemas e regras de clientes/produtos portados; envelopes/eventos/vínculos dos catálogos alinhados | Testes HTTP; escritas reais e concorrência; clientes com complementos/documento vinculado; produtos com foto, opcionais, legado, configurações e estoque; hierarquia dos catálogos | Ativação e retorno por configuração |
-| Vendas | Pedidos/propostas; aprovações; tabelas; simulação/conversão simples/mista; checkout; funil e métricas comerciais; consulta/aprovação de pricing legado | Mesma matriz HTTP executada em Rust e TypeScript com migrations/RLS, concorrência, snapshots/permissões e rollback | Ativação e retorno por configuração |
-| Relatórios | Painel operacional e lista/criação/alteração de definições de relatórios personalizados | PostgreSQL/RLS com períodos, indicadores financeiros, permissões, visibilidade, fontes/colunas/filtros, revisões concorrentes e rollback | Ativação e retorno por configuração |
-| BFF e runtime | Seleção por módulo e método/recurso; pacote de produção; processo privado opcional, Compose e saúde das duas APIs | 179 testes de modelo web, 98 testes de edge/runtime, tipos web/API, pacote isolado, build web, dois projetos Playwright com Next real, parser Compose e nove cenários do dispatcher no Linux | Implantação e verificação no servidor |
+| Fundação | Auth, empresa, permissões e transação com contexto RLS; escritas bloqueiam empresa antes de carregar permissões; administrador explícito por auth_subject | Testes de plataforma; role real sem bypass de RLS; revogação de permissão durante espera; administrador sem vínculo e revogação da concessão | Ativo • acompanhar operação |
+| Preferências | GET e PUT com revisão i64 exata e verificação de titular antes da revisão | Testes HTTP e PostgreSQL: gravações sucessivas/concorrentes, owner key, auditoria, isolamento e limites i64 | Ativo • retorno por configuração verificado |
+| Cadastros | Listas, detalhes e comandos de parties, products e referências; configurações cadastrais; schemas e regras de clientes/produtos portados; envelopes/eventos/vínculos dos catálogos alinhados | Testes HTTP; escritas reais e concorrência; clientes com complementos/documento vinculado; produtos com foto, opcionais, legado, configurações e estoque; hierarquia dos catálogos | Ativo • retorno por configuração verificado |
+| Vendas | Pedidos/propostas; aprovações; tabelas; simulação/conversão simples/mista; checkout; funil e métricas comerciais; consulta/aprovação de pricing legado | Mesma matriz HTTP executada em Rust e TypeScript com migrations/RLS, concorrência, snapshots/permissões e rollback | Ativo • retorno por configuração verificado |
+| Relatórios | Painel operacional e lista/criação/alteração de definições de relatórios personalizados | PostgreSQL/RLS com períodos, indicadores financeiros, permissões, visibilidade, fontes/colunas/filtros, revisões concorrentes e rollback | Ativo • retorno por configuração verificado |
+| BFF e runtime | Seleção por módulo e método/recurso; pacote de produção; processo privado opcional, Compose e saúde das duas APIs | 179 testes de modelo web, 98 testes de edge/runtime, tipos web/API, pacote isolado, build web, dois projetos Playwright com Next real, parser Compose e nove cenários do dispatcher no Linux | Implantado • saúde e configuração verificadas |
 
 Os testes verificam os cenários descritos; não equivalem a uma prova de todos os dados e combinações possíveis. A seleção limita-se às rotas inventariadas. Os módulos fora do escopo e os contratos Rust equivalentes continuam disponíveis durante a transição.
 
@@ -87,7 +87,7 @@ O adaptador PostgreSQL serializa objetos com inteiros exatos e lê JSON/JSONB co
 
 Um item novo com tabela publicada exige o fluxo de simulação comercial. Pedidos com cotação/simulação ou checkout salvo não podem ter seu acordo alterado pelo endpoint de edição simples. O bloqueio de cotação é verificado antes do replay, como no Rust. Audit/outbox, linhas, cabeçalho e comando são gravados na mesma transação da empresa.
 
-A integração verifica criação concorrente idempotente, edição e replay sem duplicação de auditoria, preço/nome/cliente históricos, revisão desatualizada, unidade alterada, estado não editável, checkout e tabela publicada. Os demais fluxos comerciais estão descritos abaixo; a seleção é configurável no BFF e permanece desabilitada em produção.
+A integração verifica criação concorrente idempotente, edição e replay sem duplicação de auditoria, preço/nome/cliente históricos, revisão desatualizada, unidade alterada, estado não editável, checkout e tabela publicada. Os demais fluxos comerciais estão descritos abaixo; a seleção é configurável no BFF e está habilitada em produção para as rotas inventariadas.
 
 ## Transições dos pedidos
 
@@ -127,7 +127,7 @@ As alçadas são verificadas sobre a negociação atual antes de devolver o repl
 
 Buscas de pedidos extraem somente número inteiro positivo até o máximo i64. Expressões como `1e30`, `1.0` e inteiros acima do limite continuam como busca textual, sem enviar decimal ou overflow ao PostgreSQL. Paginação e versão exigem sintaxe inteira e rejeitam coerções de JavaScript, valores vazios e parâmetros repetidos. Os limites de busca contam caracteres Unicode após remover espaços externos; pedidos rejeitam caracteres de controle, enquanto propostas preservam a regra original de rejeitar NUL no texto.
 
-Testes unitários e PostgreSQL cobrem essas fronteiras. A revisão geral de precedência de erros e precondições continua pendente.
+Testes unitários e PostgreSQL cobrem essas fronteiras. A revisão final e a matriz HTTP compartilhada verificaram a precedência e as precondições dos cenários exercitados.
 
 ## Simulação comercial
 
@@ -145,7 +145,7 @@ O endpoint de simulação não cria pedidos. A conversão e a tabela comercial d
 
 `orders/checkout-save.ts` grava o cliente e as formas de pagamento como snapshots, entrada, parcelas, fabricação e observações. Forma de pagamento precisa estar ativa na mesma empresa; entrada e parcelas devem somar o total exato. As condições salvas são imutáveis e não representam recebimento ou criação de títulos. O aceite/confirmacão origina os títulos nos momentos já descritos nas transições.
 
-A integração verifica digest desatualizado, oportunidade incompleta/stale, entrada sem forma de pagamento, soma incorreta, criação concorrente idempotente e replay do resultado original após aceite. Uma falha de INSERT no checkout desfaz pedido, itens, cotação, vínculo, auditoria e comando. O fluxo completo de entrada explícita zero permanece pendente de aprovação; após decisão autorizada, o aceite origina somente o título do saldo.
+A integração verifica digest desatualizado, oportunidade incompleta/stale, entrada sem forma de pagamento, soma incorreta, criação concorrente idempotente e replay do resultado original após aceite. Uma falha de INSERT no checkout desfaz pedido, itens, cotação, vínculo, auditoria e comando. Quando a entrada explícita zero exige alçada, o pedido aguarda a decisão comercial; após aprovação autorizada, o aceite origina somente o título do saldo.
 
 ## Simulação e conversão de tabelas mistas
 
@@ -185,7 +185,7 @@ O proxy do navegador seleciona o backend antes do envio, usando uma lista explí
 
 O proxy conserva sessão, empresa, corpo sem reserializar números, `If-Match`, `Idempotency-Key`, ETag e identificação da resposta. Cada operação faz uma única chamada. Perda de resposta ou erro do backend não provoca nova tentativa em Rust. Para retornar um módulo, remova seu nome da configuração e reinicie/reimplante o BFF. As duas implementações compartilham PostgreSQL, revisões e comandos salvos.
 
-Testes de seleção e do proxy real verificam as quatro famílias, rollback de Vendas, cabeçalhos/JSON, conflito, falha após envio, configuração ausente e permanência de rotas não migradas em Rust. A regressão dos proxies existentes também passou. O processo TypeScript foi preparado no runtime conforme descrito a seguir; a ativação de produção continua pendente.
+Testes de seleção e do proxy real verificam as quatro famílias, rollback de Vendas, cabeçalhos/JSON, conflito, falha após envio, configuração ausente e permanência de rotas não migradas em Rust. A regressão dos proxies existentes também passou. O processo TypeScript foi preparado no runtime conforme descrito a seguir; a ativação e o retorno no servidor estão registrados na seção de produção.
 
 ## Runtime privado e empacotamento
 
@@ -193,7 +193,7 @@ O build de produção compila somente o código da API para `dist/server.js` e p
 
 O runtime Cloudflare inicia TypeScript em loopback8081 somente quando houver módulos habilitados. Passa somente banco/Auth; mantém segredos de sessão, SMTP e Fiscal fora desse processo. O supervisor aguarda readiness real de Rust e TypeScript antes de iniciar a interface e encerra os demais processos quando um falha. A saúde pública exige todas as APIs habilitadas. As configurações do inventário continuam desativadas por padrão.
 
-O produtor web empacota o artefato validado e o produtor API executa a matriz compartilhada durante a validação completa. Testes locais verificaram isolamento das variáveis, espera por prontidão, falha/encerramento dos processos e saúde pública. A integração no deploy Compose existente e a validação por navegador estão descritas abaixo; a ativação real continua pendente.
+O produtor web empacota o artefato validado e o produtor API executa a matriz compartilhada durante a validação completa. Testes locais verificaram isolamento das variáveis, espera por prontidão, falha/encerramento dos processos e saúde pública. A integração no deploy Compose existente e a validação por navegador estão descritas abaixo; a ativação real está registrada na seção de produção.
 
 O build web passou após gerar o OpenAPI do checkout e os tipos de rotas Next. Na primeira execução, após compilação/tipos/prerenderização, o Next interrompeu o comando com um alerta de segurança da versão instalada. A repetição concluiu com código zero. Nenhuma atualização de dependência foi realizada nesta etapa; a recomendação de atualização de segurança precisa continuar registrada separadamente.
 
@@ -237,8 +237,21 @@ Um teste PostgreSQL observa a espera real em `pg_stat_activity`, revoga cada uma
 
 O [PR #229](https://github.com/avilaops/P003/pull/229) foi integrado à `main` em `8ce8444daf5dd3a4dca3ba9fafe6939b3b18636d`, após CI e revisão. A verificação TypeScript/PostgreSQL e a matriz Rust/TypeScript são obrigatórias também na validação de PR, sem depender de `inputs.full` e sem permitir omitir a URL de testes. A integração não representa ativação em produção.
 
-A [primeira execução de release](https://github.com/avilaops/P003/actions/runs/43976847209) passou nos gates de API, banco, contratos, build web e no primeiro shard de navegador. O segundo shard encontrou quatro falhas e bloqueou a implantação. A investigação confirmou um erro de concordância na mensagem de propostas vazias, uma fixture de detalhe sem `dueDate` obrigatório, um clique de teste interceptado pela camada modal do menu e espaçamento móvel que excedia a altura validada no Chrome Linux. A correção conserva as verificações de filtros, recuperação de erro, Escape/foco, clique externo, retorno/rolagem e altura máxima. A fixture de detalhe agora é conferida pelos tipos OpenAPI. A ativação de produção continua pendente de nova release validada.
+A [primeira execução de release](https://github.com/avilaops/P003/actions/runs/43976847209) passou nos gates de API, banco, contratos, build web e no primeiro shard de navegador. O segundo shard encontrou quatro falhas e bloqueou a implantação. A investigação confirmou um erro de concordância na mensagem de propostas vazias, uma fixture de detalhe sem `dueDate` obrigatório, um clique de teste interceptado pela camada modal do menu e espaçamento móvel que excedia a altura validada no Chrome Linux. A correção conserva as verificações de filtros, recuperação de erro, Escape/foco, clique externo, retorno/rolagem e altura máxima. A fixture de detalhe agora é conferida pelos tipos OpenAPI. Essa tentativa não chegou ao deploy; a ativação validada consta abaixo.
 
 Na [release seguinte](https://github.com/avilaops/P003/actions/runs/43983176119), o segundo shard DANFE passou com as quatro correções. O primeiro apresentou uma falha intermitente no teste de teclado de cores, que enviava `Home` e setas antes de conferir a transferência assíncrona de foco do Base UI. O teste original passou em 20 repetições locais; a suíte inteira passou três vezes, totalizando 21 testes, com a sincronização por foco. O ajuste conserva as teclas e a seleção esperada e acrescenta verificações intermediárias, sem espera fixa, `force` ou remoção de asserts.
 
 A suíte seguinte de propostas identificou sete testes ainda ligados às consultas e à apresentação anteriores à padronização de Vendas. As fixtures e verificações foram alinhadas ao filtro acessível, às consultas de recentes/rascunhos, às regiões, à recuperação do bloco e ao cliente exibido como texto. Isso revelou um overflow real do botão de repetição no resumo móvel, corrigido permitindo quebra de texto e limitando sua largura. Nomes móveis recebem o mesmo limite de duas linhas e nome completo em `title`; o teste usa duas vezes a altura de linha computada, como já fazia a lista, e um nome mais longo. Os 28 testes de propostas e os 25 de documentos/SMTP passaram localmente. A decisão passou a ser uma nova release, em vez de repetir a execução antiga com essas falhas determinísticas.
+
+
+## Produção • ativação e retorno verificados
+
+A [release 43988885393](https://github.com/avilaops/P003/actions/runs/43988885393) terminou com sucesso e implantou `3c00410091fc30e6191f301f2b762740643a2772` às 22:06 de 16/11/2026, em Brasília. API, contratos Rust/TypeScript, PostgreSQL, build, ambos os shards de navegador, sessões, cadastros, propostas, documentos/SMTP e navegador do BFF com retorno explícito passaram antes da promoção. A saúde pública em `https://erp.avilaops.com/api/health` respondeu `ok: true` com esse SHA.
+
+A implantação habilitou primeiro `preferences`. Sob o bloqueio exclusivo do deploy e com backup privado `0600`, foram acrescentados `registrations`, `sales` e `reports`, conferindo a configuração efetiva do processo web e sua saúde em cada etapa. Em seguida, cada módulo foi removido individualmente da lista, recriando somente o web com a mesma imagem validada. Todas as etapas ficaram saudáveis. Ao final, `ERP_TYPESCRIPT_MODULES=preferences,registrations,sales,reports`; os containers das APIs Rust e TypeScript conservaram seus IDs.
+
+O processo TypeScript usa a mesma imagem web validada, escuta em loopback e conserva somente banco/Auth na configuração do serviço. A inspeção verificou a lista permitida de variáveis e a ausência dos segredos de sessão, SMTP, Fiscal e assinatura. Os endpoints privados de liveness/readiness responderam 200; requisições com token inválido responderam 401 e conservaram o identificador da requisição.
+
+As leituras autenticadas pelo MCP oficial retornaram 200 na empresa selecionada para preferências, produtos, pedidos e definições de relatórios. Essa conexão continua atendida pela API legada e confirma sua continuidade; não representa execução autenticada de todos os fluxos de negócio na API TypeScript de produção. A equivalência de regras foi verificada separadamente pela matriz HTTP com PostgreSQL real, enquanto o navegador com Next real verificou a seleção do BFF.
+
+A conferência operacional alterou a configuração de tráfego e fez consultas de leitura. Os endpoints Rust equivalentes permanecem disponíveis durante a transição, junto dos módulos fora do escopo. Sua retirada é uma próxima onda, após observar operações autenticadas no novo caminho e encerrar a janela de retorno; não faz parte desta ativação inicial.

@@ -159,12 +159,14 @@
 - [x] Revisar diff, segurança e documentação.
 - [x] Commit `chore(runtime): activate gradual TypeScript API migration`.
 
-## Liberação • trabalho restante
+## Liberação • evidências
 
-As tarefas acima preparam o código e a verificação local. Não representam ativação de produção.
+A release `3c00410091fc30e6191f301f2b762740643a2772` foi implantada e os quatro módulos foram ativados gradualmente. A saúde e o retorno operacional por configuração foram conferidos no servidor. As evidências e os limites estão em `docs/architecture/typescript-api-migration-status.md`.
 
 - [x] Conferir as chamadas legadas ainda usadas pelas telas do escopo e registrar a cobertura final.
 - [x] Testar o BFF no Next real pelo navegador com os módulos habilitados e o retorno explícito a Rust.
 - [x] Integrar o processo privado ao deploy Compose existente, preservando os manifestos e segredos.
-- [ ] Validar a implantação candidata e ativar gradualmente os módulos.
-- [ ] Comprovar retorno por módulo e operação real antes de retirar rotas Rust equivalentes.
+- [x] Validar a implantação candidata e ativar gradualmente os módulos.
+- [x] Exercitar o retorno por módulo no servidor e restaurar os quatro módulos habilitados.
+
+A retirada das rotas Rust equivalentes é uma próxima onda. Exige observar operações autenticadas no novo caminho e encerrar a janela de retorno; os endpoints continuam disponíveis nesta ativação gradual.
