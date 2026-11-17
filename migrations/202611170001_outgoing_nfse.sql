@@ -104,3 +104,11 @@ INSERT INTO permissions(code,description) VALUES
     ('fiscal.outgoing_nfse.read','Consultar NFS-e emitidas pela empresa'),
     ('fiscal.outgoing_nfse.issue','Emitir e reconciliar NFS-e da empresa'),
     ('fiscal.outgoing_nfse.cancel','Cancelar NFS-e autorizadas da empresa');
+
+INSERT INTO role_permissions(role_id,permission_code)
+SELECT role.id,permission.code
+FROM roles role
+CROSS JOIN permissions permission
+WHERE lower(role.code) = 'administrator'
+  AND permission.code IN ('fiscal.outgoing_nfse.read','fiscal.outgoing_nfse.issue','fiscal.outgoing_nfse.cancel')
+ON CONFLICT DO NOTHING;
