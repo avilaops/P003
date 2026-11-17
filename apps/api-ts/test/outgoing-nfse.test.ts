@@ -39,6 +39,7 @@ test("outgoing NFS-e start binds tenant, stores command before transport and fin
     async issue() { throw new Error("not called by start") },
     async consult() { throw new Error("not called") },
     async cancel() { throw new Error("not called") },
+    async inspectOutgoing() { throw new Error("not called") },
   }
   const started = await startIssuance(context, { "x-request-id": "request-1" }, "33333333-3333-4333-8333-333333333333", input, engine, async () => ({ issuerTaxId: "04252011000110", certificate: { pkcs12Base64: "AA==", password: "secret" } }))
   assert.equal(started.prepared?.id, "DPS354340220425201100011000001000000000000001")
@@ -59,7 +60,7 @@ test("outgoing NFS-e replays the stored command and never prepares or transmits 
     }, release() {},
   }
   const context = { client, tenantId: tenant, authSubject: "service-app", permissions: ["fiscal.outgoing_nfse.issue"], identity: { subject: "service-app", email: "service@example.test", name: "Serviço", emailVerified: true } }
-  const engine = { async prepare() { prepared++; return {} }, async issue() { throw new Error() }, async consult() { throw new Error() }, async cancel() { throw new Error() } }
+  const engine = { async prepare() { prepared++; return {} }, async issue() { throw new Error() }, async consult() { throw new Error() }, async cancel() { throw new Error() }, async inspectOutgoing() { throw new Error() } }
   const result = await startIssuance(context, {}, "33333333-3333-4333-8333-333333333333", input, engine, async () => { throw new Error("certificate must not load") })
   assert.deepEqual(result.replayed, replayed)
   assert.equal(prepared, 0)
@@ -105,6 +106,7 @@ test("private NFS-e HTTP command authenticates, authorizes, emits once and repla
     async prepare() { return { id: "DPS354340220425201100011000001000000000000001" } },
     async issue() { issueCalls++; return { status: "authorized", accessKey: "1".repeat(50), xml: "<?xml version=\"1.0\"?><NFSe/>", reason: "NFS-e autorizada." } },
     async consult() { throw new Error("not called") }, async cancel() { throw new Error("not called") },
+    async inspectOutgoing() { throw new Error("not called") },
   }
   const app = buildApp({
     pool: { async connect() { return client } }, userinfoUrl: "https://auth.example.test/oauth/userinfo",
@@ -122,5 +124,45 @@ test("private NFS-e HTTP command authenticates, authorizes, emits once and repla
   assert.equal(issueCalls, 1)
   const wrongTenant = await app.inject({ method: "POST", url: "/api/v1/integrations/nfse/issuances", headers: { ...headers, "x-tenant-id": "55555555-5555-4555-8555-555555555555" }, payload: input })
   assert.equal(wrongTenant.statusCode, 403)
+  await app.close()
+})
+
+test("manual NFS-e prepares without certificate and authorizes only the matching national XML", async () => {
+  let command: { scope: string; request: unknown; result: Record<string, unknown> } | undefined
+  let savedIssuance = ""
+  const manualInput = { ...input, environment: "production" as const }
+  const client: DatabaseClient = {
+    async query<T extends Record<string, unknown>>(sql: string, values: readonly unknown[] = []) {
+      if (sql.includes("FROM tenants tenant") && sql.includes("permissions")) return { rows: [{ tenant_id: tenant, permissions: ["fiscal.outgoing_nfse.issue"] }] as unknown as T[] }
+      if (sql.startsWith("SELECT id FROM service_api_keys")) return { rows: [{ id: "44444444-4444-4444-8444-444444444444" }] as unknown as T[] }
+      if (sql.startsWith("SELECT scope,request,result")) return { rows: command ? [command] as unknown as T[] : [] }
+      if (sql.startsWith("SELECT tax_id,legal_name")) return { rows: [{ tax_id: "04252011000110", legal_name: "Ávila Ops" }] as unknown as T[] }
+      if (sql.startsWith("SELECT tax_id FROM tenants")) return { rows: [{ tax_id: "04252011000110" }] as unknown as T[] }
+      if (sql.startsWith("INSERT INTO fiscal_outgoing_nfse_sequences")) return { rows: [{ number: "1" }] as unknown as T[] }
+      if (sql.startsWith("INSERT INTO fiscal_outgoing_nfse_issuances")) savedIssuance = String(values[1])
+      if (sql.startsWith("INSERT INTO domain_commands")) command = { scope: String(values[3]), request: values[4], result: values[5] as Record<string, unknown> }
+      if (sql.startsWith("SELECT status,request_snapshot")) return { rows: [{ status: "pending", request_snapshot: { ...manualInput, issuanceMode: "manual" } }] as unknown as T[] }
+      if (sql.startsWith("SELECT external_id,environment,status")) return { rows: [{ external_id: manualInput.externalId, environment: "production", status: "pending", revision: "1", request_snapshot: { ...manualInput, issuanceMode: "manual" } }] as unknown as T[] }
+      return { rows: [] }
+    }, release() {},
+  }
+  const xml = "<?xml version=\"1.0\"?><NFSe/>"
+  const engine: OutgoingNfseEngine = {
+    async prepare() { return { id: "DPS354340220425201100011000001000000000000001", data: "prepared" } },
+    async issue() { throw new Error("automatic issue must not run") }, async consult() { throw new Error("not called") }, async cancel() { throw new Error("not called") },
+    async inspectOutgoing() { return { accessKey: "1".repeat(50), environment: "production", number: "15", issuedAt: "2026-11-17T12:00:00-03:00", provider: { kind: "CNPJ", value: "04252011000110", name: "Ávila Ops" }, recipient: { kind: "CPF", value: manualInput.customer.taxId, name: manualInput.customer.name }, serviceCode: manualInput.serviceCode, description: manualInput.description, serviceCents: "123456", xml, xmlSha256: "a".repeat(64) } },
+  }
+  const app = buildApp({ pool: { async connect() { return client } }, userinfoUrl: "https://auth.example.test/oauth/userinfo", fetchAuth: async () => Response.json({ sub: "service-app", email: "service@example.test", email_verified: true }), outgoingNfse: { engine, async certificateProvider() { throw new Error("certificate must not load") } } })
+  const headers = { authorization: `Bearer erp_${tenant}_${"a".repeat(64)}`, "x-tenant-id": tenant, "idempotency-key": "33333333-3333-4333-8333-333333333333" }
+  const prepared = await app.inject({ method: "POST", url: "/api/v1/integrations/nfse/manual-issuances", headers, payload: manualInput })
+  assert.equal(prepared.statusCode, 201, prepared.body)
+  assert.equal(prepared.json().data.id, savedIssuance)
+  assert.equal(prepared.json().data.status, "pending")
+  assert.equal(prepared.json().portalUrl, "https://www.nfse.gov.br/EmissorNacional")
+  command = undefined
+  const confirmed = await app.inject({ method: "POST", url: `/api/v1/integrations/nfse/issuances/${savedIssuance}/manual-confirm`, headers: { ...headers, "idempotency-key": "55555555-5555-4555-8555-555555555555" }, payload: { xml } })
+  assert.equal(confirmed.statusCode, 200, confirmed.body)
+  assert.equal(confirmed.json().data.status, "authorized")
+  assert.equal(confirmed.json().data.accessKey, "1".repeat(50))
   await app.close()
 })
