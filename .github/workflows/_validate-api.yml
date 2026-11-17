@@ -11,6 +11,10 @@ name: Validate API
       publish:
         type: boolean
         default: false
+      typescript_only:
+        description: Skip native compilation for scoped TypeScript-only PRs
+        type: boolean
+        default: false
     outputs:
       digest:
         description: Validated registry image digest
@@ -40,9 +44,11 @@ jobs:
         ref: ${{ inputs.source_sha }}
         persist-credentials: false
     - uses: dtolnay/rust-toolchain@1.99.1
+      if: '!inputs.typescript_only || inputs.full || inputs.publish'
       with:
         components: rustfmt,clippy
     - uses: Swatinem/rust-cache@v2
+      if: '!inputs.typescript_only || inputs.full || inputs.publish'
     - run: 'script_file=$(mktemp)
 
         trap ''rm -f -- "$script_file"'' EXIT
@@ -57,6 +63,7 @@ jobs:
         -- bash --noprofile --norc -e -o pipefail "$script_file"
 
         '
+      if: '!inputs.typescript_only || inputs.full || inputs.publish'
     - run: 'script_file=$(mktemp)
 
         trap ''rm -f -- "$script_file"'' EXIT
@@ -73,6 +80,7 @@ jobs:
         '
       if: inputs.full
     - name: Test and export the exact source contract
+      if: '!inputs.typescript_only || inputs.full || inputs.publish'
       run: 'script_file=$(mktemp)
 
         trap ''rm -f -- "$script_file"'' EXIT
@@ -98,15 +106,21 @@ jobs:
       with:
         node-version: 24
         cache: pnpm
-    - name: Verify TypeScript API and shared Rust HTTP contracts
+    - name: Verify TypeScript API with PostgreSQL
       env:
         API_TS_TEST_ADMIN_URL: postgres://postgres:ci_isolated_only@127.0.0.1:5432/postgres
       run: |
         python3 scripts/ci/timed.py --label 'api/typescript-install' --output "artifacts/timings/$GITHUB_JOB.jsonl" -- pnpm install --frozen-lockfile --prefer-offline
         python3 scripts/ci/timed.py --label 'api/typescript-typecheck' --output "artifacts/timings/$GITHUB_JOB.jsonl" -- pnpm --filter api-ts typecheck
         python3 scripts/ci/timed.py --label 'api/typescript-tests' --output "artifacts/timings/$GITHUB_JOB.jsonl" -- pnpm --filter api-ts test
+    - name: Compare native and TypeScript HTTP contracts
+      if: '!inputs.typescript_only || inputs.full || inputs.publish'
+      env:
+        API_TS_TEST_ADMIN_URL: postgres://postgres:ci_isolated_only@127.0.0.1:5432/postgres
+      run: |
         python3 scripts/ci/timed.py --label 'api/rust-typescript-contracts' --output "artifacts/timings/$GITHUB_JOB.jsonl" -- pnpm --filter api-ts test:contracts
     - uses: actions/upload-artifact@v4
+      if: '!inputs.typescript_only || inputs.full || inputs.publish'
       with:
         name: erp-openapi-${{ inputs.source_sha }}-${{ github.run_attempt }}
         path: artifacts/contracts/

@@ -25,7 +25,7 @@ def plan(paths):
             continue
         if path.startswith(("apps/web/", "packages/")):
             scope["web"] = True
-        elif path.startswith(("apps/api/", "migrations/", "queries/")) or path in (
+        elif path.startswith(("apps/api/", "apps/api-ts/", "migrations/", "queries/")) or path in (
             "Cargo.toml", "Cargo.lock", "rust-toolchain.toml"
         ):
             scope["api"] = True
@@ -35,6 +35,21 @@ def plan(paths):
             # Unknown/new infrastructure must not silently bypass validation.
             scope = dict.fromkeys(DOMAINS, True)
     return scope
+
+
+def native_api_required(paths):
+    for path in paths:
+        if path.startswith('apps/api-ts/'):
+            if path.startswith(('apps/api-ts/scripts/', 'apps/api-ts/src/platform/')) or path in (
+                'apps/api-ts/src/app.ts', 'apps/api-ts/src/server.ts',
+                'apps/api-ts/package.json', 'apps/api-ts/tsconfig.json',
+                'apps/api-ts/tsconfig.build.json', 'apps/api-ts/test/postgres-sales.test.ts',
+            ):
+                return True
+            continue
+        if plan([path])['api']:
+            return True
+    return False
 
 
 def signature_check_required(paths, *, full=False):
@@ -91,10 +106,12 @@ def attest(jobs, env):
 
 def main():
     if sys.argv[1] == "plan":
-        scope = plan(changed_paths())
+        paths = changed_paths()
+        scope = plan(paths)
         with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
             for domain, selected in scope.items():
                 output.write(f"{domain}={str(selected).lower()}\n")
+            output.write(f"native_api={str(native_api_required(paths)).lower()}\n")
         print(json.dumps(scope, sort_keys=True))
     elif sys.argv[1] == 'signatures':
         full = os.environ.get('VALIDATE_FULL', 'false')
