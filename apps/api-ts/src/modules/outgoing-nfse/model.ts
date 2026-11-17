@@ -36,7 +36,7 @@ export const outgoingNfseCreateSchema = z.object({
   environment: z.enum(["homologation", "production"]),
   competenceDate: z.iso.date(),
   amount: decimalAmountSchema,
-  serviceCode: z.string().trim().regex(/^\d{4,9}$/),
+  serviceCode: z.string().trim().regex(/^\d{6}$/),
   description: z.string().trim().min(1).max(2_000),
   customer: z.object({
     name: z.string().trim().min(1).max(200),

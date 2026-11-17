@@ -16,12 +16,13 @@ import { registerProductRoutes } from "./modules/products/routes.js"
 import { registerProposalRoutes } from "./modules/proposals/routes.js"
 import { registerReferenceRoutes } from "./modules/reference-data/routes.js"
 import { registerRegistrationSettingsRoutes } from "./modules/registration-settings/routes.js"
+import { registerOutgoingNfseRoutes, type OutgoingNfseDependencies } from "./modules/outgoing-nfse/routes.js"
 import { authenticateRequest, type AccessDependencies } from "./platform/access.js"
 import { Problem } from "./platform/problem.js"
 import { parseJson, stringifyJson } from "./platform/json.js"
 import { registerMcpDispatch } from "./platform/mcp-dispatch.js"
 
-export type AppDependencies = AccessDependencies
+export type AppDependencies = AccessDependencies & { outgoingNfse?: OutgoingNfseDependencies }
 
 export function buildApp(_dependencies: AppDependencies): FastifyInstance {
   const app = Fastify({ logger: false, bodyLimit: 65_536 })
@@ -83,6 +84,7 @@ export function buildApp(_dependencies: AppDependencies): FastifyInstance {
   registerProposalRoutes(app, _dependencies)
   registerReferenceRoutes(app, _dependencies)
   registerRegistrationSettingsRoutes(app, _dependencies)
+  registerOutgoingNfseRoutes(app, _dependencies)
   registerMcpDispatch(app, _dependencies)
   return app
 }

@@ -14,7 +14,7 @@ test("outgoing NFS-e input is strict and preserves monetary values as decimal st
     environment: "homologation",
     competenceDate: "2026-11-17",
     amount: "1234.56",
-    serviceCode: "0107",
+    serviceCode: "010701",
     description: "Consultoria em tecnologia",
     customer: { name: "Cliente", taxId: "52998224725", email: "financeiro@example.test" },
   }
