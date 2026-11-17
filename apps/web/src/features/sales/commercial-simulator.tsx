@@ -25,6 +25,7 @@ import { CommercialCheckout, type CheckoutHandle, type CheckoutProposalSnapshot 
 import { paymentToday, type CheckoutInput } from "./commercial-payment-model"
 import { checkoutEntryIssue } from "./commercial-payment-mobile-model"
 import { OrderWeightSummary } from "./order-weight-summary"
+import { useOrderProductDetails, type ProductFinishes } from "./order-product-details"
 import { OrderCustomerForm, type OrderCustomerHandle } from "./order-customer-form"
 import { CommercialOrderLayout, OrderEquipmentSearch, OrderSection, OrderTotals } from "./commercial-order-layout"
 import { OrderPendingReview, OrderQuickSummary, OrderSectionNavigation, focusOrderSection } from "./order-mobile-navigation"
@@ -117,6 +118,7 @@ function Simulator({ table: initialTable, initialSourceLine, initialProduct, ini
   const table = updatedTable || initialTable
   const [items, setItems] = useState<Selected[]>(() => (initialItems?.length ? initialItems : initialProduct ? [{ productId: initialProduct, quantity: 1 }] : []).map(item => { const source = table.data?.items.find(price => price.productId === item.productId && (!orderMode || price.line === (initialSourceLine === "national" ? "national" : "imported"))); return { productId: item.productId, quantity: String(item.quantity), ...(orderMode ? { line: source?.line, versionId: source?.versionId } : {}), structureColor: "", swingArmColor: "", upholsteryColor: "", plateHolderColor: "", plateHolderType: "" } }))
   const [product, setProduct] = useState("")
+  const productDetails = useOrderProductDetails(table.tenantId, items.map(item => item.productId), orderMode)
   const [search, setSearch] = useState("")
   const [destinationDraft, setDestination] = useState(initialDestination || table.data?.originState || "")
   const [taxpayer, setTaxpayer] = useState(initialTaxpayer ? "true" : "false")
@@ -351,6 +353,7 @@ function Simulator({ table: initialTable, initialSourceLine, initialProduct, ini
           equipment={<OrderSection id="order-equipment" title="Equipamentos" detail={quantityTotal === null ? "Confira as quantidades" : quantityTotal + " un."}>
             {table.sourceWarnings?.map(message => <p role="status" key={message} className="text-sm">{message} <Button type="button" variant="outline" disabled={frozen} onClick={refreshTable}>Atualizar tabelas</Button></p>)}
             <OrderEquipmentSearch items={table.data!.items} selected={items} tenantId={table.tenantId} disabled={frozen} onAdd={add} />
+            {Object.keys(productDetails.errors).length > 1 && <div role="status" className="flex flex-wrap items-center gap-2 text-sm"><span>Acabamentos indisponíveis em {Object.keys(productDetails.errors).length} equipamentos.</span><Button type="button" variant="outline" disabled={frozen || !!productDetails.loadingIds.length} onClick={() => productDetails.retry()}>Tentar de novo para todos</Button></div>}
             {unavailableItems.length > 0 && <p role="alert" className="text-sm">Há equipamentos indisponíveis nesta versão. Remova os itens indicados para continuar.</p>}
             {items.length ? <div className="order-equipment-scroll" role="region" aria-label="Equipamentos do pedido" tabIndex={0}>
               <DataTable className="order-equipment-table" aria-label="Equipamentos do pedido">
@@ -359,6 +362,7 @@ function Simulator({ table: initialTable, initialSourceLine, initialProduct, ini
                   name={sourcePrice(item)?.name || "Equipamento indisponível"}
                   sku={sourcePrice(item)?.sku || ""}
                   tenant={table.tenantId} orderMode price={sourcePrice(item)}
+                  details={{ value: productDetails.products[item.productId.toLowerCase()] ? { tenantId: table.tenantId, data: productDetails.products[item.productId.toLowerCase()] } : null, loading: productDetails.loadingIds.includes(item.productId.toLowerCase()), error: productDetails.errors[item.productId.toLowerCase()] || "", status: 0, reload: () => productDetails.retry(item.productId) }}
                   priced={sale?.items.find(source => source.productId === item.productId)} disabled={frozen}
                   update={next => { setItems(current => current.map((source, position) => position === index ? next : source)); change() }}
                   remove={() => { setItems(current => current.filter(source => source.productId !== item.productId)); change() }} />)}</tbody>
@@ -366,7 +370,7 @@ function Simulator({ table: initialTable, initialSourceLine, initialProduct, ini
               </DataTable>
             </div> : <div className="order-equipment-empty"><p>Nenhum equipamento ainda.</p><Button type="button" variant="outline" disabled={frozen} onClick={focusSearch}>Adicionar equipamento</Button></div>}
             {attempted && orderIssues.filter(issue => issue.section === "equipment").map(issue => <p key={issue.field} className="text-xs text-destructive">{issue.message}</p>)}
-            <OrderWeightSummary tenantId={table.tenantId} items={items.map(item => ({ ...item, quantity: validOrderQuantity(item.quantity) ? String(Number(item.quantity)) : "" }))} />
+            <OrderWeightSummary tenantId={table.tenantId} loading={!!productDetails.loadingIds.length} unavailable={!!Object.keys(productDetails.errors).length} onRetry={() => productDetails.retry()} items={items.map(item => ({ ...item, equipmentWeight: productDetails.products[item.productId.toLowerCase()]?.weight ?? null, quantity: validOrderQuantity(item.quantity) ? String(Number(item.quantity)) : "" }))} />
           </OrderSection>}
           customer={<OrderCustomerForm ref={customerForm} tenantId={table.tenantId} disabled={frozen}
             canManage={canCreate && canManageCustomer} onDirty={markDirty}
@@ -456,8 +460,19 @@ function Simulator({ table: initialTable, initialSourceLine, initialProduct, ini
   </div>
 }
 
-function SelectedProduct({ item, name, sku, tenant, update, remove, orderMode = false, price, priced, disabled = false }: { item: Selected; name: string; sku: string; tenant: string; update: (next: Selected) => void; remove: () => void; orderMode?: boolean; price?: PriceItem; priced?: Simulation["sale"]["items"][number]; disabled?: boolean }) {
-  const product = useResource<{ tenantId: string; data: { structureColors?: string[]; swingArmColors?: string[]; finishingPalette?: string | null; upholsteryColors?: string[]; upholsteryConfigurable?: boolean; plateHolderColors?: string[]; plateHolderTypes?: string[] } }>(`/api/erp/products/${item.productId}`)
+type FinishResource = { value: { tenantId: string; data: Partial<Omit<ProductFinishes, "finishingPalette">> & { finishingPalette?: string | null } } | null; loading: boolean; error: string; status: number; reload: () => void }
+type SelectedProductProps = { item: Selected; name: string; sku: string; tenant: string; update: (next: Selected) => void; remove: () => void; orderMode?: boolean; price?: PriceItem; priced?: Simulation["sale"]["items"][number]; disabled?: boolean; details?: FinishResource }
+
+function SelectedProduct(props: SelectedProductProps) {
+  return props.details ? <SelectedProductContent {...props} product={props.details} /> : <SelectedProductResource {...props} />
+}
+
+function SelectedProductResource(props: SelectedProductProps) {
+  const product = useResource<{ tenantId: string; data: { structureColors?: string[]; swingArmColors?: string[]; finishingPalette?: string | null; upholsteryColors?: string[]; upholsteryConfigurable?: boolean; plateHolderColors?: string[]; plateHolderTypes?: string[] } }>(`/api/erp/products/${props.item.productId}`)
+  return <SelectedProductContent {...props} product={product} />
+}
+
+function SelectedProductContent({ item, name, sku, tenant, update, remove, orderMode = false, price, priced, disabled = false, product }: SelectedProductProps & { product: FinishResource }) {
   const colors = product.value?.tenantId === tenant ? product.value.data : null
   const palette = catalogPaletteFor(colors?.finishingPalette)
   const selectedFinishes = [item.structureColor, item.swingArmColor, item.upholsteryColor, item.plateHolderType].filter(Boolean).join(" · ")
@@ -469,8 +484,9 @@ function SelectedProduct({ item, name, sku, tenant, update, remove, orderMode = 
       <td className="py-3 align-top"><Button variant="ghost" size="icon" type="button" disabled={disabled} aria-label={`Remover equipamento ${name}`} onClick={remove}><X aria-hidden="true" /></Button></td>
     </tr>
     <tr className="border-b last:border-0"><td colSpan={orderMode ? 6 : 3} className="min-w-0 pb-3">
-      {product.error && <div className="space-y-2 rounded-lg border p-2 text-xs"><p role="alert"><RequestError message={product.error} status={product.status} /></p><Button type="button" variant="outline" disabled={product.loading} aria-label={`Recarregar acabamentos de ${name}`} onClick={product.reload}>{product.loading ? "Carregando acabamentos…" : "Recarregar acabamentos"}</Button></div>}
-      <details className="group min-w-0" onInvalidCapture={event => { event.currentTarget.open = true }}>
+      {product.error && <div className={orderMode ? "flex flex-wrap items-center gap-2 text-xs" : "space-y-2 rounded-lg border p-2 text-xs"}><p role="alert">{orderMode ? "Acabamentos indisponíveis" : <RequestError message={product.error} status={product.status} />}</p><Button type="button" variant="outline" disabled={product.loading} aria-label={`Recarregar acabamentos de ${name}`} onClick={product.reload}>{product.loading ? "Carregando acabamentos…" : orderMode ? "Tentar de novo" : "Recarregar acabamentos"}</Button></div>}
+      {orderMode && product.loading && <p role="status" className="text-xs text-muted-foreground">Carregando acabamentos…</p>}
+      {(!orderMode || !!colors && !product.error) && <details className="group min-w-0" onInvalidCapture={event => { event.currentTarget.open = true }}>
         <summary className="min-h-10 cursor-pointer rounded-md py-2 text-sm font-medium focus-visible:outline-2 focus-visible:outline-ring">Acabamentos<span className="sr-only"> de {name}</span><span className="ml-2 text-xs font-normal text-muted-foreground group-open:hidden">{selectedFinishes || "Escolher cores"}</span></summary>
         <fieldset disabled={disabled} className="grid min-w-0 gap-4 pt-3 sm:grid-cols-2">
           <FinishChoice title="Estrutura" part="structure" palette={palette} label={`Cor da estrutura de ${name}`} options={colors?.structureColors} value={item.structureColor} onChange={value => update({ ...item, structureColor: value })} />
@@ -480,7 +496,7 @@ function SelectedProduct({ item, name, sku, tenant, update, remove, orderMode = 
           {(colors?.upholsteryConfigurable !== false || item.upholsteryColor) && <FinishChoice title="Estofado" part="upholstery" palette={palette} label={`Cor do estofado de ${name}`} options={colors?.upholsteryConfigurable === false ? [] : colors?.upholsteryColors} value={item.upholsteryColor} onChange={value => update({ ...item, upholsteryColor: value })} />}
           <div className="sm:col-span-2"><CatalogPaletteReference palette={palette} /></div>
         </fieldset>
-      </details>
+      </details>}
     </td></tr>
   </>
 }

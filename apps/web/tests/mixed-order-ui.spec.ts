@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test"
+import { installProductFinishesFixture } from "./helpers/product-finishes-fixture"
 import { installFrontendFixture, tenant } from "./helpers/frontend-fixture"
 
 const versions = { imported: "11111111-1111-4111-8111-111111111112", national: "11111111-1111-4111-8111-111111111113" }
@@ -98,6 +99,7 @@ test("seletor navega por teclado, mantém a busca aberta e rola sem deslocar o p
 
 test("novo pedido reúne ambas as tabelas e só libera proposta após cálculo atual", async ({ page, context, browserName }, info) => {
   await installFrontendFixture(context)
+  await installProductFinishesFixture(page, tenant, equipment.map(item => ({ id: item.productId, name: item.name, weight: "20" })))
   const inputs: Record<string, unknown>[] = []
   await page.route("**/api/erp/me", route => route.fulfill({ json: { tenant: { id: tenant }, permissions: ["sales.orders.read", "sales.orders.manage", "catalog.parties.read", "catalog.products.read"] } }))
   await page.route("**/api/erp/company", route => route.fulfill({ json: { tenantId: tenant, data: { legalName: "Emitente da proposta", taxId: "12345678000190" } } }))

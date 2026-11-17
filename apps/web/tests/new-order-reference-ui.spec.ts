@@ -1,4 +1,5 @@
 import { installEmptyNationalTable } from "./helpers/empty-national-table"
+import { installProductFinishesFixture } from "./helpers/product-finishes-fixture"
 import { expect, test, type Page } from "@playwright/test"
 import { installFrontendFixture, tenant, record } from "./helpers/frontend-fixture"
 import type { CheckoutInput } from "../src/features/sales/commercial-payment-model"
@@ -11,6 +12,7 @@ const boleto = "77777777-7777-4777-8777-777777777777"
 const equipment = { productId: product, name: "Mesa flexora", sku: "LD-B001", unit: "UN", ipiBps: 1300, priceWithoutIpiCents: 100000, priceWithIpiCents: 113000, available: true }
 
 async function fixture(page: Page) {
+  await installProductFinishesFixture(page, tenant, [{ id: product, name: equipment.name, weight: "25.5" }])
   await installEmptyNationalTable(page)
   await page.route("**/api/erp/me", route => route.fulfill({ json: { tenant: { id: tenant }, permissions: ["sales.orders.read", "sales.orders.manage", "catalog.parties.read", "catalog.parties.manage", "catalog.products.read"] } }))
   await page.route(/\/api\/erp\/orders\?/, route => route.fulfill({ headers: { ETag: '"1"' }, json: { tenantId: tenant, canEdit: true, data: [], total: 0 } }))

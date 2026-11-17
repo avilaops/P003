@@ -7,6 +7,7 @@ export type BackendEnvironment = { ERP_TYPESCRIPT_API_URL?: string | undefined; 
 const uuid = "[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}"
 const routes: { module: MigratedModule; methods: readonly string[]; path: RegExp }[] = [
   { module: "preferences", methods: ["GET", "PUT"], path: /^\/preferences$/ },
+  { module: "registrations", methods: ["GET"], path: /^\/products\/finishes$/ },
   { module: "registrations", methods: ["GET", "POST"], path: /^\/(?:parties|products|product-categories|product-groups|tag-groups|tags)$/ },
   { module: "registrations", methods: ["GET", "PUT"], path: new RegExp(`^/(?:parties|products|product-categories|product-groups|tag-groups|tags)/${uuid}$`, "i") },
   { module: "registrations", methods: ["GET", "PUT"], path: /^\/registration-settings\/(?:products|parties|contact-types|tax-profiles)$/ },
