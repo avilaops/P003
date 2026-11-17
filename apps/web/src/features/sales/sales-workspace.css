@@ -33,7 +33,7 @@
 @media (max-width: 760px) {
   .sales-recent-table :is(td, th) { padding: 12px 10px; }
   .sales-customer-column, .sales-status-column { display: none; }
-  .sales-mobile-customer { display: block; overflow-wrap: anywhere; margin-top: 6px; font-size: 13px; }
+  .sales-mobile-customer { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; margin-top: 6px; font-size: 13px; }
   .sales-mobile-status { display: block; margin-top: 8px; }
   .sales-recent-table thead { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
   .sales-recent-table tbody { display: block; }
