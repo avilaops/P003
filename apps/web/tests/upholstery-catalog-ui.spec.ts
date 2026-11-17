@@ -16,6 +16,8 @@ const finishes = [
 
 for (const finish of finishes) for (const width of [320, 390]) test(`proposta mostra fotos de ${finish.label.toLowerCase()} do catálogo e conserva a escolha em ${width}px`, async ({ context, page }, info) => {
   await installFrontendFixture(context)
+  await page.route("**/api/erp/commercial/tables/**", route => route.fulfill({ json: { tenantId: tenant, data: null } }))
+  await page.route(`**/api/erp/parties/${customerId}`, route => route.fulfill({ json: { tenantId: tenant, data: { id: customerId, personType: "fisica", fiscal: null, addresses: [] } } }))
   await page.setViewportSize({ width, height: 844 })
   await page.route("**/api/erp/me", route => route.fulfill({ json: { tenant: { id: tenant }, permissions: ["sales.proposals.read", "sales.proposals.manage"] } }))
   let saved: Record<string, unknown> | undefined
