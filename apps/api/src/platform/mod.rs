@@ -24,3 +24,6 @@ pub mod langfuse;
 pub mod service_auth;
 pub mod state;
 pub mod subscriptions;
+pub mod typescript_gateway;
+#[cfg(test)]
+mod typescript_gateway_tests;

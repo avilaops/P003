@@ -345,6 +345,16 @@ async fn handle(State(state): State<McpState>, headers: HeaderMap, body: Bytes) 
             request
                 .extensions_mut()
                 .insert(VerifiedEmail(credential.verified_email));
+            // Only the authenticated native MCP boundary creates this capability.
+            // TypeScript independently checks the original grant again.
+            request.extensions_mut().insert(
+                crate::platform::typescript_gateway::McpDispatchCredential::validated(
+                    headers
+                        .get("authorization")
+                        .and_then(|value| value.to_str().ok())
+                        .expect("validated MCP authorization"),
+                ),
+            );
             let response = match tokio::time::timeout(
                 Duration::from_secs(120),
                 state.dispatch.clone().oneshot(request),
@@ -363,6 +373,8 @@ async fn handle(State(state): State<McpState>, headers: HeaderMap, body: Bytes) 
                 "content-disposition",
                 "retry-after",
                 "x-request-id",
+                "x-erp-backend",
+                "idempotency-replayed",
             ] {
                 if let Some(value) = response.headers().get(key).and_then(|h| h.to_str().ok()) {
                     result_headers.insert(key.into(), json!(value));
