@@ -42,7 +42,12 @@
     },
     "1.01": {
       "entry": "NFSe_v1.01.xsd",
+      "dpsEntry": "DPS_v1.01.xsd",
       "files": [
+        {
+          "name": "DPS_v1.01.xsd",
+          "sha256": "8e1aab58d3850d654f119a0274e5d8f1826f39007d272d925fe5bf23fcd38ca3"
+        },
         {
           "name": "NFSe_v1.01.xsd",
           "sha256": "a2cfc804c82f01240d9f39ebea05eb91c9b46d3b72f305668830e81e10e863af"

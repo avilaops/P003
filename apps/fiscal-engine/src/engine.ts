@@ -14,6 +14,7 @@ import { supplementSimplifiedNfe } from "./lib/fiscal/simplified-nfe.ts";
 import { createNfceQrPayload } from "./lib/fiscal/nfce-qr.ts";
 import { queryCteDistribution } from "./lib/fiscal/cte-distribution-client.ts";
 import { inspectReceivedNationalNfse } from "./lib/fiscal/nfse-received.ts";
+import { prepareNationalNfse } from "./lib/fiscal/nfse-issuance.ts";
 import { NationalNfseXmlError } from "./lib/fiscal/nfse-layout.ts";
 import { inspectReceivedCte, CteInspectionError } from "./lib/fiscal/cte-received.ts";
 import type { RecipientManifestKind } from "./lib/fiscal/recipient-manifest.ts";
@@ -485,6 +486,7 @@ export async function dispatch(operation: string, value: unknown, send: Send = s
       throw error;
     }
   }
+  if (operation === "prepare-nfse") return { ...await prepareNationalNfse(input) };
   const environment = fiscalEnvironment(input);
   if (!["prepare", "authorize", "consult", "event", "void"].includes(operation)) homologation(input);
   if (operation === "prepare") {
