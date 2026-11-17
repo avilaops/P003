@@ -11,6 +11,6 @@ export default defineConfig({
     ...server,
     command: "node node_modules/next/dist/bin/next start --hostname 127.0.0.1 --port 23928",
     url: `${monitorOrigin}/entrar`,
-    env: { ...server?.env, ERP_WEB_ORIGIN: monitorOrigin, ERP_API_URL: "http://127.0.0.1:33929" },
+    env: { ...server?.env, ERP_WEB_ORIGIN: monitorOrigin, ERP_API_URL: "http://127.0.0.1:33929", ERP_TYPESCRIPT_API_URL: "http://127.0.0.1:33929" },
   },
 })

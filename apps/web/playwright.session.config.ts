@@ -19,6 +19,7 @@ export default defineConfig({
       ERP_WEB_ORIGIN: origin,
       ERP_SESSION_SECRET: secret,
       ERP_API_URL: "http://127.0.0.1:33129",
+      ERP_TYPESCRIPT_API_URL: "http://127.0.0.1:33129",
       AUTH_ISSUER: "http://127.0.0.1:33130",
       ERP_AUTH_CLIENT_ID: "cookie-fixture-client",
       ERP_AUTH_CLIENT_SECRET: "cookie-fixture-secret",

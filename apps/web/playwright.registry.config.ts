@@ -10,6 +10,6 @@ export default defineConfig({
   use: { ...base.use, launchOptions: process.env.ERP_BROWSER_EXECUTABLE ? { executablePath: process.env.ERP_BROWSER_EXECUTABLE } : undefined },
   webServer: { ...server,
     ...(process.env.ERP_REGISTRY_BROWSER_SERVER ? { command: `node ${process.env.ERP_REGISTRY_BROWSER_SERVER}` } : {}),
-    env: { ...server.env, PORT: "33118", HOSTNAME: "127.0.0.1", ERP_API_URL: "http://127.0.0.1:33941" },
+    env: { ...server.env, PORT: "33118", HOSTNAME: "127.0.0.1", ERP_API_URL: "http://127.0.0.1:33941", ERP_TYPESCRIPT_API_URL: "http://127.0.0.1:33941" },
   },
 })
