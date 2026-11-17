@@ -39,12 +39,12 @@ pub(super) async fn required(
         .bind(tenant).bind(proposal).bind(version).fetch_one(&mut **tx).await.map_err(db)
 }
 
-fn unavailable() -> Response {
-    response(
+fn unavailable() -> Box<Response> {
+    Box::new(response(
         StatusCode::SERVICE_UNAVAILABLE,
         None,
         json!({"status":503,"title":"A validação comercial da proposta está indisponível. Nenhuma mensagem foi enviada."}),
-    )
+    ))
 }
 
 pub(super) async fn check(
@@ -54,7 +54,7 @@ pub(super) async fn check(
     tenant: Uuid,
     proposal: Uuid,
     expected: i64,
-) -> Result<Value, Response> {
+) -> Result<Value, Box<Response>> {
     if state.typescript.is_none() {
         return Err(unavailable());
     }
@@ -77,7 +77,7 @@ pub(super) async fn check(
     let checked =
         crate::platform::typescript_gateway::dispatch(State(state.clone()), request).await;
     if checked.status() != StatusCode::OK {
-        return Err(checked);
+        return Err(Box::new(checked));
     }
     let bytes = to_bytes(checked.into_body(), 1_000_000)
         .await

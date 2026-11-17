@@ -374,7 +374,7 @@ pub async fn send(
             .await
             {
                 Ok(candidate) => candidate,
-                Err(response) => return Ok(response),
+                Err(response) => return Ok(*response),
             }
         } else {
             serde_json::Value::Null
