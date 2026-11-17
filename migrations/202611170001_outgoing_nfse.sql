@@ -6,6 +6,7 @@ CREATE TABLE fiscal_outgoing_nfse_issuances (
     status text NOT NULL CHECK (status IN ('pending','processing','authorized','rejected','uncertain','cancelled')),
     request_hash char(64) NOT NULL CHECK (request_hash ~ '^[0-9a-f]{64}$'),
     request_snapshot jsonb NOT NULL CHECK (jsonb_typeof(request_snapshot) = 'object'),
+    dps_id char(45) NOT NULL CHECK (dps_id ~ '^DPS[0-9]{42}$'),
     access_key char(50) CHECK (access_key ~ '^[0-9]{50}$'),
     nfse_number text CHECK (nfse_number IS NULL OR char_length(btrim(nfse_number)) BETWEEN 1 AND 50),
     issued_at timestamptz,
@@ -28,6 +29,13 @@ CREATE TABLE fiscal_outgoing_nfse_issuances (
 CREATE INDEX fiscal_outgoing_nfse_status_idx
     ON fiscal_outgoing_nfse_issuances(tenant_id,status,updated_at,id);
 
+CREATE TABLE fiscal_outgoing_nfse_sequences (
+    tenant_id uuid NOT NULL REFERENCES tenants(id),
+    series integer NOT NULL CHECK (series BETWEEN 1 AND 99999),
+    next_number bigint NOT NULL CHECK (next_number BETWEEN 1 AND 999999999999999),
+    PRIMARY KEY (tenant_id,series)
+);
+
 CREATE FUNCTION fiscal_outgoing_nfse_request_snapshot_immutable() RETURNS trigger
 LANGUAGE plpgsql AS $$
 BEGIN
@@ -37,6 +45,7 @@ BEGIN
         OR NEW.environment IS DISTINCT FROM OLD.environment
         OR NEW.request_hash IS DISTINCT FROM OLD.request_hash
         OR NEW.request_snapshot IS DISTINCT FROM OLD.request_snapshot
+        OR NEW.dps_id IS DISTINCT FROM OLD.dps_id
         OR NEW.created_by_subject IS DISTINCT FROM OLD.created_by_subject
         OR NEW.created_at IS DISTINCT FROM OLD.created_at THEN
         RAISE EXCEPTION 'NFS-e request snapshot is immutable';
@@ -82,6 +91,12 @@ CREATE POLICY fiscal_outgoing_nfse_issuances_isolation ON fiscal_outgoing_nfse_i
 ALTER TABLE fiscal_outgoing_nfse_events ENABLE ROW LEVEL SECURITY;
 ALTER TABLE fiscal_outgoing_nfse_events FORCE ROW LEVEL SECURITY;
 CREATE POLICY fiscal_outgoing_nfse_events_isolation ON fiscal_outgoing_nfse_events
+    USING (tenant_id=nullif(current_setting('app.tenant_id',true),'')::uuid)
+    WITH CHECK (tenant_id=nullif(current_setting('app.tenant_id',true),'')::uuid);
+
+ALTER TABLE fiscal_outgoing_nfse_sequences ENABLE ROW LEVEL SECURITY;
+ALTER TABLE fiscal_outgoing_nfse_sequences FORCE ROW LEVEL SECURITY;
+CREATE POLICY fiscal_outgoing_nfse_sequences_isolation ON fiscal_outgoing_nfse_sequences
     USING (tenant_id=nullif(current_setting('app.tenant_id',true),'')::uuid)
     WITH CHECK (tenant_id=nullif(current_setting('app.tenant_id',true),'')::uuid);
 

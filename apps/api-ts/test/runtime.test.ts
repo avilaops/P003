@@ -39,3 +39,12 @@ test("MCP resource uses the validated ERP origin without credentials, path or in
     assert.throws(() => loadConfiguration({ ...environment, ERP_MCP_ORIGIN: origin }))
   }
 })
+
+test("fiscal credentials are complete and can only be sent to the loopback engine", () => {
+  const environment = { DATABASE_URL: "postgresql://app@localhost/test", AUTH_ISSUER: "https://auth.example.test", ERP_FISCAL_ENGINE_TOKEN: "x".repeat(24), FISCAL_A1_KEYRING: "{}" }
+  assert.equal(loadConfiguration({ ...environment, ERP_FISCAL_ENGINE_URL: "http://127.0.0.1:8091" }).fiscalEngine?.url, "http://127.0.0.1:8091")
+  assert.throws(() => loadConfiguration(environment))
+  for (const url of ["https://127.0.0.1:8091", "http://engine.internal:8091", "http://user:secret@127.0.0.1:8091", "http://127.0.0.1:8091/path"]) {
+    assert.throws(() => loadConfiguration({ ...environment, ERP_FISCAL_ENGINE_URL: url }))
+  }
+})
