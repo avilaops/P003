@@ -350,7 +350,7 @@ function Simulator({ table: initialTable, initialSourceLine, initialProduct, ini
         renderOrder={({ payment, delivery }) => <CommercialOrderLayout
           equipment={<OrderSection id="order-equipment" title="Equipamentos" detail={quantityTotal === null ? "Confira as quantidades" : quantityTotal + " un."}>
             {table.sourceWarnings?.map(message => <p role="status" key={message} className="text-sm">{message} <Button type="button" variant="outline" disabled={frozen} onClick={refreshTable}>Atualizar tabelas</Button></p>)}
-            <OrderEquipmentSearch items={table.data!.items} selected={items.map(item => item.productId)} disabled={frozen} onAdd={add} />
+            <OrderEquipmentSearch items={table.data!.items} selected={items} tenantId={table.tenantId} disabled={frozen} onAdd={add} />
             {unavailableItems.length > 0 && <p role="alert" className="text-sm">Há equipamentos indisponíveis nesta versão. Remova os itens indicados para continuar.</p>}
             {items.length ? <div className="order-equipment-scroll" role="region" aria-label="Equipamentos do pedido" tabIndex={0}>
               <DataTable className="order-equipment-table" aria-label="Equipamentos do pedido">

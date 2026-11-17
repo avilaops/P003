@@ -31,7 +31,8 @@ async function fixture(page: Page, options: { authority?: string; limit?: number
 async function addEquipment(page: Page) {
   const search = page.getByLabel("Buscar equipamento", { exact: true })
   await search.fill("Mesa")
-  await page.getByRole("button", { name: /^Mesa flexora/ }).click()
+  await page.getByRole("option", { name: /^Mesa flexora/ }).click()
+  await search.press("Escape")
   await expect(page.getByRole("region", { name: "Totais do pedido", exact: true })).toContainText("R$ 1.130,00")
 }
 test.beforeEach(async ({ context, page, baseURL }) => {
@@ -56,8 +57,10 @@ for (const theme of ["light", "dark"]) test(`pendências explicam salvar e levam
   await page.getByRole("button", { name: "Revisar pedido", exact: true }).click()
   await page.screenshot({ path: info.outputPath(`mobile-empty-review-${theme}.png`) })
   await page.getByRole("button", { name: "Salvar pedido", exact: true }).click()
+  const search = page.getByLabel("Buscar equipamento", { exact: true })
+  await expect(search).toBeFocused()
+  await search.press("Escape")
   await expect(page.getByRole("region", { name: "Pendências do pedido" })).toContainText("Equipamentos")
-  await expect(page.getByLabel("Buscar equipamento", { exact: true })).toBeFocused()
   expect(writes).toEqual([])
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
   await page.screenshot({ path: info.outputPath("mobile-pending.png"), fullPage: true })
@@ -67,8 +70,9 @@ test("resumo sai da área do teclado e navegação preserva o preenchimento", as
   await fixture(page)
   await page.goto("/vendas/pedidos/novo")
   const quick = page.getByRole("region", { name: "Resumo rápido do pedido" })
+  const search = page.getByLabel("Buscar equipamento", { exact: true })
   await expect(quick).toBeVisible()
-  await page.getByLabel("Buscar equipamento", { exact: true }).focus()
+  await search.focus()
   await page.evaluate(() => {
     Object.defineProperty(window.visualViewport!, "height", { configurable: true, value: 380 })
     window.visualViewport!.dispatchEvent(new Event("resize"))
@@ -78,6 +82,7 @@ test("resumo sai da área do teclado e navegação preserva o preenchimento", as
     Object.defineProperty(window.visualViewport!, "height", { configurable: true, value: innerHeight })
     window.visualViewport!.dispatchEvent(new Event("resize"))
   })
+  await search.press("Escape")
   await expect(quick).toBeVisible()
   await addEquipment(page)
   page.once("dialog", dialog => dialog.dismiss())
@@ -208,8 +213,10 @@ for (const person of ["cpf", "cnpj"] as const) test(`cliente novo ${person}, out
 test("erro de cálculo preserva equipamento, explica bloqueio e não fabrica total", async ({ page }) => {
   await fixture(page, { failure: true })
   await page.goto("/vendas/pedidos/novo")
-  await page.getByLabel("Buscar equipamento", { exact: true }).fill("Mesa")
-  await page.getByRole("button", { name: /^Mesa flexora/ }).click()
+  const search = page.getByLabel("Buscar equipamento", { exact: true })
+  await search.fill("Mesa")
+  await page.getByRole("option", { name: /^Mesa flexora/ }).click()
+  await search.press("Escape")
   await expect(page.getByRole("region", { name: "Resumo rápido do pedido" })).toContainText("Confira o cálculo")
   await expect(page.getByRole("region", { name: "Salvar pedido", exact: true })).toContainText("Preço temporariamente indisponível")
   await expect(page.getByLabel("Quantidade de Mesa flexora", { exact: true })).toHaveValue("1")
