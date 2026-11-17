@@ -21,7 +21,7 @@ const linkClass = "font-medium text-primary underline-offset-4 hover:underline f
 
 function DraftSummary({ title, href, resource }: { title: string; href: string; resource: ReadState }) {
   return <div className="sales-summary-card" aria-busy={resource.loading}>
-    {resource.loading ? <><span className="sales-summary-placeholder" aria-hidden="true" /><span>{title}</span><span role="status" className="sr-only">Carregando…</span></> : resource.error ? <><span className="font-medium">{title}</span><RequestError message={resource.error} status={resource.status} /><Button variant="outline" size="sm" onClick={resource.reload}>Tentar consultar {title.toLowerCase()} novamente</Button></> : resource.value ? <Link className="sales-summary-link" href={href}><strong className="sales-summary-number tabular-nums">{resource.value.total}</strong><span>{title}</span><span aria-hidden="true" className="sales-summary-arrow">↗</span></Link> : null}
+    {resource.loading ? <><span className="sales-summary-placeholder" aria-hidden="true" /><span>{title}</span><span role="status" className="sr-only">Carregando…</span></> : resource.error ? <><span className="font-medium">{title}</span><RequestError message={resource.error} status={resource.status} /><Button variant="outline" size="sm" className="h-auto min-h-9 max-w-full whitespace-normal text-left" onClick={resource.reload}>Tentar consultar {title.toLowerCase()} novamente</Button></> : resource.value ? <Link className="sales-summary-link" href={href}><strong className="sales-summary-number tabular-nums">{resource.value.total}</strong><span>{title}</span><span aria-hidden="true" className="sales-summary-arrow">↗</span></Link> : null}
   </div>
 }
 
@@ -45,7 +45,7 @@ function RecentRecords({ kind, title, resource }: { kind: Kind; title: string; r
         const action = commercialRecordAction(kind, record.id, record.status, canEdit)
         const status = "expired" in record && record.expired ? "Expirada" : (orders ? orderStatusLabels : proposalStatus)[record.status] || record.status
         return <tr key={record.id}>
-          <td className="sales-record-identity"><Link className={linkClass} href={`/vendas/${kind}/${record.id}`}>{orders ? orderNumber(record.number) : `Proposta ${record.number}`}</Link><span className="sales-mobile-customer">{record.customerName}</span><span className="sales-mobile-status"><CommercialStatus status={record.status} label={status} /></span><span className="sales-mobile-date">Atualizado em <UpdatedAt value={"updatedAt" in record ? record.updatedAt : undefined} /></span></td>
+          <td className="sales-record-identity"><Link className={linkClass} href={`/vendas/${kind}/${record.id}`}>{orders ? orderNumber(record.number) : `Proposta ${record.number}`}</Link><span className="sales-mobile-customer" title={record.customerName}>{record.customerName}</span><span className="sales-mobile-status"><CommercialStatus status={record.status} label={status} /></span><span className="sales-mobile-date">Atualizado em <UpdatedAt value={"updatedAt" in record ? record.updatedAt : undefined} /></span></td>
           <td className="sales-customer-column"><span className="sales-customer-name" title={record.customerName}>{record.customerName}</span></td>
           <td className="sales-status-column"><CommercialStatus status={record.status} label={status} /></td>
           <td className="sales-date-column"><UpdatedAt value={"updatedAt" in record ? record.updatedAt : undefined} /></td>
