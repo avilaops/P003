@@ -50,7 +50,7 @@
 .order-equipment-thumbnail svg { width: 15px; height: 15px; }
 .order-equipment-option-copy { display: grid; gap: 2px; overflow-wrap: anywhere; }
 .order-equipment-option-copy strong, .order-equipment-option-price { font-size: 13px; font-weight: 600; line-height: 1.25; }
-.order-equipment-option-copy small { font-size: 11px; line-height: 1.25; color: var(--muted-foreground); }
+.order-equipment-option-copy small { font-size: var(--workspace-font-auxiliary); line-height: 1.25; color: var(--muted-foreground); }
 .order-equipment-option-copy .order-equipment-option-hint { font-weight: 600; }
 .order-equipment-option-price { font-variant-numeric: tabular-nums; white-space: nowrap; }
 .order-equipment-option-add { width: 16px; height: 16px; color: var(--muted-foreground); }

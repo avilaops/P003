@@ -73,12 +73,12 @@
 }
 
 .order-mobile-summary-copy small {
-  font-size: inherit;
+  font-size: var(--workspace-font-auxiliary);
 }
 
 .order-mobile-summary-copy strong {
   color: var(--foreground);
-  font-size: 15px;
+  font-size: 16px;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
 }

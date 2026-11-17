@@ -75,7 +75,7 @@
 }
 
 .order-equipment-identity strong { font-weight: 600; }
-.order-equipment-identity small { min-height: 1em; color: var(--muted-foreground); font-size: 11px; }
+.order-equipment-identity small { min-height: 1em; color: var(--muted-foreground); font-size: var(--workspace-font-auxiliary); }
 .order-equipment-identity > *, .order-equipment-short-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .order-equipment-finishes { min-width: 0; }
 .order-equipment-list .order-equipment-compact-row .order-equipment-finishes-action {
@@ -87,11 +87,11 @@
   gap: 4px;
   padding-inline: 4px;
   color: var(--muted-foreground);
-  font-size: 11px;
+  font-size: var(--workspace-font-auxiliary);
 }
 
 .order-equipment-finishes-action svg { flex-shrink: 0; }
-.order-equipment-finish-loading { display: flex; min-height: 28px; align-items: center; padding-inline: 4px; color: var(--muted-foreground); font-size: 11px; }
+.order-equipment-finish-loading { display: flex; min-height: 28px; align-items: center; padding-inline: 4px; color: var(--muted-foreground); font-size: var(--workspace-font-auxiliary); }
 .order-equipment-chips { display: flex; min-width: 0; align-items: center; gap: 4px; }
 .order-equipment-chip {
   display: inline-flex;
@@ -252,7 +252,7 @@
   .order-equipment-compact-quantity { width: 154px; grid-template-columns: 44px minmax(0, 1fr) 44px; margin-inline: 0; }
   .order-equipment-list .order-equipment-compact-row .order-equipment-compact-quantity input { font-size: 16px; }
 
-  .order-equipment-amount { display: flex; justify-content: flex-end; gap: 4px; font-size: 11px; line-height: 1.2; }
+  .order-equipment-amount { display: flex; justify-content: flex-end; gap: 4px; font-size: var(--workspace-font-auxiliary); line-height: 1.2; }
   .order-equipment-amount > small { display: inline; flex-shrink: 0; color: var(--muted-foreground); font-size: 10px; }
 
   .order-finishes-sheet[data-side=right] {

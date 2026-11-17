@@ -90,22 +90,43 @@ async fn packet_positions_and_sealed_evidence_are_database_invariants(admin: PgP
 
     let invalid_position = sqlx::query("INSERT INTO document_engine.document_packet_items(id,tenant_id,packet_id,document_id,section,position,added_by) VALUES(gen_random_uuid(),$1::uuid,'eeeeeeee-0000-4000-8000-000000000001','dddddddd-0000-4000-8000-000000000001','order',0,'editor')")
         .bind(TENANT).execute(&admin).await.unwrap_err();
-    assert_eq!(invalid_position.as_database_error().unwrap().code().as_deref(), Some("23514"));
+    assert_eq!(
+        invalid_position
+            .as_database_error()
+            .unwrap()
+            .code()
+            .as_deref(),
+        Some("23514")
+    );
 
     let cross_tenant = sqlx::query("INSERT INTO document_engine.document_packet_items(id,tenant_id,packet_id,document_id,section,position,added_by) VALUES(gen_random_uuid(),$1::uuid,'eeeeeeee-0000-4000-8000-000000000001','dddddddd-0000-4000-8000-000000000002','order',1,'editor')")
         .bind(TENANT).execute(&admin).await.unwrap_err();
-    assert_eq!(cross_tenant.as_database_error().unwrap().code().as_deref(), Some("23503"));
+    assert_eq!(
+        cross_tenant.as_database_error().unwrap().code().as_deref(),
+        Some("23503")
+    );
 
     sqlx::query("UPDATE document_engine.document_packets SET status='sealed',sealed_at=now() WHERE tenant_id=$1::uuid AND id='eeeeeeee-0000-4000-8000-000000000001'")
         .bind(TENANT).execute(&admin).await.unwrap();
     let reopen = sqlx::query("UPDATE document_engine.document_packets SET status='draft',sealed_at=NULL WHERE tenant_id=$1::uuid AND id='eeeeeeee-0000-4000-8000-000000000001'")
         .bind(TENANT).execute(&admin).await.unwrap_err();
-    assert_eq!(reopen.as_database_error().unwrap().code().as_deref(), Some("42501"));
+    assert_eq!(
+        reopen.as_database_error().unwrap().code().as_deref(),
+        Some("42501")
+    );
     let append = sqlx::query("INSERT INTO document_engine.document_packet_items(id,tenant_id,packet_id,document_id,section,position,added_by) VALUES(gen_random_uuid(),$1::uuid,'eeeeeeee-0000-4000-8000-000000000001','dddddddd-0000-4000-8000-000000000001','order',1,'editor')")
         .bind(TENANT).execute(&admin).await.unwrap_err();
-    assert_eq!(append.as_database_error().unwrap().code().as_deref(), Some("42501"));
+    assert_eq!(
+        append.as_database_error().unwrap().code().as_deref(),
+        Some("42501")
+    );
 
-    let other_tenant_document: i64 = sqlx::query_scalar("SELECT count(*) FROM document_engine.rendered_documents WHERE tenant_id=$1::uuid")
-        .bind(OTHER).fetch_one(&admin).await.unwrap();
+    let other_tenant_document: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM document_engine.rendered_documents WHERE tenant_id=$1::uuid",
+    )
+    .bind(OTHER)
+    .fetch_one(&admin)
+    .await
+    .unwrap();
     assert_eq!(other_tenant_document, 1);
 }

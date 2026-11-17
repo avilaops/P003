@@ -37,7 +37,7 @@ function singleHeader(value: string | string[] | undefined) {
 }
 
 function commandKey(value: string | string[] | undefined) {
-  const parsed = z.guid().safeParse(singleHeader(value))
+  const parsed = z.string().uuid().safeParse(singleHeader(value))
   if (singleHeader(value) === undefined) throw new Problem(428, "idempotency_required", "Informe a chave de idempotência")
   if (!parsed.success) throw new Problem(422, "invalid_input", "Chave de idempotência inválida")
   return parsed.data
@@ -82,7 +82,7 @@ async function validateRelations(context: AuthorizedContext, resource: string, i
 export function registerReferenceRoutes(app: FastifyInstance, dependencies: AppDependencies) {
   for (const [resource, definition] of Object.entries(definitions)) {
     const schema = inputSchemas[resource as keyof typeof inputSchemas]
-    const idSchema = resource === "product-categories" ? databaseId : z.guid()
+    const idSchema = databaseId
     const projection = ["id", "revision", "code", "name", "status", "notes", ...definition.extras].join(",")
     const load = async (client: Parameters<Parameters<typeof authorizeRequest>[2]>[0]["client"], tenantId: string, id: string) => {
       const result = await client.query<Record<string, unknown>>(`SELECT ${projection} FROM ${definition.table} WHERE tenant_id=$1 AND id=$2`, [tenantId, id])
