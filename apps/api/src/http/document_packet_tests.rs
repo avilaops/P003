@@ -33,17 +33,26 @@ async fn document_engine_schema_has_all_tenant_safe_tables(admin: PgPool) {
     );
     assert!(rows.iter().all(|row| row.1 && row.2));
 
-    let definition: String = sqlx::query_scalar(
-        "SELECT pg_get_indexdef(indexrelid)
-         FROM pg_index
-         WHERE indrelid='document_engine.document_packet_items'::regclass
-           AND indisunique
-           AND pg_get_indexdef(indexrelid) LIKE '%tenant_id, packet_id, position%'",
+    let unique_position: bool = sqlx::query_scalar(
+        "SELECT EXISTS (
+           SELECT FROM pg_constraint c
+            WHERE c.conrelid='document_engine.document_packet_items'::regclass
+              AND c.contype='u'
+              AND ARRAY(
+                SELECT a.attname::text
+                  FROM unnest(c.conkey) WITH ORDINALITY AS k(attnum, ord)
+                  JOIN pg_attribute a ON a.attrelid=c.conrelid AND a.attnum=k.attnum
+                 ORDER BY k.ord
+              ) = ARRAY['tenant_id','packet_id','position']
+         )",
     )
     .fetch_one(&admin)
     .await
     .unwrap();
-    assert!(definition.contains("tenant_id, packet_id, position"));
+    assert!(
+        unique_position,
+        "packet positions must be unique within each tenant and packet"
+    );
 }
 
 async fn seed_packet_graph(admin: &PgPool) {
