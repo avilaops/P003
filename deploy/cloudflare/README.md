@@ -9,7 +9,7 @@ its worker modules/settings, SQLite-backed Durable Object namespace and native
 `durable_object` scheduling-policy image map to the current deployment API. No
 runtime has been deployed and the existing edge remains in maintenance.
 
-The runtime keeps Rust/SQLx, Next.js and the optional TypeScript API in one stateless Linux Container. Rust
+The runtime keeps Rust/SQLx, Next.js and the required TypeScript API in one stateless Linux Container. Rust
 listens only on127.0.0.1:8080; TypeScript uses127.0.0.1:8081; web listens on3000 and connects through
 loopback. PostgreSQL is external. The supervisor starts the required APIs, waits for actual
 database readiness from each, then starts web. It does not run migrations. A process failure stops
@@ -24,13 +24,19 @@ port3000; that route probes every enabled private API over loopback. Business re
 use the Container's HTTP transport once, with public host/protocol metadata
 set from the verified ERP origin. API ports8080/8081 are never exposed for readiness.
 
-`ERP_TYPESCRIPT_MODULES` defaults to empty. Set a comma-separated subset of
-`preferences,registrations,sales,reports` after the shared contract and deployment gates pass.
-The runtime forces the private TypeScript origin; it does not accept an operator-supplied remote override.
-Remove a module and restart/redeploy to route it back to Rust before the next command.
-The BFF never retries a failed command against another backend. With no enabled module,
-the TypeScript process is not started. Both APIs use the same restricted PostgreSQL role;
-budget the sum of their connection pools when enabling modules.
+The four migrated modules permanently use TypeScript. `ERP_TYPESCRIPT_MODULES`
+is retired and cannot restore Rust handlers or disable the private process.
+The runtime always starts both APIs before web and forces their private TypeScript
+origin; it does not accept an operator-supplied remote override. Public health
+requires both APIs. Both use the same restricted PostgreSQL role; budget the sum
+of their connection pools. Only DB/Auth and MCP-origin configuration reaches TypeScript.
+
+Recovery redeploys the last validated complete runtime release with its matching
+Worker/container image and private configuration. Keep the prior digest-pinned
+release recoverable. This delivery changes no database migrations. Never use
+retired module flags as a recovery procedure. The BFF and native MCP gateway
+never retry a command against another backend; consult state after an uncertain
+result. See [the current recovery procedure](../../docs/architecture/typescript-api-transition-finalization.md).
 
 Build `runtime.Dockerfile` from validated API/web **digest** inputs from the same
 release, not mutable tags. The web image contributes Node and its standalone

@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
+import { test, after } from "node:test";
 import { readFileSync } from "node:fs";
 import ts from "typescript";
+const previousTypescriptOrigin = process.env.ERP_TYPESCRIPT_API_URL;
+process.env.ERP_TYPESCRIPT_API_URL = "http://127.0.0.1:8081";
+after(() => { if (previousTypescriptOrigin === undefined) delete process.env.ERP_TYPESCRIPT_API_URL; else process.env.ERP_TYPESCRIPT_API_URL = previousTypescriptOrigin; });
 
 const tenant = "11111111-1111-4111-8111-111111111111";
 const other = "22222222-2222-4222-8222-222222222222";

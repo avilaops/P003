@@ -48,7 +48,7 @@ export function startSupervisor({ env = process.env, spawnProcess = spawn, fetch
   const ready = (async () => {
     try {
       const apis = [{ command: '/usr/local/bin/erp-next-api', args: [], env: environments.api, port: 8080 },
-        ...(environments.apiTs ? [{ command: process.execPath, args: ['apps/api-ts/dist/server.js'], env: environments.apiTs, port: 8081 }] : [])];
+        { command: process.execPath, args: ['apps/api-ts/dist/server.js'], env: environments.apiTs, port: 8081 }];
       for (const api of apis) {
         launch(api.command, api.args, api.env);
         let apiReady = false;

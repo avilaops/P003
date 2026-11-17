@@ -32,9 +32,9 @@
 
 **Interfaces:** `runWithMcpIdentity(identity, operation)` limita a identidade ao despacho interno; `registerMcpDispatch(app, dependencies)` valida token/grant e injeta a requisição tipada. O endpoint privado usa corpo/cabeçalhos limitados e somente rotas migradas.
 
-- [ ] Escrever e observar testes falhos de token inválido/expirado/revogado, recurso e escopo incorretos, identidade concorrente, headers forjados, URL arbitrária, corpo grande de produto e preservação de revisão/comando.
-- [ ] Implementar consulta de credencial compatível com `apps/api/src/mcp/oauth.rs`, isolamento assíncrono e registro privado.
-- [ ] Executar testes, tipos e build `api-ts`; registrar resultados e commit.
+- [x] Escrever e observar testes falhos de token inválido/expirado/revogado, recurso e escopo incorretos, identidade concorrente, headers forjados, URL arbitrária, corpo grande de produto e preservação de revisão/comando.
+- [x] Implementar consulta de credencial compatível com `apps/api/src/mcp/oauth.rs`, isolamento assíncrono e registro privado.
+- [x] Executar testes, tipos e build `api-ts`; registrar resultados e commit.
 
 ## Task 2 • Encaminhamento HTTP e MCP Rust
 
@@ -42,9 +42,9 @@
 
 **Interfaces:** extensão `McpDispatchCredential` só é construída pelo MCP autenticado. Gateway recebe requisição original e origem validada, encaminha HTTP normal ou envelope MCP privado e conserva status/headers/bytes sem retry.
 
-- [ ] Observar testes falhos de encaminhamento HTTP/MCP, origem inválida, escopo/credencial não forjável, timeout sem segundo envio e permanência de recursos não migrados.
-- [ ] Implementar gateway e rotas explícitas; manter referência separada até Task 3.
-- [ ] Executar fmt, testes relevantes e checagem Rust; registrar resultados e commit.
+- [x] Observar testes falhos de encaminhamento HTTP/MCP, origem inválida, escopo/credencial não forjável, resposta de conflito sem segundo envio e permanência de recursos não migrados. A cobertura dedicada de timeout/perda de resposta no gateway Rust foi registrada como lacuna Minor na revisão final; o BFF cobre perda de resposta e a política do cliente Rust proíbe retry/redirecionamento.
+- [x] Implementar gateway e rotas explícitas; manter referência separada até Task 3.
+- [x] Executar fmt, testes relevantes e checagem Rust; registrar resultados e commit.
 
 ## Task 3 • Referência explícita e retirada dos handlers de produção
 
@@ -52,9 +52,9 @@
 
 **Interfaces:** `migration-reference` conserva apenas a implementação anterior usada como oráculo; produção registra o gateway. OpenAPI de produção usa fragmento conferido contra as anotações da referência.
 
-- [ ] Testar igualdade de contrato/catálogo e provar escolha de handlers nas duas compilações.
-- [ ] Restringir handlers e helpers exclusivos à referência, conservando tipos/utilitários ainda usados por outros módulos.
-- [ ] Executar a matriz HTTP nas duas APIs e o MCP pelo gateway de produção, com PostgreSQL real; registrar resultados e commit.
+- [x] Testar igualdade de contrato/catálogo e provar escolha de handlers nas duas compilações.
+- [x] Restringir handlers e helpers exclusivos à referência, conservando tipos/utilitários ainda usados por outros módulos.
+- [x] Executar a matriz HTTP nas duas APIs e o MCP pelo gateway de produção, com PostgreSQL real; registrar resultados e commit.
 
 ## Task 4 • Runtime e encerramento da seleção gradual
 
@@ -62,13 +62,13 @@
 
 **Interfaces:** módulos migrados usam TypeScript permanentemente; runtime sempre fornece o processo/origem privada. Retorno operacional usa a release anterior, não uma seleção parcial sem handlers antigos.
 
-- [ ] Testar ausência de retry, configuração incompleta, inicialização/saúde dos processos e retorno por release.
-- [ ] Atualizar runtime, empacotamento e exemplos sem ampliar segredos do processo TypeScript.
-- [ ] Executar verificações adequadas, build e navegador; registrar resultados e commit.
+- [x] Testar ausência de retry, configuração incompleta, inicialização/saúde dos processos e retorno por release.
+- [x] Atualizar runtime, empacotamento e exemplos sem ampliar segredos do processo TypeScript.
+- [x] Executar verificações adequadas, build e navegador; registrar resultados e commit.
 
 ## Task 5 • Publicação e evidências finais
 
-- [ ] Revisão independente de toda a alteração e correções necessárias.
+- [x] Revisão independente de toda a alteração e correções necessárias.
 - [ ] PR/CI, merge e release com SHA exato, conservando a release anterior recuperável.
 - [ ] Conferir navegador autenticado e MCP nos quatro módulos, origem TypeScript, empresa, ETag e saúde; somente leituras no ambiente real.
 - [ ] Atualizar inventário, procedimento de retorno e memória com fatos verificados e limites.

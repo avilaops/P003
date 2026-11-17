@@ -26,10 +26,10 @@ test.beforeAll(async () => {
 })
 test.afterAll(async () => { for (const server of servers) { server.closeAllConnections(); await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve())) } })
 
-test("navegador usa os módulos configurados e preserva o retorno explícito a Rust", async ({ page, context, baseURL }, info) => {
+test("navegador mantém os quatro módulos em TypeScript sem depender das flags antigas", async ({ page, context, baseURL }) => {
   await installFrontendFixture(context, baseURL)
   await context.unroute("**/api/erp/**")
-  const expected = info.project.name === "typescript" ? "typescript" : "rust"
+  const expected = "typescript"
   await page.goto("/vendas")
   await expect(page.getByRole("heading", { name: "Vendas", exact: true })).toBeVisible()
   await expect(page.getByRole("region", { name: "Pedidos de venda", exact: true }).locator(".sales-customer-name")).toHaveText(`Cliente • ${expected}`)

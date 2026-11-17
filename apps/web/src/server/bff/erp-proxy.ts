@@ -218,7 +218,7 @@ export async function forwardErp(request: Request, resource: string) {
     // ETag is the backend revision used by If-Match; proxy encoding must not rewrite it.
     const output = new Headers({ "Cache-Control": "no-store, no-transform", "Content-Type": response.headers.get("content-type") || "application/json" })
     if ((productExportResource || orderDocumentResource) && response.ok) { const disposition = response.headers.get("content-disposition"); if (disposition) output.set("Content-Disposition", disposition) }
-    for (const name of ["etag", "x-request-id", "idempotency-replayed"]) { const value = response.headers.get(name); if (value) output.set(name, value) }
+    for (const name of ["etag", "x-request-id", "idempotency-replayed", "x-erp-backend"]) { const value = response.headers.get(name); if (value) output.set(name, value) }
     if (supportingDownloadResource && response.ok) {
       output.set("X-Content-Type-Options", "nosniff")
       output.set("Content-Disposition", response.headers.get("content-disposition") || "attachment")

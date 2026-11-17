@@ -41,7 +41,7 @@ class ArchiveTests(unittest.TestCase):
 
 
 class TypeScriptComposeTests(unittest.TestCase):
-    def test_generated_config_preserves_activation_and_limits_private_api_secrets(self):
+    def test_generated_config_always_starts_private_api_and_limits_secrets(self):
         import sys
         code = re.search(r'python3 - "\$release/compose.json" "\$source_sha" <<\'PY\'\n([\s\S]*?)\nPY', (DEPLOY / 'production-deploy.sh').read_text())[1]
         for modules in ('', 'preferences,sales', 'unknown', 'sales,sales', 'sales,'):
@@ -55,16 +55,9 @@ class TypeScriptComposeTests(unittest.TestCase):
                 original = json.dumps(config)
                 path.write_text(original)
                 result = subprocess.run([sys.executable, '-c', code, str(path), A], capture_output=True, text=True)
-                if modules in ('unknown', 'sales,sales', 'sales,'):
-                    self.assertNotEqual(result.returncode, 0)
-                    self.assertEqual(path.read_text(), original)
-                    continue
                 self.assertEqual(result.returncode, 0, result.stderr)
                 services = json.loads(path.read_text())['services']
-                self.assertEqual(services['web']['environment']['ERP_TYPESCRIPT_MODULES'], modules)
-                if not modules:
-                    self.assertNotIn('api-ts', services)
-                    continue
+                self.assertNotIn('ERP_TYPESCRIPT_MODULES', services['web']['environment'])
                 api = services['api-ts']
                 self.assertEqual(api['image'], 'erp-next-web:sha-' + A)
                 self.assertEqual(api['network_mode'], 'service:api')
@@ -80,8 +73,9 @@ class TypeScriptComposeTests(unittest.TestCase):
                 replay = subprocess.run([sys.executable, '-c', code, str(path), A], capture_output=True, text=True)
                 self.assertEqual(replay.returncode, 0, replay.stderr)
                 restored = json.loads(path.read_text())['services']
-                self.assertEqual(restored['web']['environment']['ERP_TYPESCRIPT_MODULES'], '')
-                self.assertIn('api-ts', restored, 'Traffic rollback can preserve the optional process without replaying a command')
+                self.assertNotIn('ERP_TYPESCRIPT_MODULES', restored['web']['environment'])
+                self.assertIn('api-ts', restored, 'Retired traffic flags cannot disable a required business backend')
+                self.assertEqual(restored['api']['environment']['ERP_TYPESCRIPT_API_URL'], 'http://127.0.0.1:8081')
 
 
 FAKE_DOCKER = r'''#!/usr/bin/env python3
