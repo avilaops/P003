@@ -14,6 +14,7 @@ jobs:
     outputs:
       web: ${{ steps.scope.outputs.web }}
       api: ${{ steps.scope.outputs.api }}
+      native_api: ${{ steps.scope.outputs.native_api }}
       fiscal: ${{ steps.scope.outputs.fiscal }}
     steps:
     - uses: actions/checkout@v4
@@ -53,6 +54,7 @@ jobs:
       source_sha: ${{ github.sha }}
       full: false
       publish: false
+      typescript_only: ${{ needs.changes.outputs.native_api == 'false' }}
   web:
     needs:
     - changes

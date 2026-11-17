@@ -8,7 +8,7 @@ import { nextRevision, parseRevision } from "../../platform/revision.js"
 import { decimal } from "../sales/fixed.js"
 import { prepareProposal, storeProposalLines } from "./prepare.js"
 import { proposalId, proposalInputSchema } from "./schema.js"
-import { loadProposal } from "./snapshot.js"
+import { loadProposal, projectProposalReplay } from "./snapshot.js"
 import { registerProposalTransitions } from "./transitions.js"
 
 export function registerProposalCommands(app: FastifyInstance, dependencies: AppDependencies) {
@@ -22,7 +22,7 @@ export function registerProposalCommands(app: FastifyInstance, dependencies: App
       if (!parsed.success) throw new Problem(422, "invalid_input", "JSON inválido ou campos desconhecidos")
       const input = { id: existingId ?? null, revision: expected, input: parsed.data }
       const repeated = await replay(context, key, scope, input)
-      if (repeated) return repeated
+      if (repeated) return projectProposalReplay(context, repeated)
       const previous = existingId ? await loadProposal(context, existingId) : undefined
       if (previous && previous.data.revision !== expected) throw new Problem(412, "revision_conflict", "Outra pessoa alterou o cadastro. Sua edição foi preservada")
       if (previous && (previous.data.status !== "draft" || previous.data.orderId !== null)) throw new Problem(409, "domain_conflict", "Somente rascunhos podem ser editados")
@@ -37,6 +37,7 @@ export function registerProposalCommands(app: FastifyInstance, dependencies: App
         await client.query("UPDATE sales_proposals SET revision=$3,updated_at=now() WHERE tenant_id=$1 AND id=$2", [tenantId, id, next])
       }
       await storeProposalLines(context, id, version, prepared.lines)
+      await client.query("UPDATE sales_proposal_versions SET commercial_public=$4,commercial_private=$5,customer_snapshot=$6,checkout_snapshot=$7,commercial_approval=NULL WHERE tenant_id=$1 AND proposal_id=$2 AND version=$3", [tenantId, id, version, prepared.commercial?.public ?? null, prepared.commercial?.private ?? null, prepared.commercial?.customer ?? null, parsed.data.checkout ?? null])
       await record(context, request.headers, "sales_proposal", id, existingId ? "proposal.updated" : "proposal.created", { revision: next, version, amount: decimal(prepared.total, 2), items: prepared.lines.length })
       const body = await loadProposal(context, id)
       await remember(context, key, scope, input, body)

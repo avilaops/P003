@@ -78,6 +78,7 @@ use crate::platform::{
         sales::proposals::update,
         sales::proposals::approve_order,
         sales::proposals::email::get, sales::proposals::email::send,
+        sales::proposals::commercial_check::validate,
         sales::order_email::get, sales::order_email::send,
         sales::order_document::get,
         crate::platform::mail_settings::get, crate::platform::mail_settings::put,
@@ -472,7 +473,7 @@ mod tests {
     #[test]
     fn contract_contains_only_implemented_resources_and_company_preconditions() {
         let doc = serde_json::to_value(ApiDoc::openapi()).unwrap();
-        assert_eq!(doc["paths"].as_object().unwrap().len(), 252);
+        assert_eq!(doc["paths"].as_object().unwrap().len(), 253);
         for (path, method) in [
             ("/api/v1/commercial/mixed/simulate", "post"),
             ("/api/v1/commercial/mixed/orders", "post"),
@@ -482,6 +483,7 @@ mod tests {
             ("/api/v1/price-lists", "post"),
             ("/api/v1/price-lists/{id}", "put"),
             ("/api/v1/proposals/{id}/approve-order", "post"),
+            ("/api/v1/proposals/{id}/commercial-validation", "post"),
             ("/api/v1/proposals/{id}/email", "get"),
             ("/api/v1/proposals/{id}/email", "post"),
             ("/api/v1/orders/{id}/email", "get"),

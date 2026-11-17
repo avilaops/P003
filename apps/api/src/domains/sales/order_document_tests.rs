@@ -35,6 +35,7 @@ fn order() -> OrderSnapshot {
             plate_holder_type: Some("Redondo".into()),
         }],
         checkout: Some(checkout_document::fixture()),
+        proposal_agreement: None,
     }
 }
 fn document_text(current: &OrderSnapshot) -> String {
@@ -42,6 +43,12 @@ fn document_text(current: &OrderSnapshot) -> String {
         .checkout
         .as_ref()
         .map(|c| c.customer.clone())
+        .or_else(|| {
+            current
+                .proposal_agreement
+                .as_ref()
+                .map(|agreement| agreement["customer"].clone())
+        })
         .unwrap_or(json!({}));
     let document = commercial(
         current,
@@ -56,6 +63,27 @@ fn document_text(current: &OrderSnapshot) -> String {
         .extract_text(&parsed.get_pages().keys().copied().collect::<Vec<_>>())
         .unwrap()
 }
+#[test]
+fn proposal_agreement_preserves_terms_without_creating_a_payment_plan() {
+    let mut current = order();
+    current.checkout = None;
+    current.proposal_agreement = Some(
+        json!({"customer":{"legalName":"Cliente da proposta","email":"proposta@example.test"},"paymentTerms":"Entrada aprovada e saldo na entrega","deliveryTerms":"Prazo aprovado de 45 dias úteis","notes":"Observação comercial preservada"}),
+    );
+    let text = document_text(&current);
+    for expected in [
+        "Cliente da proposta",
+        "proposta@example.test",
+        "Entrada aprovada e saldo na entrega",
+        "Prazo aprovado de 45 dias úteis",
+        "Observação comercial preservada",
+    ] {
+        assert!(text.contains(expected), "missing {expected}");
+    }
+    assert!(!text.contains("Condições de pagamento não registradas"));
+    assert!(current.checkout.is_none());
+}
+
 #[test]
 fn document_uses_frozen_customer_and_recorded_prices_without_repricing() {
     let text = document_text(&order());

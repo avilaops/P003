@@ -4,6 +4,14 @@ import { simulateParameters } from "../src/modules/commercial/parameters.js"
 import { calculateNegotiation } from "../src/modules/commercial/negotiation-model.js"
 import { commercialFixture } from "./commercial-fixture.js"
 
+test("positive profit below the configured margin still needs approval when the optional target switch is off", () => {
+  const { parameters, rules, input, sources } = commercialFixture()
+  const result = calculateNegotiation({ ...parameters, freeDiscountBps: 9000 }, { ...rules, belowTarget: false }, { ...input, discount: { kind: "percent", value: 5000 } }, sources)
+  assert.equal(result.director.band, "belowTarget")
+  assert.ok(result.director.netProfitCents > 0)
+  assert.ok(result.sale.approvalReasons.includes("fora-da-meta"), "A seller cannot bypass the minimum net margin through the legacy optional switch")
+})
+
 test("commercial parameters reproduce Rust managerial reference and destination limits", () => {
   const { parameters } = commercialFixture(), actual = simulateParameters(parameters)
   assert.equal(actual.worstState, "MA")
