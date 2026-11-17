@@ -1,0 +1,268 @@
+.order-equipment-list {
+  --order-equipment-page-offset: 108px;
+  display: grid;
+  min-width: 0;
+  gap: 8px;
+}
+
+.order-equipment-finish-required { flex-shrink: 0; font-size: 10px; font-weight: 600; color: var(--foreground); background: var(--muted); border: 1px solid var(--border); border-radius: 4px; padding: 1px 4px; }
+
+.order-equipment-list-tools,
+.order-equipment-list-error {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px 12px;
+}
+
+.order-equipment-list-tools input { flex: 1 1 140px; max-width: 22rem; }
+.order-equipment-list-tools button, .order-equipment-list-error button { min-height: 44px; padding-inline: 10px; }
+.order-equipment-list-summary, .order-equipment-list-error p, .order-equipment-list-empty { color: var(--muted-foreground); font-size: 13px; }
+.order-equipment-list-summary { flex: 1 1 190px; overflow-wrap: anywhere; }
+.order-equipment-list-error { padding: 2px 8px; border: 1px solid var(--border); border-radius: 8px; }
+.order-equipment-list-empty { padding-block: 10px; }
+
+.order-equipment-compact-table {
+  width: 100%;
+  table-layout: fixed;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 13px;
+}
+
+.order-equipment-quantity-column { width: 120px; }
+.order-equipment-price-column { width: 21.5%; }
+.order-equipment-compact-table[data-simulated=true] .order-equipment-price-column { width: 16.33%; }
+.order-equipment-actions-column { width: 40px; }
+
+.order-equipment-compact-table :is(td, th) { min-width: 0; padding: 3px 5px; vertical-align: middle; }
+.order-equipment-compact-table thead th {
+  padding-block: 8px;
+  border-bottom: 1px solid var(--border);
+  background: var(--card);
+  color: var(--muted-foreground);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.2;
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+
+.order-equipment-list[data-long-list=true] thead th {
+  position: sticky;
+  top: var(--order-equipment-sticky-top, var(--order-equipment-page-offset));
+  z-index: 2;
+}
+
+.order-equipment-compact-table .order-equipment-quantity-heading { text-align: center; }
+.order-equipment-compact-table .order-equipment-price-heading { text-align: right; }
+.order-equipment-compact-row { height: 68px; }
+.order-equipment-compact-row:not(:last-child) > * { border-bottom: 1px solid var(--border); }
+
+.order-equipment-list .order-equipment-compact-row :is(input, button) {
+  scroll-margin-block: calc(var(--order-equipment-sticky-top, var(--order-equipment-page-offset)) + 68px) 114px;
+}
+
+.order-equipment-identity {
+  display: grid;
+  min-width: 0;
+  gap: 1px;
+  font-weight: 400;
+  line-height: 1.25;
+  text-align: left;
+}
+
+.order-equipment-identity strong { font-weight: 600; }
+.order-equipment-identity small { min-height: 1em; color: var(--muted-foreground); font-size: 11px; }
+.order-equipment-identity > *, .order-equipment-short-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.order-equipment-finishes { min-width: 0; }
+.order-equipment-list .order-equipment-compact-row .order-equipment-finishes-action {
+  display: flex;
+  width: 100%;
+  height: 28px;
+  min-height: 28px;
+  justify-content: flex-start;
+  gap: 4px;
+  padding-inline: 4px;
+  color: var(--muted-foreground);
+  font-size: 11px;
+}
+
+.order-equipment-finishes-action svg { flex-shrink: 0; }
+.order-equipment-finish-loading { display: flex; min-height: 28px; align-items: center; padding-inline: 4px; color: var(--muted-foreground); font-size: 11px; }
+.order-equipment-chips { display: flex; min-width: 0; align-items: center; gap: 4px; }
+.order-equipment-chip {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 6px;
+  border-radius: 20px;
+  background: var(--muted);
+  color: var(--foreground);
+  line-height: 16px;
+}
+
+.order-equipment-chip .catalog-color-swatch-frame {
+  width: 12px;
+  height: 12px;
+  min-height: 12px;
+  flex-basis: 12px;
+  overflow: hidden;
+  border-radius: 3px;
+}
+
+.order-equipment-extra-chips-mobile { display: none; }
+
+.order-equipment-compact-quantity {
+  display: grid;
+  width: 110px;
+  grid-template-columns: 28px minmax(0, 1fr) 28px;
+  margin-inline: auto;
+}
+
+.order-equipment-list .order-equipment-compact-row .order-equipment-compact-quantity > * { min-height: 36px; height: 36px; }
+.order-equipment-compact-quantity button { width: 100%; padding: 0; }
+.order-equipment-compact-quantity button:first-child { border-start-end-radius: 0; border-end-end-radius: 0; }
+.order-equipment-compact-quantity button:last-child { border-start-start-radius: 0; border-end-start-radius: 0; }
+.order-equipment-list .order-equipment-compact-row .order-equipment-compact-quantity input {
+  position: relative;
+  padding: 0 1px;
+  border-radius: 0;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+.order-equipment-compact-quantity > :focus-visible { z-index: 1; }
+.order-equipment-list .order-equipment-compact-row .order-equipment-remove-cell button { width: 32px; height: 36px; min-height: 36px; }
+
+.order-equipment-amount {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+
+.order-equipment-amount[data-column=total] { font-weight: 600; }
+.order-equipment-amount > small { display: none; }
+
+.order-finishes-sheet[data-side=right] {
+  width: min(100vw, 28rem);
+  max-width: none;
+  gap: 0;
+}
+
+.order-finishes-header {
+  display: grid;
+  min-width: 0;
+  gap: 6px;
+  padding: 10px 16px 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.order-finishes-title { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.order-finishes-product { overflow-wrap: anywhere; }
+.order-finishes-navigation { display: flex; flex-wrap: wrap; gap: 8px; }
+.order-finishes-navigation button[aria-disabled=true] { opacity: .5; cursor: default; }
+.order-finishes-body {
+  display: grid;
+  min-width: 0;
+  min-height: 0;
+  align-content: start;
+  gap: 16px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 16px;
+  padding-bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+  scroll-padding-block: 8px;
+}
+
+.order-finishes-choices { display: grid; min-width: 0; gap: 16px; }
+.order-finishes-choice { display: grid; min-width: 0; gap: 6px; }
+.order-finishes-choice > p, .order-finishes-choices label { font-size: 13px; font-weight: 500; }
+.order-finishes-choice label { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.order-finishes-choices select { min-height: 44px; }
+.order-finishes-apply { width: 100%; height: auto; min-height: 44px; padding: 8px; text-align: center; white-space: normal; }
+.order-finishes-feedback:empty { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+.order-finishes-skipped summary { display: flex; min-height: 44px; align-items: center; cursor: pointer; color: var(--primary); text-decoration: underline; }
+.order-finishes-skipped ul { padding-inline-start: 1.25rem; list-style: disc; overflow-wrap: anywhere; }
+.order-finishes-error { display: grid; justify-items: start; gap: 8px; }
+
+@media (min-width: 1024px) {
+  .order-equipment-list { --order-equipment-page-offset: 120px; }
+}
+
+@media (max-width: 767px) {
+  .order-equipment-list[data-long-list=true] .order-equipment-list-tools[data-expanded=true] {
+    padding-block: 4px;
+    background: var(--card);
+  }
+
+  .order-equipment-compact-table, .order-equipment-compact-table tbody { display: block; }
+  .order-equipment-compact-table colgroup { display: none; }
+  .order-equipment-compact-table thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .order-equipment-compact-table .order-equipment-compact-row {
+    display: grid;
+    min-width: 0;
+    height: auto;
+    grid-template-columns: minmax(0, 1.2fr) minmax(0, .8fr) 110px 44px;
+    grid-template-areas: "identity unit unit remove" "identity total total remove" "finishes finishes quantity quantity";
+    grid-template-rows: repeat(2, minmax(22px, auto)) minmax(44px, auto);
+    gap: 0 4px;
+    align-items: center;
+    padding: 4px 6px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+  }
+
+  .order-equipment-compact-table[data-simulated=true] .order-equipment-compact-row {
+    grid-template-areas: "identity unit unit remove" "identity discount discount remove" "identity total total remove" "finishes finishes quantity quantity";
+    grid-template-rows: repeat(3, minmax(15px, auto)) minmax(44px, auto);
+  }
+
+  .order-equipment-compact-row + .order-equipment-compact-row { margin-top: 6px; }
+  .order-equipment-compact-row:not(:last-child) > * { border-bottom: 0; }
+  .order-equipment-compact-table tbody :is(td, th) { padding: 0; }
+  .order-equipment-identity-cell { display: contents; }
+  .order-equipment-identity { grid-area: identity; }
+  .order-equipment-finishes { grid-area: finishes; }
+  .order-equipment-quantity-cell { grid-area: quantity; }
+  .order-equipment-remove-cell { grid-area: remove; }
+  .order-equipment-amount[data-column=unit] { grid-area: unit; }
+  .order-equipment-amount[data-column=discount] { grid-area: discount; }
+  .order-equipment-amount[data-column=total] { grid-area: total; }
+
+  .order-equipment-list .order-equipment-compact-row .order-equipment-finishes-action,
+  .order-equipment-list .order-equipment-compact-row .order-equipment-remove-cell button,
+  .order-equipment-list .order-equipment-compact-row .order-equipment-compact-quantity > * { min-height: 44px; height: 44px; }
+  .order-equipment-list .order-equipment-compact-row .order-equipment-remove-cell button { width: 44px; }
+  .order-equipment-chip:nth-child(n+2), .order-equipment-extra-chips { display: none; }
+  .order-equipment-extra-chips-mobile { display: inline; }
+  .order-equipment-compact-quantity { width: 154px; grid-template-columns: 44px minmax(0, 1fr) 44px; margin-inline: 0; }
+  .order-equipment-list .order-equipment-compact-row .order-equipment-compact-quantity input { font-size: 16px; }
+
+  .order-equipment-amount { display: flex; justify-content: flex-end; gap: 4px; font-size: 11px; line-height: 1.2; }
+  .order-equipment-amount > small { display: inline; flex-shrink: 0; color: var(--muted-foreground); font-size: 10px; }
+
+  .order-finishes-sheet[data-side=right] {
+    inset: auto 0 0;
+    width: 100%;
+    height: auto;
+    max-height: 90dvh;
+    border: 1px solid var(--border);
+    border-radius: 14px 14px 0 0;
+  }
+
+  .order-finishes-sheet:is([data-starting-style], [data-ending-style]) { translate: 0 2.5rem; }
+}
