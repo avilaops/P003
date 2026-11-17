@@ -1,6 +1,6 @@
 # API TypeScript • conclusão dos quatro módulos
 
-Atualizado em 17/11/2026 • implementação em validação, publicação pendente.
+Atualizado em 17/11/2026 • publicado em produção na revisão `32f196818b4b1fcb1d3b5a33a70ce006f82f00c5`.
 
 ## Escopo e propriedade
 
@@ -56,8 +56,27 @@ A referência Rust com `migration-reference` é um oráculo de testes, não uma 
 
 ## Evidências operacionais
 
-A verificação local passou: API TypeScript 46 testes sem skips; mesma matriz PostgreSQL em três backends, incluindo MCP nativo; OpenAPI completo idêntico; três unidades de transporte Rust e a unidade do fragmento; clippy em todos os targets com avisos tratados como erro; 179 modelos web, 98 testes de runtime, 50 de CI, 45 de verificação, dois projetos de navegador com Next real, nove simulações Linux do dispatcher e parser Compose real. O build web e o pacote TypeScript com dependências somente de produção também passaram. CI do PR e publicação ainda estão pendentes.
+A verificação local passou: API TypeScript 46 testes sem skips; mesma matriz PostgreSQL em três backends, incluindo MCP nativo; OpenAPI completo idêntico; três unidades de transporte Rust e a unidade do fragmento; clippy em todos os targets com avisos tratados como erro; 179 modelos web, 98 testes de runtime, 50 de CI, 45 de verificação, dois projetos de navegador com Next real, nove simulações Linux do dispatcher e parser Compose real. O build web e o pacote TypeScript com dependências somente de produção também passaram.
 
 Antes desta entrega, leituras autenticadas de Preferências, Produtos, Pedidos e Relatórios no navegador e no MCP retornaram JSON normalizado idêntico, com mesma empresa, titular e revisão de preferências. O MCP ainda usava os handlers antigos naquele momento; por isso essa igualdade, isoladamente, não comprova o novo encaminhamento.
 
-A confirmação final exige a nova release saudável e `x-erp-backend: typescript` nos quatro caminhos pelo navegador e pelo MCP. SHA, CI e resultados dessa confirmação serão registrados após a publicação.
+A implementação foi integrada pelo [PR #233](https://github.com/avilaops/P003/pull/233), com [CI aprovado](https://github.com/avilaops/P003/actions/runs/44088090733). Uma checagem adicional encontrou a origem TypeScript ausente nas fixtures compartilhadas de navegador: a aceitação de pedido retornava 503. O [PR #234](https://github.com/avilaops/P003/pull/234) declarou as origens controladas em seis configurações e passou no [CI](https://github.com/avilaops/P003/actions/runs/44091877967); a regressão local passou em 17 cenários de pedido/financeiro/documentos, 46 de monitor e 53 de cadastro. A tentativa anterior de release foi cancelada antes do deploy.
+
+A [release completa 44092281237](https://github.com/avilaops/P003/actions/runs/44092281237) terminou com sucesso e publicou a revisão `32f196818b4b1fcb1d3b5a33a70ce006f82f00c5`, incluindo testes da API, schema, contratos, baseline, políticas, componentes fiscais, web, dois grupos de navegador, imagens e deploy.
+
+As leituras autenticadas na empresa ativa passaram nos dois canais:
+
+| Módulo | Recurso | Navegador/BFF | MCP nativo |
+| --- | --- | --- | --- |
+| Preferências | `preferences` | 200 • TypeScript | 200 • TypeScript |
+| Cadastros | `products?limit=1&offset=0` | 200 • TypeScript | 200 • TypeScript |
+| Vendas | `orders?limit=1&offset=0` | 200 • TypeScript | 200 • TypeScript |
+| Relatórios | `system/custom-reports` | 200 • TypeScript | 200 • TypeScript |
+
+Os quatro retornaram `x-erp-backend: typescript` e request ID. Empresa, permissões, identificadores e totais coincidiram entre navegador e MCP; titular, revisão e ETag `"1"` de Preferências também coincidiram. O JSON normalizado das quatro leituras MCP permaneceu idêntico ao baseline capturado antes do deploy. A conferência de produção foi somente de leitura.
+
+Os cinco containers estão saudáveis e usam as imagens do manifesto selecionado. O serviço TypeScript escuta somente no loopback, sem porta publicada e sem segredos de sessão, SMTP, Fiscal ou assinatura. As flags antigas foram removidas do web. O estado operacional registra a revisão nova como ativa e `3c00410091fc30e6191f301f2b762740643a2772` como anterior; as quatro imagens necessárias à recuperação foram encontradas no servidor.
+
+O dispatcher instalado corresponde ao SHA-256 `79c49d65befc691762f98c97c24f70df1be00d0c1841b8bc839c94929e1e2fd4`. A atualização ocorreu sob o lock operacional, com backup dos bytes anteriores (`db3f9a188b86413640ece0d966f651219d3c88627847015695de2b1d91fbc310`).
+
+A revisão independente teve os dois achados importantes corrigidos. Ficou registrada uma melhoria de cobertura: o teste unitário Rust conta envios diante de 409, enquanto simulações específicas de timeout/perda de conexão/redirecionamento ficam para manutenção futura. A política explícita sem retry/redirecionamento e os testes reais de perda de resposta no BFF estão presentes.
