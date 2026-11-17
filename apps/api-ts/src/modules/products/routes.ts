@@ -10,6 +10,7 @@ import { databaseId } from "../../platform/database-id.js"
 import { Problem } from "../../platform/problem.js"
 import { sameJson } from "../../platform/json.js"
 import { integer } from "../registrations/query.js"
+import { productPlateHolderTypes, registerProductFinishesRoute } from "./finishes.js"
 import { productInputSchema, materialize, type ProductInput as Input } from "./schema.js"
 
 const querySchema = z.strictObject({
@@ -31,9 +32,7 @@ function price(cents: unknown) {
 }
 
 function product(row: Record<string, unknown>) {
-  const types = Array.isArray(row.plate_holder_types) ? [...row.plate_holder_types] as string[] : []
-  if (types.length === 0 && row.plate_holder_type === "standard") types.push("Standard")
-  if (types.length === 0 && row.plate_holder_type === "olympic") types.push("Olímpico")
+  const types = productPlateHolderTypes(row.plate_holder_types, row.plate_holder_type)
   const legacy = types.length === 1 ? types[0] === "Standard" ? "standard" : types[0] === "Olímpico" ? "olympic" : null : null
   return {
     photoUrl: row.main_media_id ? `/api/erp/products/${String(row.id)}/media/${String(row.main_media_id)}` : null,
@@ -48,6 +47,8 @@ function product(row: Record<string, unknown>) {
 }
 
 export function registerProductRoutes(app: FastifyInstance, dependencies: AppDependencies) {
+  registerProductFinishesRoute(app, dependencies)
+
   app.get("/api/v1/products", async (request, reply) => {
     const parsed = querySchema.safeParse(request.query)
     if (!parsed.success) throw new Problem(422, "invalid_input", "Filtros inválidos")

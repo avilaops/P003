@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test"
+import { addNewOrderEquipment, installNewOrderRedesignFixture, orderEquipment } from "./helpers/new-order-redesign-fixture"
 import { installFrontendFixture, record, tenant } from "./helpers/frontend-fixture"
 import type { CheckoutInput, CheckoutSnapshot } from "../src/features/sales/commercial-payment-model"
 import type { SimulationInput } from "../src/features/sales/negotiation-types"
@@ -574,4 +575,72 @@ for (const width of [390, 1366]) test(`negociação preserva cliente, entrada e 
   expect(state.writes.every(write => ["/api/erp/commercial/simulate", "/api/erp/commercial/orders"].includes(write.pathname))).toBe(true)
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
   await page.screenshot({ path: info.outputPath(`checkout-preserved-${width}.png`), fullPage: true })
+})
+
+test("novo pedido consulta acabamentos e pesos em lote e reutiliza os dados ao mudar quantidade", async ({ page, baseURL }) => {
+  const state = await installNewOrderRedesignFixture(page, baseURL)
+  await page.goto("/vendas/pedidos/novo")
+  await addNewOrderEquipment(page, 14)
+  await expect(page.getByRole("region", { name: "Peso do pedido", exact: true })).toContainText("721 kg")
+  expect(state.batches.length).toBeGreaterThan(0)
+  expect(new Set(state.batches.flat()).size).toBe(14)
+  expect(state.individualReads).toEqual([])
+  const reads = state.batches.length
+  await page.getByLabel(`Quantidade de ${orderEquipment[0].price.name}`, { exact: true }).fill("2")
+  await expect(page.getByRole("region", { name: "Peso do pedido", exact: true })).toContainText("766 kg")
+  expect(state.batches.length).toBe(reads)
+  expect(state.writes.every(resource => resource === "commercial/mixed/simulate")).toBe(true)
+})
+
+test("novo pedido não repete um lote pendente ao remover outro equipamento já carregado", async ({ page, baseURL }) => {
+  await installNewOrderRedesignFixture(page, baseURL)
+  await page.goto("/vendas/pedidos/novo")
+  await addNewOrderEquipment(page, 1)
+  await expect(page.getByRole("region", { name: "Peso do pedido", exact: true })).toContainText("45 kg")
+  let requests = 0
+  let release!: () => void
+  const suspended = new Promise<void>(resolve => { release = resolve })
+  await page.route("**/api/erp/products/finishes?ids=**", async route => {
+    if (new URL(route.request().url()).searchParams.get("ids")?.includes(orderEquipment[1].price.productId)) {
+      requests++
+      await suspended
+    }
+    await route.fallback()
+  })
+  try {
+    const search = page.getByLabel("Buscar equipamento", { exact: true })
+    await search.fill(orderEquipment[1].price.sku)
+    await search.press("Enter")
+    await expect.poll(() => requests).toBe(1)
+    await page.getByRole("button", { name: `Remover equipamento ${orderEquipment[0].price.name}`, exact: true }).click()
+    await expect(page.getByLabel(`Quantidade de ${orderEquipment[0].price.name}`, { exact: true })).toHaveCount(0)
+    // Exceed the hook's 100ms batching window while the original B request is held.
+    await page.waitForTimeout(250)
+    expect(requests).toBe(1)
+  } finally { release() }
+  await expect(page.getByRole("region", { name: "Peso do pedido", exact: true })).toContainText("46 kg")
+})
+
+test("novo pedido repete o lote com falha sem usar acabamentos de outra empresa", async ({ page, baseURL }) => {
+  const state = await installNewOrderRedesignFixture(page, baseURL)
+  state.setBatchUnavailable(true)
+  await page.goto("/vendas/pedidos/novo")
+  await addNewOrderEquipment(page, 14)
+  const retry = page.getByRole("button", { name: "Tentar de novo para todos", exact: true })
+  await expect(page.getByText("Acabamentos indisponíveis em 14 equipamentos.", { exact: true })).toBeVisible()
+  await expect(page.getByLabel(/^Cor da estrutura de /)).toHaveCount(0)
+  state.setBatchUnavailable(false)
+  state.setBatchTenant("99999999-9999-4999-8999-999999999999")
+  await retry.click()
+  await expect(retry).toBeEnabled()
+  await expect(page.getByRole("region", { name: "Peso do pedido", exact: true })).toContainText("Incompleto")
+  await expect(page.getByLabel(/^Cor da estrutura de /)).toHaveCount(0)
+  state.setBatchTenant(tenant)
+  const reads = state.batches.length
+  await retry.click()
+  await expect(page.getByRole("region", { name: "Peso do pedido", exact: true })).toContainText("721 kg")
+  expect(state.batches.length).toBe(reads + 1)
+  expect(state.batches.at(-1)).toHaveLength(14)
+  expect(state.individualReads).toEqual([])
+  await expect(retry).toHaveCount(0)
 })
