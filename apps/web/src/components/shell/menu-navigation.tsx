@@ -12,12 +12,18 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 
 const icons: Record<string, LucideIcon> = { "Meu Negócio": BriefcaseBusiness, Cadastros: Users, Vendas: ShoppingCart, Estoque: Boxes, Compras: PackageCheck, Financeiro: Wallet, Fiscal: ReceiptText, "Logística": Truck, Serviços: Wrench, Relatórios: BarChart3, Preferências: Settings2 }
 const modulePaths = new Set<string>(moduleLinks.map(([, href]) => href))
-const indexDestinations = navigationDestinations.filter(item => !modulePaths.has(item.href))
+// Unavailable features stay reachable by URL (with an explanation) but never take a menu slot.
+const availableHref = (href: string) => !isDemonstrationRoute(href.split("?")[0])
+const availableMenus = desktopMenus.map(menu => ({
+  ...menu,
+  columns: menu.columns.map(group => ({ ...group, items: group.items.filter(item => availableHref(item.href)) })).filter(group => group.items.length),
+}))
+const indexDestinations = navigationDestinations.filter(item => !modulePaths.has(item.href) && availableHref(item.href))
 const indexGroups = [...new Set(indexDestinations.map(item => item.category))].map(title => ({
   title,
   items: indexDestinations.filter(item => item.category === title),
 }))
-const menus = [...desktopMenus, {
+const menus = [...availableMenus, {
   label: "Índice completo",
   columns: [
     { title: "Módulos", items: moduleLinks.map(([label, href]) => ({ label, href })) },
@@ -28,7 +34,7 @@ const mobileGroups = [
   { label: "Operações", modules: ["Vendas", "Compras", "Estoque", "Logística", "Serviços"] },
   { label: "Gestão", modules: ["Meu Negócio", "Financeiro", "Fiscal", "Relatórios", "Cadastros", "Preferências"] },
 ]
-const searchableDestinations = navigationDestinations.filter(item => !isDemonstrationRoute(item.href.split("?")[0]))
+const searchableDestinations = navigationDestinations.filter(item => availableHref(item.href))
 function normalizeSearch(value: string) {
   return value.normalize("NFD").replace(/\p{Diacritic}/gu, "").toLowerCase().trim()
 }
@@ -59,7 +65,7 @@ function Options({ index, pathname, onNavigate }: { index: number; pathname: str
     {menus[index].columns.map(group => <section key={group.title || group.items[0]?.href}>
       {group.title && <h3>{group.title}</h3>}
       <ul>{group.items.map(item => <li key={item.href}>
-        <Link href={item.href} onNavigate={onNavigate} className="erp-option" aria-current={item.href === active ? "page" : undefined}><span className="min-w-0">{item.label}{isDemonstrationRoute(item.href.split("?")[0]) && <small className="block text-xs text-muted-foreground">Indisponível</small>}</span></Link>
+        <Link href={item.href} onNavigate={onNavigate} className="erp-option" aria-current={item.href === active ? "page" : undefined}><span className="min-w-0">{item.label}</span></Link>
       </li>)}</ul>
     </section>)}
   </div>

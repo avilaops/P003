@@ -1,0 +1,33 @@
+// Explanations for features listed in demonstrationRoutes. Each entry is matched by
+// the longest route prefix; frontend-models.spec.ts checks that every route resolves.
+export type UnavailableFeature = { title: string; purpose: string; related: readonly [label: string, href: string] }
+
+export const unavailableFeatures: Record<string, UnavailableFeature> = {
+  "/aplicativos": { title: "Aplicativos", purpose: "Conectar aplicativos externos ao ERP.", related: ["Integrações", "/preferencias/integracoes"] },
+  "/compras/notas-entrada": { title: "Nota fiscal de entrada", purpose: "Consultar o detalhe de uma nota recebida.", related: ["Notas fiscais de entrada", "/compras/notas-entrada"] },
+  "/compras/sugestoes": { title: "Sugestões de compra", purpose: "Calcular o que repor com base em estoque mínimo e demanda dos pedidos.", related: ["Pedidos de compra", "/compras/pedidos"] },
+  "/estoque/inventarios": { title: "Conferência de estoque", purpose: "Contar o estoque físico, comparar com o saldo do sistema e ajustar as divergências.", related: ["Saldos de estoque", "/estoque"] },
+  "/estoque/lancamentos": { title: "Lançamento de estoque", purpose: "Consultar o detalhe de uma movimentação de estoque.", related: ["Saldos de estoque", "/estoque"] },
+  "/eventos": { title: "Eventos", purpose: "Acompanhar os acontecimentos da empresa em uma linha do tempo.", related: ["Visão geral", "/"] },
+  "/financeiro/conta-digital": { title: "Conta digital", purpose: "Movimentar uma conta de pagamento integrada ao ERP.", related: ["Caixas e bancos", "/financeiro/caixas-bancos"] },
+  "/financeiro/contador": { title: "Contador", purpose: "Dar ao escritório contábil acesso aos documentos da empresa.", related: ["Usuários", "/preferencias/usuarios"] },
+  "/financeiro/controle-caixa": { title: "Abertura e fechamento de caixa", purpose: "Abrir, movimentar e fechar o caixa físico do dia.", related: ["Caixas e bancos", "/financeiro/caixas-bancos"] },
+  "/financeiro/faturamento-agrupado": { title: "Faturamento agrupado", purpose: "Reunir vários pedidos do mesmo cliente em uma cobrança.", related: ["Contas a receber", "/financeiro/contas-receber"] },
+  "/financeiro/ficha-financeira": { title: "Ficha financeira", purpose: "Ver o histórico financeiro completo de um cliente ou fornecedor.", related: ["Contas a receber", "/financeiro/contas-receber"] },
+  "/financeiro/remessas-retornos": { title: "Remessas e retornos", purpose: "Gerar arquivos de cobrança bancária e ler os retornos do banco.", related: ["Contas a receber", "/financeiro/contas-receber"] },
+  "/financeiro/tributos": { title: "Tributos", purpose: "Apurar os impostos da empresa e acompanhar as guias.", related: ["Fiscal", "/fiscal"] },
+  "/fiscal/guias": { title: "Guias tributárias", purpose: "Emitir e acompanhar as guias de recolhimento de impostos.", related: ["Fiscal", "/fiscal"] },
+  "/logistica/envios": { title: "Envios", purpose: "Organizar e acompanhar a expedição dos pedidos.", related: ["Logística", "/logistica"] },
+  "/logistica/etiquetas": { title: "Etiquetas de envio", purpose: "Gerar etiquetas de transporte para os pedidos.", related: ["Etiquetas", "/logistica/etiquetas"] },
+  "/logistica/reversa": { title: "Logística reversa", purpose: "Organizar devoluções e coletas de mercadoria.", related: ["Logística", "/logistica"] },
+  "/notificacoes": { title: "Notificações", purpose: "Reunir os avisos e pendências que pedem a sua atenção.", related: ["Visão geral", "/"] },
+  "/novidades": { title: "Novidades", purpose: "Mostrar as mudanças recentes do ERP.", related: ["Visão geral", "/"] },
+  "/vendas/anuncios": { title: "Anúncios", purpose: "Publicar e acompanhar anúncios dos produtos em marketplaces.", related: ["Integrações", "/preferencias/integracoes"] },
+  "/vendas/loja-virtual": { title: "Loja virtual", purpose: "Receber pedidos da loja virtual da empresa.", related: ["Integrações", "/preferencias/integracoes"] },
+}
+
+export function unavailableFeatureFor(pathname: string): UnavailableFeature | undefined {
+  const path = pathname.replace(/\/$/, "") || "/"
+  const prefix = Object.keys(unavailableFeatures).filter(route => path === route || path.startsWith(route + "/")).sort((a, b) => b.length - a.length)[0]
+  return prefix ? unavailableFeatures[prefix] : undefined
+}

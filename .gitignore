@@ -31,3 +31,13 @@ Thumbs.db
 
 # Derived from the same-revision OpenAPI artifact before the web build.
 /apps/web/src/lib/api/generated.d.ts
+
+# Evidence from real ERP sessions is retained on the operator's machine.
+/docs/telas/erp-mobile.pdf
+/docs/telas/erp-web.pdf
+/docs/telas/erp-telas.zip
+/docs/telas/erp-telas/
+/reports/screens/
+/reports/accessibility/browser-profile/
+/reports/accessibility/*.png
+/reports/accessibility/live-audit.json

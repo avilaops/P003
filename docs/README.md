@@ -42,6 +42,15 @@ Escolha o mesmo nome que aparece no menu do ERP. Cada guia reúne a listagem, o 
 
 Esses itens não são apresentados como concluídos nos guias. Relatórios antigos podem conter pendências que já foram resolvidas; consulte primeiro o guia da tela.
 
+## Evolução do produto
+
+| Quero saber | Abrir |
+| --- | --- |
+| Quais funcionalidades ainda faltam e como desenvolvê-las | [Funcionalidades pendentes por tela](telas/pendencias/README.md) |
+| O padrão de desenvolvimento de referência Protheus | [Padrão Protheus](telas/pendencias/PADRAO-PROTHEUS.md) |
+| O que corrigir na interface de cada tela | [Melhorias de tela](telas/MELHORIAS-INDICE.md) e [padrão visual](telas/PADRAO-MELHORIAS.md) |
+| A estratégia e o roteiro do produto | [Análise estratégica (PDF)](strategy/analise-saas-comercial-padrao-totvs.pdf) |
+
 ## Documentos de apoio
 
 - [Referências técnicas e organização da pasta](tecnica/README.md).
