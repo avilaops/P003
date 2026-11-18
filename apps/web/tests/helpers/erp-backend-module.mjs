@@ -8,5 +8,7 @@ function moduleUrl(file, transform = source => source) {
   return "data:text/javascript;base64," + Buffer.from(compiled).toString("base64");
 }
 const locations = moduleUrl("stock-location-path.ts");
-export const { selectErpBackend, erpHealthOrigins, salesPolicyResource, stockLocationPath } = await import(moduleUrl("erp-backend.ts",
-  source => source.replace('"./stock-location-path"', JSON.stringify(locations))));
+const pos = moduleUrl("pos-resources.ts");
+const finance = moduleUrl("finance-resources.ts", source => source.replace('"./pos-resources"', JSON.stringify(pos)));
+export const { selectErpBackend, erpHealthOrigins, salesPolicyResource, stockLocationPath, financeRoute } = await import(moduleUrl("erp-backend.ts",
+  source => source.replace('"./stock-location-path"', JSON.stringify(locations)).replace('"./finance-resources"', JSON.stringify(finance))));

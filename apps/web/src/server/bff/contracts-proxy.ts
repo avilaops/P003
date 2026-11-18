@@ -1,4 +1,5 @@
 import "server-only"
+import type { Schema } from "@/lib/api/types"
 
 import { currentSession, erpConfiguration, uuidPattern } from "@/server/auth/erp-session"
 
@@ -47,6 +48,28 @@ async function forwardContracts(request: Request, path: string, templates: boole
     const upstream = await fetch(url, { method: request.method, headers, body: body as BodyInit | undefined, cache: "no-store", redirect: "error", signal: AbortSignal.timeout(60000) })
     const output = new Headers({ "Cache-Control": "no-store, no-transform", "X-Content-Type-Options": "nosniff", "Content-Type": upstream.headers.get("content-type") || "application/json" })
     for (const key of ["etag", "content-disposition"]) { const value = upstream.headers.get(key); if (value) output.set(key, value) }
+    if (!templates && request.method === "GET" && path.startsWith("/options/") && upstream.ok) {
+      const draftId = process.env[`ERP_DEFAULT_CONTRACT_DRAFT_${session.tenantId.replaceAll("-", "").toUpperCase()}`]
+      if (draftId) {
+        const options: Schema<"ContractOptions"> = await upstream.json()
+        if (options.tenantId !== session.tenantId) return Response.json({ title: "A empresa do pedido mudou" }, { status: 409, headers: output })
+        let preferredTemplateId: number | null = null
+        if (uuidPattern.test(draftId)) {
+          const draftResponse = await fetch(`${config.api}/api/v1/contract-template-drafts/${draftId}`, {
+            headers, cache: "no-store", redirect: "error", signal: AbortSignal.timeout(10000),
+          }).catch(() => null)
+          if (draftResponse?.ok) {
+            const draft: Schema<"TemplateDraftDetail"> = await draftResponse.json()
+            if (draft.tenantId === session.tenantId && draft.id === draftId) {
+              const published = draft.versions?.filter(version => version.status === "published" && version.externalId)
+                .sort((a, b) => b.revision - a.revision)[0]
+              preferredTemplateId = options.templates.find(template => template.id === published?.externalId)?.id ?? null
+            }
+          }
+        }
+        return Response.json({ ...options, preferredTemplateId }, { headers: output })
+      }
+    }
     return new Response(upstream.body, { status: upstream.status, headers: output })
   } catch {
     return Response.json({ title: "Não foi possível confirmar o resultado. Consulte o contrato antes de repetir a operação" }, { status: 503, headers: { "Cache-Control": "no-store" } })

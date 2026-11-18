@@ -52,8 +52,16 @@ test("the eleven complementary order methods, title and proposal origins route t
   }
 });
 
+test("wallets, stock and production resolve to their TypeScript owners", () => {
+  for (const [method, resource, module] of [
+    ["GET", "/receivables", "finance"], ["GET", "/financial-accounts", "finance"],
+    ["GET", "/warehouses", "inventory"], ["POST", "/stock/periods/close", "inventory"],
+    ["GET", "/production/orders", "inventory"],
+  ]) assert.deepEqual(selectErpBackend(method, resource, rust, environment), { origin: typescript, backend: "typescript", module });
+});
+
 test("unmigrated routes and unsupported methods stay on their explicit Rust origin", () => {
-  for (const [method, resource] of [["PUT", `/orders/${id}/document`], ["POST", "/fiscal/nfe"], ["GET", "/receivables"], ["GET", `/products/${id}/catalog`], ["GET", "/products/export"], ["POST", "/preferences"], ["DELETE", `/products/${id}`], ["GET", `/system/custom-reports/${id}`], ["GET", "/commercial/tables/unknown"], ["GET", `/orders/${id}/cancel-completed`]]) {
+  for (const [method, resource] of [["PUT", `/orders/${id}/document`], ["POST", "/fiscal/nfe"], ["DELETE", "/receivables"], ["GET", `/products/${id}/catalog`], ["GET", "/products/export"], ["POST", "/preferences"], ["DELETE", `/products/${id}`], ["GET", `/system/custom-reports/${id}`], ["GET", "/commercial/tables/unknown"], ["GET", `/orders/${id}/cancel-completed`]]) {
     assert.equal(selectErpBackend(method, resource, rust, environment).origin, rust, resource);
   }
 });

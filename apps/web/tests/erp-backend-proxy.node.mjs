@@ -54,7 +54,14 @@ test("BFF selects one backend per module and never retries commands on Rust", as
     assert.equal(calls[0].url.origin, "http://127.0.0.1:8081", "Retired flags cannot restore Rust business handlers");
     process.env.ERP_TYPESCRIPT_MODULES = "preferences,registrations,sales,reports";
     calls.length = 0;
-    await forwardErp(new Request("http://fixture.local/receivables"), "/receivables");
+    for (const [resource, query] of [["/receivables", "limit=12"], ["/stock/reports", "dataset=stock_position"], ["/warehouses", "q=central"]]) {
+      calls.length = 0;
+      await forwardErp(new Request("http://fixture.local" + resource + "?" + query), resource);
+      assert.equal(calls[0].url.origin, "http://127.0.0.1:8081");
+      assert.equal(calls[0].url.searchParams.toString(), query);
+    }
+    calls.length = 0;
+    await forwardErp(new Request("http://fixture.local/users"), "/users");
     assert.equal(calls[0].url.origin, "http://rust.local");
     delete process.env.ERP_TYPESCRIPT_API_URL;
     calls.length = 0;

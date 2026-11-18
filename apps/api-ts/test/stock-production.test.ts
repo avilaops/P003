@@ -71,7 +71,7 @@ test("versioned production reserves components, consumes losses and receives val
   await seed.query("INSERT INTO receivables(id,tenant_id,order_id,customer_name,due_date,amount_cents,status) VALUES($1,$2,$3,'Academia','2027-01-02',15000,'open')",[receivable,tenant,order])
   const payment=randomUUID(),bank=randomUUID(),seller=randomUUID()
   await seed.query("INSERT INTO financial_accounts(id,tenant_id,code,name,status,revision,account_type) VALUES($1,$2,'CX-RET','Banco','active',1,'bank')",[bank,tenant])
-  await seed.query("INSERT INTO receivable_payments(id,tenant_id,receivable_id,kind,amount_cents,method,reference,occurred_on,financial_account_id) VALUES($1,$2,$3,'receipt',4000,'bank_transfer','Entrada declarada','2027-01-08',$4)",[payment,tenant,receivable,bank])
+  await seed.query("INSERT INTO receivable_payments(id,tenant_id,receivable_id,kind,amount_cents,interest_cents,method,reference,occurred_on,financial_account_id) VALUES($1,$2,$3,'receipt',4000,1000,'bank_transfer','Entrada declarada','2027-01-08',$4)",[payment,tenant,receivable,bank])
   await seed.query("INSERT INTO staff(id,tenant_id,code,name,is_employee,is_seller,status) VALUES($1,$2,'OP-01','Vendedor',false,true,'active')",[seller,tenant])
   await seed.query("INSERT INTO commission_accounts(tenant_id,seller_staff_id) VALUES($1,$2)",[tenant,seller])
   await seed.query("INSERT INTO commission_entries(id,tenant_id,seller_staff_id,seller_name,order_id,kind,receipt_id,competence,payment_due,base_cents,commission_rate,ipi_rate,payment_day,amount_cents,reason) VALUES($1,$2,$3,'Vendedor',$4,'receipt',$5,'2027-01-01','2027-02-10',4000,50000,0,10,200,'Recebimento da venda')",[randomUUID(),tenant,seller,order,payment])
@@ -97,7 +97,10 @@ test("versioned production reserves components, consumes losses and receives val
   assert.equal(summary.paymentReversalIds.length,1)
   assert.equal(summary.reconciliation.commission.reversedEntries,1)
   assert.equal((await seed.query("SELECT amount_cents,payment_due::text FROM commission_entries WHERE reversal_id=$1",[summary.paymentReversalIds[0]])).rows[0].payment_due,"2027-03-10")
-  assert.equal((await seed.query("SELECT amount_cents FROM financial_account_entries WHERE account_id=$1 AND direction='debit'",[bank])).rows[0].amount_cents,"4000")
+  const reversedReceipt=(await seed.query(`SELECT p.reverses_id,p.amount_cents,p.interest_cents,p.net_cents,e.amount_cents AS ledger_amount
+    FROM receivable_payments p JOIN financial_account_entries e ON (e.tenant_id,e.id)=(p.tenant_id,p.account_entry_id)
+    WHERE p.id=$1 AND e.account_id=$2 AND e.direction='debit'`,[summary.paymentReversalIds[0],bank])).rows[0]
+  assert.deepEqual(reversedReceipt,{reverses_id:payment,amount_cents:"4000",interest_cents:"1000",net_cents:"5000",ledger_amount:"5000"})
   assert.deepEqual((await get("orders/"+order+"/cancellations")).json().data,[summary])
   assert.deepEqual(summary.reconciliation.production.orderIds,[job])
   const compensations=[...summary.stockMovementIds,...summary.reconciliation.production.stockMovementIds]

@@ -4,6 +4,7 @@ import { createServer } from "node:http"
 import { once } from "node:events"
 import { installFrontendFixture, tenant, record } from "./helpers/frontend-fixture"
 import { origin } from "../playwright.danfe.config"
+import { allocateAmount, amountTotal, reallocateAmounts } from "../src/features/fiscal/nfe-amount-allocation"
 
 const draft = { environment: "homologation", model: 55, operationNature: "Venda", taxRuleReference: "Instrução de teste", recipient: { taxId: "11222333000181", legalName: "Cliente de teste", state: "SP", municipalityCode: "3549805", postalCode: "15035000", street: "Rua Teste", number: "1", district: "Centro" }, items: [{ code: "P1", description: "Produto", unit: "UN", ncm: "95069100", cfop: "5102", quantity: "1.0000", unitPrice: "100.0000000000", grossTotal: "100.00", origin: 0, csosn: "102", icmsCst: null, pisCst: "07", cofinsCst: "07" }], productsTotal: "100.00", payments: [{ code: "17", amount: "100.00", description: null }] }
 const nfceKey = `${"35261012345678000195550010000001231482917364".slice(0, 20)}65${"35261012345678000195550010000001231482917364".slice(22)}`
@@ -12,6 +13,81 @@ const nfcePdf = Buffer.from("%PDF-1.7 NFC-e synthetic")
 const digest = (value: string | Buffer) => createHash("sha256").update(value).digest("hex")
 
 test.beforeEach(async ({ context }) => installFrontendFixture(context))
+
+test("rateio preserva centavos, proporções e os demais valores dos itens", () => {
+  const items = ["10", "20", "30"].map(unitPrice => ({ ...draft.items[0], unitPrice, insuranceAmount: "2.00" }))
+  const allocated = allocateAmount(items, "freightAmount", "10,01")
+  expect(allocated.map(item => item.freightAmount)).toEqual(["1.67", "3.34", "5.00"])
+  expect(amountTotal(allocated, "freightAmount")).toBe("10.01")
+  expect(amountTotal(allocated, "insuranceAmount")).toBe("6.00")
+  expect(items[0]).not.toHaveProperty("freightAmount")
+  expect(allocateAmount(items, "discountAmount", "0").map(item => item.discountAmount)).toEqual(["0.00", "0.00", "0.00"])
+  expect(() => allocateAmount(items, "discountAmount", "61")).toThrow("desconto")
+  expect(() => allocateAmount(items, "freightAmount", "-1")).toThrow()
+  expect(() => allocateAmount([{ ...items[0], unitPrice: "0" }], "freightAmount", "1")).toThrow("preços")
+})
+
+test("rateio acompanha produtos e preserva os ajustes individuais", () => {
+  const items = ["100", "200", "300"].map(unitPrice => ({ ...draft.items[0], unitPrice, freightAmount: "5.00" }))
+  const rules = { freightAmount: { total: "60", locked: [0] } }
+  const allocated = reallocateAmounts(items, rules)
+  expect(allocated.map(item => item.freightAmount)).toEqual(["5.00", "22.00", "33.00"])
+  expect(amountTotal(reallocateAmounts(allocated.slice(0, 2), rules), "freightAmount")).toBe("60.00")
+  expect(() => reallocateAmounts([{ ...items[0], freightAmount: "61" }, items[1]], rules)).toThrow("superam")
+  expect(() => reallocateAmounts([items[0]], rules)).toThrow("Todos")
+  expect(() => reallocateAmounts([{ ...items[1], unitPrice: "" }], { freightAmount: { total: "60", locked: [] } })).toThrow()
+})
+
+test("tributação em linhas e totais da nota atualizam os itens sem accordions", async ({ page }) => {
+  await page.route("**/api/erp/registration-settings/tax-profiles", route => route.fulfill({ json: { tenantId: tenant, revision: 1, data: { profiles: [] } } }))
+  await page.route("**/api/erp/fiscal/readiness", route => route.fulfill({ json: { tenantId: tenant, environment: "homologation", profileConfigured: true, canTransmit: false, blockers: [] } }))
+  await page.route("**/api/erp/me", route => route.fulfill({ json: { tenant: { id: tenant }, permissions: ["fiscal.nfe.read", "fiscal.nfe.manage"] } }))
+  await page.route(`**/api/erp/fiscal/nfe/${record}`, route => route.fulfill({ headers: { ETag: '"1"' }, json: { tenantId: tenant, canEdit: true, data: { id: record, revision: 1, input: { ...draft, items: [draft.items[0], { ...draft.items[0], description: "Segundo produto", unitPrice: "200.00" }] }, issuer: { legalName: "Empresa teste" } } } }))
+  await page.route(`**/api/erp/fiscal/nfe/${record}/emission`, route => route.fulfill({ status: 404, json: {} }))
+  await page.goto(`/fiscal/notas-saida/${record}`)
+  await page.getByRole("button", { name: "2. Destinatário", exact: true }).click()
+  await expect(page.getByRole("combobox", { name: "Tipo de pessoa", exact: true })).toHaveCount(0)
+  await expect(page.getByLabel("CPF/CNPJ", { exact: true })).toBeHidden()
+  await page.getByRole("button", { name: "Editar dados desta nota", exact: true }).click()
+  await expect(page.getByLabel("CPF/CNPJ", { exact: true })).toHaveValue("11222333000181")
+  await page.getByRole("button", { name: "Concluir edição do destinatário", exact: true }).click()
+  await page.getByRole("button", { name: "3. Produtos", exact: true }).click()
+  await page.getByLabel("Frete total (R$)", { exact: true }).fill("10")
+  await page.getByRole("button", { name: "6. Revisão e emissão", exact: true }).click()
+  await expect(page.getByRole("button", { name: "Salvar rascunho", exact: true })).toBeDisabled()
+  await expect(page.getByText("Volte à etapa Produtos para aplicar ou descartar os totais digitados antes de salvar.", { exact: true })).toBeVisible()
+  await page.getByRole("button", { name: "3. Produtos", exact: true }).click()
+  await page.getByRole("button", { name: "Aplicar totais aos itens", exact: true }).click()
+  await page.getByRole("button", { name: "Ajustar valores por item", exact: true }).click()
+  await expect(page.getByLabel("Frete do item 1 (R$)", { exact: true })).toHaveValue("3.33")
+  await expect(page.getByLabel("Frete do item 2 (R$)", { exact: true })).toHaveValue("6.67")
+  await expect(page.getByLabel("Totais da nota", { exact: true })).toContainText("310,00")
+  await page.getByLabel("Frete do item 1 (R$)", { exact: true }).fill("4")
+  await expect(page.getByLabel("Frete do item 2 (R$)", { exact: true })).toHaveValue("6.00")
+  await page.getByLabel("Preço unitário do item 2", { exact: true }).fill("300")
+  await expect(page.getByLabel("Frete do item 1 (R$)", { exact: true })).toHaveValue("4")
+  await expect(page.getByLabel("Totais da nota", { exact: true })).toContainText("410,00")
+  await page.getByRole("button", { name: "4. Tributação", exact: true }).click()
+  const table = page.getByRole("table", { name: "Tributação dos itens", exact: true })
+  await expect(table.locator("tbody tr")).toHaveCount(2)
+  await expect(table.getByRole("columnheader")).toHaveCount(8)
+  await page.getByLabel("CFOP do item 2", { exact: true }).fill("6102")
+  await expect(page.getByLabel("CFOP", { exact: true })).toHaveValue("5102")
+  await page.getByLabel("CFOP do item 2", { exact: true }).fill("")
+  await page.getByRole("button", { name: "6. Revisão e emissão", exact: true }).click()
+  await expect(page.getByText("Preenchimento avulso • sem pedido vinculado", { exact: false })).toBeVisible()
+  await page.getByRole("button", { name: "Corrigir • CFOP do item 2", exact: true }).click()
+  await expect(page.getByLabel("CFOP do item 2", { exact: true })).toBeFocused()
+  await page.getByLabel("CFOP do item 2", { exact: true }).fill("6102")
+  await expect(page.locator('[data-editor-step="3"] details')).toHaveCount(0)
+  await page.getByRole("button", { name: "Adicionar declaração tributária CRT 3", exact: true }).click()
+  await expect(page.getByLabel("Alíquota do ICMS (%)", { exact: true })).toBeVisible()
+  await page.screenshot({ path: "../../artifacts/nfe-tax-compact-desktop.png", fullPage: true })
+  await page.setViewportSize({ width: 390, height: 844 })
+  await expect(table).toBeVisible()
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBeTruthy()
+  await page.screenshot({ path: "../../artifacts/nfe-tax-compact-mobile.png", fullPage: true })
+})
 
 test("nova nota mostra a transmissão e salvar abre a nota sem transmitir", async ({ page }) => {
   let saved = draft, creates = 0, issues = 0
@@ -29,6 +105,8 @@ test("nova nota mostra a transmissão e salvar abre a nota sem transmitir", asyn
   await page.getByRole("button", { name: "6. Revisão e emissão", exact: true }).click()
   await expect(page.getByRole("button", { name: "Transmitir NF-e à SEFAZ em homologação", exact: true })).toBeDisabled()
   await expect(page.getByText("Salve o rascunho para habilitar a transmissão à SEFAZ.", { exact: true })).toBeVisible()
+  await page.getByRole("button", { name: "Corrigir • Natureza da operação", exact: true }).click()
+  await expect(page.getByLabel("Natureza da operação", { exact: true })).toBeFocused()
   await page.getByRole("button", { name: "1. Dados da nota", exact: true }).click()
   await page.getByLabel("Natureza da operação", { exact: true }).fill("Venda")
   await page.getByLabel("Referência da instrução fiscal", { exact: true }).fill("Instrução de teste")
@@ -50,6 +128,21 @@ test("nova nota mostra a transmissão e salvar abre a nota sem transmitir", asyn
   await expect(page.getByRole("button", { name: "Transmitir NF-e à SEFAZ em homologação", exact: true })).toBeEnabled()
   expect(creates).toBe(1)
   expect(issues).toBe(0)
+})
+
+test("consulta fiscal mantém endereço e ajustes individuais acessíveis e identifica devolução", async ({ page }) => {
+  await page.route("**/api/erp/me", route => route.fulfill({ json: { tenant: { id: tenant }, permissions: ["fiscal.nfe.read"] } }))
+  await page.route("**/api/erp/fiscal/readiness", route => route.fulfill({ json: { tenantId: tenant, profileConfigured: true, blockers: [] } }))
+  await page.route(`**/api/erp/fiscal/nfe/${record}`, route => route.fulfill({ headers: { ETag: '"1"' }, json: { tenantId: tenant, canEdit: false, data: { id: record, revision: 1, input: { ...draft, sourceReturnId: record, items: [{ ...draft.items[0], freightAmount: "10.00", additionalInfo: "Detalhe preservado" }] }, issuer: { legalName: "Empresa teste" } } } }))
+  await page.route(`**/api/erp/fiscal/nfe/${record}/emission`, route => route.fulfill({ status: 404, json: {} }))
+  await page.goto(`/fiscal/notas-saida/${record}`)
+  await page.getByRole("button", { name: "2. Destinatário", exact: true }).click()
+  await expect(page.getByLabel("CEP", { exact: true })).toBeVisible()
+  await page.getByRole("button", { name: "3. Produtos", exact: true }).click()
+  await expect(page.getByLabel("Frete do item 1 (R$)", { exact: true })).toBeVisible()
+  await expect(page.getByLabel("Informações do item 1", { exact: true })).toHaveValue("Detalhe preservado")
+  await page.getByRole("button", { name: "6. Revisão e emissão", exact: true }).click()
+  await expect(page.getByText(`Devolução vinculada ${record}`, { exact: false })).toBeVisible()
 })
 
 for (const environment of ["homologation", "production"]) {
@@ -83,6 +176,7 @@ test("homologação permite transmitir após salvar com produção bloqueada", a
   await expect(transmit).toBeEnabled()
   await expect(page.getByText("Pendências para emitir", { exact: true })).toHaveCount(0)
   await page.getByRole("button", { name: "2. Destinatário", exact: true }).click()
+  await page.getByRole("button", { name: "Editar dados desta nota", exact: true }).click()
   await page.getByLabel("Nome ou razão social", { exact: true }).fill("Cliente revisado")
   await page.getByRole("button", { name: "6. Revisão e emissão", exact: true }).click()
   await expect(transmit).toBeDisabled()
@@ -150,10 +244,13 @@ test("NFC-e autorizada gera DANFE e valida XML e PDF pelo BFF", async ({ page })
   })
   await page.goto(`/fiscal/nfce/${record}`)
   await expect(page.getByText("Situação fiscal: Autorizada em homologação", { exact: true })).toBeVisible()
+  const downloading = page.waitForEvent("download")
   await page.getByRole("button", { name: "Gerar DANFE NFC-e", exact: true }).click()
-  await expect(page.getByTitle("Visualização do NFC-e", { exact: true })).toHaveAttribute("src", /^blob:/)
-  await expect(page.getByText(digest(nfceXml), { exact: true })).toBeVisible()
-  await expect(page.getByText(digest(nfcePdf), { exact: true })).toBeVisible()
+  const downloaded = await downloading
+  expect(downloaded.suggestedFilename()).toBe(`DANFE-${nfceKey}.pdf`)
+  expect(await downloaded.failure()).toBeNull()
+  await expect(page.locator("#fiscal-emission iframe")).toHaveCount(0)
+  await expect(page.getByText("Download do DANFE iniciado.", { exact: true })).toBeVisible()
   expect(danfeRequests).toEqual([nfceXml])
   await page.route(`**/api/erp/fiscal/nfe/${record}/email`, route => route.fulfill({ headers: { ETag: '"4"' }, json: {
     tenantId: tenant, recipientEmail: "fiscal@example.test", status: "ready", smtpConfigured: true, attachments: ["XML autorizado da NFC-e"],

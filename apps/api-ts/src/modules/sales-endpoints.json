@@ -181,9 +181,6 @@
   "fixed-expenses-id": {
     "PUT": "/api/v1/fixed-expenses/:id"
   },
-  "financial-categories": {
-    "GET": "/api/v1/financial-categories"
-  },
   "price-tables-line": {
     "GET": "/api/v1/price-tables/:line"
   },

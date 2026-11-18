@@ -106,6 +106,15 @@ chaves ou PDFs. Testes sintéticos não são validação ITI nem homologação r
 
 ## Publicação no host applications
 
+O destino das próximas imagens é `ghcr.io/avilaops/erp-next-contract-validator-private`. Antes da primeira publicação, provisione esse nome na conta `avilaops` com uma imagem vazia de inicialização, sem camadas do projeto. Confirme a visibilidade privada nas configurações do pacote, dê acesso de escrita ao workflow de `avilaops/P003` em *Manage Actions access* e de leitura à credencial Docker do host `applications`. Verifique a identidade e a visibilidade antes de disparar o workflow:
+
+```sh
+gh api users/avilaops/packages/container/erp-next-contract-validator-private \
+  --jq '{name, owner: .owner.login, visibility}'
+```
+
+O preflight da CI exige o nome acima, a conta `avilaops` e `visibility=private` antes do push. Ele encerra o job se o pacote estiver ausente, inacessível ou público. O recibo e o host conferem o repositório e o digest. O primeiro release de produção (`47b8805d`) preserva a referência histórica exata para rollback.
+
 A tarefa manual `contracts-validator` do workflow `regression.yml` recebe o SHA completo já integrado em `main`. O GitHub testa a imagem em Linux, publica a mesma imagem no GHCR privado e registra o digest no artefato `contract-validator-release-<sha>-<tentativa>`. A imagem web do mesmo SHA contém a API TypeScript e as migrações SQL usadas pelo dispatcher do ERP.
 
 ```sh

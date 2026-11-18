@@ -7,11 +7,11 @@ import { erpFetch } from "@/lib/api/client"
 import { useCommand, useResource } from "@/hooks/use-operation"
 import { blockerLabels } from "./nfe-draft-model"
 import { NfeEmailPanel } from "./nfe-email-panel"
+import { saveDocument } from "./received-documents"
 
 type Emission = { tenantId: string; id: string; revision: number; status: string; environment?: "homologation" | "production"; model?: 55 | 65; returnOrderId?:string|null; number: number; series: number; accessKey?: string; protocol?: string; result: { code?: string; reason?: string; blockers?: string[] } }
 type FiscalEvent = { id: string; kind: string; sequence: number; revision: number; status: string; request: { text?: string }; result: { reason?: string; protocol?: string } }
 type FiscalEvents = { tenantId: string; data: FiscalEvent[] }
-type Danfe = { url: string; filename: string; xmlHash: string; pdfHash: string }
 const labels: Record<string, string> = { preparing: "Preparação pendente", prepared: "XML preparado", unknown: "Resultado fiscal incerto", rejected: "Rejeitada", cancelled: "Cancelada na SEFAZ" }
 
 async function sha256(bytes: BufferSource) {
@@ -26,7 +26,6 @@ export function EmissionActions({ id, tenantId, draftRevision, environment, mode
   const [event, setEvent] = useState("correction")
   const [text, setText] = useState("")
   const [notice, setNotice] = useState("")
-  const [danfe, setDanfe] = useState<Danfe | null>(null)
   const [danfeBusy, setDanfeBusy] = useState(false)
   const [emailOpen, setEmailOpen] = useState(false)
   const document = resource.value
@@ -40,7 +39,6 @@ export function EmissionActions({ id, tenantId, draftRevision, environment, mode
   const prepareOffline=documentModel===65 && emissionType==="9" && !document?.accessKey
   useEffect(() => { onDocument?.(document ? { number: document.number, series: document.series } : null) }, [document, onDocument])
   useEffect(() => { onLocked(Boolean(document?.accessKey || command.busy || command.uncertain)) }, [document?.accessKey, command.busy, command.uncertain, onLocked])
-  useEffect(() => () => { if (danfe) URL.revokeObjectURL(danfe.url) }, [danfe])
   const revision = document ? resource.etag : `"${draftRevision}"`
   const mismatched = Boolean(document && (document.tenantId !== tenantId || document.environment && document.environment !== environment))
   async function act(action: string, pendingText?:string) {
@@ -60,7 +58,7 @@ export function EmissionActions({ id, tenantId, draftRevision, environment, mode
   }
   async function generateDanfe() {
     if (danfeBusy || !document?.accessKey) return
-    setDanfeBusy(true); setDanfe(null); setNotice("")
+    setDanfeBusy(true); setNotice("")
     try {
       const xmlResponse = await erpFetch(`/api/erp/fiscal/nfe/${id}/xml`, { headers: { "X-Tenant-Id": tenantId } })
       if (!xmlResponse.ok) { const error = await xmlResponse.json(); throw new Error(error.title || "XML autorizado indisponível") }
@@ -74,7 +72,8 @@ export function EmissionActions({ id, tenantId, draftRevision, environment, mode
       if (xmlHash !== response.headers.get("x-xml-sha256") || pdfHash !== response.headers.get("x-pdf-sha256")) throw new Error("O DANFE recebido não corresponde aos hashes da geração")
       const filename = response.headers.get("content-disposition")?.match(/filename="(DANFE-[0-9]{44}\.pdf)"/)?.[1]
       if (!filename) throw new Error("Nome do DANFE inválido")
-      setDanfe({ url: URL.createObjectURL(new Blob([pdf], { type: "application/pdf" })), filename, xmlHash, pdfHash })
+      saveDocument(new Uint8Array(pdf), "application/pdf", filename)
+      setNotice("Download do DANFE iniciado.")
     } catch (error) { setNotice(error instanceof Error ? error.message : "Falha ao gerar o DANFE") }
     finally { setDanfeBusy(false) }
   }
@@ -102,7 +101,6 @@ export function EmissionActions({ id, tenantId, draftRevision, environment, mode
       <Button variant="outline" disabled={command.busy} onClick={() => { command.reset(); resource.reload() }}>Atualizar situação fiscal</Button>
     </div>}
     {emailOpen && canIssue && !mismatched && document?.status === "authorized" && <NfeEmailPanel key={`${tenantId}/${id}`} id={id} tenantId={tenantId} label={documentLabel} onClose={() => setEmailOpen(false)} />}
-    {danfe && <div className="space-y-3 rounded-xl border p-4" role="status"><p>{danfe.filename} {offlineReceipt ? "gerado em contingência • autorização pendente." : "gerado a partir do XML autorizado."}</p><a className="text-primary underline" href={danfe.url} download={danfe.filename}>Baixar DANFE em PDF</a><iframe title={`Visualização do ${documentLabel}`} src={danfe.url} className="h-[75vh] min-h-96 w-full rounded-xl border" /><dl className="break-all text-xs text-muted-foreground"><dt>SHA-256 do XML</dt><dd>{danfe.xmlHash}</dd><dt>SHA-256 do PDF</dt><dd>{danfe.pdfHash}</dd></dl></div>}
     {(canCancel || canCorrect && documentModel===55) && document?.status === "authorized" && <form className="space-y-3 rounded-xl border p-4" onSubmit={e => { e.preventDefault(); void act(selectedEvent) }}>
       <fieldset className="space-y-3" disabled={command.busy || command.uncertain || dirty || mismatched}>
         <label className="grid gap-2 text-sm">Evento fiscal<select className="workspace-fiscal-event min-h-11 min-w-0 rounded-lg border bg-background px-3" value={selectedEvent} onChange={e => setEvent(e.target.value)}>{canCorrect && documentModel===55 && <option value="correction">Carta de correção</option>}{canCancel && <option value="cancel">{cancellationLabel}</option>}</select></label>

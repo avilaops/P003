@@ -65,11 +65,11 @@ test("frete, desconto e alíquotas do destino persistem sem alterar o preço bru
   await page.goto(`/fiscal/notas-saida/${record}`)
   await page.getByRole("button", { name: "3. Produtos", exact: true }).click()
   await page.getByRole("combobox", { name: "Frete por conta", exact: true }).selectOption("0")
-  await page.getByText("Frete, seguro, desconto e informações do item 1", { exact: true }).click()
+  await page.getByRole("button", { name: "Ajustar valores por item", exact: true }).click()
   await page.getByLabel("Frete do item 1 (R$)", { exact: true }).fill("20,00")
   await page.getByLabel("Desconto incondicional do item 1 (R$)", { exact: true }).fill("5")
   await page.getByRole("button", { name: "4. Tributação", exact: true }).click()
-  await page.getByText("ICMS e FCP do destino · DIFAL", { exact: true }).click()
+  await expect(page.getByRole("heading", { name: "ICMS e FCP do destino • DIFAL", exact: true })).toBeVisible()
   for (const [name, value] of [["Alíquota interna do ICMS no destino (%)", "20"], ["Alíquota do FCP no destino (%)", "2"]]) {
     await page.getByLabel(name, { exact: true }).fill(value)
   }
@@ -82,7 +82,7 @@ test("frete, desconto e alíquotas do destino persistem sem alterar o preço bru
   expect(saved).toMatchObject({ freightMode: "0", productsTotal: "100.00", items: [{ unitPrice: "100.0000000000", grossTotal: "100.00", freightAmount: "20.00", discountAmount: "5.00" }], taxDeclaration: { destinationIcmsRate: "20.0000", destinationFcpRate: "2.0000" }, payments: [{ amount: "126.50" }] })
   await page.reload()
   await page.getByRole("button", { name: "3. Produtos", exact: true }).click()
-  await page.getByText("Frete, seguro, desconto e informações do item 1", { exact: true }).click()
+  await page.getByRole("button", { name: "Ajustar valores por item", exact: true }).click()
   await expect(page.getByLabel("Frete do item 1 (R$)", { exact: true })).toHaveValue("20.00")
   await page.getByRole("button", { name: "4. Tributação", exact: true }).click()
   await expect(page.getByLabel("Alíquota do FCP no destino (%)", { exact: true })).toHaveValue("2.0000")

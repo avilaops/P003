@@ -91,6 +91,10 @@ async function sources(page: Page) {
   await page.route("**/api/erp/receivables?*", route => route.fulfill({ json: { tenantId: tenant, data: [account] } }))
 
   await page.route("**/api/erp/financial-payables?*", route => route.fulfill({ json: { tenantId: tenant, data: [] } }))
+  await page.route("**/api/erp/finance/portfolio?*", route => route.fulfill({ json: {
+    tenantId: tenant, companyName: "Empresa do relatório", allowed: ["receivable", "payable"], asOf: "2026-11-15", total: 2, rows: [], buckets: [],
+    totals: { receivable: "150.00", payable: "0.00", overdueReceivable: "0.00", overduePayable: "0.00" }
+  } }))
 
 }
 
@@ -108,7 +112,7 @@ for (const kind of ["title", "report"] as const) test(`${kind} confirma destinat
 
   await page.route(`**${path}`, route => {
 
-    if (route.request().method() === "GET") return route.fulfill({ headers: { ETag: '"3"' }, json: { ...status, recipient: kind === "title" ? status.recipient : null, scope: kind === "title" ? status.scope : "Primeiros 100 recebíveis e 100 pagáveis • ordenação por vencimento", recordCount: kind === "title" ? 1 : 2 } })
+    if (route.request().method() === "GET") return route.fulfill({ headers: { ETag: '"3"' }, json: { ...status, recipient: kind === "title" ? status.recipient : null, scope: kind === "title" ? status.scope : "Todos os títulos do filtro • A receber e a pagar", recordCount: kind === "title" ? 1 : 2 } })
 
     sends++
 
@@ -130,7 +134,7 @@ for (const kind of ["title", "report"] as const) test(`${kind} confirma destinat
 
   await expect(composer.getByLabel("Destinatário", { exact: true })).toHaveValue(kind === "title" ? status.recipient : "")
 
-  await expect(composer).toContainText(kind === "title" ? "recebido declarado" : "100 recebíveis")
+  await expect(composer).toContainText(kind === "title" ? "recebido declarado" : "Todos os títulos do filtro")
 
   await composer.getByLabel("Destinatário", { exact: true }).fill(status.recipient)
 

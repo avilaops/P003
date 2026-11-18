@@ -1,0 +1,66 @@
+import "server-only"
+import { posSessionRoute } from "./pos-resources"
+
+// Only resources implemented by the finance API may be forwarded through the session BFF.
+const id = "[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}"
+const portfolio = ["side","partyId","categoryId","from","to","q","status","bucket","limit","offset"]
+type FinanceRoute = {path: RegExp; methods: string[]; query?: string[]}
+const routes: FinanceRoute[] = [
+  {path:new RegExp("^/wallet-payment-files/(?:receivables|payables|financial-payables)/"+id+"/"+id+"$","i"),methods:["GET"]},
+  {path:/^\/purchase-orders$/,methods:["GET","POST"],query:["offset","limit"]},
+  {path:new RegExp("^/purchase-orders/"+id+"$","i"),methods:["GET","PUT"]},
+  {path:new RegExp("^/purchase-orders/"+id+"/(?:confirm|cancel|close)$","i"),methods:["POST"]},
+  {path:new RegExp("^/purchase-orders/"+id+"/receipts$","i"),methods:["GET","POST"],query:["offset","limit"]},
+  {path:new RegExp("^/purchase-receipts/"+id+"(?:/reversals)?$","i"),methods:["GET"]},
+  {path:new RegExp("^/purchase-receipts/"+id+"/reverse$","i"),methods:["POST"]},
+  {path:new RegExp("^/staff/"+id+"/payroll$","i"),methods:["GET"]},
+  {path:new RegExp("^/staff/"+id+"/payroll/requests$","i"),methods:["POST"]},
+  {path:/^\/staff-payroll\/employees$/,methods:["GET"],query:["offset","limit"]},
+  {path:/^\/staff-payroll$/,methods:["GET"],query:["status","offset","limit"]},
+  {path:/^\/staff-payroll\/(?:generate|salaries)$/,methods:["POST"]},
+  {path:new RegExp("^/staff-payroll/requests/"+id+"/review$","i"),methods:["POST"]},
+  {path:/^\/financial-report\/email$/,methods:["GET"],query:portfolio.filter(key=>key!=="limit" && key!=="offset")},
+  {path:/^\/finance\/portfolio(?:\/export)?$/,methods:["GET"],query:portfolio},
+  {path:/^\/finance\/cashflow$/,methods:["GET"],query:["from","to","interval","fixed","orders","accountId","categoryId"]},
+  {path:/^\/finance\/income-statement$/,methods:["GET"],query:["from","to","categoryId"]},
+  {path:/^\/finance\/operations$/,methods:["GET","POST"],query:["partyId","side"]},
+  {path:/^\/finance\/(?:operation-decisions|operation-reversals)$/,methods:["POST"]},
+  {path:/^\/finance\/partner$/,methods:["GET"],query:["partyId"]},
+  {path:/^\/finance\/partners$/,methods:["GET"],query:["q"]},
+  {path:/^\/finance\/partner\/credit$/,methods:["PUT"]},
+  {path:/^\/finance\/company-periods$/,methods:["GET","POST"]},
+  {path:/^\/finance\/balances$/,methods:["GET"]},
+  {path:/^\/finance-treasury\/(?:reconciliation|collections)$/,methods:["GET"],query:["groupId","accountId","from","to","status","offset","entryOffset","throughDate","limit"]},
+  {path:/^\/finance-treasury\/batches$/,methods:["GET"],query:["batchId","q","offset","historyOffset"]},
+  {path:/^\/finance-treasury\/provider-reports$/,methods:["GET"],query:["accountId"]},
+  {path:/^\/finance-treasury\/cnab-profile$/,methods:["GET","POST"],query:["accountId","batchId","offset"]},
+  {path:/^\/finance-treasury\/cnab-remittance$/,methods:["GET","POST"],query:["accountId","batchId"]},
+  {path:/^\/finance-treasury\/(?:cnab-return|cnab-review)$/,methods:["POST"]},
+  {path:/^\/finance-treasury\/(?:prepare-batch|cancel-batch)$/,methods:["POST"]},
+  {path:/^\/finance-treasury\/(?:import-ofx|import-cnab|match|classify-movement|exception|close-period|reopen-period|issue-charge|import-return)$/,methods:["POST"]},
+  {path:/^\/accounting$/,methods:["GET"],query:["from","to"]},
+  {path:/^\/accounting\/(?:accounts|rules|close|reopen|sync)$/,methods:["POST"]},
+  {path:new RegExp("^/accounting/entries/"+id+"/reverse$","i"),methods:["POST"]},
+  {path:/^\/accounting\/reports\/(?:journal|ledger|trial-balance)$/,methods:["GET"],query:["from","to","accountId","format","offset","limit"]},
+  {path:/^\/(?:receivables|payables|financial-payables)$/,methods:["GET"],query:["offset","limit"]},
+  {path:/^\/(?:receivables|payables|financial-payables)\/payment-batches$/,methods:["POST"]},
+  {path:new RegExp("^/(?:receivables|payables|financial-payables)/"+id+"$","i"),methods:["GET"]},
+  {path:new RegExp("^/(?:receivables|payables|financial-payables)/"+id+"/(?:payments|reverse-payment)$","i"),methods:["POST"]},
+  {path:new RegExp("^/(?:receivables|payables|financial-payables)/"+id+"/classification$","i"),methods:["PUT"]},
+  {path:new RegExp("^/(?:receivables|payables|financial-payables)/"+id+"/approvals$","i"),methods:["POST","GET"]},
+  {path:new RegExp("^/(?:receivables|payables|financial-payables)/"+id+"/approvals/"+id+"/decision$","i"),methods:["POST"]},
+  {path:/^\/(?:financial-settings|financial-wallet-settings)$/,methods:["GET","PUT"]},
+  {path:/^\/(?:financial-accounts|financial-categories|payment-methods|financial-cost-centers)$/,methods:["GET","POST"],query:["q","status","offset","limit"]},
+  {path:new RegExp("^/(?:financial-accounts|financial-categories|payment-methods|financial-cost-centers)/"+id+"$","i"),methods:["GET","PUT"]},
+  {path:/^\/financial-account-entries$/,methods:["GET","POST"],query:["accountId","offset","limit","from","to"]},
+  {path:/^\/financial-account-transfers$/,methods:["POST"]},
+  {path:/^\/commissions$/,methods:["GET"],query:["offset","limit"]},
+  {path:new RegExp("^/commissions/"+id+"$","i"),methods:["GET"]},
+  {path:new RegExp("^/commissions/"+id+"/(?:adjustments|payments|policies|closings)$","i"),methods:["POST"]},
+  {path:new RegExp("^/orders/"+id+"/commission$","i"),methods:["GET","PUT"]},
+  {path:new RegExp("^/orders/"+id+"/(?:finance|documents/"+id+")$","i"),methods:["GET"]},
+  {path:new RegExp("^/orders/"+id+"/documents$","i"),methods:["GET","POST"]},
+]
+export function financeRoute(method:string,resource:string) {
+  return posSessionRoute(method,resource) ?? routes.find(route=>route.methods.includes(method.toUpperCase()) && route.path.test(resource))
+}

@@ -215,6 +215,7 @@ test("salvar abre a etapa e o grupo tributário com o campo obrigatório pendent
  await page.route("**/api/erp/fiscal/settings/operation-natures", r => r.fulfill({ json: { tenantId: tenant, revision: 1, data: { items: [] } } }))
  await page.goto(`/fiscal/notas-saida/${id}`)
  await page.getByRole("button", { name: "2. Destinatário", exact: true }).click()
+ await page.getByRole("button", { name: "Editar dados desta nota", exact: true }).click()
  await page.getByLabel("Nome ou razão social", { exact: true }).fill("Cliente revisado")
  await page.getByRole("button", { name: "6. Revisão e emissão", exact: true }).click()
  await page.getByRole("button", { name: "Salvar rascunho", exact: true }).click()

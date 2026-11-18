@@ -51,7 +51,11 @@
     ".next-outgoing-tests/types/**/*.ts",
     ".next-outgoing-tests/dev/types/**/*.ts",
     ".next-release-candidate/types/**/*.ts",
-    ".next-release-candidate/dev/types/**/*.ts"
+    ".next-release-candidate/dev/types/**/*.ts",
+    ".next-wallet-tests/types/**/*.ts",
+    ".next-wallet-tests/dev/types/**/*.ts",
+    ".next-treasury-tests/types/**/*.ts",
+    ".next-treasury-tests/dev/types/**/*.ts"
   ],
   "exclude": [
     "node_modules"

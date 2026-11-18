@@ -68,11 +68,10 @@ function MixedOrderPage(props: SimulatorProps & { opportunity?: Opportunity; opp
   const national = useResource<PriceTable>(`/api/erp/commercial/tables/national${suffix}`)
   const access = useResource<{ tenant: { id: string }; permissions: string[] }>("/api/erp/me")
   const tenantId = access.value?.tenant.id || ""
-  const [loaded, setLoaded] = useState<{key: string; transfer: SimulationTransfer | null} | null>(null)
   const transferKey = tenantId + "/" + (props.transferId || "")
-  useEffect(() => {
-    if (tenantId && props.transferId) setLoaded({key:transferKey, transfer:readSimulationTransfer(sessionStorage, props.transferId, tenantId)})
-  }, [tenantId, props.transferId, transferKey])
+  const loaded = useMemo<{key: string; transfer: SimulationTransfer | null} | null>(() =>
+    tenantId && props.transferId ? {key:transferKey, transfer:readSimulationTransfer(sessionStorage, props.transferId, tenantId)} : null,
+  [tenantId, props.transferId, transferKey])
   const transfer = loaded?.key === transferKey ? loaded.transfer : null
   const foreign = [imported.value, national.value].some(table => table && table.tenantId !== tenantId)
   const table = useMemo(() => {
@@ -141,20 +140,21 @@ function Simulator({ transfer, table: initialTable, initialSourceLine, initialPr
   const [calculated, setResult] = useState<{ value: Simulation; input: NegotiationInput } | null>(null)
   const [pricedTotal, setPricedTotal] = useState<{ key: string; totalCents: number; minimumCents: number } | null>(null)
   const [acknowledgedQuote, setAcknowledgedQuote] = useState("")
-  const [sourceCheck,setSourceCheck] = useState<"pending"|"same"|"changed"|"failed">(transfer?"pending":"same")
+  const [sourceResult,setSourceResult] = useState<{key:string;value:"same"|"changed"|"failed"}|null>(null)
   const [sourceRetry,setSourceRetry] = useState(0)
+  const sourceKey = transfer ? transfer.digest+"/"+sourceRetry : ""
+  const sourceCheck: "pending"|"same"|"changed"|"failed" = !transfer ? "same" : sourceResult?.key===sourceKey ? sourceResult.value : "pending"
   useEffect(()=>{
     if (!transfer) return
-    const controller=new AbortController()
-    setSourceCheck("pending")
+    const controller=new AbortController(), key=transfer.digest+"/"+sourceRetry
     erpFetch("/api/erp/commercial/simulate",{method:"POST",headers:{"Content-Type":"application/json","X-Tenant-Id":transfer.tenantId},body:JSON.stringify(transfer.input),signal:controller.signal}).then(async response=>{
       if(controller.signal.aborted)return
-      if(response.status===409||response.status===412){setSourceCheck("changed");return}
+      if(response.status===409||response.status===412){setSourceResult({key,value:"changed"});return}
       if(!response.ok)throw Error()
       const checked=await response.json() as Simulation
       if(checked.tenantId!==transfer.tenantId||!/^[a-f0-9]{64}$/.test(checked.digest))throw Error()
-      if(!controller.signal.aborted)setSourceCheck(checked.digest===transfer.digest?"same":"changed")
-    }).catch(()=>{if(!controller.signal.aborted)setSourceCheck("failed")})
+      if(!controller.signal.aborted)setSourceResult({key,value:checked.digest===transfer.digest?"same":"changed"})
+    }).catch(()=>{if(!controller.signal.aborted)setSourceResult({key,value:"failed"})})
     return ()=>controller.abort()
   },[transfer,sourceRetry])
   const checkout = useRef<CheckoutHandle>(null)

@@ -48,8 +48,10 @@ export function CommercialTable() {
   const table = useResource<PriceTable>(`/api/erp/commercial/tables/${line}${apiParams.size ? `?${apiParams}` : ""}`)
   const data = table.value?.data
   const destination = query.destinationState || data?.context?.destinationState || data?.originState || ""
-  const [showAll, setShowAll] = useState(query.includeUnavailable === true)
-  useEffect(() => setShowAll(query.includeUnavailable === true), [query.includeUnavailable])
+  const wantedAll = query.includeUnavailable === true
+  const [toggle, setToggle] = useState({ wanted: wantedAll, value: wantedAll })
+  const showAll = toggle.wanted === wantedAll ? toggle.value : wantedAll
+  const setShowAll = (value: boolean) => setToggle({ wanted: wantedAll, value })
   const unavailableCount = data?.items.filter(item => item.available === false).length || 0
   const items = (data?.items || []).filter(item => showAll || item.available !== false).filter(item => `${item.name} ${item.sku}`.toLocaleLowerCase("pt-BR").includes(q.toLocaleLowerCase("pt-BR")))
   const limit = commercialTablePageSize

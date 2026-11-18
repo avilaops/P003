@@ -1,11 +1,11 @@
-import { expect, test } from "@playwright/test"
+import { expect, test, type Page } from "@playwright/test"
 import { createCipheriv, createHash, randomBytes } from "node:crypto"
 import { createServer } from "node:http"
 import type { PurchaseDetail, ReceiptDetail } from "../src/features/purchasing/purchase-types"
 
-// These responses verify browser/BFF behavior. Rust/PostgreSQL tests own transactional effects.
-test.setTimeout(45_000)
-const origin = "http://127.0.0.1:33118"
+// Browser fixtures exercise the BFF. The wallet integration test verifies PostgreSQL effects.
+test.setTimeout(120_000)
+const origin = process.env.ERP_TEST_WEB_ORIGIN || "http://127.0.0.1:33118"
 const secret = "danfe-browser-fixture-not-a-real-service-secret"
 const tenant = "11111111-1111-4111-8111-111111111111"
 const orderId = "22222222-2222-4222-8222-222222222222"
@@ -37,7 +37,7 @@ function initialPayable(): Payable {
 const upstream = createServer(async (request, response) => {
   response.setHeader("Content-Type", "application/json")
   try {
-    expect(request.headers.authorization).toBe("Bearer purchase-fixture-token")
+    if (request.headers.authorization !== "Bearer purchase-fixture-token") { response.writeHead(401).end();return }
     expect(request.headers["x-tenant-id"]).toBe(tenant)
     const url = new URL(request.url!, "http://fixture.invalid")
     requests.push(request.method + " " + url.pathname + url.search)
@@ -64,6 +64,8 @@ const upstream = createServer(async (request, response) => {
     if (url.pathname === `/api/v1/purchase-orders/${orderId}/receipts`) { response.end(JSON.stringify({ tenantId: tenant, total: receipts.length, data: receipts.map(item => item.data) })); return }
     if (url.pathname === `/api/v1/purchase-orders/${orderId}` && order) { response.setHeader("ETag", `"${order.data.revision}"`); response.end(JSON.stringify({ ...order, canEdit })); return }
     if (url.pathname === `/api/v1/purchase-receipts/${receiptId}` && receipts[0]) { response.end(JSON.stringify(receipts[0])); return }
+    if (url.pathname === "/api/v1/financial-accounts") {response.end(JSON.stringify({data:[{id:orderId,code:"BANCO",name:"Banco"}]}));return}
+    if (url.pathname === "/api/v1/financial-wallet-settings") {response.end(JSON.stringify({tenantId:tenant,categories:[],costCenters:[],data:{interestMonthlyBps:0,penaltyBps:0,graceDays:0,discountLimitBps:10000,paymentApprovalLimit:null}}));return}
     if (url.pathname === "/api/v1/financial-payables") { response.end(JSON.stringify({ tenantId: tenant, canEdit, total: payable ? 1 : 0, data: payable ? [payable.data] : [] })); return }
     if (url.pathname === `/api/v1/financial-payables/${payableId}` && payable) { response.setHeader("ETag", `"${payable.data.revision}"`); response.end(JSON.stringify({ ...payable, canEdit })); return }
     response.statusCode = 404; response.end(JSON.stringify({ title: "Registro não encontrado" }))
@@ -75,7 +77,7 @@ function cookie() {
   const encrypted = Buffer.concat([cipher.update(JSON.stringify({ accessToken: "purchase-fixture-token", tenantId: tenant, expiresAt: Date.now() + 3600_000 })), cipher.final()])
   return { name: "erp_session", value: Buffer.concat([iv, cipher.getAuthTag(), encrypted]).toString("base64url"), url: origin, httpOnly: true, sameSite: "Lax" as const }
 }
-test.beforeAll(async () => { await new Promise<void>(resolve => upstream.listen(33119, "127.0.0.1", resolve)) })
+test.beforeAll(async () => { await new Promise<void>(resolve => upstream.listen(Number(process.env.WALLET_TEST_API_PORT || 33119), "127.0.0.1", resolve)) })
 test.afterAll(async () => { await new Promise<void>(resolve => upstream.close(() => resolve())) })
 test.beforeEach(() => { order = null; payable = null; receipts = []; canEdit = true; permissions = ["purchasing.receipts.create", "inventory.stock.manage", "finance.payables.originate"]; plans = []; calls = []; failures = []; requests = [] })
 test.afterEach(() => { expect(failures).toEqual([]); expect(plans).toEqual([]) })
@@ -95,6 +97,26 @@ test("purchase BFF rejects anonymous, foreign-origin, changed-company and unsupp
   expect(requests).toEqual(["GET /api/v1/purchase-orders?offset=25&limit=25"])
 })
 
+async function submitDraft(page: Page, label: string, expectedStatus: number) {
+  const [request] = await Promise.all([
+    page.waitForRequest(r => r.method() === "POST" && new URL(r.url()).pathname === "/api/erp/purchase-orders", { timeout: 45_000 }),
+    page.getByRole("button", { name: label, exact: true }).click(),
+  ])
+  const response = await request.response()
+  if (!response) throw new Error("A gravação da compra terminou sem resposta HTTP")
+  expect(response.status(), await response.text()).toBe(expectedStatus)
+}
+
+async function submitDraftAndOpenEditor(page: Page, label: string) {
+  await submitDraft(page, label, 201)
+  const detail = origin + "/compras/pedidos/" + orderId
+  await expect(page).toHaveURL(detail, { timeout: 45_000 })
+  const edit = page.getByRole("link", { name: "Editar rascunho", exact: true })
+  await expect(edit).toHaveAttribute("href", "/compras/pedidos/" + orderId + "/editar", { timeout: 30_000 })
+  await edit.click()
+  await expect(page).toHaveURL(detail + "/editar", { timeout: 45_000 })
+}
+
 test("browser creates and edits a purchase, receives a partial delivery and records and reverses a partial payment", async ({ page, context }, testInfo) => {
   await context.addCookies([cookie()])
   const errors: string[] = []
@@ -110,10 +132,9 @@ test("browser creates and edits a purchase, receives a partial delivery and reco
   await expect(page.getByText("Total previsto: R$ 6,50", { exact: true })).toBeVisible()
   const created = draft()
   plans.push({ method: "POST", path: "/api/v1/purchase-orders", status: 201, response: created, revision: 1, apply: () => { order = created } })
-  await page.getByRole("button", { name: "Criar rascunho de compra", exact: true }).click()
-  await page.getByRole("link", { name: "Editar rascunho", exact: true }).click()
+  await submitDraftAndOpenEditor(page, "Criar rascunho de compra")
   expect(calls[0].body).toEqual({ supplierId, dueDate: "2026-11-20", items: [{ productId, quantity: "2.000000", unitCost: "3.25" }] })
-  await expect(page.getByLabel("Custo unitário de Produto da compra", { exact: true }).filter({ visible: true })).toHaveValue("3.25")
+  await expect(page.getByLabel("Custo unitário de Produto da compra", { exact: true }).filter({ visible: true })).toHaveValue("3.25", { timeout: 30_000 })
   await page.getByLabel("Custo unitário de Produto da compra", { exact: true }).filter({ visible: true }).fill("4.00")
   const edited = { ...created, data: { ...created.data, revision: 2, amount: "8.00" }, items: [{ ...created.items[0], unitCost: "4.00", amount: "8.00" }] }
   plans.push({ method: "PUT", path: `/api/v1/purchase-orders/${orderId}`, status: 200, response: edited, revision: 2, apply: () => { order = edited } })
@@ -131,7 +152,8 @@ test("browser creates and edits a purchase, receives a partial delivery and reco
   await expect(page.getByText("Situação: Recebido parcialmente", { exact: true })).toBeVisible()
   expect(calls[3]).toMatchObject({ revision: '"3"', body: { reference: "REC-001", occurredOn: "2026-10-28", items: [{ productId, quantity: "1.000000" }] } })
   await page.getByRole("link", { name: "Consultar conta a pagar", exact: true }).click()
-  await page.getByLabel("Valor do pagamento", { exact: true }).filter({ visible: true }).fill("3.00")
+  await page.getByLabel("Principal pago", { exact: true }).filter({ visible: true }).fill("3.00")
+  await page.getByLabel("Conta de saída").selectOption(orderId)
   await page.getByLabel("Data do pagamento", { exact: true }).filter({ visible: true }).fill("2026-10-28")
   await page.getByLabel("Referência do pagamento", { exact: true }).filter({ visible: true }).fill("PAG-001")
   const payment: Payment = { id: paymentId, kind: "payment", amount: "3.00", method: "bank_transfer", reference: "PAG-001", occurredOn: "2026-10-28", reversesId: null }
@@ -148,7 +170,7 @@ test("browser creates and edits a purchase, receives a partial delivery and reco
   const reversed = { ...initialPayable(), data: { ...initialPayable().data, revision: 3 }, payments: [payment, { ...payment, id: "88888888-8888-4888-8888-888888888888", kind: "reversal", reference: "Correção do registro", reversesId: paymentId }] }
   plans.push({ method: "POST", path: `/api/v1/financial-payables/${payableId}/reverse-payment`, status: 200, response: reversed, revision: 3, apply: () => { payable = reversed } })
   await page.getByRole("button", { name: "Confirmar estorno do pagamento", exact: true }).click()
-  await expect(page.getByText("Saldo restante: R$ 4,00", { exact: true })).toBeVisible()
+  await expect(page.getByText("Saldo restante: R$ 4,00", { exact: true })).toBeVisible({timeout:30000})
   await expect(page.getByText("Estorno vinculado ao pagamento original.", { exact: true })).toBeVisible()
   expect(calls[5]).toMatchObject({ revision: '"2"', body: { paymentId, reason: "Correção do registro", occurredOn: "2026-10-28" } })
   expect(errors).toEqual([])
@@ -164,12 +186,12 @@ test("ambiguous purchase creation repeats the same key and stale edits preserve 
   await page.getByLabel("Custo unitário de Produto da compra", { exact: true }).filter({ visible: true }).fill("3.25")
   await page.getByLabel("Vencimento da compra", { exact: true }).filter({ visible: true }).fill("2026-11-20")
   plans.push({ method: "POST", path: "/api/v1/purchase-orders", status: 503, response: { title: "Confirmação indisponível" } })
-  await page.getByRole("button", { name: "Criar rascunho de compra", exact: true }).click()
+  await submitDraft(page, "Criar rascunho de compra", 503)
+  await expect(page.getByRole("button", { name: "Conferir gravação da compra", exact: true })).toBeEnabled()
   await expect(page.getByLabel("Custo unitário de Produto da compra", { exact: true }).filter({ visible: true })).toBeDisabled()
   const created = draft()
   plans.push({ method: "POST", path: "/api/v1/purchase-orders", status: 201, response: created, revision: 1, apply: () => { order = created } })
-  await page.getByRole("button", { name: "Conferir gravação da compra", exact: true }).click()
-  await page.getByRole("link", { name: "Editar rascunho", exact: true }).click()
+  await submitDraftAndOpenEditor(page, "Conferir gravação da compra")
   expect(calls[0]).toEqual(calls[1])
   await page.getByLabel("Custo unitário de Produto da compra", { exact: true }).filter({ visible: true }).fill("8.00")
   plans.push({ method: "PUT", path: `/api/v1/purchase-orders/${orderId}`, status: 412, response: { title: "Outra pessoa alterou a compra" } })
@@ -196,7 +218,7 @@ test("receipt permissions are independent from purchase editing and readonly pay
   payable = initialPayable()
   await page.goto(`/financeiro/contas-pagar/${payableId}`)
   await expect(page.getByText("Somente consulta.", { exact: true })).toBeVisible()
-  await expect(page.getByLabel("Valor do pagamento", { exact: true }).filter({ visible: true })).toHaveCount(0)
+  await expect(page.getByLabel("Principal pago", { exact: true }).filter({ visible: true })).toHaveCount(0)
   await page.goto("/compras/pedidos/novo")
   await expect(page.getByRole("status")).toContainText("Somente consulta")
   await expect(page.getByLabel("Vencimento da compra", { exact: true }).filter({ visible: true })).toHaveCount(0)

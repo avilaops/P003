@@ -54,14 +54,18 @@ test("análise indisponível não oferece impressão", async ({ page }) => {
 
 for (const kind of ["financeiro", "servicos"]) {
   test(`${kind} imprime os registros persistidos e mantém a exportação`, async ({ page }) => {
-    await page.route("**/api/erp/receivables?*", route => route.fulfill({ json: { tenantId: tenant, data: [{ id: "r1", customerName: "Cliente registrado", amount: "120.00", outstandingAmount: "80.00", status: "open", dueDate: "2026-12-01" }] } }))
-    await page.route("**/api/erp/financial-payables?*", route => route.fulfill({ json: { tenantId: tenant, data: [] } }))
+    const portfolio = {
+      tenantId: tenant, companyName: "Empresa do relatório", allowed: ["receivable","payable"], asOf: "2026-11-15", total: 1, buckets: [],
+      totals: { receivable: "80.00", payable: "0.00", overdueReceivable: "0.00", overduePayable: "0.00" },
+      rows: [{ id: "r1", side: "receivable", party: "Cliente registrado", amount: "120.00", settled: "40.00", outstanding: "80.00", status: "open", dueDate: "2026-12-01" }],
+    }
+    await page.route("**/api/erp/finance/portfolio**", route => route.fulfill({ json: portfolio }))
     await page.route("**/api/erp/warranty-service-orders?*", route => route.fulfill({ json: { tenantId: tenant, data: [{ id: "s1", protocol: "OS-123", title: "Reparo registrado", status: "completed", laborCents: 15000, updatedAt: "2026-11-15" }] } }))
     await page.goto(`/relatorios/${kind}`)
     await page.getByRole("button", { name: "Visualizar impressão/PDF" }).click()
     const document = page.locator("[data-report-document]")
     await expect(document).toContainText(kind === "financeiro" ? "Cliente registrado" : "Reparo registrado")
-    await expect(document).toContainText("100 registros")
+    await expect(document).toContainText(kind === "financeiro" ? "posição em 15/11/2026" : "100 registros")
     await expect(document).toContainText("Empresa do relatório")
     await expect(page.getByRole("button", { name: "Exportar CSV" })).toBeEnabled()
     await expect(page.getByRole("button", { name: "Imprimir / salvar PDF" })).toBeEnabled()

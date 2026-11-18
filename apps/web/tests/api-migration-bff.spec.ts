@@ -52,7 +52,8 @@ test("navegador mantém os quatro módulos em TypeScript sem depender das flags 
   expect((await write('{"case":"lost-response"}')).status).toBe(503)
   expect(calls.filter(call => call.method === "POST")).toHaveLength(before + 1)
   const financial = await page.evaluate(async () => (await fetch("/api/erp/receivables")).json())
-  expect(financial.backend).toBe("rust")
+  // Finance is a permanently migrated module, so it never falls back to Rust.
+  expect(financial.backend).toBe("typescript")
   before = calls.length
   await context.clearCookies()
   expect((await context.request.get("/api/erp/orders")).status()).toBe(401)

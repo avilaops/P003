@@ -28,6 +28,9 @@ export function normalizedRoute(value) {
   return value.split('?')[0].replace(/\[([^\]]+)\]|\{[^}]+\}/g, '{}').replace(/\/$/, '') || '/';
 }
 
+// Next catch-all parameter names vary across modules, including [...finance] and [...resource].
+export const catchAllSegment = /\[\.\.\.[A-Za-z_][\w]*\]/;
+
 function compatibleRoutes(left, right) {
   const a = normalizedRoute(left).split('/'), b = normalizedRoute(right).split('/');
   return a.length === b.length && a.every((part, index) => part === b[index] || part === '{}' || b[index] === '{}');
@@ -241,6 +244,26 @@ export async function discover(root, options = {}) {
     }
     for (const [route, methods] of routes) api.push({ path: route, methods, file });
   }
+  const financeFile = 'apps/api-ts/src/modules/finance-endpoints.json';
+  let financeRegistry;
+  try { financeRegistry = await readFile(path.join(root, financeFile), 'utf8'); }
+  catch (error) { if (error.code !== 'ENOENT') throw error; }
+  if (financeRegistry) {
+    files.push({ file: financeFile, hash: hash(financeRegistry) });
+    for (const [file, endpoints] of Object.entries(JSON.parse(financeRegistry))) {
+      if (!/^apps\/api-ts\/src\/modules\/finance-[\w-]+\/[\w-]+\.ts$/.test(file)) throw Error('Invalid finance source: ' + file);
+      files.push({ file, hash: hash(await readFile(path.join(root, file), 'utf8')) });
+      for (const endpoint of endpoints) {
+        const [method, url] = endpoint.split(' ');
+        if (!verbs.has(method) || !url?.startsWith('/')) throw Error('Invalid finance endpoint: ' + endpoint);
+        let route = api.find(row => normalizedRoute(row.path) === normalizedRoute(url));
+        if (!route) { route = { path: url, methods: [], file }; api.push(route); }
+        if (route.typescript?.[method]) throw Error('Duplicate finance endpoint: ' + endpoint);
+        if (!route.methods.includes(method)) route.methods.push(method);
+        (route.typescript ??= {})[method] = { file };
+      }
+    }
+  }
   const stock = await stockRoutes(root, ts);
   for (const source of stock.sources) files.push({ file: source.file, hash: hash(source.content) });
   for (const { method, path: url, file, line } of stock.routes) {
@@ -316,16 +339,17 @@ export function analyze(inventory, catalogue = null) {
     }
   }
   for (const route of inventory.bff) {
-    const catchAll = route.path.startsWith("/api/erp/") && route.path.match(/\[\.\.\.\w+\]/)?.[0];
-    if (catchAll) {
+    if (catchAllSegment.test(route.path)) {
       const mappings = [...(catalogue?.actions || []), ...(catalogue?.actionsAppendix || [])].filter(action => action.ui?.bff?.path === route.path);
       if (!mappings.length) {
         findings.push({ severity: 'info', code: 'dynamic_forward_requires_runtime', path: route.path, evidence: [route.file], detail: 'O recurso abrangente pode conter vários segmentos; uma rota de parâmetro único não determina seus destinos ou métodos.' });
       } else for (const method of route.methods) {
-        const targets = mappings.filter(action => action.ui.bff.method === method && typeof action.ui.bff.resource === 'string');
+        const targets = mappings.filter(action => action.ui.bff.method === method && (typeof action.ui.bff.resource === 'string' || typeof action.ui.bff.action === 'string'));
         if (!targets.length) findings.push({ severity: 'error', code: 'bff_dispatch_method_unmapped', path: route.path, evidence: [route.file], detail: `${method} sem destinos explícitos no catálogo.` });
         for (const action of targets) {
-          const target = route.path.replace('/api/erp/', '/api/v1/').replace(catchAll, action.ui.bff.resource);
+          const target = typeof action.ui.bff.resource === 'string'
+            ? route.path.replace('/api/erp/', '/api/v1/').replace(catchAllSegment, action.ui.bff.resource)
+            : action.operation.path;
           const backend = api.get(normalizedRoute(target));
           if (!backend) findings.push({ severity: 'error', code: 'bff_target_missing', path: route.path, evidence: [route.file], detail: `Recurso declarado aponta para ${target}, ausente da API.` });
           else if (!backend.methods.includes(method)) findings.push({ severity: 'error', code: 'bff_method_missing', path: route.path, evidence: [route.file, ...backend.files], detail: `${method} não encontrado no destino ${backend.path}.` });

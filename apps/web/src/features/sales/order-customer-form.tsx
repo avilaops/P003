@@ -189,11 +189,6 @@ export function OrderCustomerForm({ initialCustomerId, ref, tenantId, disabled, 
     return () => { clearTimeout(timer); controller.abort(); setCepPending(false) }
   }, [draft.postalCode, draft.taxId, cepRevision, cepRetry, editable, tenantId, onDirty, onDestinationChange])
 
-  useEffect(() => {
-    if (initialCustomerId) void selectCustomer({id: initialCustomerId, legalName: "Cliente da negociação"})
-    // The parent remounts the form when the scoped transfer changes.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [initialCustomerId, tenantId])
   async function selectCustomer(value: Choice) {
     if (disabled || busy || uncertain || running.current) return
     activeSelection.current?.abort()
@@ -298,6 +293,13 @@ export function OrderCustomerForm({ initialCustomerId, ref, tenantId, disabled, 
     <p className="text-xs text-muted-foreground">IE ou ISENTO será usado nas condições deste pedido.</p>
   </div>
   const documentField = <label className="grid min-w-0 gap-1"><span>{draft.personType === "juridica" ? "CNPJ" : "CPF"}{required}</span><Input {...validationProps("taxId")} aria-label={draft.personType === "juridica" ? "CNPJ" : "CPF"} name="order-customer-taxId" required maxLength={30} inputMode={draft.personType === "fisica" ? "numeric" : "text"} autoCapitalize="characters" value={draft.taxId} disabled={!editable} onChange={event => change("taxId", event.target.value)} onBlur={() => format("taxId")} />{inlineError("taxId")}</label>
+  useEffect(() => {
+    if (!initialCustomerId) return
+    const timer = window.setTimeout(() => void selectCustomer({id: initialCustomerId, legalName: "Cliente da negociação"}), 0)
+    return () => clearTimeout(timer)
+    // The parent remounts the form when the scoped transfer changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialCustomerId, tenantId])
   return <section ref={region} tabIndex={-1} aria-label="Cliente" className="order-customer-fields min-w-0">
     <header><h2 className="font-semibold">Cliente</h2><span className="order-customer-completion" role="status">{!selectedName && !editorOpen ? "Selecione ou cadastre um cliente" : issues.length ? `${issues.length} pendência${issues.length === 1 ? "" : "s"}` : "Dados conferidos"}</span></header>
     <div className="order-customer-actions">

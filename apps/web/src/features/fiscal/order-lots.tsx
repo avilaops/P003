@@ -1,7 +1,7 @@
 "use client"
 
 import Link from "next/link"
-import { useEffect,useRef,useState } from "react"
+import { useEffect,useRef,useState,useMemo } from "react"
 import {OwnReturnForm,ownReturnStatus} from "./own-return"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -38,12 +38,12 @@ function ApplyReturnCredit({tenant,path,returnId,remaining,locked,send}:{tenant:
 }
 
 export function OrderFiscalLots({id,tenant,permissions,disabled,onChange}:{id:string;tenant:string;permissions:string[];disabled:boolean;onChange:()=>void}) {
-  const [environment,setEnvironment]=useState<LotEnvironment>("production")
+  const [environment,setEnvironment]=useState<LotEnvironment>(()=>typeof window!=="undefined" && new URLSearchParams(window.location.search).get("ambiente")==="homologation" ? "homologation" : "production")
   const path="/api/erp/fiscal/order-lots/"+id
   const read=useResource<OrderLots>(path+"?environment="+environment), action=useCommand()
   const data=read.value?.tenantId===tenant && read.value.orderId===id && read.value.environment===environment ? read.value:null
   const [amounts,setAmounts]=useState<Record<number,string>>({})
-  const [ownLot,setOwnLot]=useState("")
+  const [ownLotChoice,setOwnLot]=useState<string|null>(null)
   const [unitInput,setUnitInput]=useState<Record<string,string>>({})
   function serialCommand(lot:FiscalLot){
     const serials=lot.items.filter(i=>i.tracked).map(i=>({lineNumber:i.lineNumber,serials:(unitInput[lot.id+":"+i.lineNumber]||"").split(/\r?\n/).map(n=>n.trim()).filter(Boolean)})).filter(row=>row.serials.length)
@@ -51,19 +51,23 @@ export function OrderFiscalLots({id,tenant,permissions,disabled,onChange}:{id:st
   }
   const [returnLot,setReturnLot]=useState(""),[received,setReceived]=useState(""),[reason,setReason]=useState(""),[destination,setDestination]=useState("stock")
   const panel=useRef<HTMLDetailsElement>(null),initialized=useRef("")
+  const requestedLot=useMemo(()=>{
+    if (!data || typeof window==="undefined") return ""
+    const documentId=new URLSearchParams(window.location.search).get("devolucao")
+    const lot=documentId ? data.lots.find(l=>l.draftId===documentId) : undefined
+    return lot?.status==="authorized" && (lot.deliveredAt || environment==="homologation") ? lot.id : ""
+  },[data,environment])
+  const ownLot=ownLotChoice ?? requestedLot
   const [creditForm,setCreditForm]=useState("")
   const [decisions,setDecisions]=useState<Record<string,string>>({})
   useEffect(()=>{
     if (!data || !panel.current || initialized.current===id) return
     const params=new URLSearchParams(window.location.search)
-    if(params.get("ambiente")==="homologation" && environment!=="homologation"){setEnvironment("homologation");return}
     initialized.current=id
     const documentId=params.get("devolucao")
     if(!documentId) return
     panel.current.open=true
-    const lot=data.lots.find(l=>l.draftId===documentId)
-    if(lot?.status==="authorized" && (lot.deliveredAt || environment==="homologation"))setOwnLot(lot.id)
-  },[data,id,environment])
+  },[data,id])
   const [error,setError]=useState(""),[notice,setNotice]=useState("")
   const allowed=(...perms:string[])=>perms.every(p=>permissions.includes(p))
   const manage=allowed("sales.orders.manage","fiscal.nfe.manage")

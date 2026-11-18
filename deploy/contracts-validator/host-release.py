@@ -15,11 +15,21 @@ FILES = {'release.json','compose.yml','erp-network.yml','seccomp.json','public/r
          'public/intermediates.pem','public/evidence-origins.json','smoke.py','route-portal.py','configure-api.py'}
 
 
+LEGACY_SHA = '47b8805d384d21b8ce656d19d270d4aae775dc61'
+LEGACY_IMAGE = ('ghcr.io/avilaops/erp-next-contract-validator@'
+                'sha256:8752ac2dff496a68d87293f4359168023dcfeb61393301571c75a2438c3842a4')
+
+
 def reference(directory):
     data = json.loads((directory/'release.json').read_bytes())
-    if data['sourceSha'] != directory.name or not re.fullmatch(r'ghcr\.io/avilaops/erp-next-contract-validator@sha256:[a-f0-9]{64}',data['image']):
+    image = data['image']
+    if data['sourceSha'] != directory.name:
         raise ValueError('invalid release identity')
-    return data['image']
+    if directory.name == LEGACY_SHA and image == LEGACY_IMAGE:
+        return image
+    if not re.fullmatch(r'ghcr\.io/avilaops/erp-next-contract-validator-private@sha256:[a-f0-9]{64}', image):
+        raise ValueError('invalid image origin')
+    return image
 
 
 def compose(directory,*args):

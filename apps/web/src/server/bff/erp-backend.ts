@@ -1,10 +1,11 @@
 import "server-only"
+import { financeRoute } from "./finance-resources"
 import { stockLocationPath } from "./stock-location-path"
-export { stockLocationPath }
+export { financeRoute, stockLocationPath }
 
 // Permanent ownership after the four-module transition. The previous release,
 // rather than traffic flags, is the operational return path.
-export type MigratedModule = "preferences" | "registrations" | "sales" | "reports" | "inventory"
+export type MigratedModule = "access" | "preferences" | "registrations" | "sales" | "reports" | "finance" | "inventory"
 export type BackendEnvironment = { ERP_TYPESCRIPT_API_URL?: string | undefined; ERP_TYPESCRIPT_MODULES?: string | undefined }
 const uuid = "[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}"
 export function salesPolicyResource(method: string, resource: string) {
@@ -27,6 +28,7 @@ const routes: { module: MigratedModule; methods: readonly string[]; path: RegExp
   { module: "sales", methods: ["GET", "PUT"], path: /^\/pos\/settings$/ },
   { module: "sales", methods: ["GET"], path: new RegExp(`^/pos/(?:products|sessions(?:/current|/${uuid})?|sales(?:/${uuid})?)$`, "i") },
   { module: "sales", methods: ["POST"], path: new RegExp(`^/pos/(?:sessions(?:/${uuid}/(?:movements|sales|close))?|sales/${uuid}/cancel)$`, "i") },
+  { module: "access", methods: ["GET"], path: /^\/me$/ },
   { module: "inventory", methods: ["GET","POST"], path: /^\/production\/(orders|stages)$/ },
   { module: "inventory", methods: ["GET","POST"], path: new RegExp("^/production/structures/"+uuid+"$", "i") },
   { module: "inventory", methods: ["GET"], path: new RegExp("^/production/orders/"+uuid+"$", "i") },
@@ -91,6 +93,7 @@ export function erpHealthOrigins(rustOrigin: string, environment: BackendEnviron
   return [rustOrigin, typescriptOrigin(environment)]
 }
 export function selectErpBackend(method: string, resource: string, rustOrigin: string, environment: BackendEnvironment) {
+  if (financeRoute(method, resource)) return { origin: typescriptOrigin(environment), backend: "typescript" as const, module: "finance" as const }
   if (stockLocationPath(resource,method.toUpperCase())) return { origin: typescriptOrigin(environment), backend: "typescript" as const, module: "inventory" as const }
   const route = routes.find(route => route.methods.includes(method.toUpperCase()) && route.path.test(resource))
   if (salesPolicyResource(method, resource)) return { origin: typescriptOrigin(environment), backend: "typescript" as const, module: "sales" as const }

@@ -26,12 +26,28 @@ for (const resource of [`receivables/${record}/email`, "financial-report/email",
       { method: "GET", url: `/api/v1/${resource}`, tenant, revision: undefined, key: undefined, body: "" },
       { method: "POST", url: `/api/v1/${resource}`, tenant, revision: '"7"', key: record, body: JSON.stringify(data) },
     ])
+    const reportPreview = resource === "financial-report/email"
+    if (reportPreview) {
+      const filters = new URLSearchParams({
+        side: "receivable", q: "selecionado", partyId: record, categoryId: record,
+        from: "2026-11-01", to: "2026-11-30", status: "open", bucket: "1_30",
+      })
+      const preview = await context.request.get(path + "?" + filters)
+      expect(preview.status()).toBe(200)
+      expect(preview.headers()["etag"]).toBe('"7"')
+      expect(calls.at(-1)?.url).toBe("/api/v1/financial-report/email?" + filters)
+      for (const invalid of ["q=a&q=b", "limit=100", "offset=30", "tenantId=" + tenant])
+        expect((await context.request.get(path + "?" + invalid)).status()).toBe(400)
+    } else if (!packageCommand) {
+      expect((await context.request.get(path + "?q=selecionado")).status()).toBe(400)
+    }
+    expect((await context.request.post(path + "?q=selecionado", { headers, data })).status()).toBe(400)
     expect((await context.request.post(`${path}?unexpected=1`, { headers, data })).status()).toBe(400)
     expect((await context.request.post(path, { headers: { ...headers, Origin: "https://other.example" }, data })).status()).toBe(403)
     expect((await context.request.post(path, { headers: { ...headers, "X-Tenant-Id": record }, data })).status()).toBe(409)
     await context.clearCookies()
     expect((await context.request.post(path, { headers, data })).status()).toBe(401)
     expect((await context.request.get(path)).status()).toBe(401)
-    expect(calls).toHaveLength(2)
+    expect(calls).toHaveLength(reportPreview ? 3 : 2)
   } finally { await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve())) }
 })

@@ -10,10 +10,8 @@ import { orderSummary, orderSearchNumber, queryInput } from "../sales/shared.js"
 import { loadOrder, summary } from "./snapshot.js"
 import { registerOrderCommands } from "./commands.js"
 import { registerOrderTransitions } from "./transitions.js"
-import { registerOrderFinance } from "./settlements.js"
-import { registerSupportingDocuments } from "./supporting-documents.js"
 import { registerOrderCommercialDocuments } from "./commercial-documents.js"
-import { registerCompletedCancellation } from "./completed-cancellation.js"
+import { registerCompletedOrderCancellation } from "./completed-cancellation.js"
 import { registerOrderPricing } from "./pricing.js"
 
 
@@ -22,10 +20,8 @@ export function registerOrderRoutes(app: FastifyInstance, dependencies: AppDepen
   registerOrderCommands(app, dependencies)
   registerOrderTransitions(app, dependencies)
   registerOrderPricing(app, dependencies)
-  registerOrderFinance(app, dependencies)
-  registerSupportingDocuments(app, dependencies)
   registerOrderCommercialDocuments(app, dependencies)
-  registerCompletedCancellation(app, dependencies)
+  registerCompletedOrderCancellation(app, dependencies)
   app.get<{ Params: { id: string } }>("/api/v1/orders/:id", async (request, reply) => {
     const body = await authorizeRequest(request, dependencies, async context => {
       requirePermission(context, "sales.orders.read")

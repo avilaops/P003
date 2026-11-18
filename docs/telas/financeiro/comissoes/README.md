@@ -15,7 +15,9 @@ Consultar e manter os registros de comissão autorizados.
 
 - Consultar comissões
 - Registrar os ajustes permitidos
-- Conferir o vínculo com o pedido
+- Conferir o vínculo com o pedido e a política aplicada ao vendedor, produto ou linha
+- Consultar comissões por faturamento ou recebimento e conferir estornos proporcionais
+- Fechar a competência e abrir a obrigação gerada em Contas a pagar
 
 ## Regras e limites
 
@@ -23,6 +25,6 @@ Comissão registrada não representa pagamento bancário realizado.
 
 ## Referências para manutenção
 
-Guia conferido no código de 12/11/2026. As ações dependem das permissões e da configuração da empresa. Relatos técnicos antigos descrevem a etapa em que foram escritos.
+As ações disponíveis dependem das permissões do operador e da configuração da empresa.
 
 - [commissions-workspace](../../../../apps/web/src/features/finance/commissions-workspace.tsx)

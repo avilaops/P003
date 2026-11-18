@@ -1,6 +1,6 @@
 import "server-only"
 import { fiscalApiOrigin } from "@/lib/api/local-fiscal-origin"
-import { selectErpBackend, salesPolicyResource, stockLocationPath } from "@/server/bff/erp-backend"
+import { financeRoute, selectErpBackend, salesPolicyResource, stockLocationPath } from "@/server/bff/erp-backend"
 
 import { currentIdentitySession, currentSession, erpConfiguration } from "@/server/auth/erp-session"
 
@@ -14,7 +14,7 @@ export async function forwardErp(request: Request, resource: string) {
   if (salesPolicy && !["/commercial/policies/store","/commercial/policies/performance"].includes(resource) && new URL(request.url).search) return Response.json({ title: "Consulta inválida" }, { status:400 })
   const orderFinanceResource = /^\/orders\/[a-f0-9-]{36}\/finance$/i.test(resource)
   const supportingDocumentsResource = /^\/orders\/[a-f0-9-]{36}\/documents$/i.test(resource)
-  const supportingDownloadResource = /^\/orders\/[a-f0-9-]{36}\/documents\/[a-f0-9-]{36}$/i.test(resource)
+  const supportingDownloadResource = /^\/wallet-payment-files\/(?:receivables|payables|financial-payables)\/[a-f0-9-]{36}\/[a-f0-9-]{36}$/i.test(resource) || /^\/orders\/[a-f0-9-]{36}\/documents\/[a-f0-9-]{36}$/i.test(resource)
   const supportingResource = orderFinanceResource || supportingDocumentsResource || supportingDownloadResource
   if (supportingResource && (!(supportingDocumentsResource ? ["GET", "POST"] : ["GET"]).includes(request.method) || new URL(request.url).search)) return Response.json({ title: "Operação de documentos ou financeiro inválida" }, { status: 400 })
   const platformMailResource = resource === "/platform/mail-settings"
@@ -90,7 +90,7 @@ export async function forwardErp(request: Request, resource: string) {
   const qualifiedResource = (["GET","POST"].includes(request.method) && /^\/commercial-contracts\/[a-f0-9-]{36}\/qualified-reissue$/i.test(resource))
     || (request.method === "POST" && /^\/commercial-contracts\/[a-f0-9-]{36}\/prepare-signatures$/i.test(resource))
   const documentEmailResource = financialEmailResource || packageEmailResource || qualifiedResource || /^\/(?:orders|proposals)\/[a-f0-9-]{36}\/email$/i.test(resource)
-  if (financialEmailResource && new URL(request.url).search) return Response.json({ title: "Consulta inválida" }, { status: 400 })
+  if ((packageEmailResource || qualifiedResource || financialEmailResource && !(resource === "/financial-report/email" && request.method === "GET")) && new URL(request.url).search) return Response.json({ title: "Consulta inválida" }, { status: 400 })
   const posReadResource = /^\/pos\/(?:products|sessions(?:\/current|\/[a-f0-9-]{36})?|sales(?:\/[a-f0-9-]{36})?)$/i.test(resource)
   const posWriteResource = /^\/pos\/(?:sessions(?:\/[a-f0-9-]{36}\/(?:movements|sales|close))?|sales\/[a-f0-9-]{36}\/cancel)$/i.test(resource)
   const posResource = resource.startsWith("/pos/")
@@ -108,7 +108,9 @@ export async function forwardErp(request: Request, resource: string) {
   const orderAcceptanceResource = /^\/orders\/[a-f0-9-]{36}\/accept$/i.test(resource)
   if (orderAcceptanceResource && request.method !== "POST") return Response.json({ title: "Método inválido" }, { status: 405 })
   const purchaseResource = purchaseCollection || /^\/(?:purchase-orders|purchase-receipts|payables|financial-payables)\/[a-f0-9-]{36}$|^\/purchase-orders\/[a-f0-9-]{36}\/(?:confirm|cancel|close)$|^\/(?:payables|financial-payables)\/[a-f0-9-]{36}\/(?:payments|reverse-payment)$/i.test(resource)
-  if (!stockLocationPath(resource, request.method) && !(resource === "/sales/overview" && request.method === "GET") && !salesImportResource && !salesPolicy && !orderAcceptanceResource && !supportingResource && !platformMailResource && !orderDocumentResource && !posResource && !documentEmailResource && !priceListResource && !opportunityResource && !negotiationResource && !warrantyResource && !simulatorResource && !dashboardResource && !productCostResource && !priceTableResource && !fixedExpenseResource && !commercialResource && !proposalResource && !payrollResource && !registryResource && !salesSettingsResource && !accountResource && !continuityResource && !auditResource && !systemResource && !returnResource && !logisticsResource && !invitationResource && !referenceResource && !financialAccountEntriesResource && !financialAccountTransfersResource && !inventoryCountResource && !serviceKeyResource && !purchaseResource && !productTransferResource && !productCatalogResource && !productFinishesResource && !/^\/(?:me|company|companies|financial-settings|preferences|staff|users|roles|permissions|products|stock|parties|orders|receivables)$|^\/(?:users|roles|products|parties|staff|orders|receivables)\/[a-f0-9-]{36}$|^\/stock\/movements$|^\/orders\/[a-f0-9-]{36}\/(?:confirm|cancel|complete)$|^\/receivables\/[a-f0-9-]{36}\/(?:payments|reverse-payment)$/i.test(resource)) return Response.json({ title: "Recurso inválido" }, { status: 400 })
+  const financialRoute = financeRoute(request.method, resource)
+  if (financialEmailResource && !financialRoute && new URL(request.url).search) return Response.json({ title: "Consulta inválida" }, { status: 400 })
+  if (!financialRoute && !stockLocationPath(resource, request.method) && !(resource === "/sales/overview" && request.method === "GET") && !salesImportResource && !salesPolicy && !orderAcceptanceResource && !supportingResource && !platformMailResource && !orderDocumentResource && !posResource && !documentEmailResource && !priceListResource && !opportunityResource && !negotiationResource && !warrantyResource && !simulatorResource && !dashboardResource && !productCostResource && !priceTableResource && !fixedExpenseResource && !commercialResource && !proposalResource && !payrollResource && !registryResource && !salesSettingsResource && !accountResource && !continuityResource && !auditResource && !systemResource && !returnResource && !logisticsResource && !invitationResource && !referenceResource && !financialAccountEntriesResource && !financialAccountTransfersResource && !inventoryCountResource && !serviceKeyResource && !purchaseResource && !productTransferResource && !productCatalogResource && !productFinishesResource && !/^\/(?:me|company|companies|financial-settings|preferences|staff|users|roles|permissions|products|stock|parties|orders|receivables)$|^\/(?:users|roles|products|parties|staff|orders|receivables)\/[a-f0-9-]{36}$|^\/stock\/movements$|^\/orders\/[a-f0-9-]{36}\/(?:confirm|cancel|complete)$|^\/receivables\/[a-f0-9-]{36}\/(?:payments|reverse-payment)$/i.test(resource)) return Response.json({ title: "Recurso inválido" }, { status: 400 })
   try {
     const config = erpConfiguration()
     const session = platformMailResource || resource === "/companies" || resource === "/company-registration/lookup" ? await currentIdentitySession() : await currentSession()
@@ -126,7 +128,7 @@ export async function forwardErp(request: Request, resource: string) {
       const reader = request.body?.getReader()
       const chunks: Uint8Array[] = []
       let size = 0
-      const bodyLimit = warrantyRecords || supportingDocumentsResource || /^\/receivables\/[a-f0-9-]{36}\/payments$/i.test(resource) || /^\/products\/[a-f0-9-]{36}\/catalog$/i.test(resource) ? 14_100_000 : /^\/products\/import$/i.test(resource) ? 2_800_000 : /^\/(?:staff|products|company)(?:\/[a-f0-9-]{36})?$/i.test(resource) ? 400_000 : 65_536
+      const bodyLimit = /^\/finance-treasury\/(?:import-(?:ofx|cnab|return)|cnab-return)$/.test(resource) ? 2_800_000 : warrantyRecords || supportingDocumentsResource || /^\/(?:receivables|payables|financial-payables)\/(?:[a-f0-9-]{36}\/(?:payments|approvals)|payment-batches)$/i.test(resource) || /^\/products\/[a-f0-9-]{36}\/catalog$/i.test(resource) ? 14_100_000 : /^\/products\/import$/i.test(resource) ? 2_800_000 : /^\/(?:staff|products|company)(?:\/[a-f0-9-]{36})?$/i.test(resource) ? 400_000 : 65_536
       if (reader) for (;;) {
         const { done, value } = await reader.read()
         if (done) break
@@ -158,6 +160,13 @@ export async function forwardErp(request: Request, resource: string) {
       const query = new URL(request.url).searchParams
       for (const [key,value] of query) {
         if (key !== "external" || query.getAll(key).length !== 1) return Response.json({title:"Filtro de canal inválido"},{status:400})
+        upstream.searchParams.set(key,value)
+      }
+    }
+    if (financialRoute) {
+      const query = new URL(request.url).searchParams
+      for (const [key,value] of query) {
+        if (request.method !== "GET" || !financialRoute.query?.includes(key) || query.getAll(key).length !== 1) return Response.json({ title: "Filtro financeiro inválido" }, { status: 400 })
         upstream.searchParams.set(key,value)
       }
     }
@@ -253,13 +262,16 @@ export async function forwardErp(request: Request, resource: string) {
     if (stockLocationPath(resource,request.method)) {
       const params = new URL(request.url).searchParams
       const allowed = resource === "/stock/periods/basis" ? ["productId","movementId"] : resource === "/stock/serials/document" ? ["documentId","offset"] : resource === "/stock/serials/events" ? ["productId","serial","offset"] : resource === "/stock/serials" ? ["offset","limit","productId","documentId","kind","q"] : resource === "/stock/replenishment" ? ["offset","limit","mode","q"] : resource === "/stock/transfers" ? ["offset","limit","id"] : []
-      if (resource === "/stock/reports") allowed.push("dataset","definitionId","productId","warehouseId","startDate","endDate","idleDays","offset","limit","all","catalog")
+      if (resource === "/stock/reports") allowed.push(
+        "dataset", "definitionId", "productId", "warehouseId", "startDate", "endDate",
+        "idleDays", "movementDirection", "countStatus", "productionStatus", "offset", "limit", "all", "catalog",
+      )
       for (const [key,value] of params) {
         if (request.method !== "GET" || !allowed.includes(key) || params.getAll(key).length !== 1) return Response.json({title: "Filtro inválido"}, {status: 400})
         upstream.searchParams.set(key,value)
       }
     }
-    if (dashboardResource || auditResource || resource === "/system/files" || referenceCollection || purchaseResource || financialAccountEntriesResource || inventoryCountResource && (resource === "/inventory-counts") || ["/staff", "/products", "/products/export", "/stock", "/stock/movements", "/parties", "/orders", "/receivables"].includes(resource)) {
+    if (!financialRoute && (dashboardResource || auditResource || resource === "/system/files" || referenceCollection || purchaseResource || financialAccountEntriesResource || inventoryCountResource && (resource === "/inventory-counts") || ["/staff", "/products", "/products/export", "/stock", "/stock/movements", "/parties", "/orders", "/receivables"].includes(resource))) {
       const query = new URL(request.url).searchParams
       const allowed = dashboardResource ? ["period"] : auditResource ? ["q", "action", "entity", "startDate", "endDate", "before"] : resource === "/system/files" ? ["q", "origin", "status", "offset", "limit"] : purchaseResource ? purchaseCollection ? ["offset", "limit"] : [] : financialAccountEntriesResource ? ["accountId", "offset", "limit"] : inventoryCountResource ? ["offset", "limit"] : resource === "/stock/movements" ? (request.method === "GET" ? ["productId", "startDate", "endDate", "offset", "limit"] : []) : resource === "/products/export" ? ["q", "status"] : ["/parties", "/staff"].includes(resource) ? ["q", "status", "role", "offset", "limit"] : resource === "/orders" ? ["q", "status", "sort", "offset", "limit", "view", "from", "to", "seller", "stage", "stale", "includeCancelled"] : resource === "/receivables" ? ["offset", "limit"] : ["q", "status", "offset", "limit"]
       if (resource === "/products" || resource === "/stock") allowed.push("category_id")
@@ -271,7 +283,7 @@ export async function forwardErp(request: Request, resource: string) {
         upstream.searchParams.set(key, value)
       }
     }
-    if (posResource || documentEmailResource) {
+    if (posResource || (documentEmailResource && !financialRoute)) {
       const query = new URL(request.url).searchParams
       const allowed = resource === "/pos/products" ? ["search", "destination", "taxpayer", "offset", "limit"] : resource === "/pos/sessions/current" ? ["register"] : resource === "/pos/sessions" ? ["status", "register", "startDate", "endDate", "offset", "limit"] : resource === "/pos/sales" ? ["sessionId", "status", "offset", "limit"] : []
       for (const [key, value] of query) {
@@ -279,7 +291,9 @@ export async function forwardErp(request: Request, resource: string) {
         upstream.searchParams.set(key, value)
       }
     }
-    const timeout = AbortSignal.timeout(packageEmailResource || qualifiedResource ? 105000 : documentEmailResource || orderDocumentResource ? 25000 : invitationResource || accountResource ? 20000 : 10000)
+    const importBankReturn = resource === "/finance-treasury/import-return" || resource === "/finance-treasury/cnab-return"
+    const listBankReports = resource === "/finance-treasury/provider-reports"
+    const timeout = AbortSignal.timeout(packageEmailResource || qualifiedResource || importBankReturn ? 105000 : documentEmailResource || orderDocumentResource || listBankReports ? 25000 : invitationResource || accountResource ? 20000 : 10000)
     const signal = productExportResource || productFinishesResource ? AbortSignal.any([request.signal, timeout]) : timeout
     const response = await fetch(upstream, { method: request.method, headers, body, cache: "no-store", redirect: "error", signal })
     // ETag is the backend revision used by If-Match; proxy encoding must not rewrite it.

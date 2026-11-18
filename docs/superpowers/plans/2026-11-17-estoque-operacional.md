@@ -41,4 +41,12 @@ Tenant trocado em link salvo • SKU com barra e nome duplicado • quantidades 
 ### Task 6 • Validação e publicação
 
 - [x] Validar contrato público e BFF TypeScript e estabelecer publicação do estoque com migrações TypeScript e imagem nativa existente, atendendo à restrição de custo. Garantir reprodutibilidade da release e verificações das mudanças. Rodar testes da API com PG, testes de interface, build, arquitetura e revisão final. Resolver conflitos com a main vigente.
-- [ ] Publicar o SHA validado via GitHub, acompanhar publicação e verificar saúde, revisão e rotas de estoque na produção por leitura autorizada. Registrar evidência sem escrever dados comerciais de teste em produção.
+- [x] Publicar o SHA validado via GitHub, acompanhar publicação e verificar saúde, revisão e rotas de estoque na produção por leitura autorizada. Registrar evidência sem escrever dados comerciais de teste em produção.
+
+Em 18/11/2026, o GitHub concluiu a publicação da revisão `47b8805d384d21b8ce656d19d270d4aae775dc61`. Às 05h03 de Brasília, a saúde pública do ERP informava a mesma revisão. A consulta autenticada de Saldos retornou os 160 SKUs da empresa conferida, todos com saldo, reservado e disponível iguais a zero. Nos cinco SKUs consultados no Kardex, a identidade correspondia à linha de Saldos e o histórico estava vazio. [Publicação no GitHub](https://github.com/avilaops/P003/actions/runs/44254980953) • [Saúde do ERP](https://erp.avilaops.com/api/health)
+
+### Aceite operacional com documentos reais
+
+- [ ] Conciliar um recebimento de compra e uma saída de venda do mesmo SKU na empresa conferida. Na consulta de 18/11/2026, Compras retornou zero pedidos e Vendas retornou quatro rascunhos e um pedido cancelado.
+
+No próximo ciclo, conferir o vínculo de cada movimento com seu documento de origem, o SKU, a unidade e o depósito. Registrar saldo, reservado e disponível antes da reserva e depois da reserva e da baixa. Na tela 41, abrir **Ver movimentos** e conferir que o saldo inicial do Kardex mais as entradas menos as saídas resulta no saldo final para o mesmo período e depósito. Registrar o resultado com referências internas aos documentos.

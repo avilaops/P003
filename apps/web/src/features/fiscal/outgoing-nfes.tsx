@@ -71,8 +71,7 @@ export function OutgoingNfes({model = 55}:{model?:55 | 65}) {
         if (!signal.aborted) setError(reason instanceof Error ? reason.message : "Consulta fiscal indisponível")
       } finally { if (!signal.aborted) setLoading(false) }
     }
-    setLoading(!invalid); setState(null); setError("")
-    const timer = window.setTimeout(() => void read(),150)
+    const timer = window.setTimeout(() => { setLoading(!invalid); setState(null); setError(""); void read() },150)
     return () => { clearTimeout(timer); controller.abort() }
   },[filters,group,invalid,model,offset,reload])
 

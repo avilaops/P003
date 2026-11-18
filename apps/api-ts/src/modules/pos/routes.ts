@@ -4,11 +4,10 @@ import type { AppDependencies } from "../../app.js"
 import { authorizeRequest, requirePermission, type AuthorizedContext } from "../../platform/access.js"
 import { commandKey, record, remember, replay } from "../../platform/commands.js"
 import { parseRevision, type Revision } from "../../platform/revision.js"
-import { open, close, movement } from "./cash.js"
 import { checkout, cancel } from "./sales.js"
-import { rights, current, sessions, sales, products, sessionDetail, saleDetail } from "./read.js"
+import { sales, products, saleDetail } from "./read.js"
 import { registerPosSettings } from "./settings.js"
-import { openInput, closeInput, movementInput, checkoutInput, cancelInput, uuid, parsed, currentQuery, sessionsQuery, salesQuery, productsQuery } from "./schema.js"
+import { checkoutInput, cancelInput, uuid, parsed, salesQuery, productsQuery } from "./schema.js"
 
 type Body = Record<string, unknown>
 function replyWith(reply:FastifyReply, body:Body, status=200) {
@@ -19,6 +18,7 @@ function replyWith(reply:FastifyReply, body:Body, status=200) {
 
 export function registerPosRoutes(app: FastifyInstance, deps: AppDependencies) {
   registerPosSettings(app,deps)
+  // Cash sessions (open, read, movements, close) are served by modules/pos-sessions.
   const base="/api/v1/pos"
   function get(path:string,load:(c:AuthorizedContext,id:string,query:unknown)=>Promise<Body>) {
     app.get<{Params:{id?:string}}>(base+path,async(req,reply)=>{
@@ -30,9 +30,6 @@ export function registerPosRoutes(app: FastifyInstance, deps: AppDependencies) {
       return replyWith(reply,body)
     })
   }
-  get("/sessions",(c,_,q)=>sessions(c,parsed(sessionsQuery,q)))
-  get("/sessions/current",(c,_,q)=>current(c,parsed(currentQuery,q).register))
-  get("/sessions/:id",async(c,id)=>({...rights(c),data:await sessionDetail(c,id)}))
   get("/products",(c,_,q)=>products(c,parsed(productsQuery,q)))
   get("/sales",(c,_,q)=>sales(c,parsed(salesQuery,q)))
   get("/sales/:id",(c,id)=>saleDetail(c,id))
@@ -58,9 +55,6 @@ export function registerPosRoutes(app: FastifyInstance, deps: AppDependencies) {
       return replyWith(reply,result.value,status)
     })
   }
-  command("/sessions","pos.open","manage",201,openInput,(c,_,__,input)=>open(c,input))
-  command("/sessions/:id/movements","pos.movement","manage",200,movementInput,movement)
   command("/sessions/:id/sales","pos.checkout","manage",201,checkoutInput,checkout)
-  command("/sessions/:id/close","pos.close","close",200,closeInput,close)
   command("/sales/:id/cancel","pos.cancel","cancel",200,cancelInput,cancel)
 }

@@ -1,3 +1,4 @@
+import { startPayrollWorker } from "./modules/finance-wallets/payroll.js"
 import { buildApp } from "./app.js"
 import { fiscalTransport } from "./modules/fiscal-workspace/engine.js"
 import { startCostWorker } from "./modules/inventory/cost-jobs.js"
@@ -14,8 +15,14 @@ const outgoingNfse = configuration.fiscalEngine && vault ? (() => {
 })() : undefined
 const fiscalOperations=configuration.fiscalEngine && vault ? {call:fiscalTransport(configuration.fiscalEngine.url,configuration.fiscalEngine.token),material:vault.material.bind(vault),nfceSecret:vault.nfceSecret.bind(vault),productionRecipient:(tenant:string)=>process.env.SEFAZ_MONITOR_ENABLED==="true" && (!process.env.SEFAZ_MONITOR_TENANT_ID || process.env.SEFAZ_MONITOR_TENANT_ID.toLowerCase()===tenant),production:(tenant:string)=>process.env.NFE_PRODUCTION_ENABLED==="true" && process.env.NFE_PRODUCTION_TENANT_ID?.toLowerCase()===tenant} : undefined
 const app = buildApp({ ...(vault?{fiscalVault:vault}:{}), ...(fiscalOperations ? {fiscalOperations}:{}), pool, userinfoUrl: configuration.userinfoUrl, mcpResource: configuration.mcpResource, ...(outgoingNfse ? { outgoingNfse } : {}) })
-const stopCostWorker = startCostWorker(pool)
-app.addHook("onClose", async () => { await stopCostWorker(); await pool.close() })
+const workers = process.env.ERP_BACKGROUND_WORKERS_ENABLED ?? "true"
+if (workers !== "false" && workers !== "true") throw new Error("ERP_BACKGROUND_WORKERS_ENABLED must be true or false")
+const stopCostWorker = workers === "true" ? startCostWorker(pool) : undefined
+app.addHook("onClose", async () => {
+  await stopCostWorker?.()
+  await pool.close()
+})
+if (workers === "true") startPayrollWorker(app, pool)
 const shutdown = () => { void app.close().catch(() => { process.exitCode = 1 }) }
 process.once("SIGTERM", shutdown)
 process.once("SIGINT", shutdown)

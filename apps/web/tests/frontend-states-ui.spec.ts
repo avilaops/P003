@@ -11,10 +11,15 @@ test("recarregar recebível após revisão antiga não declara recebimento confi
   const body = { tenantId: tenant, canEdit: true, data: { id: record, orderId: record, customerName: "Cliente fixture", dueDate: "2026-11-20", amount: "100.00", receivedAmount: "0.00", outstandingAmount: "100.00", status: "open", revision: 2, paymentId: null }, payments: [] }
   await page.route(`**/api/erp/receivables/${record}`, route => route.fulfill({ headers: { ETag: '"2"' }, json: body }))
   await page.route(`**/api/erp/receivables/${record}/payments`, route => route.fulfill({ status: 412, json: { title: "Revisão antiga" } }))
+  await page.route("**/api/erp/financial-wallet-settings", route => route.fulfill({json:{tenantId:tenant, categories:[],costCenters:[],data:{graceDays:0,interestMonthlyBps:0,penaltyBps:0,discountLimitBps:10000,paymentApprovalLimit:null}}}))
+  await page.route("**/api/erp/payment-methods?**", route => route.fulfill({json:{data:[]}}))
+  await page.route("**/api/erp/financial-settings", route => route.fulfill({json:{data:{defaultPaymentMethod:"bank_transfer"}}}))
+  await page.route("**/api/erp/financial-accounts?**", route => route.fulfill({json:{data:[{id:record,code:"BANCO",name:"Conta de teste"}]}}))
   await page.goto(`/financeiro/contas-receber/${record}`)
-  await page.getByLabel(/^Valor declarado/).fill("10")
+  await page.getByLabel("Principal recebido", { exact: true }).fill("10")
   await page.getByLabel("Data do recebimento", { exact: true }).fill("2026-11-13")
   await page.getByLabel("Referência do recebimento", { exact: true }).fill("Tentativa com revisão antiga")
+  await page.getByLabel("Conta de entrada", { exact: false }).selectOption(record)
   await page.getByRole("button", { name: "Confirmar recebimento declarado", exact: true }).click()
   await page.getByRole("button", { name: "Recarregar conta", exact: true }).click()
   await expect(page.getByText("Saldo restante: R$ 100,00", { exact: true })).toBeVisible()
@@ -282,6 +287,7 @@ for (const resource of ["payables", "receivables"] as const) {
   test(resource + ": vírgula é aceita e enviada como decimal canônico", async ({ page }) => {
     const body = { tenantId: tenant, canEdit: true, data: { id: record, receiptId: record, orderId: record, supplierName: "Fornecedor fixture", customerName: "Cliente fixture", dueDate: "2026-11-20", amount: "100.00", paidAmount: "0.00", receivedAmount: "0.00", outstandingAmount: "100.00", status: "open", revision: 1, paymentId: null }, payments: [] }
     let sent: { amount: string } | undefined
+    await page.route("**/api/erp/financial-accounts?*",route=>route.fulfill({json:{data:[{id:record,name:"Banco",code:"BANCO"}]}}))
     await page.route("**/api/erp/" + (resource === "payables" ? "financial-payables" : resource) + "/" + record, route => route.fulfill({ headers: { ETag: '"1"' }, json: body }))
     await page.route("**/api/erp/" + (resource === "payables" ? "financial-payables" : resource) + "/" + record + "/payments", route => {
       sent = route.request().postDataJSON()
@@ -289,8 +295,9 @@ for (const resource of ["payables", "receivables"] as const) {
     })
     page.on("dialog", dialog => dialog.accept())
     await page.goto("/financeiro/contas-" + (resource === "payables" ? "pagar" : "receber") + "/" + record)
-    const amount = page.getByLabel(resource === "payables" ? "Valor do pagamento" : /^Valor declarado/)
+    const amount = page.getByLabel(resource === "payables" ? "Principal pago" : "Principal recebido")
     await amount.fill("12,50")
+    await page.getByLabel(resource==="payables" ? "Conta de saída" : "Conta de entrada").selectOption(record)
     expect(await amount.evaluate((input: HTMLInputElement) => input.checkValidity())).toBe(true)
     await page.getByLabel(resource === "payables" ? "Data do pagamento" : "Data do recebimento", { exact: true }).fill("2026-10-30")
     await page.getByLabel(resource === "payables" ? "Referência do pagamento" : "Referência do recebimento", { exact: true }).fill("Teste decimal")

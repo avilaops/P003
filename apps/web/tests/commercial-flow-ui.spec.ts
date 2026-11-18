@@ -153,7 +153,8 @@ test("equipamento removido da publicação continua visível e exige remoção e
 })
 
 test("transferência ao novo pedido conserva condições e exige conferência se somente a regra mudou", async ({page})=>{
- const singleInputs:Record<string,any>[]=[], mixedInputs:Record<string,any>[]=[], writes:string[]=[]
+ type RecordedInput={items:Record<string,unknown>[];[key:string]:unknown}
+ const singleInputs:RecordedInput[]=[], mixedInputs:RecordedInput[]=[], writes:string[]=[]
  let moved=false
  await page.route(/\/api\/erp\/commercial\/tables\/(imported|national)(?:\?.*)?$/,route=>route.fulfill({json:{tenantId:tenant,line:new URL(route.request().url()).pathname.split("/").at(-1),canManage:false,data:table}}))
  await page.route("**/api/erp/commercial/policies/catalog",route=>route.fulfill({json:{tenantId:tenant,channels:[{channel:"Loja"}],terms:[]}}))

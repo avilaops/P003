@@ -22,6 +22,7 @@ const date=(value:string)=>new Intl.DateTimeFormat("pt-BR",{timeZone:"America/Sa
 export function WarrantyList({initiallyOpen=false}:{initiallyOpen?:boolean}) {
   const url=useSearchParams(),router=useRouter()
   const q=url.get("q") ?? "",status=url.get("status") ?? "",offset=Math.max(0,Number(url.get("offset"))||0)
+  const [openedAt]=useState(()=>Date.now())
   const [search,setSearch]=useState(q)
   const query=new URLSearchParams({limit:"25",offset:String(offset)})
   if(q) query.set("q",q)
@@ -46,7 +47,7 @@ export function WarrantyList({initiallyOpen=false}:{initiallyOpen?:boolean}) {
       {list.value?.data.length ? <ul className="divide-y rounded-lg border">{list.value.data.map(c=><li key={c.id} className="grid gap-2 p-3 sm:grid-cols-[2fr_2fr_1fr]">
         <div><Link className="font-semibold text-primary underline" href={"/vendas/garantias/"+c.id}>{c.title}</Link><small className="block break-all">{c.protocol}</small>{c.customerName}</div>
         <div>{[c.productName,c.serialNumber].filter(Boolean).join(" • ")}{c.orderId && <Link className="block text-primary underline" href={"/vendas/pedidos/"+c.orderId}>Pedido {c.orderNumber}</Link>}{c.assignedToName || c.queue}</div>
-        <div>{stages[c.status]}<small className="block">Aberta em {date(c.createdAt)}</small>{c.slaDueAt && !["closed","cancelled","resolved"].includes(c.status) && new Date(c.slaDueAt).getTime()<Date.now() && <strong>Prazo vencido</strong>}</div>
+        <div>{stages[c.status]}<small className="block">Aberta em {date(c.createdAt)}</small>{c.slaDueAt && !["closed","cancelled","resolved"].includes(c.status) && new Date(c.slaDueAt).getTime()<openedAt && <strong>Prazo vencido</strong>}</div>
       </li>)}</ul> : <p>{q || status?"Nenhum chamado corresponde aos filtros.":"Registre aqui os chamados de garantia e assistência dos equipamentos vendidos."}</p>}
       {Boolean(offset || (list.value?.total ?? 0)>25) && <Pagination total={list.value?.total ?? 0} offset={offset} pageSize={25} onOffsetChange={v=>filter(search,status,v)}/>}
     </>}

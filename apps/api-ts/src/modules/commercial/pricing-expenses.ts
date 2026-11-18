@@ -29,18 +29,7 @@ export async function monthlyExpenses(context: AuthorizedContext) {
 }
 
 export function registerPricingExpenses(app: FastifyInstance, deps: AccessDependencies) {
-  app.get("/api/v1/financial-categories", async (req,reply) => {
-    const body = await authorizeRequest(req,deps,async c => {
-      requirePermission(c,"finance.categories.read")
-      const query = parseListQuery(req.query)
-      const filter = " FROM financial_categories WHERE tenant_id=$1 AND ($2::text IS NULL OR status=$2) AND (strpos(lower(name),lower($3))>0 OR strpos(lower(code),lower($3))>0)"
-      const values = [c.tenantId,query.status ?? null,query.q]
-      const result = await c.client.query('SELECT id,revision,code,name,status,notes,parent_id AS "parentId",direction' + filter + ' ORDER BY name,id LIMIT $4 OFFSET $5',[...values,query.limit,query.offset])
-      const count = await c.client.query("SELECT count(*) AS total" + filter,values)
-      return { tenantId:c.tenantId, canEdit:c.permissions.includes("finance.categories.manage"), data:result.rows.map(row=>({...row,revision:revisionValue(row.revision)})), total:Number(count.rows[0]!.total),offset:query.offset,limit:query.limit }
-    })
-    return reply.header("cache-control","no-store").send(body)
-  })
+  // GET /financial-categories is served by reference-data (full category registry).
   const path = "/api/v1/fixed-expenses"
   app.get(path,async (req,reply) => {
     const body = await authorizeRequest(req,deps,async c => {

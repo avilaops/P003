@@ -1,9 +1,15 @@
 import assert from "node:assert/strict"
 import { readFileSync } from "node:fs"
-import { test } from "node:test"
+import { test, before, after } from "node:test"
 import ts from "typescript"
 
 const tenant = "11111111-1111-4111-8111-111111111111"
+const previousApi = process.env.ERP_TYPESCRIPT_API_URL
+before(() => { process.env.ERP_TYPESCRIPT_API_URL = "http://127.0.0.1:8081" })
+after(() => {
+  if (previousApi === undefined) delete process.env.ERP_TYPESCRIPT_API_URL
+  else process.env.ERP_TYPESCRIPT_API_URL = previousApi
+})
 const id = "22222222-2222-4222-8222-222222222222"
 process.env.ERP_TYPESCRIPT_API_URL = "http://127.0.0.1:19980"
 const uri = source => "data:text/javascript;base64," + Buffer.from(source).toString("base64")

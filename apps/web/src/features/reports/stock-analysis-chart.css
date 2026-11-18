@@ -1,0 +1,29 @@
+.stock-class-mark {
+  --class-ink: var(--chart-1);
+  --class-paper: var(--background);
+  background-color: var(--class-ink);
+}
+
+.stock-class-mark[data-pattern="1"] {
+  --class-ink: var(--chart-2);
+  background-image: repeating-linear-gradient(45deg, transparent 0 4px, var(--class-paper) 4px 6px);
+}
+
+.stock-class-mark[data-pattern="2"] {
+  --class-ink: var(--chart-3);
+  background-image: repeating-linear-gradient(90deg, transparent 0 3px, var(--class-paper) 3px 5px);
+}
+
+.stock-class-mark[data-pattern="3"] {
+  --class-ink: var(--chart-4);
+  background-image: radial-gradient(var(--class-paper) 1.5px, transparent 1.5px);
+  background-size: 6px 6px;
+}
+
+@media (forced-colors: active) {
+  .stock-class-mark[data-pattern] {
+    forced-color-adjust: none;
+    --class-ink: CanvasText;
+    --class-paper: Canvas;
+  }
+}

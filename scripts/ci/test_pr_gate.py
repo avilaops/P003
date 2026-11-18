@@ -54,7 +54,7 @@ class ScopeTests(unittest.TestCase):
             self.assertTrue(gate.native_api_required([path]), path)
         self.assertFalse(gate.native_api_required(["apps/api-ts/src/modules/proposals/commands.ts", "migrations/123.sql"]))
         for path in ("apps/api-ts/src/platform/mcp-dispatch.ts", ".github/workflows/ci.yml",
-                     ".github/workflows/regression.yml", "deploy/release-retention.py",
+                     ".github/workflows/regression.yml", "scripts/ci/test_workflows.py", "deploy/release-retention.py",
                      "deploy/web.Dockerfile", "apps/fiscal-engine/src/server.ts", "pnpm-lock.yaml"):
             self.assertFalse(gate.native_api_required([path]), path)
         self.assertFalse(gate.native_api_required(["apps/web/src/page.tsx", "docs/design.md"]))

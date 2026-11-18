@@ -36,6 +36,21 @@ function SelectedSession({id}:{id:string}) {
   </div>
 }
 
+function MovementReversal({ tenant, session, movementId, reload }: { tenant: string; session: CashSession; movementId: string; reload: () => void }) {
+  const [reason, setReason] = useState("")
+  const command = useCommand()
+  return <details className="mt-2"><summary className="cursor-pointer text-sm text-primary">Estornar movimentação</summary>
+    <form className="space-y-2 pt-2" onSubmit={async event => {
+      event.preventDefault()
+      const saved = await command.send<Envelope<CashSession>>(`/api/erp/pos/sessions/${session.id}/movements`, tenant, { reversesMovementId: movementId, reason: reason.trim() }, `"${session.revision}"`)
+      if (saved?.tenantId === tenant && saved.data.id === session.id) reload()
+    }}>
+      <label>Motivo do estorno<Input required minLength={3} maxLength={200} value={reason} onChange={event => setReason(event.target.value)} disabled={command.busy || command.uncertain || command.stale}/></label>
+      {command.error && <Failure message={command.error} status={command.status} retry={command.stale ? reload : undefined}/>}
+      <Button type="submit" variant="outline" disabled={command.busy || command.stale}>{command.uncertain ? "Repetir confirmação" : "Confirmar estorno da transferência"}</Button>
+    </form></details>
+}
+
 function ClosingEditor({ snapshot, reload }: { snapshot: Envelope<CashSession>; reload: () => void }) {
   const [closed, setClosed] = useState<CashSession | null>(null)
   const session = closed || snapshot.data
@@ -60,7 +75,7 @@ function ClosingEditor({ snapshot, reload }: { snapshot: Envelope<CashSession>; 
         <Button type="submit" disabled={!canClose || command.busy || command.stale}>{command.busy ? "Fechando…" : command.uncertain ? "Conferir fechamento" : "Confirmar fechamento"}</Button>
       </form>
     </>}
-    {!!session.movements.length && <section className="space-y-3"><h2 className="font-semibold">Movimentações do caixa</h2><div className="overflow-x-auto rounded-lg border"><DataTable aria-label="Movimentações do caixa"><thead><tr><th>Data</th><th>Tipo e motivo</th><th className="text-right">Valor</th></tr></thead><tbody>{session.movements.map(movement => <tr key={movement.id}><td className="whitespace-nowrap">{when(movement.createdAt)}</td><td>{movement.direction === "supply" ? "Suprimento" : "Sangria"}<span className="block text-xs text-muted-foreground">{movement.reason}</span></td><td className="whitespace-nowrap text-right">{money(movement.amount)}</td></tr>)}</tbody></DataTable></div></section>}
+    {!!session.movements.length && <section className="space-y-3"><h2 className="font-semibold">Movimentações do caixa</h2><div className="overflow-x-auto rounded-lg border"><DataTable aria-label="Movimentações do caixa"><thead><tr><th>Data</th><th>Tipo e motivo</th><th className="text-right">Valor</th></tr></thead><tbody>{session.movements.map(movement => <tr key={movement.id}><td className="whitespace-nowrap">{when(movement.createdAt)}</td><td>{movement.direction === "supply" ? "Suprimento" : "Sangria"}<span className="block text-xs text-muted-foreground">{movement.reason}</span>{movement.reversesMovementId ? <span className="text-xs">Estorno</span> : movement.reversed ? <span className="text-xs">Movimentação estornada</span> : movement.transferId && session.status === "open" && snapshot.canEdit && <MovementReversal tenant={snapshot.tenantId} session={session} movementId={movement.id} reload={reload} />}</td><td className="whitespace-nowrap text-right">{money(movement.amount)}</td></tr>)}</tbody></DataTable></div></section>}
     <SessionSales id={session.id} tenant={snapshot.tenantId} onChanged={reload} />
   </div>
 }
@@ -74,7 +89,7 @@ function CashMovement({ session, tenant, reload }: { session: CashSession; tenan
   const command = useCommand()
   const frozen = command.busy || command.uncertain || command.stale
   return <details className="max-w-xl rounded-lg border p-4"><summary className="cursor-pointer text-sm font-semibold">Suprimento ou sangria</summary><form className="mt-4 space-y-3" onSubmit={async e => { e.preventDefault(); const normalized = amount(value); if (!normalized || Number(normalized) <= 0 || accounts.value?.tenantId !== tenant) return; const result = await command.send<Envelope<CashSession>>(`/api/erp/pos/sessions/${session.id}/movements`, tenant, { direction, amount: normalized, reason: reason.trim(), ...(direction === "supply" ? { sourceAccountId: accountId } : { targetAccountId: accountId }) }, `"${session.revision}"`); if (result?.tenantId === tenant && result.data.id === session.id) reload() }}>
-    <fieldset disabled={frozen} className="grid gap-3 sm:grid-cols-2"><label className="grid gap-1.5 text-xs font-medium">Movimentação<select className="h-9 rounded-lg border bg-background px-3 text-sm" value={direction} onChange={e => setDirection(e.target.value)}><option value="supply">Suprimento · entrada no caixa</option><option value="withdrawal">Sangria · retirada do caixa</option></select></label><label className="grid gap-1.5 text-xs font-medium">Valor da movimentação (R$)<Input required inputMode="decimal" value={value} onChange={e => setValue(e.target.value)} /></label><div className="sm:col-span-2"><AccountSelect label={direction === "supply" ? "Conta de origem do suprimento" : "Conta de destino da sangria"} accounts={accounts.value?.tenantId === tenant ? accounts.value.data : []} omit={session.cashAccountId} value={accountId} onChange={setAccountId} /></div><label className="grid gap-1.5 text-xs font-medium sm:col-span-2">Motivo da movimentação<Input required minLength={3} maxLength={1000} value={reason} onChange={e => setReason(e.target.value)} /></label></fieldset>
+    <fieldset disabled={frozen} className="grid gap-3 sm:grid-cols-2"><label className="grid gap-1.5 text-xs font-medium">Movimentação<select className="h-9 rounded-lg border bg-background px-3 text-sm" value={direction} onChange={e => setDirection(e.target.value)}><option value="supply">Suprimento · entrada no caixa</option><option value="withdrawal">Sangria · retirada do caixa</option></select></label><label className="grid gap-1.5 text-xs font-medium">Valor da movimentação (R$)<Input required inputMode="decimal" value={value} onChange={e => setValue(e.target.value)} /></label><div className="sm:col-span-2"><AccountSelect label={direction === "supply" ? "Conta de origem do suprimento" : "Conta de destino da sangria"} accounts={accounts.value?.tenantId === tenant ? accounts.value.data : []} omit={session.cashAccountId} value={accountId} onChange={setAccountId} /></div><label className="grid gap-1.5 text-xs font-medium sm:col-span-2">Motivo da movimentação<Input required minLength={3} maxLength={200} value={reason} onChange={e => setReason(e.target.value)} /></label></fieldset>
     <p className="text-xs text-muted-foreground">A movimentação transfere saldo entre as contas financeiras selecionadas.</p>
     {(accounts.error || command.error) && <Failure message={accounts.error || command.error} status={command.status} retry={command.stale ? reload : undefined} />}
     <Button type="submit" disabled={command.busy || command.stale || !accountId}>{command.busy ? "Registrando…" : command.uncertain ? "Conferir movimentação" : "Registrar movimentação"}</Button>
