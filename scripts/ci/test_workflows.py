@@ -60,7 +60,11 @@ class WorkflowTests(unittest.TestCase):
         self.assertIn('.visibility == "private"', publish)
         self.assertIn('length == 1', publish)
         commands = publish.splitlines()
-        push = commands.index('docker push "$REGISTRY:sha-$SOURCE"')
+        push = next(i for i, command in enumerate(commands) if command.startswith('docker push "$REGISTRY:sha-$SOURCE"'))
+        self.assertIn('set -o pipefail', commands[:push])
+        self.assertIn('reference="$REGISTRY@$digest"', commands[push+1:])
+        self.assertIn('docker buildx imagetools inspect "$reference" >/dev/null', commands[push+1:])
+        self.assertNotIn('.RepoDigests', publish)
         self.assertIn('require_private_package', commands[:push])
         self.assertIn('require_private_package', commands[push+1:])
 
