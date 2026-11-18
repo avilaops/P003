@@ -21,7 +21,7 @@ Escolha a tela que deseja consultar. Novo cadastro, consulta e edição ficam no
 
 ## Relatórios, gráficos e filtros
 
-- **Movimentos** • Consulte entradas e saídas por data efetiva, depósito e unidade. Selecione um SKU ou uma direção para investigar o volume. Abra o Kardex quando precisar do documento que originou um lançamento.
+- **Movimentos** • Em **Lançamentos de estoque**, filtre as entradas e saídas por produto, depósito, direção e período. Cada linha identifica o movimento e o documento de origem quando disponível. Use **Atividade de movimentação** para ver os volumes agrupados ou abra o **Kardex** para conferir os saldos de um produto.
 - **Conferências** • Acompanhe as linhas contadas e pendentes de cada inventário aberto no período, inclusive os que já foram aprovados ou cancelados. Use a situação para restringir a lista. Consulte divergências e acurácia para avaliar o resultado das contagens aprovadas.
 - **Produção** • Compare as ordens abertas no período por etapa e situação atual. A tabela identifica o produto acabado, a unidade e a quantidade planejada. Filtre por produto ou depósito para consultar uma parte da operação.
 - **Posição e planejamento** • Consulte posição valorizada, giro e cobertura, itens parados e classificação ABC. Cada análise indica a data de referência e o critério de cálculo.
