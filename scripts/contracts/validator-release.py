@@ -41,7 +41,7 @@ def receipt(sha,run):
         raw = zipped.read('contract-validator-release.json')
     value = json.loads(raw)
     if (value['schema'] != 'erp-contract-validator-release/1' or value['sourceSha'] != sha or value['run'] != run
-            or value['attempt'] != attempt or not re.fullmatch(r'ghcr\.io/avilaops/erp-next-contract-validator@sha256:[a-f0-9]{64}',value['image'])):
+            or value['attempt'] != attempt or not re.fullmatch(r'ghcr\.io/avilaops/erp-next-contract-validator-private@sha256:[a-f0-9]{64}',value['image'])):
         raise ValueError('registry receipt mismatch')
     proof = value['verification']
     if (proof['wheelCorpus'] is not True or proof['cases'] <= 0 or proof['skipped'] != 0

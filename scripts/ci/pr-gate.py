@@ -52,7 +52,7 @@ def native_api_required(paths):
         "verification/contracts.json", "verification/discovery.mjs", "verification/stock-route-discovery.mts",
         "verification/ts-migration-inventory.mjs",
         "verification/test/contracts.test.mjs", "verification/test/product-context.test.mjs",
-        "scripts/ci/published-components.py", "scripts/ci/test_pr_gate.py",
+        "scripts/ci/published-components.py", "scripts/ci/test_pr_gate.py", "scripts/ci/test_workflows.py",
         "scripts/ci/test_typescript_api.py", "scripts/ci/test_published_components.py",
         ".github/workflows/ci.yml", ".github/workflows/_validate-project.yml",
         ".github/workflows/_validate-api.yml", ".github/workflows/_validate-fiscal.yml", ".github/workflows/_validate-web.yml",

@@ -31,7 +31,7 @@ jobs:
       packages: write
     env:
       SOURCE: ${{ inputs.source_sha }}
-      REGISTRY: ghcr.io/avilaops/erp-next-contract-validator
+      REGISTRY: ghcr.io/avilaops/erp-next-contract-validator-private
     steps:
     - uses: actions/checkout@v4
       with:
@@ -68,17 +68,16 @@ jobs:
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
-        endpoint="https://api.github.com/orgs/avilaops/packages/container/erp-next-contract-validator"
-        visibility=$(curl --silent --show-error --output "$RUNNER_TEMP/package.json" --write-out '%{http_code}' \
-          -H "Authorization: Bearer $GH_TOKEN" "$endpoint")
-        case "$visibility" in
-          200) jq -e '.visibility == "private"' "$RUNNER_TEMP/package.json" >/dev/null ;;
-          404) : ;; # A new GHCR container package is private by default.
-          *) exit 1 ;;
-        esac
+        endpoint="users/avilaops/packages/container/erp-next-contract-validator-private"
+        require_private_package() {
+          gh api "$endpoint" > "$RUNNER_TEMP/validator-destination.json" || return 1
+          jq -se 'length == 1 and (.[0] | .name == "erp-next-contract-validator-private" and .visibility == "private" and .owner.login == "avilaops")' \
+            "$RUNNER_TEMP/validator-destination.json" >/dev/null
+        }
+        require_private_package
         docker tag "avila-validator-approved:$SOURCE" "$REGISTRY:sha-$SOURCE"
         docker push "$REGISTRY:sha-$SOURCE"
-        gh api orgs/avilaops/packages/container/erp-next-contract-validator | jq -e '.visibility == "private"' >/dev/null
+        require_private_package
         reference=$(docker image inspect --format '{{index .RepoDigests 0}}' "$REGISTRY:sha-$SOURCE")
         [[ "${reference%@*}" == "$REGISTRY" && "${reference#*@}" =~ ^sha256:[0-9a-f]{64}$ ]]
         docker buildx imagetools inspect "$reference" >/dev/null
