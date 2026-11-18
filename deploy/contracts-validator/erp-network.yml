@@ -1,0 +1,12 @@
+services:
+  worker:
+    restart: unless-stopped
+  gateway:
+    restart: unless-stopped
+    networks:
+      private:
+        aliases: [contract-signature-gateway]
+networks:
+  private:
+    name: erp-next_erp
+    external: true

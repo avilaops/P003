@@ -13,8 +13,8 @@ test('every production API operation and BFF has a contract without claiming ver
   const inventory = await discover(fileURLToPath(root));
   const assessment = assessContracts(catalogue, inventory);
   assert.deepEqual(assessment.findings, []);
-  assert.equal(assessment.apiOperations, 500);
-  assert.equal(assessment.bffOperations, 389);
+  assert.equal(assessment.apiOperations, 508);
+  assert.equal(assessment.bffOperations, 395);
   assert.equal(assessment.pendingFlows, 34);
   assert.equal(assessment.p0Ready, false);
   assert.equal(assessment.runtimeVerdict, 'not_verified_by_catalog');
@@ -40,13 +40,15 @@ test('every production API operation and BFF has a contract without claiming ver
       const { source, type } = action.input.body;
       assert.match(type, /^[A-Za-z_][\w]*$/);
       const definition = await readFile(new URL(source, root), 'utf8');
-      if (action.input.body.validator) {
+      if (action.input.body.mediaType === 'application/pdf') {
+        assert.equal(type, 'Buffer');
+        assert.match(definition, /addContentTypeParser\(["']application\/pdf["'],\s*\{\s*parseAs:\s*["']buffer["']/);
+        assert.match(definition, /Buffer\.isBuffer\(request\.body\)/);
+      } else if (action.input.body.validator) {
         assert.ok(source.endsWith('.ts'));
         assert.match(definition, new RegExp(`\\b(?:const|function)\\s+${type}\\b`));
         assert.ok(definition.includes(action.input.body.validator), source);
-        continue;
-      }
-      if (source.endsWith('.ts')) {
+      } else if (source.endsWith('.ts')) {
         assert.match(definition, new RegExp(`^\\s*(?:export\\s+)?const\\s+${type}\\s*=\\s*z\\.(?:object|strictObject)\\(`, 'm'), source);
         assert.match(definition, new RegExp(`\\b${type}\\.(?:safeParse|parse)\\(request\\.body\\)`), source);
       } else {

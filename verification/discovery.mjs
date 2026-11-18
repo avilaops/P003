@@ -243,7 +243,13 @@ export async function discover(root, options = {}) {
         routes.set(route, methods);
       }
     }
-    for (const [route, methods] of routes) api.push({ path: route, methods, file: documentRoutes });
+    for (const [route, methods] of routes) {
+      const endpoint = { path: route, methods, file: documentRoutes };
+      // The TypeScript document registry owns these methods, including migrated operations.
+      const migrated = api.findIndex(existing => existing.path === route && existing.methods.every(method => methods.includes(method)));
+      if (migrated >= 0) api[migrated] = endpoint;
+      else api.push(endpoint);
+    }
   }
   const financeFile = 'apps/api-ts/src/modules/finance-endpoints.json';
   let financeRegistry;

@@ -15,7 +15,7 @@ metadados dos dois pacotes; testes, arquivos locais e credenciais ficam fora.
 Antes de implantar, a imagem precisa ser construída a partir do commit aprovado,
 testada e disponibilizada em registro privado. Configure `VALIDATOR_IMAGE` com
 `registro/imagem@sha256:...`, nunca com uma tag mutável. A publicação dessa imagem
-e a ligação ao runtime do ERP ainda dependem da recuperação da hospedagem.
+e a ligação ao runtime do ERP são operações separadas da verificação de PR.
 
 `VALIDATOR_PUBLIC_CONFIG` aponta para um diretório contendo:
 
@@ -103,3 +103,36 @@ São removidos somente containers, volume e tag temporários que a execução cr
 Não há prune global, deploy ou acúmulo de imagens no servidor de produção.
 O relatório de CI contém hashes e resultados, sem certificados pessoais,
 chaves ou PDFs. Testes sintéticos não são validação ITI nem homologação real.
+
+## Publicação no host applications
+
+O destino das próximas imagens é `ghcr.io/avilaops/erp-next-contract-validator-private`. Antes da primeira publicação, provisione esse nome na conta `avilaops` com uma imagem vazia de inicialização, sem camadas do projeto. Confirme a visibilidade privada nas configurações do pacote, dê acesso de escrita ao workflow de `avilaops/P003` em *Manage Actions access* e de leitura à credencial Docker do host `applications`. Verifique a identidade e a visibilidade antes de disparar o workflow:
+
+```sh
+gh api users/avilaops/packages/container/erp-next-contract-validator-private \
+  --jq '{name, owner: .owner.login, visibility}'
+```
+
+O preflight da CI exige o nome acima, a conta `avilaops` e `visibility=private` antes do push. Ele encerra o job se o pacote estiver ausente, inacessível ou público. O recibo e o host conferem o repositório e o digest. O primeiro release de produção (`47b8805d`) preserva a referência histórica exata para rollback.
+
+A tarefa manual `contracts-validator` do workflow `regression.yml` recebe o SHA completo já integrado em `main`. O GitHub testa a imagem em Linux, publica a mesma imagem no GHCR privado e registra o digest no artefato `contract-validator-release-<sha>-<tentativa>`. A imagem web do mesmo SHA contém a API TypeScript e as migrações SQL usadas pelo dispatcher do ERP.
+
+```sh
+gh workflow run regression.yml --ref main -f task=contracts-validator -f source_sha="$SHA"
+python scripts/contracts/validator-release.py stage "$SHA" --run "$RUN_ID"
+python scripts/contracts/validator-release.py start "$SHA"
+python scripts/contracts/validator-release.py smoke "$SHA"
+```
+
+O comando `stage` verifica o run, a tentativa, o SHA, o digest do ZIP e a evidência da CI. Ele instala o manifesto complementar e a configuração pública imutável em `/etc/erp-next/contract-signatures/releases/<sha>`. O comando `start` baixa a imagem pelo digest e aplica o Compose. O gateway recebe o alias TLS `contract-signature-gateway` na rede privada `erp-next_erp`. O teste `smoke` aplica um selo técnico descartável a uma página em branco, confere o preflight positivo e autentica o bundle retornado pelo worker. O host precisa de acesso de leitura ao pacote GHCR privado.
+
+A preparação inicial de chaves usa `python3 prepare-host.py` dentro do host como root. O diretório `/etc/erp-next/contract-signatures` contém a CA dedicada, a chave do gateway, o HMAC de transporte e o chaveiro de cifragem de CPFs. Inclua esse diretório no backup privado com controle de acesso. A leitura do cliente usa UID 1000 e a do gateway, UID 10001. Preserve as chaves de identidade de envelopes existentes ao rotacionar o chaveiro. O certificado do gateway expira em um ano.
+
+Após o preflight privado, o dispatcher do ERP aplica `configure-api.py <compose.json candidato> <sha>`, executa as migrações e sobe o ERP aprovado. As liberações seguintes podem usar `--previous <compose.json anterior>` para manter o snapshot de confiança já ativo. O fallback exige a montagem anterior de arquivos públicos imutáveis.
+
+```sh
+python scripts/contracts/validator-release.py check-route "$SHA"
+python scripts/contracts/validator-release.py activate-route "$SHA"
+```
+
+O Caddy valida a configuração antes da troca e verifica se o SHA do ERP está ativo. Apenas `/icp/*` de `contrato.avilaops.com` segue para `127.0.0.1:3140` com o Host original. O restante do site continua no DocuSeal em `127.0.0.1:3111`. Para reverter somente essa rota, execute `rollback-route "$SHA"`. Para restaurar o validador anterior, execute `start "$SHA_ANTERIOR"` sobre a revisão já instalada e restaure o ERP com o dispatcher habitual. A homologação exige o PDF produzido pela versão instalada do DocuSeal e assinaturas sucessivas de titulares autorizados.

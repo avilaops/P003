@@ -4,3 +4,5 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   const { id } = await params
   return forwardErp(request, `/commercial-contracts/${id}/send-package`)
 }
+
+export const GET = POST

@@ -26,10 +26,9 @@ test("completed sales cancellations and their history use TypeScript", () => {
 });
 
 test("document previews and email dispatch use the TypeScript backend", () => {
-  for (const resource of [`/orders/${id}/email`, `/proposals/${id}/email`, `/receivables/${id}/email`, `/financial-payables/${id}/email`, `/commercial-contracts/${id}/email`, "/financial-report/email"]) {
+  for (const resource of [`/orders/${id}/email`, `/proposals/${id}/email`, `/receivables/${id}/email`, `/financial-payables/${id}/email`, `/commercial-contracts/${id}/email`, `/commercial-contracts/${id}/send-package`, "/financial-report/email"]) {
     for (const method of ["GET", "POST"]) assert.equal(selectErpBackend(method, resource, rust, environment).origin, typescript, resource);
   }
-  assert.equal(selectErpBackend("POST", `/commercial-contracts/${id}/send-package`, rust, environment).origin, typescript);
 });
 
 test("wallets, stock and production resolve to their TypeScript owners", () => {

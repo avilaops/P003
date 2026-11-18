@@ -32,7 +32,7 @@ class ArchiveTests(unittest.TestCase):
         code = re.search(r"python3 -c '(\nimport os, sys, tarfile[\s\S]*?)\n' \"\$staging\"", (DEPLOY / 'production-deploy.sh').read_text())[1]
         names = ('release.json', 'compose.yaml', 'fiscal-compose.yaml', 'migrate-release.py', 'release-retention.py', 'grant-fiscal-monitor.sql', 'grant-cte-distribution.sql')
         valid = [(name, b'fixture') for name in names]
-        for extra, expected in [([], 0), ([('../escape', b'x')], 1), ([('release.json', b'x')], 1), ([('unknown', b'x')], 1), ([('unknown', b'x' * 524289)], 1)]:
+        for extra, expected in [([], 0), ([('configure-api.py', b'signer fixture')], 0), ([('../escape', b'x')], 1), ([('release.json', b'x')], 1), ([('unknown', b'x')], 1), ([('unknown', b'x' * 524289)], 1)]:
             with self.subTest(extra=[name for name, _ in extra]), tempfile.TemporaryDirectory() as directory:
                 import sys
                 result = subprocess.run([sys.executable, '-c', code, directory], input=archive(valid + extra), capture_output=True)

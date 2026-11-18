@@ -3,7 +3,7 @@ import { connection } from "next/server"
 import { currentWorkspaceAccess, WorkspaceAccessNotice } from "@/features/access/workspace-access"
 import { StockLocations } from "@/features/inventory/stock-locations"
 
-export const metadata = {title: "Transferências entre depósitos"}
+export const metadata = { title: "Transferências entre depósitos" }
 async function Access() {
   await connection()
   const access = await currentWorkspaceAccess()
