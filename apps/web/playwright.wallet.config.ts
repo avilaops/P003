@@ -5,7 +5,7 @@ const origin = (process.env.ERP_TEST_WEB_ORIGIN = "http://127.0.0.1:33384")
 const port = (process.env.WALLET_TEST_API_PORT = "33385")
 export default defineConfig({
   ...base,
-  testMatch: ["order-finance-ui.spec.ts", "purchase-ui.spec.ts"],
+  testMatch: ["order-finance-ui.spec.ts", "purchase-ui.spec.ts", "staff-payroll-ui.spec.ts"],
   use: { ...base.use, baseURL: origin },
   webServer: {
     command: "pnpm exec next dev --hostname 127.0.0.1 --port 33384",

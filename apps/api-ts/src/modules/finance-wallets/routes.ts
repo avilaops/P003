@@ -8,6 +8,7 @@ import { parseRevision, nextRevision, revisionValue } from "../../platform/revis
 import { validateDate } from "../sales/fixed.js"
 import { queryInteger } from "../registrations/query.js"
 import { fileLimit, pathId, registerDocumentRoutes } from "./documents.js"
+import { configureDistribution, distributionInput } from "./allocations.js"
 import { checkClassification, registerWalletSettings, walletSettings } from "./settings.js"
 import {
   applyWalletPayment,
@@ -33,6 +34,7 @@ import {
 const listQuery = z.object({ offset: queryInteger(0, 100000).default(0), limit: queryInteger(1, 100).default(25) })
 const classification = z.strictObject({
   natureId: z.guid(),
+  costCenterAllocations: distributionInput.optional(),
   costCenterId: z.guid().nullable(),
   competenceOn: z.string(),
   forecastAccountId: z.guid().nullish(),
@@ -216,12 +218,19 @@ export function registerFinanceWalletRoutes(app: FastifyInstance, deps: AppDepen
               const title = await loadWallet(ctx, wallet, id),
                 s = cls!.data!
               currentRevision(title.data.revision, expected)
+              const group = await configureDistribution(
+                ctx,
+                title.data.costCenterDistributionId,
+                title.data.costCenterAllocations,
+                s.costCenterAllocations,
+                s.costCenterId,
+              )
               await checkClassification(
                 ctx,
                 s.natureId,
                 s.costCenterId,
                 d.receipt ? "income" : "expense",
-                (await walletSettings(ctx)).data.requireCostCenter,
+                !group && (await walletSettings(ctx)).data.requireCostCenter,
               )
               const forecast = s.forecastAccountId === undefined ? title.data.forecastAccountId : s.forecastAccountId
               if (
@@ -235,7 +244,7 @@ export function registerFinanceWalletRoutes(app: FastifyInstance, deps: AppDepen
               )
                 invalid("Escolha uma conta prevista ativa")
               await ctx.client.query(
-                `UPDATE ${d.titles} SET category_id=$3,cost_center_id=$4,competence_on=$5,revision=$6,forecast_account_id=$7 WHERE tenant_id=$1 AND id=$2`,
+                `UPDATE ${d.titles} SET category_id=$3,cost_center_id=$4,competence_on=$5,revision=$6,forecast_account_id=$7,cost_center_distribution_id=$8 WHERE tenant_id=$1 AND id=$2`,
                 [
                   ctx.tenantId,
                   id,
@@ -244,6 +253,7 @@ export function registerFinanceWalletRoutes(app: FastifyInstance, deps: AppDepen
                   validateDate(s.competenceOn),
                   nextRevision(expected),
                   forecast,
+                  group,
                 ],
               )
               await record(ctx, req.headers, d.entity, id, d.entity + ".classified", {

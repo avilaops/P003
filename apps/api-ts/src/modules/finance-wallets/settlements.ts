@@ -7,6 +7,7 @@ import { nextRevision, type Revision } from "../../platform/revision.js"
 import { fixed, decimal, validateDate } from "../sales/fixed.js"
 import { onSettlement } from "../finance-management/accrual.js"
 import { assertOpenAccountPeriod } from "../finance-treasury/ledger.js"
+import { saveAllocations, reverseAllocations } from "./allocations.js"
 import { documentSchema, prepareDocument, storeDocument, type Headers } from "./documents.js"
 import { checkClassification, walletSettings } from "./settings.js"
 import {
@@ -101,7 +102,10 @@ export async function preparePayment(
   if (effect === "cash" && (!s.financialAccountId || !net))
     invalid("Informe a conta financeira para a movimentação de caixa")
   if (effect === "non_cash" && s.financialAccountId) invalid("Uma compensação deve ser registrada sem conta de caixa")
-  const center = s.costCenterId ?? title.data.costCenterId ?? settings.defaultCostCenterId
+  const distribution = title.data.costCenterDistributionId
+  if (distribution && s.costCenterId)
+    invalid("Altere o rateio na classificação do título antes de indicar um centro único")
+  const center = distribution ? null : (s.costCenterId ?? title.data.costCenterId ?? settings.defaultCostCenterId)
   let category = s.natureId ?? title.data.natureId
   if (!category)
     category = String(
@@ -112,7 +116,13 @@ export async function preparePayment(
         ])
       ).rows[0]!.id,
     )
-  await checkClassification(ctx, category, center, d.receipt ? "income" : "expense", settings.requireCostCenter)
+  await checkClassification(
+    ctx,
+    category,
+    center,
+    d.receipt ? "income" : "expense",
+    !distribution && settings.requireCostCenter,
+  )
   const reasons: string[] = []
   if (discount * 10000n > principal * BigInt(settings.discountLimitBps)) reasons.push("discount")
   if (
@@ -122,7 +132,7 @@ export async function preparePayment(
     net > fixed(settings.paymentApprovalLimit, 2)
   )
     reasons.push("payment")
-  return { principal, interest, penalty, surcharge, discount, net, effect, category, center, reasons }
+  return { principal, interest, penalty, surcharge, discount, net, effect, category, center, distribution, reasons }
 }
 export function approvalIntent(s: Input, values: Awaited<ReturnType<typeof preparePayment>>) {
   const { approvalId: _, ...intent } = paymentIntent(s)
@@ -148,6 +158,7 @@ async function accountEntry(
   description: string,
   ref: string,
   reversing: boolean,
+  distribution: string | null = null,
 ) {
   const accountRow = (
     await ctx.client.query("SELECT status FROM financial_accounts WHERE tenant_id=$1 AND id=$2", [
@@ -169,9 +180,21 @@ async function accountEntry(
   await assertOpenAccountPeriod(ctx, account, occurredOn)
   const id = randomUUID()
   await ctx.client.query(
-    `INSERT INTO financial_account_entries(id,tenant_id,account_id,direction,amount_cents,occurred_on,description,reference,category_id,cost_center_id)
-    VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
-    [id, ctx.tenantId, account, credit ? "credit" : "debit", net, occurredOn, description, ref, category, center],
+    `INSERT INTO financial_account_entries(id,tenant_id,account_id,direction,amount_cents,occurred_on,description,reference,category_id,cost_center_id,cost_center_distribution_id)
+    VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
+    [
+      id,
+      ctx.tenantId,
+      account,
+      credit ? "credit" : "debit",
+      net,
+      occurredOn,
+      description,
+      ref,
+      category,
+      center,
+      distribution,
+    ],
   )
   return id
 }
@@ -191,6 +214,7 @@ type Entry = {
   center: string | null
   methodId?: string | null
   methodSnapshot?: unknown
+  distribution?: string | null
   proof?: ReturnType<typeof prepareDocument>
   approvedBy?: string | null
 }
@@ -224,6 +248,7 @@ async function insertPayment(
     "recorded_by",
     "reverses_id",
     "discount_approved_by",
+    "cost_center_distribution_id",
   ]
   const values: unknown[] = [
     paymentId,
@@ -246,6 +271,7 @@ async function insertPayment(
     ctx.authSubject,
     reverses,
     e.approvedBy ?? null,
+    e.distribution ?? null,
   ]
   if (e.proof) {
     columns.push("proof_metadata", "proof_content")
@@ -331,6 +357,7 @@ export async function applyWalletPayment(
         d.receipt ? "Recebimento declarado" : "Pagamento declarado",
         s.reference,
         false,
+        v.distribution,
       )
     : null
   const payment = randomUUID(),
@@ -351,6 +378,7 @@ export async function applyWalletPayment(
     methodSnapshot,
     approvedBy,
   })
+  if (v.distribution) await saveAllocations(ctx, wallet, payment, v.distribution, v)
   if (salesOrder && proof) await storeDocument(ctx, headers, salesOrder, payment, proof)
   else if (proof)
     await record(ctx, headers, d.entity + "_payment", payment, "finance.payment_proof_attached", {
@@ -407,11 +435,13 @@ export async function reverseWalletPayment(
         "Estorno de lançamento financeiro",
         s.reason,
         true,
+        original.costCenterDistributionId,
       )
     : null
   const payment = randomUUID(),
     revision = nextRevision(expected)
   await insertPayment(ctx, wallet, id, payment, original.id, {
+    distribution: original.costCenterDistributionId,
     amount: fixed(original.amount, 2),
     interest: fixed(original.interestAmount, 2),
     penalty: fixed(original.penaltyAmount, 2),
@@ -432,6 +462,7 @@ export async function reverseWalletPayment(
     `UPDATE ${d.titles} SET status='open',payment_id=NULL,revision=$3 WHERE tenant_id=$1 AND id=$2`,
     [ctx.tenantId, id, revision],
   )
+  if (original.costCenterDistributionId) await reverseAllocations(ctx, wallet, payment, original.id)
   await onSettlement(ctx, headers, d.receipt ? "receivable" : "payable", payment)
   await record(ctx, headers, d.entity, id, d.entity + ".payment_reversed", {
     paymentId: payment,

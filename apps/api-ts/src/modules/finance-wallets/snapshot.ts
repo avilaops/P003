@@ -1,3 +1,4 @@
+import type { Share } from "./allocations.js"
 import type { AuthorizedContext } from "../../platform/access.js"
 import { Problem } from "../../platform/problem.js"
 import { revisionValue, type Revision } from "../../platform/revision.js"
@@ -46,6 +47,8 @@ type Title = {
   dueDate: string
   natureId: string | null
   costCenterId: string | null
+  costCenterDistributionId: string | null
+  costCenterAllocations: Share[]
   forecastAccountId: string | null
   competenceOn: string
 }
@@ -66,6 +69,7 @@ export type Payment = {
   financialEffect: "cash" | "non_cash" | "unclassified"
   natureId: string | null
   costCenterId: string | null
+  costCenterDistributionId: string | null
   paymentMethodId?: string
   paymentMethod?: Record<string, unknown>
   reversesId: string | null
@@ -81,7 +85,8 @@ function titleQuery(wallet: Wallet, filter: string, history: boolean) {
   return `SELECT r.due_date,r.id,
     jsonb_build_object('id',r.id,'dueDate',r.due_date,'amount',${money("r.amount_cents")},
       'outstandingAmount',${money("CASE WHEN r.status='cancelled' THEN 0 ELSE r.amount_cents-tot.principal END")},
-      'status',r.status,'revision',r.revision,'paymentId',r.payment_id,'natureId',r.category_id,'costCenterId',r.cost_center_id,'forecastAccountId',r.forecast_account_id,'financeOperationId',to_jsonb(r)->>'finance_operation_id',
+      'status',r.status,'revision',r.revision,'paymentId',r.payment_id,'natureId',r.category_id,'costCenterId',r.cost_center_id,'forecastAccountId',r.forecast_account_id,'costCenterDistributionId',r.cost_center_distribution_id,
+      'costCenterAllocations',coalesce((SELECT jsonb_agg(jsonb_build_object('costCenterId',s.cost_center_id,'basisPoints',s.basis_points,'name',c.name) ORDER BY s.cost_center_id) FROM finance_cost_center_shares s JOIN financial_cost_centers c ON (c.tenant_id,c.id)=(s.tenant_id,s.cost_center_id) WHERE s.tenant_id=r.tenant_id AND s.distribution_id=r.cost_center_distribution_id),'[]'::jsonb),'financeOperationId',to_jsonb(r)->>'finance_operation_id',
       'partyId',coalesce(${d.receipt ? "(SELECT o.customer_id FROM sales_orders o WHERE (o.tenant_id,o.id)=(r.tenant_id,r.order_id))" : "(SELECT o.supplier_id FROM purchase_receipts pr JOIN purchase_orders o ON (o.tenant_id,o.id)=(pr.tenant_id,pr.order_id) WHERE (pr.tenant_id,pr.id)=(r.tenant_id,r.receipt_id))"},(SELECT op.party_id FROM finance_operations op WHERE (op.tenant_id,op.id)=(r.tenant_id,r.finance_operation_id))), 'competenceOn',coalesce(r.competence_on,(r.created_at AT TIME ZONE 'America/Sao_Paulo')::date))
       ||${d.receipt ? receiptParts : payableParts} AS data
     ${history ? ",tot.history AS payments" : ""}
@@ -94,7 +99,9 @@ function titleQuery(wallet: Wallet, filter: string, history: boolean) {
         'interestAmount',${money("p.interest_cents")},'penaltyAmount',${money("p.penalty_cents")},'surchargeAmount',${money("p.surcharge_cents")},
         'discountAmount',${money("p.discount_cents")},'netAmount',${money("p.net_cents")},'method',p.method,'reference',p.reference,
         'occurredOn',p.occurred_on,'reversesId',p.reverses_id,'financialAccountId',p.financial_account_id,'natureId',p.category_id,
-        'costCenterId',p.cost_center_id,'accountEntryId',p.account_entry_id,'recordedBy',p.recorded_by,'discountApprovedBy',p.discount_approved_by,
+        'costCenterId',p.cost_center_id,'costCenterDistributionId',p.cost_center_distribution_id,
+        'costCenterAllocations',coalesce((SELECT jsonb_agg(jsonb_build_object('costCenterId',a.cost_center_id,'name',c.name,'basisPoints',s.basis_points,'amount',${money("a.principal_cents")},'interestAmount',${money("a.interest_cents")},'penaltyAmount',${money("a.penalty_cents")},'surchargeAmount',${money("a.surcharge_cents")},'discountAmount',${money("a.discount_cents")},'netAmount',${money("a.net_cents")}) ORDER BY a.cost_center_id) FROM financial_payment_allocations a JOIN financial_cost_centers c ON (c.tenant_id,c.id)=(a.tenant_id,a.cost_center_id) JOIN finance_cost_center_shares s ON (s.tenant_id,s.distribution_id,s.cost_center_id)=(a.tenant_id,a.distribution_id,a.cost_center_id) WHERE a.tenant_id=p.tenant_id AND a.${d.receipt ? "receivable_payment_id" : "payable_payment_id"}=p.id),'[]'::jsonb),
+        'accountEntryId',p.account_entry_id,'recordedBy',p.recorded_by,'discountApprovedBy',p.discount_approved_by,
         'proofName',p.proof_metadata->>'filename','proofPath',CASE WHEN p.proof_metadata IS NOT NULL THEN '/api/erp/wallet-payment-files/${wallet}/'||r.id||'/'||p.id END,
         'financialEffect',coalesce(p.financial_effect,CASE WHEN p.financial_account_id IS NULL THEN 'unclassified' ELSE 'cash' END))
         ${d.receipt ? "||jsonb_strip_nulls(jsonb_build_object('paymentMethodId',p.payment_method_id,'paymentMethod',p.payment_method))" : ""}

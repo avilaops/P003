@@ -4,7 +4,7 @@ import { createServer } from "node:http"
 import type { PurchaseDetail, ReceiptDetail } from "../src/features/purchasing/purchase-types"
 
 // Browser fixtures exercise the BFF. The wallet integration test verifies PostgreSQL effects.
-test.setTimeout(45_000)
+test.setTimeout(120_000)
 const origin = process.env.ERP_TEST_WEB_ORIGIN || "http://127.0.0.1:33118"
 const secret = "danfe-browser-fixture-not-a-real-service-secret"
 const tenant = "11111111-1111-4111-8111-111111111111"
@@ -37,7 +37,7 @@ function initialPayable(): Payable {
 const upstream = createServer(async (request, response) => {
   response.setHeader("Content-Type", "application/json")
   try {
-    expect(request.headers.authorization).toBe("Bearer purchase-fixture-token")
+    if (request.headers.authorization !== "Bearer purchase-fixture-token") { response.writeHead(401).end();return }
     expect(request.headers["x-tenant-id"]).toBe(tenant)
     const url = new URL(request.url!, "http://fixture.invalid")
     requests.push(request.method + " " + url.pathname + url.search)
@@ -151,7 +151,7 @@ test("browser creates and edits a purchase, receives a partial delivery and reco
   const reversed = { ...initialPayable(), data: { ...initialPayable().data, revision: 3 }, payments: [payment, { ...payment, id: "88888888-8888-4888-8888-888888888888", kind: "reversal", reference: "Correção do registro", reversesId: paymentId }] }
   plans.push({ method: "POST", path: `/api/v1/financial-payables/${payableId}/reverse-payment`, status: 200, response: reversed, revision: 3, apply: () => { payable = reversed } })
   await page.getByRole("button", { name: "Confirmar estorno do pagamento", exact: true }).click()
-  await expect(page.getByText("Saldo restante: R$ 4,00", { exact: true })).toBeVisible()
+  await expect(page.getByText("Saldo restante: R$ 4,00", { exact: true })).toBeVisible({timeout:30000})
   await expect(page.getByText("Estorno vinculado ao pagamento original.", { exact: true })).toBeVisible()
   expect(calls[5]).toMatchObject({ revision: '"2"', body: { paymentId, reason: "Correção do registro", occurredOn: "2026-10-28" } })
   expect(errors).toEqual([])

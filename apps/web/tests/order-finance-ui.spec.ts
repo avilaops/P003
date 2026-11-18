@@ -84,7 +84,7 @@ const upstream = createServer(async (req, res) => {
     }
     if (path === "/api/v1/payment-methods") return reply({ data: [{ id: methodId, code: "PIX", name: "Pix configurado", modality: "pix", status: "active" }] })
     if (path === "/api/v1/financial-accounts") return reply({ data: [{id:accountId,code:"BANCO",name:"Banco de teste"}] })
-    if (path === "/api/v1/financial-wallet-settings") return reply({tenantId:tenant,categories:[],costCenters:[],data:{graceDays:0,interestMonthlyBps:0,penaltyBps:0,discountLimitBps:10000,paymentApprovalLimit:null}})
+    if (path === "/api/v1/financial-wallet-settings") return reply({tenantId:tenant,categories:walletScenario?[{id:methodId,name:"Vendas",code:"VEN",direction:"income"}]:[],costCenters:walletScenario?[{id:accountId,name:"Produção",code:"PRD"},{id:methodId,name:"Administração",code:"ADM"}]:[],data:{graceDays:0,interestMonthlyBps:0,penaltyBps:0,discountLimitBps:10000,paymentApprovalLimit:null}})
     const match = path.match(/\/receivables\/([^/]+)(\/payments)?$/)
     if (match) {
       const index = titleIds.indexOf(match[1])
@@ -165,6 +165,22 @@ test("carteira confirma lote e encaminha classificação, aprovação e centros 
   expect((await context.request.post(centers,{headers,data:{}})).status()).toBe(200)
   expect((await context.request.put(centers+"/"+methodId,{headers,data:{}})).status()).toBe(200)
   expect((await context.request.get(origin+"/api/erp/financial-wallet-settings")).status()).toBe(200)
+})
+
+test("título permite distribuir percentuais exatos entre centros de custo",async({page})=>{
+  walletScenario=true
+  await page.goto("/financeiro/contas-receber/"+titleIds[0])
+  await page.getByText("Classificação do título",{exact:true}).click()
+  const form=page.locator("form").filter({has:page.getByRole("button",{name:"Salvar classificação"})})
+  await form.getByLabel("Natureza financeira").selectOption(methodId)
+  await form.getByLabel("Ratear entre centros de custo").check()
+  await form.getByLabel("Percentual de Produção").fill("33,33")
+  await form.getByLabel("Percentual de Administração").fill("66,66")
+  await form.getByRole("button",{name:"Salvar classificação"}).click()
+  await expect(form.getByRole("alert")).toContainText("100%")
+  await form.getByLabel("Percentual de Administração").fill("66,67")
+  await form.getByRole("button",{name:"Salvar classificação"}).click()
+  await expect.poll(()=>walletCalls.find(c=>c.path.endsWith("/classification"))?.body).toMatchObject({costCenterId:null,costCenterAllocations:[{costCenterId:accountId,basisPoints:3333},{costCenterId:methodId,basisPoints:6667}]})
 })
 
 test("encomenda: BFF permite somente POST autenticado com origem, revisão e chave", async ({ context }) => {

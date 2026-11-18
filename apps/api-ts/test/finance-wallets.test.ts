@@ -381,6 +381,9 @@ test(
         "approver",
       )
       assert.equal(review.statusCode, 200, review.body)
+      const team = (await app.inject({ url: "/api/v1/staff-payroll/employees?limit=1", headers })).json()
+      assert.deepEqual(team.data, [{ id: staff, name: "Vendedor" }])
+      assert.equal(team.total, 1)
       const payroll = (await app.inject({ url: staffPath, headers })).json()
       assert.ok(
         payroll.payments.some(
@@ -503,6 +506,113 @@ test(
       assert.equal(paid.statusCode, 200, paid.body)
       assert.equal(paid.json().data.status, "paid")
       assert.equal(paid.json().payments.at(-1).netAmount, "1000.00")
+      const centerB = await send(
+        "/api/v1/financial-cost-centers",
+        { code: "ADM", name: "Administrativo", status: "active" },
+        1,
+      )
+      const ids = [center.json().data.id, centerB.json().data.id].sort(),
+        shares = ids.map((costCenterId) => ({ costCenterId, basisPoints: 5000 }))
+      for (const [wallet, id] of [
+        ["receivables", receivable],
+        ["financial-payables", payable],
+      ]) {
+        const base = "/api/v1/" + wallet + "/" + id,
+          old = (await app.inject({ url: base, headers })).json().data
+        const classify = (revision: number, allocs: typeof shares, single: string | null = null) =>
+          app.inject({
+            method: "PUT",
+            url: base + "/classification",
+            headers: { ...headers, "if-match": '"' + revision + '"', "idempotency-key": randomUUID() },
+            payload: {
+              natureId: old.natureId,
+              costCenterId: single,
+              competenceOn: old.competenceOn,
+              costCenterAllocations: allocs,
+            },
+          })
+        assert.equal((await classify(old.revision, [{ ...shares[0]!, basisPoints: 4999 }, shares[1]!])).statusCode, 422)
+        assert.equal((await classify(old.revision,[shares[0]!,shares[0]!])).statusCode,422)
+        assert.equal((await classify(old.revision,[{...shares[0]!,costCenterId:randomUUID()},shares[1]!])).statusCode,422)
+        const split = await classify(old.revision, shares)
+        assert.equal(split.statusCode, 200, split.body)
+        assert.equal(split.json().data.costCenterId, null)
+        const group = split.json().data.costCenterDistributionId
+        const small = {
+          amount: "0.01",
+          method: "cash",
+          financialAccountId: account,
+          occurredOn: old.dueDate,
+          reference: "Centavos do rateio",
+        }
+        let rev = split.json().data.revision
+        const records = []
+        for (let i = 0; i < 3; i++) {
+          const res = await send(base + "/payments", small, rev++)
+          assert.equal(res.statusCode, 200, res.body)
+          records.push(res.json().payments.at(-1))
+        }
+        assert.deepEqual(
+          records.map((p) => p.costCenterAllocations.map((s: { amount: string }) => s.amount)),
+          [
+            ["0.01", "0.00"],
+            ["0.00", "0.01"],
+            ["0.01", "0.00"],
+          ],
+        )
+        const ledger = (
+          await pg.query(
+            "SELECT cost_center_id,cost_center_distribution_id FROM financial_account_entries WHERE id=$1",
+            [records[0].accountEntryId],
+          )
+        ).rows[0]
+        assert.deepEqual(ledger, { cost_center_id: null, cost_center_distribution_id: group })
+        const corrected = await send(
+          base + "/reverse-payment",
+          { paymentId: records[0].id, reason: "Estorno da primeira baixa", occurredOn: old.dueDate },
+          rev++,
+        )
+        assert.equal(corrected.statusCode, 200, corrected.body)
+        assert.deepEqual(corrected.json().payments.at(-1).costCenterAllocations, records[0].costCenterAllocations)
+        const replacement = await send(
+          base + "/payments",
+          {
+            ...small,
+            amount: "1.01",
+            interestAmount: "0.06",
+            penaltyAmount: "0.01",
+            surchargeAmount: "0.01",
+            discountAmount: "0.08",
+          },
+          rev++,
+        )
+        assert.equal(replacement.statusCode, 200, replacement.body)
+        const recent = replacement.json().payments.at(-1)
+        assert.equal(
+          recent.costCenterAllocations.reduce(
+            (sum: number, s: { netAmount: string }) => sum + Number(s.netAmount.replace(".", "")),
+            0,
+          ),
+          101,
+        )
+        for (const s of recent.costCenterAllocations)
+          assert.equal(
+            Number(s.netAmount.replace(".", "")),
+            ["amount", "interestAmount", "penaltyAmount", "surchargeAmount"].reduce(
+              (n, k) => n + Number(s[k].replace(".", "")),
+              0,
+            ) - Number(s.discountAmount.replace(".", "")),
+          )
+        const single = await classify(rev++, [], ids[0])
+        assert.equal(single.statusCode, 200, single.body)
+        const undo = await send(
+          base + "/reverse-payment",
+          { paymentId: recent.id, reason: "Reclassificação posterior", occurredOn: old.dueDate },
+          rev,
+        )
+        assert.equal(undo.statusCode, 200, undo.body)
+        assert.deepEqual(undo.json().payments.at(-1).costCenterAllocations, recent.costCenterAllocations)
+      }
     } finally {
       await app.close()
       await api.end()

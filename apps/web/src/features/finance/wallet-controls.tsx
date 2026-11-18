@@ -30,7 +30,9 @@ export type WalletSettings = {
   costCenters: Choice[]
   data: SettingsData
 }
+type Allocation = { costCenterId: string; name?: string; basisPoints: number }
 export type Classification = {
+  costCenterAllocations?: Allocation[]
   natureId?: string | null
   costCenterId?: string | null
   forecastAccountId?: string | null
@@ -105,7 +107,13 @@ export function useWalletCalculation(amount: string, date: string, due: string, 
 }
 const money = (cents: bigint) =>
   `${cents < BigInt(0) ? "−" : ""}R$ ${(cents < BigInt(0) ? -cents : cents) / BigInt(100)},${((cents < BigInt(0) ? -cents : cents) % BigInt(100)).toString().padStart(2, "0")}`
-export function ChargeFields({ calculation }: { calculation: ReturnType<typeof useWalletCalculation> }) {
+export function ChargeFields({
+  calculation,
+  title,
+}: {
+  calculation: ReturnType<typeof useWalletCalculation>
+  title?: { id: string } & Classification
+}) {
   return (
     <>
       {chargeFields.map(([key, label]) => (
@@ -132,21 +140,30 @@ export function ChargeFields({ calculation }: { calculation: ReturnType<typeof u
           ))}
         </select>
       </label>
-      <label>
-        Centro de custo da baixa
-        <select
-          className={select}
-          value={calculation.costCenterId}
-          onChange={(e) => calculation.setCenter(e.target.value)}
-        >
-          <option value="">Usar centro do título</option>
-          {calculation.centers.map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.code} • {c.name}
-            </option>
-          ))}
-        </select>
-      </label>
+      {title?.costCenterAllocations?.length ? (
+        <p>
+          Rateio do título •{" "}
+          {title.costCenterAllocations
+            .map((c) => `${c.name} ${(c.basisPoints / 100).toLocaleString("pt-BR")}%`)
+            .join(" • ")}
+        </p>
+      ) : (
+        <label>
+          Centro de custo da baixa
+          <select
+            className={select}
+            value={calculation.costCenterId}
+            onChange={(e) => calculation.setCenter(e.target.value)}
+          >
+            <option value="">Usar centro do título</option>
+            {calculation.centers.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.code} • {c.name}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
       <p className="sm:col-span-2 font-semibold" aria-live="polite">
         Valor líquido • {money(calculation.net)}
       </p>
@@ -156,9 +173,12 @@ export function ChargeFields({ calculation }: { calculation: ReturnType<typeof u
 export function PaymentAmounts({
   payment,
 }: {
-  payment: { amount: string; proofPath?: string | null; proofName?: string | null } & Partial<
-    Record<ChargeKey | "netAmount" | "financialEffect", string>
-  >
+  payment: {
+    amount: string
+    costCenterAllocations?: (Allocation & { amount: string; netAmount: string })[]
+    proofPath?: string | null
+    proofName?: string | null
+  } & Partial<Record<ChargeKey | "netAmount" | "financialEffect", string>>
 }) {
   if (!payment.netAmount) return null
   return (
@@ -175,6 +195,16 @@ export function PaymentAmounts({
           ))}{" "}
         • Líquido R$ {payment.netAmount.replace(".", ",")}
       </p>
+      {Boolean(payment.costCenterAllocations?.length) && (
+        <ul aria-label="Rateio da baixa">
+          {payment.costCenterAllocations!.map((c) => (
+            <li key={c.costCenterId}>
+              {c.name} • {(c.basisPoints / 100).toLocaleString("pt-BR")}% • Principal R$ {c.amount.replace(".", ",")} •
+              Líquido R$ {c.netAmount.replace(".", ",")}
+            </li>
+          ))}
+        </ul>
+      )}
       {payment.proofPath && (
         <a className="font-medium text-primary underline" href={payment.proofPath} download>
           {payment.proofName}
@@ -202,6 +232,16 @@ export function WalletClassification({
 }) {
   const settings = useResource<WalletSettings>("/api/erp/financial-wallet-settings")
   const command = useCommand()
+  const [split, setSplit] = useState(Boolean(title.costCenterAllocations?.length))
+  const [percents, setPercents] = useState<Record<string, string>>(() =>
+    Object.fromEntries(
+      (title.costCenterAllocations ?? []).map((c) => [
+        c.costCenterId,
+        (c.basisPoints / 100).toFixed(2).replace(".", ","),
+      ]),
+    ),
+  )
+  const [splitError, setSplitError] = useState("")
   const accounts = useResource<{ data: Choice[] }>("/api/erp/financial-accounts?status=active&limit=100")
   if (settings.error) return <p role="alert">{settings.error}</p>
   if (!settings.value) return null
@@ -216,13 +256,32 @@ export function WalletClassification({
         onSubmit={async (e) => {
           e.preventDefault()
           const data = new FormData(e.currentTarget)
+          const allocations = split
+            ? Object.entries(percents)
+                .filter(([, v]) => v.trim())
+                .map(([costCenterId, v]) => ({
+                  costCenterId,
+                  basisPoints: Number((normalizeDecimal(v) ?? "0").replace(".", "")),
+                }))
+            : []
+          if (
+            split &&
+            (allocations.length < 2 ||
+              allocations.some((c) => !c.basisPoints) ||
+              allocations.reduce((sum, c) => sum + c.basisPoints, 0) !== 10000)
+          ) {
+            setSplitError("Informe ao menos dois centros e distribua 100% do título.")
+            return
+          }
+          setSplitError("")
           if (
             await command.send(
               "/api/erp/" + wallet + "/" + title.id + "/classification",
               tenantId,
               {
                 natureId: data.get("nature"),
-                costCenterId: data.get("center") || null,
+                costCenterId: split ? null : data.get("center") || null,
+                costCenterAllocations: allocations,
                 competenceOn: data.get("competence"),
                 forecastAccountId: data.get("forecastAccount") || null,
               },
@@ -248,22 +307,60 @@ export function WalletClassification({
               ))}
             </select>
           </label>
-          <label>
-            Centro de custo
-            <select
-              className={select}
-              required={settings.value.data.requireCostCenter}
-              name="center"
-              defaultValue={title.costCenterId ?? ""}
-            >
-              <option value="">Sem centro</option>
-              {settings.value.costCenters.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.code} • {c.name}
-                </option>
-              ))}
-            </select>
+          <label className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              checked={split}
+              onChange={(e) => {
+                setSplit(e.target.checked)
+                setSplitError("")
+              }}
+            />
+            Ratear entre centros de custo
           </label>
+          {split ? (
+            <div className="sm:col-span-3 grid gap-2 sm:grid-cols-3">
+              {settings.value.costCenters.map((c) => (
+                <label key={c.id}>
+                  Percentual de {c.name} (%)
+                  <Input
+                    inputMode="decimal"
+                    maxLength={6}
+                    pattern={decimalPattern(2)}
+                    value={percents[c.id] ?? ""}
+                    onChange={(e) => setPercents((prev) => ({ ...prev, [c.id]: e.target.value }))}
+                  />
+                </label>
+              ))}
+              {title.costCenterAllocations
+                ?.filter((c) => !settings.value!.costCenters.some((a) => a.id === c.costCenterId))
+                .map((c) => (
+                  <p key={c.costCenterId}>
+                    {c.name} • Centro arquivado{" "}
+                    <Button type="button" onClick={() => setPercents((prev) => ({ ...prev, [c.costCenterId]: "" }))}>
+                      Retirar do rateio
+                    </Button>
+                  </p>
+                ))}
+            </div>
+          ) : (
+            <label>
+              Centro de custo
+              <select
+                className={select}
+                required={settings.value.data.requireCostCenter}
+                name="center"
+                defaultValue={title.costCenterId ?? ""}
+              >
+                <option value="">Sem centro</option>
+                {settings.value.costCenters.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.code} • {c.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
           <label>
             Conta prevista
             <select className={select} name="forecastAccount" defaultValue={title.forecastAccountId ?? ""}>
@@ -280,6 +377,7 @@ export function WalletClassification({
             <Input required type="date" name="competence" defaultValue={title.competenceOn ?? title.dueDate} />
           </label>
         </fieldset>
+        {splitError && <p role="alert">{splitError}</p>}
         {command.error && <p role="alert">{command.error}</p>}
         {canEdit && (
           <Button type="submit" variant="outline" disabled={command.busy || command.stale}>

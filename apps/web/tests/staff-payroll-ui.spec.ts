@@ -43,10 +43,11 @@ test("pagamento avulso pede aprovação e o histórico leva ao financeiro",async
 
 test("atualização em lote preserva a digitação decimal e envia somente propostas",async({page})=>{
  await page.route("**/api/erp/staff-payroll?*",r=>r.fulfill({json:{tenantId:tenant,canEdit:true,canApprove:true,data:[],total:0}}))
- await page.route("**/api/erp/staff?*",r=>r.fulfill({json:{tenantId:tenant,data:[{id:record,name:"Maria"}],total:1}}))
+ await page.route("**/api/erp/staff-payroll/employees?*",r=>r.fulfill({json:{tenantId:tenant,data:[{id:record,name:"Maria"}],total:1}}))
  await page.route(`**/api/erp/staff/${record}/payroll`,r=>r.fulfill({json:{tenantId:tenant,staffId:record,name:"Maria",revision:1,canEdit:true,canApprove:false,settings,requests:[],payments:[]}}))
  await page.route("**/api/erp/staff-payroll/salaries",r=>{expect(r.request().postDataJSON()).toEqual({changes:[{staffId:record,baseRevision:1,salary:"2600.50"}]});return r.fulfill({headers:{ETag:'"1"'},status:201,json:{ids:[rid],revision:1,status:"pending"}})})
- await page.goto("/cadastros/funcionarios/pagamentos")
+ await page.goto("/financeiro/contas-pagar?aba=funcionarios")
+ await expect(page.getByText("0 solicitação(ões)",{exact:true})).toBeVisible({timeout:35000})
  await page.getByRole("button",{name:"Atualizar pagamentos",exact:true}).click()
  const field=page.getByLabel("Novo salário de Maria",{exact:true})
  await field.fill("2600")

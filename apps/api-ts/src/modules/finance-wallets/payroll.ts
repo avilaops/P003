@@ -306,6 +306,26 @@ export function registerPayroll(app: FastifyInstance, deps: AppDependencies) {
       .header("etag", '"' + body.revision + '"')
       .send(body)
   })
+  app.get("/api/v1/staff-payroll/employees", async (req, reply) => {
+    const body = await authorizeRequest(req, deps, async (ctx) => {
+      requirePermission(ctx, read)
+      const paging = valid(
+        z.strictObject({ offset: queryInteger(0, 100000).default(0), limit: queryInteger(1, 100).default(25) }),
+        req.query,
+      )
+      const filter = " FROM staff WHERE tenant_id=$1 AND is_employee AND status='active'"
+      const total = Number((await ctx.client.query("SELECT count(*) AS total" + filter, [ctx.tenantId])).rows[0]!.total)
+      const data = (
+        await ctx.client.query("SELECT id,name" + filter + " ORDER BY name,id LIMIT $2 OFFSET $3", [
+          ctx.tenantId,
+          paging.limit,
+          paging.offset,
+        ])
+      ).rows
+      return { tenantId: ctx.tenantId, data, total, ...paging }
+    })
+    return reply.header("cache-control", "no-store").send(body)
+  })
   app.get("/api/v1/staff-payroll", async (req, reply) => {
     const body = await authorizeRequest(req, deps, async (ctx) => {
       requirePermission(ctx, read)
