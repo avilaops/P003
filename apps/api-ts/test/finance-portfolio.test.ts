@@ -286,6 +286,94 @@ test(
       assert.equal((await get("partner?partyId=" + customer)).position.payable, "130.00")
       assert.equal((await get("balances")).data[0].balance, "450.00")
 
+      await t.test("future receipts and reversals reserve principal while today's position and realized cash honor the cutoff", async () => {
+        const party = randomUUID(), bank = randomUUID()
+        const days = (await seed.query("SELECT ($1::date+1)::text AS tomorrow,($1::date+2)::text AS later", [day])).rows[0]!
+        await seed.query(
+          "INSERT INTO parties(id,tenant_id,person_type,legal_name,tax_id,is_customer,is_supplier,status) VALUES($1,$2,'juridica','Cliente agendado','11222333000181',true,false,'active')",
+          [party, tenant],
+        )
+        await seed.query(
+          "INSERT INTO financial_accounts(id,tenant_id,code,name,status,revision,account_type) VALUES($1,$2,'FUT','Conta agendada','active',1,'bank')",
+          [bank, tenant],
+        )
+        const makeTitle = async () => {
+          const id = randomUUID(), source = randomUUID()
+          await seed.query(
+            "INSERT INTO sales_orders(id,tenant_id,customer_id,customer_name,customer_tax_id,due_date,amount_cents,status) VALUES($1,$2,$3,'Cliente agendado','11222333000181',$4,10000,'completed')",
+            [source,tenant,party,day],
+          )
+          await seed.query(
+            "INSERT INTO receivables(id,tenant_id,order_id,customer_name,due_date,amount_cents,forecast_account_id,status) VALUES($1,$2,$3,'Cliente agendado',$4,10000,$5,'open')",
+            [id,tenant,source,day,bank],
+          )
+          return id
+        }
+        const command = async (id: string, action: string, revision: number, payload: object, status = 200, key = randomUUID()) => {
+          const result = await app.inject({
+            method: "POST", url: "/api/v1/receivables/" + id + "/" + action, payload,
+            headers: { ...headers, "if-match": '"' + revision + '"', "idempotency-key": key },
+          })
+          assert.equal(result.statusCode, status, result.body)
+          return result.json()
+        }
+        const receipt = (occurredOn: string) => ({ occurredOn, amount: "100.00", financialAccountId: bank, method: "bank_transfer", reference: "Recebimento agendado" })
+        const position = async () => (await get("partner?partyId=" + party)).position
+        const bankBalance = async () => (await get("balances")).data.find((r: { id: string }) => r.id === bank).balance
+        const flow = async (from = day) => (await get("cashflow?accountId=" + bank + "&from=" + from + "&to=" + days.later)).data
+        const first = await makeTitle(), key = randomUUID()
+        const paid = await command(first, "payments", 1, receipt(days.tomorrow), 200, key)
+        assert.equal(paid.data.outstandingAmount, "0.00")
+        assert.deepEqual(await command(first, "payments", 1, receipt(days.tomorrow), 200, key), paid)
+        await command(first, "payments", 2, receipt(days.tomorrow), 409)
+        for (const url of ["portfolio?", "portfolio/export?"]) {
+          const wallet = await get(url + "partyId=" + party + "&status=open")
+          assert.equal(wallet.asOf, day)
+          assert.equal(wallet.totals.receivable, "100.00")
+          assert.equal(wallet.totals.futureMovementTitles, 1)
+          assert.equal(wallet.rows[0].operationalOutstanding, "0.00")
+          assert.equal(wallet.rows[0].nextMovementOn, days.tomorrow)
+        }
+        assert.equal((await position()).receivable, "100.00")
+        assert.equal((await position()).averageDays, null)
+        assert.equal(await bankBalance(), "0.00")
+        const [now, tomorrow] = await flow()
+        assert.equal(now.projected, "0.00")
+        assert.equal(tomorrow.forecastIn, "100.00")
+        assert.equal(tomorrow.cashIn, "0.00")
+        assert.equal(tomorrow.realized, "0.00")
+        assert.equal(tomorrow.projected, "100.00")
+        assert.equal((await flow(days.later))[0].projected, "100.00")
+        assert.equal((await flow(days.later))[0].realized, "0.00")
+        await command(first, "reverse-payment", 2, { paymentId: paid.payments[0].id, reason: "Estorno futuro", occurredOn: days.later })
+        await command(first, "payments", 3, receipt(day), 409)
+        assert.equal((await flow())[2].forecastOut, "100.00")
+        assert.equal((await flow())[2].projected, "0.00")
+
+        const second = await makeTitle()
+        const todayReceipt = await command(second, "payments", 1, receipt(day))
+        await command(second, "reverse-payment", 2, { paymentId: todayReceipt.payments[0].id, reason: "Estorno futuro", occurredOn: days.tomorrow })
+        const settled = await get("portfolio?partyId=" + party + "&status=paid")
+        assert.equal(settled.rows.length, 1)
+        assert.equal(settled.rows[0].id, second)
+        assert.equal(settled.rows[0].outstanding, "0.00")
+        assert.equal(settled.rows[0].operationalOutstanding, "100.00")
+        assert.equal(settled.rows[0].nextMovementOn, days.tomorrow)
+        const partner = await position()
+        assert.equal(partner.receivable, "100.00")
+        assert.equal(partner.futureMovementTitles, 2)
+        assert.equal(partner.averageDays, "0.0")
+        assert.equal(await bankBalance(), "100.00")
+        const [current, next] = await flow()
+        assert.equal(current.realized, "100.00")
+        assert.equal(current.projected, "100.00")
+        assert.equal(next.forecastIn, "100.00")
+        assert.equal(next.forecastOut, "100.00")
+        assert.equal(next.cashOut, "0.00")
+        await command(second, "payments", 3, receipt(day), 409)
+        await command(second, "payments", 3, receipt(days.tomorrow))
+      })
+
       await t.test("income recognizes installments once in the invoiced month and uses completion for a legacy sale", async () => {
         const invoiced = randomUUID(), legacy = randomUUID(), method = randomUUID()
         await seed.query(

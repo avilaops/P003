@@ -65,6 +65,21 @@ function cents(input: string | undefined, otherwise = 0n) {
   return input === undefined ? otherwise : fixed(input, 2)
 }
 const rounded = (a: bigint, b: bigint) => (a + b / 2n) / b
+function availableFrom(title: WalletSnapshot, day: string, outstanding: bigint) {
+  const changes = new Map<string, bigint>()
+  for (const p of title.payments) {
+    if (p.occurredOn <= day) continue
+    const principal = fixed(p.amount, 2)
+    changes.set(p.occurredOn, (changes.get(p.occurredOn) ?? 0n) + (p.kind === "reversal" ? -principal : principal))
+  }
+  // Work back from all bookings to the effective date, undoing each day's net settlement.
+  let available = outstanding, minimum = outstanding
+  for (const date of Array.from(changes.keys()).sort().reverse()) {
+    available += changes.get(date)!
+    if (available < minimum) minimum = available
+  }
+  return minimum
+}
 export async function preparePayment(
   ctx: AuthorizedContext,
   wallet: Wallet,
@@ -76,8 +91,11 @@ export async function preparePayment(
     { data: settings } = await walletSettings(ctx)
   const principal = fixed(s.amount, 2)
   if (!principal) invalid("O principal deve ser positivo")
-  if (title.data.status !== "open" || principal > fixed(title.data.outstandingAmount, 2))
+  const outstanding = fixed(title.data.outstandingAmount, 2)
+  if (title.data.status !== "open" || principal > outstanding)
     conflict("Valor superior ao saldo de uma conta em aberto")
+  if (principal > availableFrom(title, s.occurredOn, outstanding))
+    conflict("O principal excede o saldo disponível na data informada ou antes de outro movimento já registrado")
   if (!d.receipt && s.paymentMethodId) invalid("A forma de recebimento cadastrada pertence à carteira de clientes")
   const elapsed = Math.floor(
     (Date.parse(s.occurredOn + "T00:00:00Z") - Date.parse(title.data.dueDate + "T00:00:00Z")) / 86400000,

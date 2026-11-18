@@ -83,7 +83,7 @@ export function PartnerOperations({
       id: r.id,
       side: r.side,
       revision: r.revision,
-      amount: (overrides[r.id] ?? r.outstanding).replace(",", "."),
+      amount: (overrides[r.id] ?? r.operationalOutstanding ?? r.outstanding).replace(",", "."),
     }))
     let body: object
     switch (kind) {
@@ -234,7 +234,7 @@ export function PartnerOperations({
                       inputMode="decimal"
                       required
                       readOnly={group}
-                      value={overrides[row.id] ?? row.outstanding}
+                      value={overrides[row.id] ?? row.operationalOutstanding ?? row.outstanding}
                       onChange={(e) => setOverrides({ ...overrides, [row.id]: e.target.value })}
                     />
                   </label>

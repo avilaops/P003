@@ -27,6 +27,8 @@ type PartnerData = {
   canEditCredit: boolean
   party: Party
   position: {
+    asOf: string
+    futureMovementTitles: number
     receivable: string
     payable: string
     overdueReceivable: string
@@ -177,6 +179,7 @@ function PartnerPosition({ id, group }: { id: string; group: boolean }) {
       <h2 className="text-xl font-semibold">{data.party.name}</h2>
       {!group && (
         <>
+          {p.asOf && <p>Posição em {dateLabel(p.asOf)}{p.futureMovementTitles > 0 && ` • Títulos com movimento futuro • ${p.futureMovementTitles}`}</p>}
           <dl className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
             {metrics.map(([k, v]) => (
               <div className="rounded-lg border p-3" key={k}>
@@ -231,7 +234,7 @@ function PartnerPosition({ id, group }: { id: string; group: boolean }) {
         <ul className="divide-y rounded-lg border">
           {titles.value?.rows.map((r) => (
             <li className="flex flex-wrap items-center gap-3 px-3 py-2" key={r.id}>
-              {r.status === "open" && data.writable.includes(r.side) && (
+              {(r.operationalOutstanding ?? r.outstanding) !== "0.00" && r.status !== "cancelled" && data.writable.includes(r.side) && (
                 <input
                   aria-label={"Selecionar " + sideLabels[r.side] + " " + dateLabel(r.dueDate) + " " + reais(r.outstanding)}
                   type="checkbox"
@@ -244,6 +247,7 @@ function PartnerPosition({ id, group }: { id: string; group: boolean }) {
               </Link>
               <span>
                 Original {reais(r.amount)} • saldo {reais(r.outstanding)}
+                {r.nextMovementOn && <> • próximo movimento em {dateLabel(r.nextMovementOn)} • saldo após os movimentos registrados {reais(r.operationalOutstanding)}</>}
               </span>
             </li>
           ))}

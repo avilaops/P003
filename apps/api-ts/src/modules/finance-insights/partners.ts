@@ -37,17 +37,20 @@ export function registerFinancePartners(app: FastifyInstance, deps: AppDependenc
       if (!party) throw new Problem(404, "not_found", "Parceiro não encontrado")
       const position = (
         await ctx.client.query(
-          `WITH wallet AS (SELECT * FROM finance_portfolio WHERE tenant_id=$1 AND party_id=$2 AND side=ANY($3::text[])),
+          `WITH wallet AS (SELECT * FROM finance_portfolio_today WHERE tenant_id=$1 AND party_id=$2 AND side=ANY($3::text[]) AND exists_today),
         dates AS (
           SELECT p.occurred_on-w.competence_on AS days,p.amount_cents AS amount
-            FROM wallet w JOIN receivable_payments p ON (p.tenant_id,p.receivable_id)=(w.tenant_id,w.id) WHERE w.side='receivable' AND p.kind='receipt' AND NOT EXISTS (SELECT FROM receivable_payments rev WHERE rev.tenant_id=p.tenant_id AND rev.reverses_id=p.id)
+            FROM wallet w JOIN receivable_payments p ON (p.tenant_id,p.receivable_id)=(w.tenant_id,w.id) WHERE w.side='receivable' AND p.kind='receipt'
+              AND p.occurred_on<=${today} AND NOT EXISTS (SELECT FROM receivable_payments rev WHERE rev.tenant_id=p.tenant_id AND rev.reverses_id=p.id AND rev.occurred_on<=${today})
           UNION ALL SELECT p.occurred_on-w.competence_on,p.amount_cents
-            FROM wallet w JOIN payable_payments p ON (p.tenant_id,p.payable_id)=(w.tenant_id,w.id) WHERE w.side='payable' AND p.kind='payment' AND NOT EXISTS (SELECT FROM payable_payments rev WHERE rev.tenant_id=p.tenant_id AND rev.reverses_id=p.id)
+            FROM wallet w JOIN payable_payments p ON (p.tenant_id,p.payable_id)=(w.tenant_id,w.id) WHERE w.side='payable' AND p.kind='payment'
+              AND p.occurred_on<=${today} AND NOT EXISTS (SELECT FROM payable_payments rev WHERE rev.tenant_id=p.tenant_id AND rev.reverses_id=p.id AND rev.occurred_on<=${today})
         ), orders AS (
           SELECT o.id,o.number::text AS number,o.amount_cents FROM sales_orders o WHERE o.tenant_id=$1 AND o.customer_id=$2 AND o.status IN ('accepted','confirmed') AND $4
           AND NOT EXISTS (SELECT 1 FROM fiscal_nfe_documents d WHERE d.tenant_id=o.tenant_id AND d.source_order_id=o.id AND d.status='authorized' AND d.environment='production')
         ), credit AS (SELECT limit_cents,revision FROM finance_partner_credit WHERE tenant_id=$1 AND party_id=$2 AND $4)
-        SELECT ${decimal("coalesce(sum(open_cents) FILTER(WHERE side='receivable'),0)")} AS receivable,
+        SELECT ${today}::text AS "asOf",count(next_movement_on)::int AS "futureMovementTitles",
+          ${decimal("coalesce(sum(open_cents) FILTER(WHERE side='receivable'),0)")} AS receivable,
           ${decimal("coalesce(sum(open_cents) FILTER(WHERE side='payable'),0)")} AS payable,
           ${decimal("coalesce(sum(open_cents) FILTER(WHERE due_date<" + today + " AND side='receivable'),0)")} AS "overdueReceivable",
           ${decimal("coalesce(sum(open_cents) FILTER(WHERE due_date<" + today + " AND side='payable'),0)")} AS "overduePayable",

@@ -486,7 +486,8 @@ test(
       assert.equal(overdueLine.netAmount, "420.00")
       assert.equal(overdueLine.costCenterId, center.json().data.id)
       const title = "/api/v1/financial-payables/" + salary,
-        full = { ...payment, amount: "1000.00", penaltyAmount: "0.00", discountAmount: "10.00" }
+        full = { ...payment, occurredOn: "2027-01-03", amount: "1000.00", penaltyAmount: "0.00", discountAmount: "10.00" }
+      assert.equal((await send(title + "/approvals", { ...full, occurredOn: "2027-01-02" }, 3)).statusCode, 409)
       assert.equal((await send(title + "/payments", full, 3)).statusCode, 409)
       const pending = await send(title + "/approvals", full, 3)
       assert.equal(pending.statusCode, 201, pending.body)

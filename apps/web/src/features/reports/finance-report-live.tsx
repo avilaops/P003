@@ -49,7 +49,7 @@ function cells(row: PortfolioRow) {
     reais(row.amount),
     reais(row.settled),
     reais(row.outstanding),
-    status,
+    row.nextMovementOn ? status + " • movimento em " + dateLabel(row.nextMovementOn) : status,
   ]
 }
 export function FinanceReportLive() {
@@ -244,6 +244,7 @@ function PortfolioReport() {
                 <div className="flex flex-wrap items-center gap-2">
                   <p className="mr-auto">
                     {data.companyName} • {data.total} títulos • posição em {dateLabel(data.asOf)} • {period}
+                    {data.totals.futureMovementTitles > 0 && <> • Títulos com movimento futuro • {data.totals.futureMovementTitles}</>}
                   </p>
                   <Button disabled={exporting || !data.total} variant="outline" onClick={exportCsv}>
                     Exportar CSV

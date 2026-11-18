@@ -10,6 +10,8 @@ export type PortfolioRow = {
   amount: string
   settled: string
   outstanding: string
+  operationalOutstanding: string
+  nextMovementOn: string | null
   status: string
   revision: string
 }
@@ -29,6 +31,7 @@ export type Portfolio = {
     overduePayable: string
     openReceivables: number
     openPayables: number
+    futureMovementTitles: number
   }
   buckets: { bucket: string; receivable: string; payable: string; count: number }[]
 }

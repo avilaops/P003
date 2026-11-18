@@ -80,6 +80,7 @@ async function reportSnapshot(context: AuthorizedContext, filters: Filters) {
         pdf.font("Helvetica").fontSize(10).text(`Título ${r.id} • Revisão ${r.revision}`)
         pdf.text(`Vencimento • ${date(r.dueDate)} • ${status}`)
         pdf.text(`Original • ${money(r.amount)}    Liquidado • ${money(r.settled)}    Saldo • ${money(r.outstanding)}`)
+        if (r.nextMovementOn) pdf.text(`Movimento já registrado para ${date(r.nextMovementOn)}`)
       }
     }),
   }

@@ -61,6 +61,7 @@ export function OverviewBalances() {
         value && (
           <>
             <h2 className="text-lg font-semibold">Posição em {dateLabel(value.asOf)}</h2>
+            {value.totals.futureMovementTitles > 0 && <p>Títulos com movimento após a data de corte • {value.totals.futureMovementTitles}</p>}
             <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
               {cards
                 .filter((c) => value.allowed.includes(c.side))

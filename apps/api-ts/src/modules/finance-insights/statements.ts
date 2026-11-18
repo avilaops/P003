@@ -31,12 +31,18 @@ export function registerStatementRoutes(app: FastifyInstance, deps: AppDependenc
         FROM financial_account_entries WHERE tenant_id=$1 AND ($4::uuid IS NULL OR account_id=$4)
           AND ($5::uuid IS NULL OR category_id=$5) AND occurred_on<=$3::date
           AND (transfer_id IS NULL OR $4::uuid IS NOT NULL)
-      ), opening AS (SELECT coalesce(sum(net),0) AS opening FROM moves WHERE day<$2::date),
+      ), opening AS (
+        SELECT coalesce(sum(net) FILTER (WHERE day<=${today}),0) AS opening,coalesce(sum(net),0) AS projected_opening
+        FROM moves WHERE day<$2::date
+      ),
       events AS (
-        SELECT day,incoming,outgoing,0::numeric AS expected_in,0::numeric AS expected_out FROM moves WHERE day>=$2::date
+        SELECT day,CASE WHEN day<=${today} THEN incoming ELSE 0 END AS incoming,
+          CASE WHEN day<=${today} THEN outgoing ELSE 0 END AS outgoing,
+          CASE WHEN day>${today} THEN incoming ELSE 0 END AS expected_in,
+          CASE WHEN day>${today} THEN outgoing ELSE 0 END AS expected_out FROM moves WHERE day>=$2::date
         UNION ALL SELECT greatest(due_date,${today},$2::date),0,0,
-          CASE WHEN side='receivable' THEN open_cents ELSE 0 END, CASE WHEN side='payable' THEN open_cents ELSE 0 END
-          FROM finance_portfolio WHERE tenant_id=$1 AND side=ANY($7::text[]) AND open_cents>0 AND due_date<=$3::date AND $3::date>=${today}
+          CASE WHEN side='receivable' THEN forecast_cents ELSE 0 END, CASE WHEN side='payable' THEN forecast_cents ELSE 0 END
+          FROM finance_portfolio_today WHERE tenant_id=$1 AND side=ANY($7::text[]) AND forecast_cents>0 AND due_date<=$3::date AND $3::date>=${today}
             AND ($4::uuid IS NULL OR forecast_account_id=$4) AND ($5::uuid IS NULL OR category_id=$5)
         UNION ALL SELECT greatest(o.due_date,${today},$2::date),0,0,greatest(o.amount_cents-coalesce(t.original,0),0),0
           FROM sales_orders o LEFT JOIN LATERAL (SELECT sum(amount_cents) AS original FROM receivables
@@ -56,13 +62,13 @@ export function registerStatementRoutes(app: FastifyInstance, deps: AppDependenc
       ), calendar AS (
         SELECT generate_series(date_trunc($6,$2::date::timestamp),date_trunc($6,$3::date::timestamp),('1 '||$6)::interval)::date AS start
       ), summary AS (
-        SELECT calendar.start,opening.opening,coalesce(cash_in,0) AS cash_in,coalesce(cash_out,0) AS cash_out,
+        SELECT calendar.start,opening.opening,opening.projected_opening,coalesce(cash_in,0) AS cash_in,coalesce(cash_out,0) AS cash_out,
           coalesce(future_in,0) AS future_in,coalesce(future_out,0) AS future_out FROM calendar CROSS JOIN opening LEFT JOIN grouped USING(start)
       )
       SELECT start::text AS date,${decimal("opening")} AS opening,${decimal("cash_in")} AS "cashIn",${decimal("cash_out")} AS "cashOut",
         ${decimal("future_in")} AS "forecastIn",${decimal("future_out")} AS "forecastOut",
         ${decimal("opening+sum(cash_in-cash_out) OVER(ORDER BY start)")} AS realized,
-        ${decimal("opening+sum(cash_in-cash_out+future_in-future_out) OVER(ORDER BY start)")} AS projected FROM summary ORDER BY start`,
+        ${decimal("projected_opening+sum(cash_in-cash_out+future_in-future_out) OVER(ORDER BY start)")} AS projected FROM summary ORDER BY start`,
         [
           context.tenantId,
           f.from,
