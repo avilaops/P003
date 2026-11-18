@@ -74,7 +74,7 @@ function field(parent: Element, name: string, namespace = NFE): string {
 }
 
 /** Consistency with the embedded certificate, not a trust-chain or SEFAZ authorization check. */
-function checkedSignature(root: Element, info: Element, xml: string): { digest: string; certificate: X509Certificate } {
+export function verifyNfeSignature(root: Element, info: Element, xml: string): { digest: string; certificate: X509Certificate } {
   const signature = child(root, "Signature", DSIG)!;
   if (root.getElementsByTagNameNS(DSIG, "Signature").length !== 1) throw invalid();
   const signedInfo = child(signature, "SignedInfo", DSIG)!;
@@ -155,7 +155,7 @@ export async function createFiscalQrPayload(input: { signedXml: string; profile:
     if (!root || root.localName !== "NFe" || root.namespaceURI !== NFE || root.getElementsByTagName("*").length > 50_000) throw invalid();
     const info = child(root, "infNFe")!;
     if (model === "55" && (profile.version !== "3" || field(child(info, "ide")!, "tpImp") !== "6")) throw invalid();
-    const bound = boundKey(info, model), signature = checkedSignature(root, info, xml);
+    const bound = boundKey(info, model), signature = verifyNfeSignature(root, info, xml);
     const parameters = [bound.accessKey, profile.version, bound.ambient];
     if (bound.mode === "offline") {
       const amount = field(child(child(info, "total")!, "ICMSTot")!, "vNF");
