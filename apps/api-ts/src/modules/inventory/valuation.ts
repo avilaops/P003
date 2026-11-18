@@ -28,6 +28,30 @@ export async function projectedCosts({client,tenantId}:CostContext, productIds:r
   const positions=new Map<string,Position>(), movements=new Map<string,ValuedMovement>(), transferCosts=new Map<string,bigint|null>()
   const totals=new Map<string,bigint>()
   if(!productIds.length) return {positions,movements}
+  // A posted assembly depends on the valued issues that actually fed that run.
+  // Expand all component levels, then value them in the same chronological pass.
+  const links=await client.query<{receipt:string; component:string; issue:string; manual:string|null; extra:string}>(`
+    WITH RECURSIVE components(product_id) AS (
+      SELECT unnest($2::uuid[])
+      UNION SELECT issue.product_id FROM components c JOIN stock_movements finished ON finished.tenant_id=$1 AND finished.product_id=c.product_id
+        JOIN production_postings p ON (p.tenant_id,p.receipt_id)=(finished.tenant_id,finished.id)
+        JOIN production_posting_inputs i ON (i.tenant_id,i.posting_id)=(p.tenant_id,p.id)
+        JOIN stock_movements issue ON (issue.tenant_id,issue.id)=(i.tenant_id,i.movement_id)
+    )
+    SELECT p.receipt_id receipt,issue.product_id component,issue.id issue,manual.amount_cents::text manual,p.additional_cents::text extra
+      FROM components c JOIN stock_movements finished ON finished.tenant_id=$1 AND finished.product_id=c.product_id
+      JOIN production_postings p ON (p.tenant_id,p.receipt_id)=(finished.tenant_id,finished.id)
+      JOIN production_posting_inputs i ON (i.tenant_id,i.posting_id)=(p.tenant_id,p.id)
+      JOIN stock_movements issue ON (issue.tenant_id,issue.id)=(i.tenant_id,i.movement_id)
+      LEFT JOIN production_consumptions manual ON (manual.tenant_id,manual.stock_movement_id)=(issue.tenant_id,issue.id)`,[tenantId,productIds])
+  const recipes=new Map<string,{extra:bigint; inputs:{id:string;manual:bigint|null}[]}>()
+  const required=new Set(productIds)
+  for(const link of links.rows){
+    required.add(link.component)
+    const recipe=recipes.get(link.receipt)??{extra:BigInt(link.extra)*1000000n,inputs:[]}
+    recipe.inputs.push({id:link.issue,manual:link.manual===null?null:BigInt(link.manual)*1000000n})
+    recipes.set(link.receipt,recipe)
+  }
   const rows=await client.query<LedgerRow>(`
     WITH events AS MATERIALIZED (
       SELECT m.id,m.product_id,coalesce(m.warehouse_id,s.opening_id) warehouse_id,i.effective_on,m.created_at,m.quantity_micros quantity,
@@ -49,7 +73,7 @@ export async function projectedCosts({client,tenantId}:CostContext, productIds:r
           NULL::text direction,NULL::uuid reverses_id,NULL::uuid transfer_id FROM opening o LEFT JOIN stock_opening_costs b ON b.tenant_id=$1 AND b.product_id=o.product_id AND b.warehouse_id=o.warehouse_id
         UNION ALL SELECT id,product_id,warehouse_id,effective_on,created_at,quantity,base,delta,direction,reverses_id,transfer_id FROM events
           WHERE $3::date IS NULL OR effective_on <= $3
-    ) ledger ORDER BY ledger.effective_on NULLS FIRST,created_at,id`,[tenantId,productIds,until])
+    ) ledger ORDER BY ledger.effective_on NULLS FIRST,created_at,id`,[tenantId,[...required],until])
   for(const row of rows.rows) {
     const key=positionKey(row.product_id,row.warehouse_id), qty=BigInt(row.quantity)
     const position=positions.get(key) ?? {productId:row.product_id,warehouseId:row.warehouse_id,quantity:0n,value:0n,opening:0n}
@@ -65,6 +89,15 @@ export async function projectedCosts({client,tenantId}:CostContext, productIds:r
     let amount:bigint|null
     if(row.reverses_id) amount=movements.get(row.reverses_id)?.amount ?? null
     else if(receiving && transfer) amount=transferCosts.get(transfer) ?? null
+    else if(receiving && recipes.has(row.id)){
+      const recipe=recipes.get(row.id)!
+      amount=recipe.extra+BigInt(row.delta)
+      for(const input of recipe.inputs){
+        const cost=movements.get(input.id)?.amount??input.manual
+        if(cost===null){ amount=null;break }
+        amount+=cost
+      }
+    }
     else if(receiving) amount=row.base===null ? null : BigInt(row.base)+BigInt(row.delta)
     else amount=position.value===null || position.quantity<qty ? null : roundedCost(qty*position.value,position.quantity)
     if(transfer && !receiving) transferCosts.set(transfer,amount)
@@ -76,6 +109,11 @@ export async function projectedCosts({client,tenantId}:CostContext, productIds:r
     totals.set(row.product_id,total)
     movements.set(row.id,{id:row.id,productId:row.product_id,warehouseId:row.warehouse_id,date:row.effective_on!,amount,
       unit:amount===null ? null : roundedCost(amount*1000000n,qty),quantityAfter:position.quantity,valueAfter:position.value,totalAfter:total})
+  }
+  if(required.size>new Set(productIds).size){
+    const requested=new Set(productIds)
+    for(const [key,p] of positions) if(!requested.has(p.productId)) positions.delete(key)
+    for(const [key,m] of movements) if(!requested.has(m.productId)) movements.delete(key)
   }
   return {positions,movements}
 }

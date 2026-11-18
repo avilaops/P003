@@ -22,10 +22,10 @@ test("financial totals exclude cancelled accounts and count open titles", () => 
 
 test("stock page metrics distinguish directory total from quantities on the page", () => {
   assert.deepEqual(model.stockMetrics({ total: 200, data: [
-    { quantity: "12.5", reserved: "2", available: "10.5" },
-    { quantity: "0", reserved: "0", available: "0" },
-  ] }), { products: 200, quantity: 12.5, reserved: 2, unavailable: 1 });
-  assert.deepEqual(model.stockMetrics(null), { products: 0, quantity: 0, reserved: 0, unavailable: 0 });
+    { unit:"UN", quantity: "12.5", reserved: "2", available: "10.5" },
+    { unit:"KG", quantity: "3.01", reserved: "3.01", available: "0" },
+  ] }), { products: 200, quantity: "12,5 UN • 3,01 KG", reserved: "2 UN • 3,01 KG", unavailable: 1 });
+  assert.deepEqual(model.stockMetrics(null), { products: 0, quantity: "0", reserved: "0", unavailable: 0 });
 });
 
 test("CSV retains decimal strings, delimiters, quotes and multiline cells", () => {

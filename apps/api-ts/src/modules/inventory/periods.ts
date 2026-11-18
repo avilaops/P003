@@ -7,7 +7,7 @@ import { Problem } from "../../platform/problem.js"
 import { validateDate } from "../sales/fixed.js"
 import { projectedCosts } from "./valuation.js"
 import { recalculateCosts } from "./cost-jobs.js"
-import { adjustCostBasis, costBasisSchema } from "./stock-cost-input.js"
+import { adjustCostBasis, costBasisSchema, basisQuery,readReceiptBasis } from "./stock-cost-input.js"
 
 const month=z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/)
 const closeInput=z.strictObject({month})
@@ -47,7 +47,9 @@ async function closePeriod(ctx:AuthorizedContext,month:string) {
   const products=await client.query<{product_id:string}>("SELECT product_id FROM stock_balances WHERE tenant_id=$1 UNION SELECT product_id FROM stock_cost_jobs WHERE tenant_id=$1",[tenantId])
   let count=0
   for(let i=0;i<products.rows.length;i+=100) {
-    const {positions}=await projectedCosts(ctx,products.rows.slice(i,i+100).map(r=>r.product_id),calendar.last)
+    const {positions,movements}=await projectedCosts(ctx,products.rows.slice(i,i+100).map(r=>r.product_id),calendar.last)
+    if([...movements.values()].some(m=>(!calendar.previous || m.date>=first) && m.amount===null))
+      throw conflict("Há movimentos sem custo no período. Confira as entradas e o saldo de abertura")
     const rows=[]
     for(const p of positions.values()) {
       if(p.quantity<0n || p.value===null) throw conflict("Há saldo com custo pendente no período. Confira as entradas e o valor de abertura")
@@ -71,6 +73,15 @@ async function reopenPeriod(ctx:AuthorizedContext,month:string,reason:string){
 }
 export function registerPeriods(app:FastifyInstance,deps:AccessDependencies){
   const path="/api/v1/stock/periods"
+  app.get(path+"/basis",(req,reply)=>{
+    reply.header("cache-control","no-store")
+    return authorizeRequest(req,deps,ctx=>{
+      requirePermission(ctx,"inventory.stock.manage")
+      const parsed=basisQuery.safeParse(req.query)
+      if(!parsed.success) throw new Problem(422,"invalid_input","Informe o movimento de entrada e o produto")
+      return readReceiptBasis(ctx,parsed.data)
+    })
+  })
   app.get(path,(req,reply)=>{
     reply.header("cache-control","no-store")
     return authorizeRequest(req,deps,ctx=>{requirePermission(ctx,"inventory.stock.read");return periodState(ctx)})

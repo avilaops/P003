@@ -16,7 +16,7 @@ const configure = z.strictObject({ productId: id, opening: z.array(z.strictObjec
 })).max(10000) })
 const assign = z.strictObject({ productId: id, documentId: id, kind, direction: z.enum(["receipt","issue"]),
   serials: serialList, revision: z.number().int().nonnegative().default(0) })
-const page = z.strictObject({ q: searchQuery, productId: id.optional(), documentId: id.optional(),
+const page = z.strictObject({ q: searchQuery, productId: id.optional(), documentId: id.optional(),kind:kind.default("sale"),
   limit: queryInteger(1,100).default(25), offset: queryInteger(0,100000).default(0) })
 type Headers = Record<string,string|string[]|undefined>
 const missing = () => new Problem(404,"not_found","Produto ou documento não encontrado na empresa")
@@ -118,8 +118,10 @@ export function registerSerials(app:FastifyInstance, deps:AccessDependencies) {
       requirePermission(ctx,"inventory.stock.read")
       const parsed=page.safeParse(req.query)
       if(!parsed.success) throw invalid()
-      const {q,productId,documentId,offset,limit}=parsed.data
+      const {q,productId,documentId,offset,limit,kind:docKind}=parsed.data
       const sales=ctx.permissions.includes("sales.orders.read"), fiscal=ctx.permissions.includes("fiscal.nfe.read")
+      const readDocument={sale:sales||fiscal,purchase:ctx.permissions.includes("purchasing.orders.read"),production:ctx.permissions.includes("production.read"),
+        pos:ctx.permissions.includes("sales.pos.read"),count:ctx.permissions.includes("inventory.counts.read")}[docKind]
       const p=productId ? await product(ctx,productId) : null
       const {rows}=await ctx.client.query(`SELECT s.serial,s.status,w.name AS warehouse,p.sku,p.name,p.id AS "productId",
           CASE WHEN $7 THEN coalesce(s.reserved_order_id,e.order_id) END AS "orderId",CASE WHEN $7 THEN o.customer_name END AS customer,
@@ -132,9 +134,14 @@ export function registerSerials(app:FastifyInstance, deps:AccessDependencies) {
         LEFT JOIN LATERAL(SELECT f.id,f.number,f.series FROM fiscal_nfe_documents f WHERE f.tenant_id=e.tenant_id AND f.source_order_id=e.order_id
           AND f.status='authorized' ORDER BY (f.environment='production') DESC,f.created_at DESC LIMIT 1) f ON true
         WHERE s.tenant_id=$1 AND ($2::uuid IS NULL OR p.id=$2) AND (strpos(lower(s.serial),lower($3))>0 OR strpos(lower(p.sku),lower($3))>0)
-          AND ($4::uuid IS NULL OR (($7 OR $8) AND EXISTS(SELECT 1 FROM stock_serial_events doc
-            WHERE (doc.tenant_id,doc.product_id,doc.serial)=(s.tenant_id,s.product_id,s.serial) AND doc.order_id=$4)))
-        ORDER BY s.serial,p.sku,p.id LIMIT $5 OFFSET $6`,[ctx.tenantId,productId,q,documentId,limit+1,offset,sales,fiscal])
+          AND ($4::uuid IS NULL OR ($9::boolean AND EXISTS(SELECT 1 FROM stock_serial_events doc
+            LEFT JOIN stock_movements m ON (m.tenant_id,m.id)=(doc.tenant_id,doc.movement_id)
+            LEFT JOIN purchase_receipts receipt ON (receipt.tenant_id,receipt.id)=(m.tenant_id,m.source_purchase_receipt_id)
+            LEFT JOIN pos_sales pos ON (pos.tenant_id,pos.id)=(doc.tenant_id,doc.pos_sale_id)
+            WHERE (doc.tenant_id,doc.product_id,doc.serial)=(s.tenant_id,s.product_id,s.serial)
+              AND (CASE $10::text WHEN 'sale' THEN doc.order_id WHEN 'purchase' THEN receipt.order_id WHEN 'production' THEN m.production_order_id
+                WHEN 'count' THEN m.inventory_count_id WHEN 'pos' THEN pos.session_id END)=$4)))
+        ORDER BY s.serial,p.sku,p.id LIMIT $5 OFFSET $6`,[ctx.tenantId,productId,q,documentId,limit+1,offset,sales,fiscal,readDocument,docKind])
       const canEdit=ctx.permissions.includes("inventory.stock.manage")
       const opening=p && !p.tracked && canEdit ? (await openingPositions(ctx,productId!)).map(row=>({...row,quantity:decimal(BigInt(String(row.quantity)),6)})) : []
       const assignmentKinds=Object.entries(documents).filter(([,doc])=>ctx.permissions.includes(doc[0])).map(([key])=>key)

@@ -46,6 +46,12 @@ test("versioned production reserves components, consumes losses and receives val
   assert.equal(detail.data.bomVersion,1)
   assert.equal(detail.postings[0].value,"20.00")
   assert.equal(detail.postings[0].minutes,90)
+  const revised=await post("stock/periods/basis",{kind:"receipt",productId:component,movementId:receipt.json().id,
+    freight:"10.00",recoverableTax:"0.00",revision:1,reason:"Rateio posterior do frete desta compra"})
+  assert.equal(revised.statusCode,200,revised.body)
+  assert.equal((await get("stock?q=BANCO")).json().data[0].stockValue,"26.00")
+  const cost=(await get("production/orders/"+job)).json().postings[0]
+  assert.deepEqual([cost.recordedValue,cost.value],["20.00","26.00"])
   assert.deepEqual((await seed.query("SELECT quantity_micros FROM stock_balances WHERE product_id=$1",[product])).rows,[{quantity_micros:"2000000"}])
   assert.equal((await get("stock?q=PERFIL")).json().data[0].available,"4.000000")
   assert.equal((await get("orders/"+order)).json().overdueProduction,undefined)

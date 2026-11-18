@@ -33,12 +33,14 @@ import { commercialMoney, orderNumber, orderStatusLabels as labels } from "./ord
 import { OrderPricing } from "@/features/commercial-settings/order-pricing"
 import { OrderDetailCommercial } from "./order-detail-commercial"
 import {DocumentWarehouses} from "@/features/inventory/document-warehouses"
+import {OrderSerials} from "@/features/inventory/order-serials"
 import { OrderEmail } from "./order-email"
 import { OrderPdfDownload } from "./order-pdf-download"
 import type { CheckoutSnapshot } from "./commercial-payment-model"
 import { OrderWeightSummary } from "./order-weight-summary"
 
-type Detail = Schema<"OrderSnapshot"> & { pricingOrigin?: boolean; checkout?: CheckoutSnapshot | null;overdueProduction?:{id:string;sku:string;plannedOn:string}[] }
+type Detail = Schema<"OrderSnapshot"> & { pricingOrigin?: boolean; checkout?: CheckoutSnapshot | null;overdueProduction?:{id:string;sku:string;plannedOn:string}[];
+  realizedMargin?:{revenue:string;cost:string|null;grossProfit:string|null;marginPercent:string|null} }
 type Listing = Schema<"OrderList">
 export type Choice = { id: string; legalName?: string; name?: string; sku?: string; basePrice?: string; unit?: string; structureColors?: string[]; swingArmColors?: string[]; finishingPalette?: string | null; upholsteryColors?: string[]; upholsteryConfigurable?: boolean; plateHolderColors?: string[]; plateHolderTypes?: string[]; hasPhoto?: boolean }
 type SelectedItem = Choice & { quantity: string; preserved: boolean; structureColor: string; swingArmColor: string; upholsteryColor: string; plateHolderColor: string; plateHolderType: string }
@@ -277,6 +279,12 @@ function OrderDetail({ id }: { id: string }) {
         </div></div>}
         <OrderDetailCommercial order={value} permissions={access.value?.tenant.id === value.tenantId ? access.value.permissions : []} />
         <DocumentWarehouses kind="sale" id={id} tenant={value.tenantId}/>
+        <OrderSerials key={id} id={id} tenant={value.tenantId}/>
+        {value.realizedMargin&&<section className="space-y-1" aria-label="Margem realizada"><h2 className="font-semibold">Margem bruta realizada</h2>
+          <p>Receita dos itens entregues • {commercialMoney(value.realizedMargin.revenue)}</p>
+          <p>Custo das saídas • {value.realizedMargin.cost===null?"Aguardando valorização":commercialMoney(value.realizedMargin.cost)}</p>
+          <p>Resultado bruto • {value.realizedMargin.grossProfit===null?"Aguardando valorização":commercialMoney(value.realizedMargin.grossProfit)}
+            {value.realizedMargin.marginPercent!==null&&" • "+value.realizedMargin.marginPercent.replace(".",",")+"%"}</p></section>}
         <OrderFinancePanel key={`${value.data.id}:${value.data.revision}`} orderId={id} onLockChange={boundary.setPrimaryLocked} parentBusy={command.busy || command.uncertain || command.stale || result.loading} />
         <div className="divide-y border-y">
           <details className="py-3"><summary className="cursor-pointer text-sm font-medium">Negociação e condições comerciais</summary><div className="space-y-4 pt-3"><OrderNegotiation id={id} onDecision={result.reload} showDirector={access.value?.tenant.id === value.tenantId && ["sales.approvals.director", "platform.company.manage"].every(permission => access.value?.permissions.includes(permission))} />{value.pricingOrigin && <OrderPricing id={id} onSaved={result.reload} showDirector={access.value?.tenant.id === value.tenantId && ["sales.approvals.director", "platform.company.manage"].every(permission => access.value?.permissions.includes(permission))} />}</div></details>

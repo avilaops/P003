@@ -208,7 +208,8 @@ export async function forwardErp(request: Request, resource: string) {
     }
     if (stockLocationPath(resource,request.method)) {
       const params = new URL(request.url).searchParams
-      const allowed = resource === "/stock/serials/events" ? ["productId","serial","offset"] : resource === "/stock/serials" ? ["offset","limit","productId","documentId","q"] : resource === "/stock/replenishment" ? ["offset","limit","mode","q"] : resource === "/stock/transfers" ? ["offset","limit","id"] : []
+      const allowed = resource === "/stock/periods/basis" ? ["productId","movementId"] : resource === "/stock/serials/document" ? ["documentId","offset"] : resource === "/stock/serials/events" ? ["productId","serial","offset"] : resource === "/stock/serials" ? ["offset","limit","productId","documentId","kind","q"] : resource === "/stock/replenishment" ? ["offset","limit","mode","q"] : resource === "/stock/transfers" ? ["offset","limit","id"] : []
+      if (resource === "/stock/reports") allowed.push("dataset","definitionId","productId","warehouseId","startDate","endDate","idleDays","offset","limit","all","catalog")
       for (const [key,value] of params) {
         if (request.method !== "GET" || !allowed.includes(key) || params.getAll(key).length !== 1) return Response.json({title: "Filtro inválido"}, {status: 400})
         upstream.searchParams.set(key,value)
@@ -219,6 +220,7 @@ export async function forwardErp(request: Request, resource: string) {
       const allowed = dashboardResource ? ["period"] : auditResource ? ["q", "action", "entity", "startDate", "endDate", "before"] : resource === "/system/files" ? ["q", "origin", "status", "offset", "limit"] : purchaseResource ? purchaseCollection ? ["offset", "limit"] : [] : financialAccountEntriesResource ? ["accountId", "offset", "limit"] : inventoryCountResource ? ["offset", "limit"] : resource === "/stock/movements" ? (request.method === "GET" ? ["productId", "startDate", "endDate", "offset", "limit"] : []) : resource === "/products/export" ? ["q", "status"] : ["/parties", "/staff"].includes(resource) ? ["q", "status", "role", "offset", "limit"] : resource === "/orders" ? ["q", "status", "sort", "offset", "limit"] : resource === "/receivables" ? ["offset", "limit"] : ["q", "status", "offset", "limit"]
       if (resource === "/products" || resource === "/stock") allowed.push("category_id")
       if (request.method === "GET" && (resource === "/stock" || resource === "/stock/movements")) allowed.push("warehouseId")
+      if (request.method === "GET" && resource === "/stock") allowed.push("inStock")
       if (request.method === "GET" && resource === "/stock/movements") allowed.push("direction","orderOffset")
       for (const [key, value] of query) {
         if (!allowed.includes(key) || query.getAll(key).length !== 1) return Response.json({ title: "Filtro inválido" }, { status: 400 })

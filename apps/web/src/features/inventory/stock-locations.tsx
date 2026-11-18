@@ -23,7 +23,7 @@ export function StockLocations({tenant}: {tenant:string}) {
       <section className="form-section space-y-3"><h2 className="font-semibold">Posição por depósito</h2>
         {data.warehouses.length ? <ul className="divide-y">{data.warehouses.map(w=><li key={w.id} className="flex flex-wrap items-center justify-between gap-2 py-2">
           <span>{w.code} • {w.name}</span>{data.enabled ?
-            <Link className={textLink} href={stockUrl("/estoque/saldos",{tenant,warehouseId:w.id})}>{w.itemsInStock} produto(s) com saldo</Link> :
+            <Link className={textLink} href={stockUrl("/estoque/saldos",{tenant,warehouseId:w.id,inStock:"1"})}>{w.itemsInStock} produto(s) com saldo</Link> :
             <span>{w.itemsInStock} produto(s) com saldo</span>}
         </li>)}</ul> : <p>O depósito Principal será criado ao configurar o estoque ou registrar o primeiro saldo.</p>}
         <Link href="/estoque/depositos" className={textLink}>Consultar cadastro de depósitos</Link>

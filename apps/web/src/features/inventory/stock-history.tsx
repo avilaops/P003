@@ -24,7 +24,7 @@ export function StockHistory({ productId, tenant, manual }: { productId: string;
   const from = params.get("from") || ""
   const listPath = ["/estoque", "/estoque/saldos", historyPath, manualPath].includes(from) ? from : "/estoque/saldos"
   const warehouseId = params.get("warehouseId")
-  const listQuery = { tenant, q: params.get("q"), offset: pageOffset(params.get("offset")), warehouseId }
+  const listQuery = { tenant, q: params.get("q"), offset: pageOffset(params.get("offset")), warehouseId, inStock:params.get("inStock") }
   const startDate = params.get("startDate") || "", endDate = params.get("endDate") || ""
   const offset = pageOffset(params.get("movementOffset"))
   const direction = params.get("direction") || "", orderOffset = pageOffset(params.get("orderOffset"))
@@ -49,6 +49,7 @@ export function StockHistory({ productId, tenant, manual }: { productId: string;
       <section aria-label="Movimentos do produto" className="form-section min-w-0 space-y-4">
         <h2 className="break-words font-semibold">{history.product.name}</h2>
         <p className="break-words">SKU {history.product.sku} • Unidade {history.product.unit}</p>
+        <GuardedLink className={textLink} href={stockUrl("/relatorios/estoque/analises",{dataset:"stock_kardex",productId,warehouseId,startDate,endDate})}>Exportar Kardex do produto</GuardedLink>
         <GuardedLink className={textLink} href={"/compras/sugestoes/"+productId}>Consultar reposição</GuardedLink>
         <GuardedLink className={textLink} href={stockUrl("/estoque/series",{productId,tenant})}>Rastrear séries do produto</GuardedLink>
         {warehouseId && <p>Depósito • {history.warehouses?.find(w=>w.id===warehouseId)?.name || warehouseId}</p>}

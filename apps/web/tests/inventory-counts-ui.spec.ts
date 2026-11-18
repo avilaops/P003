@@ -76,6 +76,7 @@ test("estoque • contagem cega por SKU no celular e aprovação em sessão inde
   await expect(page.getByRole("button", { name: "Aprovar ajustes" })).toHaveCount(0)
   await session(context, "visitor")
   await page.goto(detailUrl)
+  await expect(page.getByText("Diferença • 0,250001 KG",{exact:true})).toBeVisible()
   await page.getByRole("button", { name: "Aprovar ajustes" }).click()
   await expect(page.getByText("Aprovado por visitor", { exact: true })).toBeVisible()
   await session(context, "editor")
@@ -88,4 +89,16 @@ test("estoque • contagem cega por SKU no celular e aprovação em sessão inde
     direction: "receipt",
     canReverse: false,
   })
+  await page.goto("/estoque/inventarios/novo")
+  await page.getByRole("textbox",{name:"Referência",exact:true}).fill("Revisar escopo")
+  await page.getByRole("combobox",{name:"Categoria",exact:true}).selectOption(categoryId)
+  await page.getByRole("checkbox",{name:/Bloquear movimentos/}).check()
+  await page.getByRole("button",{name:"Abrir sessão"}).click()
+  await page.getByText("Cancelar inventário",{exact:true}).click()
+  await page.getByLabel("Motivo do cancelamento").fill("Conferência transferida para outro dia")
+  await page.getByRole("button",{name:"Confirmar cancelamento"}).click()
+  await expect(page.getByRole("link",{name:"Abrir nova sessão"})).toBeVisible()
+  const afterCancel=await context.request.post("/api/erp/stock/movements",{headers:headers(),
+    data:{productId,direction:"receipt",quantity:"1.000000",reason:"Entrada após cancelamento pelo celular"}})
+  expect(afterCancel.status(),await afterCancel.text()).toBe(201)
 })

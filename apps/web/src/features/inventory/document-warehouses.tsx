@@ -32,5 +32,5 @@ function LineWarehouse({line,state,endpoint,reload}:{line:Line;state:Snapshot;en
   </form>
 }
 export function DocumentSeries({id,tenant}:{id:string;tenant:string}){
-  return <Link className={textLink} href={stockUrl("/estoque/series",{documentId:id,tenant})}>Consultar e vincular séries</Link>
+  return <Link className={textLink} href={stockUrl("/estoque/series",{documentId:id,tenant,kind:"purchase"})}>Consultar e vincular séries</Link>
 }

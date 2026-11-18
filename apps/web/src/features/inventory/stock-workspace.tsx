@@ -38,9 +38,10 @@ function StockGrid({ tenant, path }: { tenant: string; path: string }) {
   const q = search.get("q") || "", offset = pageOffset(search.get("offset"))
   const focus = search.get("focus")
   const warehouseId = search.get("warehouseId")
-  const list = useResource<StockList>(stockUrl("/api/erp/stock", { q, offset, limit: pageSize, warehouseId }))
+  const inStock = search.get("inStock")==="1" ? "1" : null
+  const list = useResource<StockList>(stockUrl("/api/erp/stock", { q, offset, limit: pageSize, warehouseId, inStock }))
   const stocks = list.value?.tenantId === tenant ? list.value : null
-  const focusKey = "stock-focus:" + stockUrl(path, { tenant, q, offset, warehouseId })
+  const focusKey = "stock-focus:" + stockUrl(path, { tenant, q, offset, warehouseId, inStock })
   const warehouseName = stocks?.warehouses?.find(w => w.id===warehouseId)?.name
   useEffect(() => {
     if (!stocks) return
@@ -53,7 +54,7 @@ function StockGrid({ tenant, path }: { tenant: string; path: string }) {
   }, [stocks, focus, focusKey])
   function setQuery(q: string | null, offset: number) {
     const latestQuery = q ?? new URLSearchParams(window.location.search).get("q")
-    window.history.replaceState(null, "", stockUrl(path, { tenant, q: latestQuery, offset, warehouseId }))
+    window.history.replaceState(null, "", stockUrl(path, { tenant, q: latestQuery, offset, warehouseId, inStock }))
   }
   const manual = path === manualPath
   const title = manual ? "Novo lançamento de estoque" : path === historyPath ? "Lançamentos de estoque" : "Saldos de estoque"
@@ -69,9 +70,11 @@ function StockGrid({ tenant, path }: { tenant: string; path: string }) {
       </form>
       {Boolean(stocks?.warehouses?.length || warehouseId) && <label className="block">Depósito
         <select className="ml-2 min-h-10 rounded border px-2" value={warehouseId||""} onChange={e=>
-          window.history.replaceState(null,"",stockUrl(path,{tenant,q,warehouseId:e.target.value,offset:0}))}>
+          window.history.replaceState(null,"",stockUrl(path,{tenant,q,warehouseId:e.target.value,offset:0,inStock}))}>
           <option value="">Todos os depósitos</option>
           {stocks?.warehouses?.map(w=><option key={w.id} value={w.id}>{w.code} • {w.name}</option>)}</select></label>}
+      <label className="flex items-center gap-2"><input type="checkbox" checked={Boolean(inStock)} onChange={e=>
+        window.history.replaceState(null,"",stockUrl(path,{tenant,q,warehouseId,inStock:e.target.checked?"1":null}))}/>Somente produtos com saldo físico positivo</label>
       {list.loading ? <p role="status">Carregando saldos…</p> : !stocks ?
         <div role="alert"><p>{list.error || "A empresa da sessão mudou. Atualize a consulta."}</p><Button variant="outline" onClick={list.reload}>Tentar novamente</Button></div> : <>
         <p className="text-sm text-muted-foreground">{stocks.total} produto(s) • {stocks.canEdit ? "Consulta e movimentação" : "Somente consulta"}</p>
@@ -82,7 +85,7 @@ function StockGrid({ tenant, path }: { tenant: string; path: string }) {
             {["Saldo", "Reservado", "Disponível", "Valor"].map(label => <th key={label} className="hidden text-right lg:table-cell" scope="col">{label}</th>)}
             <th scope="col" className="lg:w-[17%]"><span className="lg:sr-only">Quantidades e ação</span></th></tr></thead>
           <tbody>{stocks.data.map(stock => {
-            const href = stockUrl(manual && stocks.canEdit ? manualPath : historyPath, { productId: stock.productId, sku: stock.sku, tenant, from: path, q, offset, warehouseId })
+            const href = stockUrl(manual && stocks.canEdit ? manualPath : historyPath, { productId: stock.productId, sku: stock.sku, tenant, from: path, q, offset, warehouseId,inStock })
             return <tr key={stock.productId} className="[overflow-wrap:anywhere]"><th scope="row" className="align-top">
               <span className="block font-medium">{stock.name}</span><span className="block text-xs font-normal text-muted-foreground">{stock.status === "active" ? "Ativo" : "Arquivado"}</span>
               <span className="mt-1 block text-sm font-normal lg:hidden">SKU {stock.sku}<br />Unidade {stock.unit}{warehouseName && <><br />Depósito {warehouseName}</>}</span></th>

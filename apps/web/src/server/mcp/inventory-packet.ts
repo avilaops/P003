@@ -1,3 +1,4 @@
+import "server-only"
 const existingStockTools = new Set([
   "erp_get_orders__id__cancellations","erp_post_orders__id__cancel_completed",
   "erp_get_production_orders","erp_get_production_orders__id","erp_get_production_stages",

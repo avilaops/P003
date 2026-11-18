@@ -27,7 +27,7 @@ export function SerialWorkspace({tenant}:{tenant:string}){
   const productId=valid ? params.get("productId") : null, documentId=valid ? params.get("documentId") : null
   const [text,setText]=useState(""),[query,setQuery]=useState(""),[offset,setOffset]=useState(0),[selected,setSelected]=useState<Row|null>(null)
   const [notice,setNotice]=useState("")
-  const result=useResource<Snapshot>(stockUrl(api,{productId,documentId,q:query,offset,limit:25}))
+  const result=useResource<Snapshot>(stockUrl(api,{productId,documentId,kind:documentId?params.get("kind"):null,q:query,offset,limit:25}))
   const value=result.value?.tenantId===tenant ? result.value:null
   function search(q:string){setQuery(q);setText(q);setOffset(0);setSelected(null)}
   function refresh(message:string){setNotice(message);result.reload()}
@@ -52,17 +52,17 @@ export function SerialWorkspace({tenant}:{tenant:string}){
     </section>
     {selected&&<Timeline key={selected.productId+selected.serial} row={selected} tenant={tenant}/>}
     {notice&&<p role="status">{notice}</p>}
-    {!productId&&<ProductPicker tenant={tenant} documentId={documentId}/>}
+    {!productId&&<ProductPicker tenant={tenant} documentId={documentId} kind={params.get("kind")}/>}
     {value?.product&&!value.product.tracked&&value.canEdit&&<OpeningForm key={value.product.id} tenant={tenant} productId={value.product.id} opening={value.opening} saved={()=>refresh("Controle por série ativado.")}/>}
-    {value?.product?.tracked&&value.assignmentKinds.length>0&&<Assignment key={value.product.id} value={value} documentId={documentId??""}
+    {value?.product?.tracked&&value.assignmentKinds.length>0&&<Assignment key={value.product.id} value={value} documentId={documentId??""} preferredKind={params.get("kind")}
       saved={()=>refresh("Séries vinculadas ao documento.")}/>}
   </div>
 }
-function ProductPicker({tenant,documentId}:{tenant:string;documentId:string|null}){
+function ProductPicker({tenant,documentId,kind}:{tenant:string;documentId:string|null;kind:string|null}){
   const [q,setQ]=useState("")
   const list=useResource<StockList>(stockUrl("/api/erp/stock",{q,limit:15,status:"active"}))
   return <section className="form-section space-y-2"><label>Localizar produto para controle de série<Input value={q} onChange={e=>setQ(e.target.value)}/></label>
-    {q&&list.value?.tenantId===tenant&&<ul>{list.value.data.map(p=><li key={p.productId}><Link className={textLink} href={stockUrl(path,{tenant,documentId,productId:p.productId})}>
+    {q&&list.value?.tenantId===tenant&&<ul>{list.value.data.map(p=><li key={p.productId}><Link className={textLink} href={stockUrl(path,{tenant,documentId,kind,productId:p.productId})}>
       {p.name} • SKU {p.sku}</Link></li>)}</ul>}</section>
 }
 function OpeningForm({tenant,productId,opening,saved}:{tenant:string;productId:string;opening:Opening[];saved:()=>void}){
@@ -78,11 +78,12 @@ function OpeningForm({tenant,productId,opening,saved}:{tenant:string;productId:s
     {cmd.error&&<p role="alert">{cmd.error}</p>}<Button type="submit" disabled={cmd.busy}>{cmd.uncertain?"Repetir confirmação":"Ativar controle de série"}</Button>
   </form>
 }
-function Assignment({value,documentId,saved}:{value:Snapshot;documentId:string;saved:()=>void}){
-  const [kind,setKind]=useState(value.assignmentKinds[0]||"sale"),[doc,setDoc]=useState(documentId),[direction,setDirection]=useState("issue"),[series,setSeries]=useState("")
+function Assignment({value,documentId,preferredKind,saved}:{value:Snapshot;documentId:string;preferredKind:string|null;saved:()=>void}){
+  const initialKind=preferredKind&&value.assignmentKinds.includes(preferredKind)?preferredKind:value.assignmentKinds[0]||"sale"
+  const [kind,setKind]=useState(initialKind),[doc,setDoc]=useState(documentId),[direction,setDirection]=useState("issue"),[series,setSeries]=useState("")
   const cmd=useCommand(), productId=value.product!.id
   const checked=/^[a-f\d]{8}(?:-[a-f\d]{4}){3}-[a-f\d]{12}$/i.test(doc)
-  const revision=useResource<Snapshot>(stockUrl(api,{productId,documentId:checked?doc:null,limit:1}))
+  const revision=useResource<Snapshot>(stockUrl(api,{productId,documentId:checked?doc:null,kind,limit:1}))
   const dir=kind==="purchase"?"receipt":kind==="sale"||kind==="pos"?"issue":direction
   const existing=revision.value?.tenantId===value.tenantId?revision.value.selections.find(s=>s.kind===kind&&s.direction===dir):undefined
   return <form className="form-section space-y-3" onSubmit={async e=>{

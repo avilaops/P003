@@ -28,7 +28,7 @@ async function verifyLocation(context: AuthorizedContext, id?: string) {
   if (!result.rows.length) throw notFound()
 }
 
-const balanceQuery = listQuerySchema.extend({ warehouseId: databaseId.optional() })
+const balanceQuery = listQuerySchema.extend({ warehouseId: databaseId.optional(), inStock: z.literal("1").optional() })
 export async function balances(context: AuthorizedContext, query: unknown) {
   const parsed = balanceQuery.safeParse(query)
   if (!parsed.success) throw new Problem(422, "invalid_input", "Filtros de saldo inválidos")
@@ -36,14 +36,17 @@ export async function balances(context: AuthorizedContext, query: unknown) {
   await verifyLocation(context, warehouseId)
   const result = await context.client.query(`
     WITH matches AS (
-      SELECT id, tenant_id, sku, name, unit, status FROM products
-      WHERE tenant_id=$1 AND ($2::text IS NULL OR status=$2)
-        AND ($6::uuid IS NULL OR category_id=$6)
-        AND (strpos(lower(name),lower($3))>0 OR strpos(lower(sku),lower($3))>0)
+      SELECT p.id,p.tenant_id,p.sku,p.name,p.unit,p.status,coalesce(CASE WHEN $7::uuid IS NULL THEN b.quantity_micros ELSE local.quantity_micros END,0) AS quantity
+      FROM products p LEFT JOIN stock_balances b ON (b.tenant_id,b.product_id)=(p.tenant_id,p.id)
+      LEFT JOIN stock_positions local ON (local.tenant_id,local.product_id,local.warehouse_id)=(p.tenant_id,p.id,$7)
+      WHERE p.tenant_id=$1 AND ($2::text IS NULL OR p.status=$2)
+        AND ($6::uuid IS NULL OR p.category_id=$6)
+        AND (strpos(lower(p.name),lower($3))>0 OR strpos(lower(p.sku),lower($3))>0)
+        AND (NOT $8::boolean OR (CASE WHEN $7 IS NULL THEN b.quantity_micros ELSE local.quantity_micros END)>0)
     ), page AS (SELECT * FROM matches ORDER BY name,id LIMIT $4 OFFSET $5)
     SELECT totals.total, p.id, p.sku, p.name, p.unit, p.status,
       EXISTS(SELECT 1 FROM stock_serial_products s WHERE (s.tenant_id,s.product_id)=(p.tenant_id,p.id)) AS tracked,
-      coalesce(CASE WHEN $7::uuid IS NULL THEN b.quantity_micros ELSE local.quantity_micros END,0) AS quantity,
+      p.quantity,
       (SELECT coalesce(sum(l.quantity_micros),0) FROM sales_order_lines l
        JOIN sales_orders o ON o.tenant_id=l.tenant_id AND o.id=l.order_id
        WHERE l.tenant_id=p.tenant_id AND l.product_id=p.id AND o.status='confirmed'
@@ -51,10 +54,8 @@ export async function balances(context: AuthorizedContext, query: unknown) {
       (SELECT coalesce(sum(r.quantity_micros),0) FROM production_component_reservations r WHERE r.tenant_id=p.tenant_id
         AND r.product_id=p.id AND ($7::uuid IS NULL OR r.warehouse_id=$7)) AS reserved
     FROM (SELECT count(*) AS total FROM matches) totals LEFT JOIN page p ON true
-    LEFT JOIN stock_balances b ON b.tenant_id=p.tenant_id AND b.product_id=p.id
-    LEFT JOIN stock_location_settings c ON c.tenant_id=p.tenant_id
-    LEFT JOIN stock_positions local ON local.tenant_id=p.tenant_id AND local.product_id=p.id AND local.warehouse_id=$7 ORDER BY p.name,p.id
-  `, [context.tenantId, status, q, limit, offset, category_id, warehouseId])
+    LEFT JOIN stock_location_settings c ON c.tenant_id=p.tenant_id ORDER BY p.name,p.id
+  `, [context.tenantId, status, q, limit, offset, category_id, warehouseId, parsed.data.inStock==="1"])
   const pageRows = result.rows.filter(row => row.id)
   const { positions } = await projectedCosts(context,pageRows.map(row=>String(row.id)))
   const data = pageRows.map(row => {

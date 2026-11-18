@@ -6,7 +6,29 @@ import {Problem} from "../../platform/problem.js"
 import {queryInteger} from "../registrations/query.js"
 
 const filter=z.strictObject({productId:normalizedDatabaseId,serial:z.string().min(1).max(120),offset:queryInteger(0,100000).default(0)})
+const documentQuery=z.strictObject({documentId:normalizedDatabaseId,offset:queryInteger(0,100000).default(0)})
 export function registerSerialHistory(app:FastifyInstance,deps:AccessDependencies) {
+  app.get("/api/v1/stock/serials/document",(req,reply)=>{
+    reply.header("cache-control","no-store")
+    return authorizeRequest(req,deps,async ctx=>{
+      const sales=ctx.permissions.includes("sales.orders.read")
+      if(!sales)requirePermission(ctx,"fiscal.nfe.read")
+      const parsed=documentQuery.safeParse(req.query)
+      if(!parsed.success)throw new Problem(422,"invalid_input","Informe o pedido da consulta")
+      const {documentId,offset}=parsed.data
+      const args=[ctx.tenantId,documentId,offset,sales]
+      const {rows}=await ctx.client.query(`WITH document AS (
+        SELECT id FROM sales_orders WHERE tenant_id=$1 AND id=$2 AND ($4 OR EXISTS(
+          SELECT 1 FROM fiscal_nfe_drafts f WHERE f.tenant_id=$1 AND f.details->>'sourceOrderId'=$2::uuid::text)
+          OR EXISTS(SELECT 1 FROM fiscal_nfe_documents f WHERE f.tenant_id=$1 AND f.source_order_id=$2))
+        ), units AS (
+          SELECT product_id,unnest(serials) AS serial FROM stock_serial_assignments WHERE tenant_id=$1 AND kind='sale' AND document_id IN (SELECT id FROM document)
+          UNION SELECT product_id,serial FROM stock_serial_events WHERE tenant_id=$1 AND order_id IN (SELECT id FROM document) AND status IN ('reserved','sold')
+        ) SELECT u.product_id AS "productId",p.sku,u.serial FROM units u JOIN products p ON (p.tenant_id,p.id)=($1,u.product_id)
+          ORDER BY p.sku,u.product_id,u.serial LIMIT 26 OFFSET $3`,args)
+      return {tenantId:ctx.tenantId,documentId,data:rows.slice(0,25),hasMore:rows.length>25}
+    })
+  })
   app.get("/api/v1/stock/serials/events",(req,reply)=>{
     reply.header("cache-control","no-store")
     return authorizeRequest(req,deps,async ctx=>{

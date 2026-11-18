@@ -5,7 +5,7 @@ import {record} from "../../platform/commands.js"
 import {Problem} from "../../platform/problem.js"
 import {revisionValue} from "../../platform/revision.js"
 import {decimal} from "../sales/fixed.js"
-import {moneyFromMicros} from "../inventory/valuation.js"
+import {moneyFromMicros,movementValues} from "../inventory/valuation.js"
 
 export type Headers=Record<string,string|string[]|undefined>
 export const missing=()=>new Problem(404,"not_found","Registro de produção não encontrado nesta empresa")
@@ -43,7 +43,7 @@ const projection=`SELECT o.id,o.order_id AS "orderId",o.product_id AS "productId
   CROSS JOIN LATERAL(SELECT coalesce(o.planned_on,(c.created_at AT TIME ZONE 'America/Sao_Paulo')::date+c.manufacturing_days) AS planned_on) schedule`
 const job=(row:Record<string,unknown>)=>{
   const {quantity_micros,...data}=row
-  return {...data,revision:revisionValue(row.revision),quantity:qty(quantity_micros)}
+  return {...data,productId:String(row.productId),revision:revisionValue(row.revision),quantity:qty(quantity_micros)}
 }
 export async function load(ctx:AuthorizedContext,id:string){
   const result=await ctx.client.query(projection+" WHERE o.tenant_id=$1 AND o.id=$2",[ctx.tenantId,id])
@@ -86,8 +86,14 @@ export async function detail(ctx:AuthorizedContext,id:string){
     p.created_at AS "createdAt",r.posting_id IS NOT NULL AS reversed FROM production_postings p LEFT JOIN production_posting_reversals r
     ON (r.tenant_id,r.posting_id)=(p.tenant_id,p.id) WHERE p.tenant_id=$1 AND p.production_order_id=$2 ORDER BY p.created_at DESC,p.id DESC`,args)
   const canEdit=ctx.permissions.includes("production.manage")
+  const valued=batches.rows.length?await movementValues(ctx,[String(data.productId)]):new Map()
   return {tenantId:ctx.tenantId,canEdit,canConsume:canEdit&&ctx.permissions.includes("inventory.stock.read")&&ctx.permissions.includes("inventory.stock.manage"),data,
     history:events.rows,consumptions:consumed.rows.map(({quantity_micros,unit_cost_cents,amount_cents,...r})=>({...r,quantity:qty(quantity_micros),unitCost:decimal(BigInt(String(unit_cost_cents)),2),amount:decimal(BigInt(String(amount_cents)),2)})),
     planned:planned.rows.map(({per_unit_micros,total,held,...r})=>({...r,perUnit:qty(per_unit_micros),total:qty(total),reserved:qty(held)})),
-    postings:batches.rows.map(({produced_micros,loss_micros,value_micros,additional_cents,...r})=>({...r,produced:qty(produced_micros),loss:qty(loss_micros),value:moneyFromMicros(value_micros==null?null:BigInt(String(value_micros))),additionalCost:decimal(BigInt(String(additional_cents)),2)}))}
+    postings:batches.rows.map(({produced_micros,loss_micros,value_micros,additional_cents,...r})=>{
+      const atPosting=value_micros==null?null:BigInt(String(value_micros))
+      const current=r.receiptId ? valued.get(String(r.receiptId))?.amount??null : atPosting
+      return {...r,produced:qty(produced_micros),loss:qty(loss_micros),value:moneyFromMicros(current),
+        recordedValue:moneyFromMicros(atPosting),additionalCost:decimal(BigInt(String(additional_cents)),2)}
+    })}
 }
