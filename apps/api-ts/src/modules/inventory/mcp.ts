@@ -16,12 +16,21 @@ const rpcCall = z.object({
 })
 const queryField = z.union([z.string(), z.number().int()])
 const argumentsSchema = z.strictObject({
-  tenant_id: databaseId, path:z.strictObject({id:databaseId}).optional(),
+  tenant_id: databaseId, path:z.strictObject({id:databaseId,movement:databaseId.optional()}).optional(),
   query:z.record(z.string(),queryField).optional(), body:z.record(z.string(),z.unknown()).optional(),
   headers:z.strictObject({"Idempotency-Key":z.string().max(100).optional(),"If-Match":z.string().max(100).optional()}).optional(),
 })
 type ToolRoute = {method:"GET"|"POST"|"PUT";resource:string;query?:boolean;key?:boolean;revision?:true|"optional";body?:boolean}
 const routes = new Map<string, ToolRoute>([
+  ["erp_get_production_orders",{method:"GET",resource:"/api/v1/production/orders",query:true}],
+  ["erp_get_production_orders__id",{method:"GET",resource:"/api/v1/production/orders/:id"}],
+  ["erp_get_production_stages",{method:"GET",resource:"/api/v1/production/stages"}],
+  ["erp_post_production_orders",{method:"POST",resource:"/api/v1/production/orders",key:true,revision:true,body:true}],
+  ["erp_post_production_orders__id__stage",{method:"POST",resource:"/api/v1/production/orders/:id/stage",key:true,revision:true,body:true}],
+  ["erp_post_production_orders__id__consumptions",{method:"POST",resource:"/api/v1/production/orders/:id/consumptions",key:true,revision:true,body:true}],
+  ["erp_post_production_orders__id__consumptions__movement__reverse",{method:"POST",resource:"/api/v1/production/orders/:id/consumptions/:movement/reverse",key:true,revision:true,body:true}],
+  ["erp_post_production_stages",{method:"POST",resource:"/api/v1/production/stages",key:true,body:true}],
+  ["erp_put_production_stages__id",{method:"PUT",resource:"/api/v1/production/stages/:id",key:true,revision:true,body:true}],
   ["erp_get_stock", { method: "GET", resource: "/api/v1/stock",query:true }],
   ["erp_get_stock_movements", { method: "GET", resource: "/api/v1/stock/movements",query:true }],
   ["erp_post_stock_movements", { method: "POST", resource: "/api/v1/stock/movements",key:true,body:true }],
@@ -81,7 +90,7 @@ export function registerInventoryMcp(app: FastifyInstance, resource: string, rea
     const args = argumentsSchema.safeParse(params.arguments)
     if (!args.success) return invalid(id, -32602, "Argumentos da consulta ou lançamento inválidos")
     const {tenant_id:tenantId,path,query:filters,headers:requestedHeaders,body:input} = args.data
-    if (Boolean(path)!==route.resource.includes(":id") || Boolean(filters)&&!route.query ||
+    if (Boolean(path)!==route.resource.includes(":id") || Boolean(path?.movement)!==route.resource.includes(":movement") || Boolean(filters)&&!route.query ||
         Boolean(requestedHeaders)!==Boolean(route.key||route.revision) ||
         route.revision!=="optional" && Boolean(requestedHeaders?.["If-Match"])!==Boolean(route.revision) ||
         Boolean(requestedHeaders?.["Idempotency-Key"])!==Boolean(route.key) || (input!==undefined)!==Boolean(route.body))
@@ -93,7 +102,7 @@ export function registerInventoryMcp(app: FastifyInstance, resource: string, rea
     for (const [name,value] of Object.entries(requestedHeaders??{})) if(value) headers[name.toLowerCase()]=value
     const body = input===undefined ? undefined : stringifyJson(input)
     if(body!==undefined) headers["content-type"]="application/json"
-    const resourcePath=path ? route.resource.replace(":id",path.id) : route.resource
+    const resourcePath=path ? route.resource.replace(":id",path.id).replace(":movement",path.movement??"") : route.resource
     const identity: AuthenticatedIdentity = { subject: grant.subject, email: grant.email, name: grant.name, emailVerified: grant.verified_email }
     const response = await runWithMcpIdentity(identity, () => app.inject({
       method: route.method, url: resourcePath + (query.size ? `?${query}` : ""), headers, ...(body === undefined ? {} : { payload: body }),

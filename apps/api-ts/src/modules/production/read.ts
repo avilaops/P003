@@ -33,12 +33,14 @@ const today="(now() AT TIME ZONE 'America/Sao_Paulo')::date"
 const projection=`SELECT o.id,o.order_id AS "orderId",o.product_id AS "productId",o.sku,o.name,o.unit,o.quantity_micros,
   o.stage_id AS "stageId",s.name AS "stageName",s.kind AS "stageKind",o.status,o.revision,o.finished_at AS "finishedAt",o.cancelled_at AS "cancelledAt",
   o.cancellation_id AS "cancellationId",o.bom_version AS "bomVersion",o.warehouse_id AS "warehouseId",
-  o.planned_on::text AS "plannedOn",o.planned_on IS NOT NULL AND o.planned_on<${today} AND o.status='open' AS overdue,
+  schedule.planned_on::text AS "plannedOn",schedule.planned_on IS NOT NULL AND schedule.planned_on<${today} AND o.status='open' AS overdue,
   ${today}-(coalesce((SELECT max(h.created_at) FROM production_history h WHERE h.tenant_id=o.tenant_id AND h.production_order_id=o.id
     AND h.action='production.stage_changed'),o.created_at) AT TIME ZONE 'America/Sao_Paulo')::date AS "daysInStage",
   sale.customer_name AS customer,sale.number::text AS "orderNumber"
   FROM production_orders o JOIN production_stages s ON (s.tenant_id,s.id)=(o.tenant_id,o.stage_id)
-  JOIN sales_orders sale ON (sale.tenant_id,sale.id)=(o.tenant_id,o.order_id)`
+  JOIN sales_orders sale ON (sale.tenant_id,sale.id)=(o.tenant_id,o.order_id)
+  LEFT JOIN sales_order_checkouts c ON (c.tenant_id,c.order_id)=(o.tenant_id,o.order_id)
+  CROSS JOIN LATERAL(SELECT coalesce(o.planned_on,(c.created_at AT TIME ZONE 'America/Sao_Paulo')::date+c.manufacturing_days) AS planned_on) schedule`
 const job=(row:Record<string,unknown>)=>{
   const {quantity_micros,...data}=row
   return {...data,revision:revisionValue(row.revision),quantity:qty(quantity_micros)}

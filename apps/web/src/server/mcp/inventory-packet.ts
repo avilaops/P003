@@ -1,4 +1,7 @@
 const existingStockTools = new Set([
+  "erp_get_production_orders","erp_get_production_orders__id","erp_get_production_stages",
+  "erp_post_production_orders","erp_post_production_orders__id__stage","erp_post_production_orders__id__consumptions",
+  "erp_post_production_orders__id__consumptions__movement__reverse","erp_post_production_stages","erp_put_production_stages__id",
   "erp_get_stock","erp_get_stock_movements","erp_post_stock_movements",
   "erp_get_warehouses","erp_get_warehouses__id","erp_post_warehouses","erp_put_warehouses__id",
   "erp_get_inventory_settings","erp_put_inventory_settings","erp_get_inventory_counts","erp_get_inventory_counts__id",

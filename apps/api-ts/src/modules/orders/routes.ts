@@ -21,7 +21,13 @@ export function registerOrderRoutes(app: FastifyInstance, dependencies: AppDepen
     const body = await authorizeRequest(request, dependencies, async context => {
       requirePermission(context, "sales.orders.read")
       if (!z.guid().safeParse(request.params.id).success) throw new Problem(422, "invalid_input", "Identificador inválido")
-      return loadOrder(context, request.params.id)
+      const snapshot=await loadOrder(context,request.params.id)
+      const late=await context.client.query(`SELECT o.id,o.sku,d.planned_on::text AS "plannedOn" FROM production_orders o
+        LEFT JOIN sales_order_checkouts c ON (c.tenant_id,c.order_id)=(o.tenant_id,o.order_id)
+        CROSS JOIN LATERAL(SELECT coalesce(o.planned_on,(c.created_at AT TIME ZONE 'America/Sao_Paulo')::date+c.manufacturing_days) AS planned_on)d
+        WHERE o.tenant_id=$1 AND o.order_id=$2 AND o.status='open' AND d.planned_on<(now() AT TIME ZONE 'America/Sao_Paulo')::date
+        ORDER BY d.planned_on,o.id`,[context.tenantId,request.params.id])
+      return late.rows.length ? {...snapshot,overdueProduction:late.rows} : snapshot
     })
     return reply.header("cache-control", "no-store").header("etag", `"${body.data.revision}"`).send(body)
   })

@@ -17,6 +17,8 @@ test("inventory MCP preserves the authenticated grant, exact tenant and idempote
     return { subject: "operador", email: "test@example.test", name: "Operador", verified_email: true, scope }
   })
   const writes: unknown[] = []
+  app.post<{Params:{id:string;movement:string}}>("/api/v1/production/orders/:id/consumptions/:movement/reverse",(req,reply)=>
+    reply.header("etag",'"3"').send({job:req.params.id,movement:req.params.movement,revision:req.headers["if-match"]}))
   app.get("/api/v1/stock", (request, reply) => reply.header("x-erp-backend", "typescript").send({
     tenant: request.headers["x-tenant-id"], subject: currentVerifiedMcpIdentity()?.subject, query: request.query,
   }))
@@ -49,6 +51,11 @@ test("inventory MCP preserves the authenticated grant, exact tenant and idempote
   const saved=(await call("erp_put_warehouses__id",update)).json().result
   assert.deepEqual(saved.structuredContent.data,{id:tenant,revision:'"1"',request:{code:"PRINCIPAL"}})
   assert.equal(saved.structuredContent.headers.etag,'"2"')
+  const original="33333333-3333-4333-8333-333333333333",reverse="erp_post_production_orders__id__consumptions__movement__reverse"
+  const moved=await call(reverse,{...update,path:{id:tenant,movement:original},body:{reason:"Contagem confirmada"}})
+  assert.deepEqual(moved.json().result.structuredContent.data,{job:tenant,movement:original,revision:'"1"'})
+  assert.equal((await call(reverse,update)).json().error.code,-32602)
+  assert.equal((await call("erp_put_warehouses__id",{...update,path:{id:tenant,movement:original}})).json().error.code,-32602)
   assert.equal((await call("erp_put_warehouses__id",{...update,path:{id:"../stock"}})).json().error.code,-32602)
   assert.equal((await call("erp_put_warehouses__id",{...update,headers:{"Idempotency-Key":"key"}})).json().error.code,-32602)
 })

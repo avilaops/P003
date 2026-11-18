@@ -75,7 +75,7 @@ export function StockHistory({ productId, tenant, manual }: { productId: string;
         {history.openOrders && <section className="space-y-2" aria-label="Reservas atuais">
           <h3 className="font-medium">Reservado atualmente • {commercialQuantity(history.openOrders.reserved)} {history.product.unit}</h3>
           {history.openOrders.data.length>0 && <ul>{history.openOrders.data.map(o=><li key={o.id}><GuardedLink className={textLink}
-            href={"/vendas/pedidos/"+o.id}>Pedido {o.number}</GuardedLink> • {o.status==="confirmed"?"Reservado":"Aceito"} • {commercialQuantity(o.quantity)} {history.product.unit}</li>)}</ul>}
+            href={(o.status==="production"?"/estoque/ordens-producao/":"/vendas/pedidos/")+o.id}>{o.status==="production"?"Produção do pedido":"Pedido"} {o.number}</GuardedLink> • {o.status==="production"?"Empenhado":o.status==="confirmed"?"Reservado":"Aceito"} • {commercialQuantity(o.quantity)} {history.product.unit}</li>)}</ul>}
           {history.openOrders.total>25 && <Pagination offset={orderOffset} total={history.openOrders.total} pageSize={25} maxOffset={100000}
             onOffsetChange={value=>{if(!locked && confirmNavigation()) window.history.pushState(null,"",stockUrl(path,{...details,orderOffset:value}))}}/>}
         </section>}

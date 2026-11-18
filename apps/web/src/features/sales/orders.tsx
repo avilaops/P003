@@ -37,7 +37,7 @@ import { OrderPdfDownload } from "./order-pdf-download"
 import type { CheckoutSnapshot } from "./commercial-payment-model"
 import { OrderWeightSummary } from "./order-weight-summary"
 
-type Detail = Schema<"OrderSnapshot"> & { pricingOrigin?: boolean; checkout?: CheckoutSnapshot | null }
+type Detail = Schema<"OrderSnapshot"> & { pricingOrigin?: boolean; checkout?: CheckoutSnapshot | null;overdueProduction?:{id:string;sku:string;plannedOn:string}[] }
 type Listing = Schema<"OrderList">
 export type Choice = { id: string; legalName?: string; name?: string; sku?: string; basePrice?: string; unit?: string; structureColors?: string[]; swingArmColors?: string[]; finishingPalette?: string | null; upholsteryColors?: string[]; upholsteryConfigurable?: boolean; plateHolderColors?: string[]; plateHolderTypes?: string[]; hasPhoto?: boolean }
 type SelectedItem = Choice & { quantity: string; preserved: boolean; structureColor: string; swingArmColor: string; upholsteryColor: string; plateHolderColor: string; plateHolderType: string }
@@ -252,6 +252,8 @@ function OrderDetail({ id }: { id: string }) {
         </div>
         {["completed", "cancelled"].includes(value.data.status) && <p className="rounded-lg border bg-muted/35 px-3 py-2 text-sm">Pedido {value.data.status === "completed" ? "concluído" : "cancelado"}: os dados comerciais estão disponíveis para consulta.</p>}
         <div className="space-y-2 print:hidden" role="group" aria-label="Documentos do pedido">
+          {value.overdueProduction?.map(p=><p role="status" key={p.id}>Fabricação em atraso • {p.sku} • Prazo {p.plannedOn.split("-").reverse().join("/")}
+            {access.value?.permissions.includes("production.read")&&<Link className={linkClass} href={"/estoque/ordens-producao/"+p.id}>Consultar produção</Link>}</p>)}
           <p className="text-xs font-medium text-muted-foreground">Documentos</p>
           <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap [&>button]:w-full sm:[&>button]:w-auto">
           <OrderPdfDownload id={id} number={value.data.number} tenantId={value.tenantId} etag={result.etag} onReload={result.reload} />

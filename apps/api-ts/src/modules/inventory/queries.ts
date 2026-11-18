@@ -45,7 +45,9 @@ export async function balances(context: AuthorizedContext, query: unknown) {
       (SELECT coalesce(sum(l.quantity_micros),0) FROM sales_order_lines l
        JOIN sales_orders o ON o.tenant_id=l.tenant_id AND o.id=l.order_id
        WHERE l.tenant_id=p.tenant_id AND l.product_id=p.id AND o.status='confirmed'
-         AND ($7::uuid IS NULL OR coalesce(l.warehouse_id,c.opening_id)=$7)) AS reserved
+         AND ($7::uuid IS NULL OR coalesce(l.warehouse_id,c.opening_id)=$7)) +
+      (SELECT coalesce(sum(r.quantity_micros),0) FROM production_component_reservations r WHERE r.tenant_id=p.tenant_id
+        AND r.product_id=p.id AND ($7::uuid IS NULL OR r.warehouse_id=$7)) AS reserved
     FROM (SELECT count(*) AS total FROM matches) totals LEFT JOIN page p ON true
     LEFT JOIN stock_balances b ON b.tenant_id=p.tenant_id AND b.product_id=p.id
     LEFT JOIN stock_location_settings c ON c.tenant_id=p.tenant_id
@@ -135,16 +137,20 @@ export async function history(context: AuthorizedContext, query: unknown) {
       LEFT JOIN stock_location_settings s ON s.tenant_id=l.tenant_id
       WHERE l.tenant_id=$1 AND l.product_id=$2 AND o.status IN ('accepted','confirmed')
         AND ($3::uuid IS NULL OR coalesce(l.warehouse_id,CASE WHEN o.status='accepted' THEN s.sales_id ELSE s.opening_id END)=$3)
-    ), page AS (SELECT * FROM demand WHERE $4 ORDER BY number,id LIMIT 25 OFFSET $5)
+      UNION ALL SELECT r.production_order_id,sale.number,'production',r.quantity_micros FROM production_component_reservations r
+      JOIN production_orders job ON (job.tenant_id,job.id)=(r.tenant_id,r.production_order_id)
+      JOIN sales_orders sale ON (sale.tenant_id,sale.id)=(job.tenant_id,job.order_id)
+      WHERE r.tenant_id=$1 AND r.product_id=$2 AND ($3::uuid IS NULL OR r.warehouse_id=$3) AND r.quantity_micros>0
+    ), page AS (SELECT * FROM demand WHERE CASE WHEN status='production' THEN $6::boolean ELSE $4::boolean END ORDER BY number,id LIMIT 25 OFFSET $5)
     SELECT totals.*,p.id,p.number,p.status,p.quantity_micros FROM
-      (SELECT count(*) AS total,coalesce(sum(quantity_micros) FILTER (WHERE status='confirmed'),0) AS reserved FROM demand) totals
+      (SELECT count(*) FILTER(WHERE CASE WHEN status='production' THEN $6 ELSE $4 END) AS total,
+        coalesce(sum(quantity_micros) FILTER (WHERE status IN ('confirmed','production')),0) AS reserved FROM demand) totals
     LEFT JOIN page p ON true ORDER BY p.number,p.id`,
-    [context.tenantId,productId,warehouseId,context.permissions.includes("sales.orders.read"),orderOffset])
-  const canReadOrders = context.permissions.includes("sales.orders.read")
+    [context.tenantId,productId,warehouseId,context.permissions.includes("sales.orders.read"),orderOffset,context.permissions.includes("production.read")])
   return { tenantId: context.tenantId, canEdit: context.permissions.includes("inventory.stock.manage"),
     product: { productId: row.selected_id, name: row.name, sku: row.sku, unit: row.unit, status: row.status },
     warehouses: await activeStockLocations(context),
-    openOrders: {reserved:amount(orders.rows[0]!.reserved),offset:orderOffset,total:canReadOrders ? Number(orders.rows[0]!.total) : 0,
+    openOrders: {reserved:amount(orders.rows[0]!.reserved),offset:orderOffset,total:Number(orders.rows[0]!.total),
       data: orders.rows.filter(order=>order.id).map(order=>({id:order.id,number:String(order.number),status:order.status,quantity:amount(order.quantity_micros)}))},
     summary: { opening: amount(opening), receipts: amount(receipts), issues: amount(issues), closing: amount(closing) },
     data: result.rows.filter(item => item.id).map(movement), total: Number(row.total), offset, limit }

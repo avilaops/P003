@@ -37,10 +37,12 @@ async function position(context:AuthorizedContext,query:z.output<typeof querySch
     ), basis AS (
       SELECT p.id,p.sku,p.name,p.unit,p.status,r.product_id IS NOT NULL AS configured,coalesce(r.revision,1) revision,
         coalesce(r.minimum_micros,0) min,coalesce(r.reorder_micros,0) point,coalesce(r.lot_micros,0) lot,coalesce(r.lead_days,0) lead,
-        coalesce(b.quantity_micros,0)-coalesce(d.reserved,0) available,coalesce(d.accepted,0) accepted,coalesce(s.quantity,0) supply
+        coalesce(b.quantity_micros,0)-coalesce(d.reserved,0)-coalesce(held.quantity,0) available,coalesce(d.accepted,0) accepted,coalesce(s.quantity,0) supply
       FROM products p LEFT JOIN stock_replenishment_rules r ON (r.tenant_id,r.product_id)=(p.tenant_id,p.id)
       LEFT JOIN stock_balances b ON (b.tenant_id,b.product_id)=(p.tenant_id,p.id)
       LEFT JOIN demand d ON d.product_id=p.id LEFT JOIN supply s ON s.product_id=p.id
+      LEFT JOIN (SELECT product_id,sum(quantity_micros) quantity FROM production_component_reservations
+        WHERE tenant_id=$1 AND ($2::uuid IS NULL OR product_id=$2) GROUP BY product_id) held ON held.product_id=p.id
       WHERE p.tenant_id=$1 AND ($2::uuid IS NULL AND p.status='active' OR p.id=$2)
         AND (strpos(lower(p.sku),lower($3))>0 OR strpos(lower(p.name),lower($3))>0)
     ), needs AS (

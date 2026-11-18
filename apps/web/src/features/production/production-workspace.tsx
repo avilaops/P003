@@ -3,21 +3,23 @@
 import { Pagination } from "@/components/workspace/pagination"
 import { useEffect, useRef, useState } from "react"
 import Link from "next/link"
+import { PageHeader } from "@/components/page-header"
+import { ProductionBoard,type Job,type Stage } from "./production-board"
+import { Structures } from "./structures"
+import { PostingPanel,type ProductionExtension } from "./posting"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { decimalPattern, normalizeDecimal } from "@/lib/decimal-input"
 
-type Job = { id: string; orderId: string; productId: string; sku: string; name: string; unit: string; quantity: string; stageId: string; stageName: string; stageKind: string; status: string; revision: number }
-type Stage = { id: string; name: string; kind: string; position: number; revision: number }
 type Consumption = { id: string; name: string; sku: string; unit: string; quantity: string; unitCost: string; amount: string; reversed: boolean }
-type Detail = { tenantId: string; canEdit: boolean; canConsume: boolean; data: Job; history: { id: string; action: string; stageName: string; actor: string; createdAt: string }[]; consumptions: Consumption[] }
+type Detail = ProductionExtension & { tenantId: string; canEdit: boolean; canConsume: boolean; data: Job; history: { id: string; action: string; stageName: string; actor: string; createdAt: string }[]; consumptions: Consumption[] }
 type List = { tenantId: string; canEdit: boolean; data: Job[]; total: number }
 type SalesPage = { tenantId: string; data: { id: string; customerName: string; status: string; revision: number }[]; total: number }
 type Stock = { productId: string; name: string; sku: string; unit: string; status: string; available: string }
 type PendingCommand = { url: string; method: string; tenant: string; revision?: number; body: string; key: string }
 const selectClass = "block h-10 w-full min-w-0 rounded-lg border bg-background px-3 text-sm"
 const statuses: Record<string, string> = { open: "Em andamento", ready: "Pronta", cancelled: "Cancelada" }
-const actions: Record<string, string> = { "production.created": "Ordem criada", "production.stage_changed": "Etapa alterada", "production.consumed": "Consumo registrado", "production.consumption_reversed": "Consumo estornado", "production.cancelled": "Ordem cancelada" }
+const actions: Record<string, string> = { "production.posted": "Apontamento confirmado", "production.created": "Ordem criada", "production.stage_changed": "Etapa alterada", "production.consumed": "Consumo registrado", "production.consumption_reversed": "Consumo estornado", "production.cancelled": "Ordem cancelada" }
 const statusLabel = (status: string) => statuses[status] || status
 const actionLabel = (action: string) => actions[action] || action
 
@@ -129,7 +131,8 @@ export function ProductionWorkspace({ id }: { id?: string }) {
         if (response.status < 500) pending.current = null
         throw new Error(value.title || "Operação recusada")
       }
-      if (value.tenantId !== current.tenant || !value.data || !response.headers.get("etag")) {
+      const createdOrders=current.url==="/api/erp/production/orders" && Array.isArray(value.data) && value.data.length>0 && value.data.every((j:Job)=>j.id&&j.revision>0)
+      if (value.tenantId !== current.tenant || !value.data || (!createdOrders&&!response.headers.get("etag"))) {
         setUncertain(true)
         throw new Error("Resposta sem confirmação da empresa e da revisão. Confira a mesma operação antes de continuar.")
       }
@@ -155,21 +158,26 @@ export function ProductionWorkspace({ id }: { id?: string }) {
 
   return <div className="mx-auto w-full min-w-0 max-w-[1600px] space-y-5 px-4 pb-24 pt-6 sm:px-6">
 
-    <p className="rounded-xl border p-4 text-sm text-muted-foreground">Cada ordem conserva o produto e a quantidade vendidos. Registre os componentes efetivamente consumidos. Marcar como pronta registra a conclusão; os consumos voltam ao estoque ao reabrir uma ordem pronta ou cancelar integralmente a venda.</p>
+    <PageHeader title="Ordens de produção" description="Acompanhe a fabricação dos pedidos por etapa e prazo." actions={list?.canEdit&&<Button disabled={locked} onClick={()=>setShowCreate(!showCreate)}>Enviar pedido à produção</Button>}/>
+    {list?.canEdit && <details className="form-section min-w-0 space-y-4"><summary className="cursor-pointer font-semibold">Mais ações • Configurar etapas</summary>
+      <p className="text-sm text-muted-foreground">As etapas iniciais são A produzir, Corte, Solda, Pintura, Montagem e Pronto. O nome anterior permanece no histórico quando uma etapa é renomeada.</p>
+      <form className="space-y-4" onSubmit={event => { event.preventDefault(); const stage = stages.find(item => item.id === stageId); void send({ url: `/api/erp/production/stages${stage ? `/${stage.id}` : ""}`, method: stage ? "PUT" : "POST", tenant: list.tenantId, revision: stage?.revision, body: { name: stageDraft.name, kind: stageDraft.kind, position: Number(stageDraft.position) } }) }}><fieldset disabled={locked} className="grid min-w-0 gap-4 sm:grid-cols-2">
+        <label className="space-y-2 sm:col-span-2">Etapa para configurar<select className={selectClass} value={stageId} onChange={event => { const stage = stages.find(item => item.id === event.target.value); setStageId(event.target.value); setStageDraft(stage ? { name: stage.name, kind: stage.kind, position: String(stage.position) } : { name: "", kind: "andamento", position: "1" }) }}><option value="">Nova etapa em andamento</option>{stages.map(stage => <option key={stage.id} value={stage.id}>{stage.name}</option>)}</select></label>
+        <label className="space-y-2">Nome da etapa<Input required minLength={2} maxLength={40} value={stageDraft.name} onChange={event => setStageDraft({ ...stageDraft, name: event.target.value })} /></label>
+        <label className="space-y-2">Posição na sequência<Input required type="number" min={1} max={10000} step={1} value={stageDraft.position} onChange={event => setStageDraft({ ...stageDraft, position: event.target.value })} /></label>
+        <Button className="w-fit" type="submit">Salvar etapa</Button>
+      </fieldset></form>
+    </details>}
     {notice && <p role="status" className="rounded-xl border p-4">{notice}</p>}
     {writeError && <p role="alert" className="rounded-xl border p-4">{writeError}</p>}
     {uncertain && <div role="alert" className="space-y-3 rounded-xl border p-4"><p>A resposta não confirmou o resultado. Repita o mesmo comando para conferir sem duplicar a operação.</p><Button disabled={saving} onClick={() => void send()}>Repetir confirmação</Button></div>}
     <section className="form-section min-w-0 space-y-4" aria-label="Ordens registradas">
       <h2 className="font-semibold">Ordens registradas</h2>
       {loading ? <p role="status">Carregando produção…</p> : error ? <div role="alert"><p>{error}</p><Button variant="outline" onClick={() => { setLoading(true); setRefresh(value => value + 1) }}>Tentar novamente</Button></div> : list && <>
-        <p>{list.total} ordem(ns) · {list.canEdit ? "Consulta e operação" : "Somente consulta"}</p>
-        <div className="flex flex-wrap gap-3">{list.canEdit && <Button disabled={locked} onClick={() => setShowCreate(value => !value)}>Enviar pedido à produção</Button>}<Button variant="outline" disabled={locked} onClick={() => { setLoading(true); setRefresh(value => value + 1) }}>Recarregar produção</Button></div>
-        {list.data.length ? <ul className="grid min-w-0 gap-3 sm:grid-cols-2">{list.data.map(job => <li key={job.id} className="min-w-0 rounded-xl border p-4">
-          <button className="block max-w-full break-words text-left font-medium text-primary underline" disabled={locked} onClick={() => choose(job)}>Consultar {job.name}</button>
-          <p className="mt-2 break-words">{job.quantity} {job.unit} · {job.sku}</p><p>{job.stageName} · {statusLabel(job.status)}</p>
-          <p className="mt-1 break-all text-xs text-muted-foreground">Pedido {job.orderId}</p>
-        </li>)}</ul> : <p>Nenhuma ordem registrada. Envie uma encomenda aceita, um pedido reservado ou concluído para começar.</p>}
-        <Pagination offset={offset} pageSize={25} total={list.total} loading={locked} onOffsetChange={offset => { setLoading(true); setOffset(offset) }} />
+        {list.data.length ? <ProductionBoard jobs={list.data} stages={stages} locked={locked} choose={choose}
+          move={list.canEdit?(j,s)=>void send({url:"/api/erp/production/orders/"+j.id+"/stage",method:"POST",tenant:list.tenantId,revision:j.revision,body:{stageId:s}}):undefined}/>
+          : <p>Nenhuma ordem em produção. Envie um pedido aceito ou reservado para começar.</p>}
+        {list.total>25&&<Pagination offset={offset} pageSize={25} total={list.total} loading={locked} onOffsetChange={offset => { setLoading(true); setOffset(offset) }} />}
       </>}
     </section>
 
@@ -181,17 +189,21 @@ export function ProductionWorkspace({ id }: { id?: string }) {
       </form>}
     </section>}
 
+    {list?.canEdit&&<Structures tenant={list.tenantId}/>}
     {selected && <section className="form-section min-w-0 space-y-5" aria-label="Ordem selecionada">
       {detailLoading ? <p role="status">Carregando ordem…</p> : detailError ? <p role="alert">{detailError}</p> : detail && <>
         <h2 className="break-words text-xl font-semibold">{detail.data.name}</h2>
         <p className="break-words">{detail.data.quantity} {detail.data.unit} · {detail.data.sku}</p><p>{detail.data.stageName} · {statusLabel(detail.data.status)}</p>
         <p className="break-all text-sm">Pedido {detail.data.orderId} · Revisão {detail.data.revision}</p>
         {detail.data.status === "cancelled" ? <p>Ordem cancelada. O histórico e os consumos permanecem disponíveis para consulta.</p> : detail.canEdit && <form className="grid min-w-0 gap-3 sm:grid-cols-[1fr_auto]" onSubmit={event => { event.preventDefault(); void send({ url: `/api/erp/production/orders/${selected}/stage`, method: "POST", tenant: detail.tenantId, revision: detail.data.revision, body: { stageId: nextStage } }) }}>
-          <label className="space-y-2">Próxima etapa<select required disabled={locked} className={selectClass} value={nextStage} onChange={event => setNextStage(event.target.value)}><option value="">Selecione a etapa</option>{stages.filter(stage => stage.id !== detail.data.stageId).map(stage => <option value={stage.id} key={stage.id}>{stage.name}{stage.kind === "pronta" ? " · Pronta" : ""}</option>)}</select></label><Button className="self-end" type="submit" disabled={locked || !nextStage}>Mover ordem</Button>
+          <label className="space-y-2">Próxima etapa<select required disabled={locked} className={selectClass} value={nextStage} onChange={event => setNextStage(event.target.value)}><option value="">Selecione a etapa</option>{stages.filter(stage => stage.id !== detail.data.stageId && (!detail.data.bomVersion || stage.kind!=="pronta")).map(stage => <option value={stage.id} key={stage.id}>{stage.name}{stage.kind === "pronta" ? " • Pronta" : ""}</option>)}</select></label><Button className="self-end" type="submit" disabled={locked || !nextStage}>Mover ordem</Button>
         </form>}
+        <PostingPanel key={detail.data.id+detail.data.revision} tenant={detail.tenantId} jobId={detail.data.id} productId={detail.data.productId}
+          revision={detail.data.revision} version={detail.data.bomVersion??null} open={detail.data.status==="open"} canConsume={detail.canConsume}
+          planned={detail.planned??[]} postings={detail.postings??[]} refresh={()=>setRefresh(v=>v+1)} saved={()=>{setNotice("Apontamento confirmado.");setRefresh(v=>v+1)}}/>
         {detail.canConsume && detail.data.status === "open" && <div className="space-y-4 border-t pt-4">
           <h3 className="font-semibold">Consumo declarado por ordem</h3>
-          <p className="text-sm text-muted-foreground">As quantidades e os custos declarados ficam no histórico desta ordem. A produção não lança entrada de produto acabado nem título financeiro.</p>
+          <p className="text-sm text-muted-foreground">Use este lançamento para componentes adicionais. O apontamento consome os itens previstos na estrutura.</p>
           <div className="space-y-2"><form className="flex flex-wrap items-end gap-3" onSubmit={event => { event.preventDefault(); setStockQuery(String(new FormData(event.currentTarget).get("componentQuery") || "")) }}><label className="min-w-0 flex-1 space-y-2">Buscar componente no estoque<Input name="componentQuery" maxLength={160} disabled={locked} /></label><Button variant="outline" disabled={locked} type="submit">Buscar componente</Button></form><Link className="inline-flex min-h-11 items-center font-medium text-primary underline underline-offset-4" href="/cadastros/produtos/novo" target="_blank" rel="noopener noreferrer">Cadastrar componente</Link></div>
           {stockError && <p role="alert">{stockError}</p>}
           <form className="space-y-4" onSubmit={consume}><fieldset disabled={locked} className="grid min-w-0 gap-4 sm:grid-cols-2">
@@ -205,21 +217,12 @@ export function ProductionWorkspace({ id }: { id?: string }) {
         {!detail.canConsume && detail.canEdit && detail.data.status !== "cancelled" && <p>Registrar ou devolver componentes exige permissões de consulta e movimentação de estoque.</p>}
         <h3 className="font-semibold">Consumos registrados</h3>
         {detail.consumptions.length ? <ul className="space-y-3">{detail.consumptions.map(consumption => <li className="min-w-0 space-y-2 rounded-xl border p-4" key={consumption.id}><p className="break-words font-medium">{consumption.name} · {consumption.sku}</p><p>{consumption.quantity} {consumption.unit} · custo unitário R$ {consumption.unitCost} · total R$ {consumption.amount}</p><p>{consumption.reversed ? "Estornado" : "Consumo ativo"}</p>{!consumption.reversed && detail.canConsume && detail.data.status !== "cancelled" && <Button variant="outline" disabled={locked} onClick={() => setReversal({ movement: consumption.id, reason: "" })}>Estornar consumo de {consumption.name}</Button>}</li>)}</ul> : <p>Nenhum consumo registrado nesta ordem.</p>}
-        {reversal.movement && <form className="space-y-3" onSubmit={event => { event.preventDefault(); void send({ url: `/api/erp/production/orders/${selected}/consumptions/${reversal.movement}/reverse`, method: "POST", tenant: detail.tenantId, revision: detail.data.revision, body: { reason: reversal.reason } }) }}><label className="block space-y-2">Motivo do estorno do consumo<Input required minLength={3} maxLength={500} disabled={locked} value={reversal.reason} onChange={event => setReversal({ ...reversal, reason: event.target.value })} /></label><Button disabled={locked}>Confirmar estorno do consumo</Button></form>}
+        {reversal.movement && <form className="space-y-3" onSubmit={event => { event.preventDefault(); void send({ url: `/api/erp/production/orders/${selected}/consumptions/${reversal.movement}/reverse`, method: "POST", tenant: detail.tenantId, revision: detail.data.revision, body: { reason: reversal.reason } }) }}><label className="block space-y-2">Motivo do estorno do consumo<Input required minLength={3} maxLength={500} disabled={locked} value={reversal.reason} onChange={event => setReversal({ ...reversal, reason: event.target.value })} /></label><Button type="submit" disabled={locked}>Confirmar estorno do consumo</Button></form>}
         <h3 className="font-semibold">Histórico da ordem</h3>
         {detail.history.length ? <ol className="space-y-3">{detail.history.map(item => <li className="min-w-0 rounded-xl border p-4" key={item.id}><p>{actionLabel(item.action)} · {item.stageName}</p><p className="break-words text-sm text-muted-foreground">{new Date(item.createdAt).toLocaleString("pt-BR")} · {item.actor}</p></li>)}</ol> : <p>Nenhum evento disponível.</p>}
       </>}
-      <Button variant="outline" disabled={locked} onClick={() => { setDetailLoading(true); setRefresh(value => value + 1) }}>Recarregar ordem</Button>
+      {detailError&&<Button variant="outline" disabled={locked} onClick={()=>{setDetailLoading(true);setRefresh(v=>v+1)}}>Tentar consultar novamente</Button>}
     </section>}
 
-    {list?.canEdit && <details className="form-section min-w-0 space-y-4"><summary className="cursor-pointer font-semibold">Configurar etapas da produção</summary>
-      <p className="text-sm text-muted-foreground">As etapas iniciais são A produzir, Corte, Solda, Pintura, Montagem e Pronto. O nome anterior permanece no histórico quando uma etapa é renomeada.</p>
-      <form className="space-y-4" onSubmit={event => { event.preventDefault(); const stage = stages.find(item => item.id === stageId); void send({ url: `/api/erp/production/stages${stage ? `/${stage.id}` : ""}`, method: stage ? "PUT" : "POST", tenant: list.tenantId, revision: stage?.revision, body: { name: stageDraft.name, kind: stageDraft.kind, position: Number(stageDraft.position) } }) }}><fieldset disabled={locked} className="grid min-w-0 gap-4 sm:grid-cols-2">
-        <label className="space-y-2 sm:col-span-2">Etapa para configurar<select className={selectClass} value={stageId} onChange={event => { const stage = stages.find(item => item.id === event.target.value); setStageId(event.target.value); setStageDraft(stage ? { name: stage.name, kind: stage.kind, position: String(stage.position) } : { name: "", kind: "andamento", position: "1" }) }}><option value="">Nova etapa em andamento</option>{stages.map(stage => <option key={stage.id} value={stage.id}>{stage.name}</option>)}</select></label>
-        <label className="space-y-2">Nome da etapa<Input required minLength={2} maxLength={40} value={stageDraft.name} onChange={event => setStageDraft({ ...stageDraft, name: event.target.value })} /></label>
-        <label className="space-y-2">Posição na sequência<Input required type="number" min={1} max={10000} step={1} value={stageDraft.position} onChange={event => setStageDraft({ ...stageDraft, position: event.target.value })} /></label>
-        <Button className="w-fit" type="submit">Salvar etapa</Button>
-      </fieldset></form>
-    </details>}
   </div>
 }
