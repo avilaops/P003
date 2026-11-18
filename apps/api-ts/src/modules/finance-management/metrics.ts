@@ -1,8 +1,8 @@
-import {unallocated} from "./commission-book.js"
+import { unallocated } from "./commission-book.js"
 
 // Recover the sales principal from replacement titles and exclude refinanced interest.
 // Each ancestor contributes its share, including subsequent renegotiations.
-export const commissionMetrics=`WITH RECURSIVE period AS (
+export const commissionMetrics = `WITH RECURSIVE period AS (
   SELECT COALESCE($2::date,date_trunc('month',now() AT TIME ZONE 'America/Sao_Paulo')::date) AS start
 ), entries AS (
   SELECT e.* FROM commission_entries e,period p WHERE e.tenant_id=$1 AND e.competence=p.start
