@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
+import { createRequire } from 'node:module';
 import { discover } from '../discovery.mjs';
 import { assessContracts } from '../contracts.mjs';
 
@@ -12,11 +13,26 @@ test('every production API operation and BFF has a contract without claiming ver
   const inventory = await discover(fileURLToPath(root));
   const assessment = assessContracts(catalogue, inventory);
   assert.deepEqual(assessment.findings, []);
-  assert.equal(assessment.apiOperations, 408);
-  assert.equal(assessment.bffOperations, 362);
+  assert.equal(assessment.apiOperations, 435);
+  assert.equal(assessment.bffOperations, 383);
   assert.equal(assessment.pendingFlows, 34);
   assert.equal(assessment.p0Ready, false);
   assert.equal(assessment.runtimeVerdict, 'not_verified_by_catalog');
+  const { tsImport } = createRequire(new URL('../../apps/api-ts/package.json', import.meta.url))('tsx/esm/api');
+  const { buildApp } = await tsImport('../apps/api-ts/src/app.ts', new URL('../discovery.mjs', import.meta.url).href);
+  const app = buildApp({ pool: { connect() { throw Error('Registration cannot query the database'); } }, userinfoUrl: 'https://auth.example.invalid/userinfo' });
+  try {
+    await app.ready();
+    const stockRoutes = inventory.api.filter(route => route.typescript);
+    assert.ok(stockRoutes.some(route => route.path === '/api/v1/stock/periods/basis' && route.typescript.POST && route.typescript.GET));
+    assert.ok(stockRoutes.some(route => route.path.endsWith('/postings') && route.typescript.POST));
+    for (const route of stockRoutes) {
+      for (const [method, origin] of Object.entries(route.typescript)) {
+        assert.match(origin.file, /^apps\/api-ts\/src\/modules\//);
+        assert.ok(app.findRoute({method, url:route.path.replace(/\{[^}]+\}/g,'test-id')}), method + ' ' + route.path);
+      }
+    }
+  } finally { await app.close(); }
   for (const action of catalogue.actions) {
     for (const file of action.sources) await readFile(new URL(file, root));
     if (action.input.body) {
@@ -27,6 +43,10 @@ test('every production API operation and BFF has a contract without claiming ver
         assert.equal(type, 'Buffer');
         assert.match(definition, /addContentTypeParser\(["']application\/pdf["'],\s*\{\s*parseAs:\s*["']buffer["']/);
         assert.match(definition, /Buffer\.isBuffer\(request\.body\)/);
+      } else if (action.input.body.validator) {
+        assert.ok(source.endsWith('.ts'));
+        assert.match(definition, new RegExp(`\\b(?:const|function)\\s+${type}\\b`));
+        assert.ok(definition.includes(action.input.body.validator), source);
       } else if (source.endsWith('.ts')) {
         assert.match(definition, new RegExp(`^\\s*(?:export\\s+)?const\\s+${type}\\s*=\\s*z\\.(?:object|strictObject)\\(`, 'm'), source);
         assert.match(definition, new RegExp(`\\b${type}\\.(?:safeParse|parse)\\(request\\.body\\)`), source);

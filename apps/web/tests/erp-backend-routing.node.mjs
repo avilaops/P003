@@ -20,6 +20,11 @@ test("saved legacy pricing and its approval use the migrated sales backend", () 
   for (const [method, resource] of [["GET", `/orders/${id}/pricing`], ["POST", `/orders/${id}/pricing/approve`]]) assert.equal(selectErpBackend(method, resource, rust, environment).origin, typescript);
 });
 
+test("completed sales cancellations and their history use TypeScript", () => {
+  assert.equal(selectErpBackend("POST", `/orders/${id}/cancel-completed`, rust, environment).origin, typescript);
+  assert.equal(selectErpBackend("GET", `/orders/${id}/cancellations`, rust, environment).origin, typescript);
+});
+
 test("document previews and email dispatch use the TypeScript backend", () => {
   for (const resource of [`/orders/${id}/email`, `/proposals/${id}/email`, `/receivables/${id}/email`, `/financial-payables/${id}/email`, `/commercial-contracts/${id}/email`, `/commercial-contracts/${id}/send-package`, "/financial-report/email"]) {
     for (const method of ["GET", "POST"]) assert.equal(selectErpBackend(method, resource, rust, environment).origin, typescript, resource);
@@ -27,7 +32,7 @@ test("document previews and email dispatch use the TypeScript backend", () => {
 });
 
 test("unmigrated routes and unsupported methods stay on their explicit Rust origin", () => {
-  for (const [method, resource] of [["GET", `/orders/${id}/document`], ["POST", "/fiscal/nfe"], ["GET", "/receivables"], ["GET", `/products/${id}/catalog`], ["GET", "/products/export"], ["POST", "/preferences"], ["DELETE", `/products/${id}`], ["GET", `/system/custom-reports/${id}`], ["GET", "/commercial/tables/unknown"], ["POST", `/orders/${id}/cancel-completed`]]) {
+  for (const [method, resource] of [["GET", `/orders/${id}/document`], ["POST", "/fiscal/nfe"], ["GET", "/receivables"], ["GET", `/products/${id}/catalog`], ["GET", "/products/export"], ["POST", "/preferences"], ["DELETE", `/products/${id}`], ["GET", `/system/custom-reports/${id}`], ["GET", "/commercial/tables/unknown"], ["GET", `/orders/${id}/cancel-completed`]]) {
     assert.equal(selectErpBackend(method, resource, rust, environment).origin, rust, resource);
   }
 });

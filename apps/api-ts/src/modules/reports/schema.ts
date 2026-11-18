@@ -1,7 +1,9 @@
 import { z } from "zod"
+import { stockCatalog,stockPermission } from "./stock-catalog.js"
 import { Problem } from "../../platform/problem.js"
 
 export const datasets: Record<string, { permission: string; columns: readonly string[] }> = {
+  ...Object.fromEntries(Object.entries(stockCatalog).map(([key,source])=>[key,{permission:stockPermission(key),columns:Object.keys(source.columns)}])),
   products: { permission: "catalog.products.read", columns: ["code", "name", "status"] },
   parties: { permission: "catalog.parties.read", columns: ["name", "document", "kind", "status"] },
   sales_orders: { permission: "sales.orders.read", columns: ["number", "customer", "status", "issued_at", "total"] },

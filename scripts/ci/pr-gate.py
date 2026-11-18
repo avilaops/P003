@@ -45,9 +45,13 @@ def native_api_required(paths):
                         "migrations/", "docs/", "architecture/", "packages/", "scripts/fiscal/",
                         "scripts/deploy/", "scripts/contracts/published/")
     platform_files = {
-        "pnpm-lock.yaml", "pnpm-workspace.yaml", "package.json", "deploy/web.Dockerfile", "deploy/CI-CD.md",
+        "pnpm-lock.yaml", "pnpm-workspace.yaml", "package.json", "deploy/web.Dockerfile", "deploy/CI-CD.md", "deploy/README.md",
         "deploy/migrate-release.py", "deploy/release-retention.py", "deploy/production-deploy.sh", "deploy/compose.yaml",
         "deploy/fiscal-compose.yaml", "deploy/api-ts.env.example", "scripts/ci/pr-gate.py",
+        "scripts/architecture/report-model.test.mjs",
+        "verification/contracts.json", "verification/discovery.mjs", "verification/stock-route-discovery.mts",
+        "verification/ts-migration-inventory.mjs",
+        "verification/test/contracts.test.mjs", "verification/test/product-context.test.mjs",
         "scripts/ci/published-components.py", "scripts/ci/test_pr_gate.py",
         "scripts/ci/test_typescript_api.py", "scripts/ci/test_published_components.py",
         ".github/workflows/ci.yml", ".github/workflows/_validate-project.yml",

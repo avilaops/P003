@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { readFile, readdir } from 'node:fs/promises';
 import path from 'node:path';
 import { createRequire } from 'node:module';
+import { stockRoutes } from './stock-route-discovery.mts';
 
 const slash = value => value.split(path.sep).join('/');
 const hash = value => createHash('sha256').update(value).digest('hex');
@@ -247,6 +248,16 @@ export async function discover(root, options = {}) {
       else api.push(endpoint);
     }
   }
+  const stock = await stockRoutes(root, ts);
+  for (const source of stock.sources) files.push({ file: source.file, hash: hash(source.content) });
+  for (const { method, path: url, file, line } of stock.routes) {
+    const existing = api.find(route => normalizedRoute(route.path) === normalizedRoute(url));
+    if (existing) {
+      if (existing.typescript?.[method]) throw Error('Duplicate Fastify stock operation: ' + method + ' ' + url);
+      if (!existing.methods.includes(method)) existing.methods.push(method);
+      (existing.typescript ??= {})[method] = { file, line };
+    } else api.push({ path: url, methods: [method], file, line, typescript: { [method]: {file,line} } });
+  }
   const testFiles = (await walk(path.join(webRoot, 'tests'))).filter(file => /\.spec\.[cm]?[jt]sx?$/.test(file));
   const browserTests = [];
   for (const absolute of testFiles) {
@@ -266,7 +277,7 @@ export async function discover(root, options = {}) {
   ];
   for (const file of await walk(path.join(root, 'migrations'))) if (file.endsWith('.sql')) extra.push(slash(path.relative(root, file)));
   try {
-    for (const file of await walk(path.join(root, 'verification'))) if (/\.(?:mjs|py|txt)$/.test(file)) extra.push(slash(path.relative(root, file)));
+    for (const file of await walk(path.join(root, 'verification'))) if (/\.(?:mjs|mts|py|txt)$/.test(file)) extra.push(slash(path.relative(root, file)));
   } catch (error) { if (error.code !== 'ENOENT') throw error; }
   for (const file of extra) {
     try { files.push({ file, hash: hash(await readFile(path.join(root, file), 'utf8')) }); }

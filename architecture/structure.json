@@ -46,8 +46,8 @@
     "pos": "Operação do PDV, sessões de caixa, fechamento e histórico, com autorização no backend."
   },
   "routeSurface": {
-    "count": 506,
-    "sha256": "9f026b1c55bca2ca10e83ca640131c7758467991976e9b23a9e80ca801bff83f"
+    "count": 526,
+    "sha256": "c398538ded9fb556c963e6d24781476b2f969712027df08dd22653b9d9b8cec4"
   },
   "retiredPaths": [
     "apps/web/src/lib/erp-session.ts",
@@ -91,8 +91,8 @@
     "apps/api/src/platform/financial_settings.rs"
   ],
   "routeSurfaceReview": {
-    "previousPolicyCommit": "c5090e5c6ea2dfd7b07e0bd6e3650b39b0d889ab",
-    "reviewedMainCommit": "f1b6bdf425c6b43c9fc1071bccb70ec36632425a",
-    "changes": "A rota de preferências de vendas foi retirada por decisão operacional. A política comercial permanece na tabela de preços e no fluxo de aprovação do pedido."
+    "previousPolicyCommit": "58b741c8503ca3ab84de3acd65025da068d7ef1f",
+    "reviewedMainCommit": "a341683e455addf4a17759918ce5bbc063e1faf3",
+    "changes": "Estoque operacional em TypeScript • consultas e comandos de depósitos, transferências, séries, custos, fechamento, reposição, análises e produção com acesso por empresa."
   }
 }
