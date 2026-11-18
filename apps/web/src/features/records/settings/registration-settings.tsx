@@ -3,6 +3,7 @@ import { PageTitle } from "@/components/workspace/page-title"
 import Link from "next/link"
 import { useEffect, useRef, useState } from "react"
 import { erpFetch } from "@/lib/api/client"
+import { DataTable } from "@/components/workspace/data-table"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { normalizedProfile, type TaxProfile } from "@/features/fiscal/settings/tax-profile-model"
@@ -146,7 +147,7 @@ export function RegistrationSettings({ section }: { section: Section }) {
       {!snapshot && !error && <p role="status">Carregando configurações…</p>}
       {snapshot && (
         <form noValidate onSubmit={save} className="space-y-5">
-          {section === "tax-profiles" && !!data.profiles?.length && <div className="overflow-x-auto rounded-lg border"><table className="w-full text-left text-sm"><caption className="sr-only">Perfis tributários cadastrados</caption><thead className="bg-muted/50"><tr>{["Perfil", "Linha comercial", "Situação", "Ações"].map(label => <th key={label} className="p-2">{label}</th>)}</tr></thead><tbody>{data.profiles.map((value, index) => <tr key={index} className="border-t"><td className="p-2">{value.name || `Novo perfil ${index + 1}`}</td><td className="p-2">{value.productLine === "imported" ? "Importada" : value.productLine === "national" ? "Nacional" : "Todas"}</td><td className="p-2">{value.active ? "Ativo" : "Inativo"}</td><td className="p-2"><Button type="button" size="sm" variant="outline" aria-label={`Editar perfil ${index + 1}`} disabled={saving} onClick={() => setEditingProfile(index)}>{snapshot.canEdit ? "Editar" : "Consultar"}</Button></td></tr>)}</tbody></table></div>}
+          {section === "tax-profiles" && !!data.profiles?.length && <div className="overflow-x-auto rounded-lg border"><DataTable className="w-full text-left text-sm"><caption className="sr-only">Perfis tributários cadastrados</caption><thead className="bg-muted/50"><tr>{["Perfil", "Linha comercial", "Situação", "Ações"].map(label => <th key={label} className="p-2">{label}</th>)}</tr></thead><tbody>{data.profiles.map((value, index) => <tr key={index} className="border-t"><td className="p-2">{value.name || `Novo perfil ${index + 1}`}</td><td className="p-2">{value.productLine === "imported" ? "Importada" : value.productLine === "national" ? "Nacional" : "Todas"}</td><td className="p-2">{value.active ? "Ativo" : "Inativo"}</td><td className="p-2"><Button type="button" size="sm" variant="outline" aria-label={`Editar perfil ${index + 1}`} disabled={saving} onClick={() => setEditingProfile(index)}>{snapshot.canEdit ? "Editar" : "Consultar"}</Button></td></tr>)}</tbody></DataTable></div>}
           {section === "tax-profiles" && editingProfile !== null && <div className="flex items-center justify-between gap-2"><p className="text-sm">Editando perfil {editingProfile + 1} • alterações preservadas ao trocar de perfil</p><Button type="button" variant="outline" size="sm" onClick={() => setEditingProfile(null)}>Concluir edição do perfil</Button></div>}
           <fieldset disabled={!snapshot.canEdit || saving || blocked} className="space-y-5">
             {(section === "products" || section === "parties") && (

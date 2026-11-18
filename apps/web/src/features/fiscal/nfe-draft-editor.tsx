@@ -8,7 +8,7 @@ import type { Schema } from "@/lib/api/types"
 
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { cloneElement, isValidElement, useEffect, useRef, useState, type ReactElement } from "react"
+import { cloneElement, isValidElement, useEffect, useMemo, useRef, useState, type ReactElement } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { TaxProfilePicker } from "./settings/tax-profile-picker"
@@ -43,7 +43,7 @@ export function NfeDraftEditor({ id, sourceOrderId, initialModel = 55 }: { id?: 
   const [emissionHeader, setEmissionHeader] = useState<{ number: number; series: number } | null>(null)
 
   const [step, setStep] = useState(id ? editorSteps.length - 1 : 0)
-  const [draft, setDraft] = useState<DraftInput>(blankDraft)
+  const [rawDraft, setDraft] = useState<DraftInput>(blankDraft)
   const [baseline, setBaseline] = useState("")
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null)
   const [preparation, setPreparation] = useState<Preparation | null>(null)
@@ -61,7 +61,10 @@ export function NfeDraftEditor({ id, sourceOrderId, initialModel = 55 }: { id?: 
   const [pendingAmounts, setPendingAmounts] = useState(false)
   const [recipientExpanded, setRecipientExpanded] = useState(false)
   const [allocationRules, setAllocationRules] = useState<AllocationRules>({})
-  const [allocationError, setAllocationError] = useState("")
+  const { draft, allocationError } = useMemo(() => {
+    try { return { draft: { ...rawDraft, items: reallocateAmounts(rawDraft.items, allocationRules) }, allocationError: "" } }
+    catch (reason) { return { draft: rawDraft, allocationError: reason instanceof Error ? reason.message : "Confira o rateio dos valores." } }
+  }, [rawDraft, allocationRules])
   const [uncertain, setUncertain] = useState(false)
   const [blocked, setBlocked] = useState(false)
   const [error, setError] = useState("")
@@ -89,7 +92,7 @@ export function NfeDraftEditor({ id, sourceOrderId, initialModel = 55 }: { id?: 
         if (ready.tenantId !== me.tenant?.id || origin && origin.tenantId !== me.tenant.id) throw new Error("A empresa da sessão mudou. Reabra o rascunho")
         const input: DraftInput = current ? current.data.input : proposed ? { ...blankDraft(), model: initialModel, sourceOrderId: proposed.orderId, recipient: proposed.recipient, items: proposed.items.map(item => ({ ...blankItem(), code: item.code, description: item.description, additionalInfo: item.additionalInfo || null, unit: item.unit, ncm: item.ncm || "", quantity: item.quantity, unitPrice: item.unitPrice, grossTotal: item.grossTotal })), productsTotal: proposed.productsTotal } : { ...blankDraft(), model: initialModel }
         if (!current) { input.environment = ready.environment; input.issuedAt = new Date().toISOString(); if (initialModel === 55) input.departureAt = input.issuedAt; input.presenceIndicator = initialModel === 65 ? 1 : 9 }
-        setAllocationRules({}); setAllocationError(""); setRecipientExpanded(!input.recipient.taxId || !input.recipient.legalName || !input.recipient.street); setPendingAmounts(false); setDraft(input); setBaseline(JSON.stringify(input)); setSnapshot(current || null)
+        setAllocationRules({}); setRecipientExpanded(!input.recipient.taxId || !input.recipient.legalName || !input.recipient.street); setPendingAmounts(false); setDraft(input); setBaseline(JSON.stringify(input)); setSnapshot(current || null)
 
         setEmissionHeader(null)
         setPreparation(proposed || null)
@@ -137,13 +140,6 @@ export function NfeDraftEditor({ id, sourceOrderId, initialModel = 55 }: { id?: 
   }, [dirty, uncertain, saving])
   useEffect(() => () => { request.current?.abort() }, [])
 
-  useEffect(() => {
-    try {
-      const items = reallocateAmounts(draft.items, allocationRules)
-      setAllocationError("")
-      if (JSON.stringify(items) !== JSON.stringify(draft.items)) setDraft(previous => ({ ...previous, items }))
-    } catch (reason) { setAllocationError(reason instanceof Error ? reason.message : "Confira o rateio dos valores.") }
-  }, [draft.items, allocationRules])
   function changeItem(index: number, patch: Partial<DraftItem>) {
     setAllocationRules(previous => {
       const next = { ...previous }
