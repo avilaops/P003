@@ -9,6 +9,7 @@ import ipaddress
 import json
 import os
 from pathlib import Path
+import re
 import ssl
 import subprocess
 import sys
@@ -171,8 +172,11 @@ def _post(port, request, context, authenticator, tls):
         return raw, list(result.headers.items())
 
 
-def verify_docker():
+def verify_docker(keep_tested_for=None):
     if sys.platform != 'linux': raise RuntimeError('real_linux_docker_is_required')
+    if keep_tested_for and (not re.fullmatch(r'[0-9a-f]{40}', keep_tested_for)
+                            or command(['git', 'rev-parse', 'HEAD']).strip() != keep_tested_for):
+        raise ValueError('tested_revision_mismatch')
     from helpers import validation_fixture
     from contract_signature_service.bundle import decode_bundle
     token = uuid4().hex
@@ -267,6 +271,8 @@ def verify_docker():
             command(['docker', 'run', '--rm', '--name', negative, '--label', f'avilaops.validator-ci={token}',
                 '--network', 'none', *_limits('10001:10001'), *_mount(public, '/config/public'),
                 *_mount(secrets, '/run/secrets/validator'), image, 'gateway'], expected=78, timeout=15)
+            if keep_tested_for:
+                command(['docker', 'tag', image, 'avila-validator-approved:' + keep_tested_for])
             return {'restrictedTlsUnixPipeline': True, 'productionRejectsSyntheticTrust': True,
                     'collectorCannotReadGatewaySecretsOrMemory': True,
                     'bundleSha256': decoded.sha256, **probe}
@@ -284,6 +290,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--directory', type=Path, required=True)
     parser.add_argument('--docker', action='store_true')
+    parser.add_argument('--keep-tested-for', help='Leave a local tag for publishing the exact verified image of the selected SHA')
     args = parser.parse_args()
     wheel = verify_archives(args.directory.resolve())
     sys.path.insert(0, str(wheel))
@@ -297,7 +304,7 @@ def main():
     if not isinstance(contract_signature_service.__loader__, zipimport.zipimporter):
         raise RuntimeError('tests_replaced_selected_wheel')
     report = {'wheelCorpus': True, 'cases': result.testsRun, 'skipped': len(result.skipped),
-              'docker': verify_docker() if args.docker else None, 'syntheticOnly': True}
+              'docker': verify_docker(args.keep_tested_for) if args.docker else None, 'syntheticOnly': True}
     target = ROOT/'artifacts/verification/contract-signature-service.json'
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(json.dumps(report, indent=2)+'\n', encoding='utf-8')

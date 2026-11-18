@@ -26,6 +26,7 @@ import { verifyCommercialProposals } from "./commercial-proposal-cases.js"
 import { verifyNfeEmail } from "./nfe-email-cases.js"
 import { verifyDocumentCopies } from "./document-copy-cases.js"
 import { verifySalesMail } from "./sales-mail-cases.js"
+import { verifyQualifiedReissue } from "./qualified-reissue-cases.js"
 
 // Opt in with a disposable PostgreSQL administrator URL. The generated database
 // and NOLOGIN role belong exclusively to this test and are removed afterwards.
@@ -444,6 +445,7 @@ for (const backend of backends) test(`${backend}: PostgreSQL migrations and RLS 
     const manageOnly = await app.inject({ method: "PUT", url: `/api/v1/products/${productId}`, headers: { ...headers, "if-match": '"2"' }, payload: productInput })
     assert.equal(manageOnly.statusCode, 403, manageOnly.body)
     if (backend === "typescript") await verifySalesMail(seed, pool, tenant, readerRole, order, proposal)
+    if (backend === "typescript") await verifyQualifiedReissue(seed, pool, tenant, readerRole)
   } finally {
     await app?.close()
     if (privateApp && privateApp !== app) await privateApp.close()

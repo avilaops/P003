@@ -2,7 +2,7 @@ export type LotEnvironment = "production" | "homologation"
 export type FiscalLot = {
   id:string; draftId:string|null; legacyFull:boolean; status:string; environment:LotEnvironment
   accessKey:string|null; number:number|null; deliveredAt:string|null
-  items:{lineNumber:number;sku:string;quantity:string}[]
+  items:{lineNumber:number;sku:string;quantity:string;tracked?:boolean}[]
 }
 export type OrderLots = {
   tenantId:string; orderId:string; status:string; environment:LotEnvironment

@@ -1,3 +1,4 @@
+import {lotSerials,serialSelection,type SerialSelection} from "./lot-serials.js"
 import {parseXml,child,children,value as xmlValue,fiscalDecimal} from "../fiscal-incoming/xml.js"
 import {randomUUID} from "node:crypto"
 import {z} from "zod"
@@ -17,13 +18,13 @@ import {renderDanfe,sha256} from "../nfe-email/danfe.js"
 const env=z.enum(["production","homologation"])
 const noPendingCancellation="NOT EXISTS (SELECT 1 FROM fiscal_nfe_events ev WHERE ev.tenant_id=d.tenant_id AND ev.document_id=d.id AND ev.kind='cancelamento' AND ev.status IN('pending','unknown'))"
 export const ownStart=z.strictObject({action:z.literal("prepareOwnReturn"),environment:env,lotId:z.guid(),reason:z.string().trim().min(3).max(200),
-  destination:z.enum(["stock","service","discard"]),taxRuleReference:z.string().trim().min(3).max(200),consumerDeclaration:z.literal(true),
+  destination:z.enum(["stock","service","discard"]),taxRuleReference:z.string().trim().min(3).max(200),consumerDeclaration:z.literal(true),serials:serialSelection.optional(),
   items:z.array(z.strictObject({lineNumber:z.number().int().min(1).max(990),quantityMicros:z.string().regex(/^[1-9]\d{0,17}$/).refine(v=>BigInt(v)%100n===0n),cfop:z.string().regex(/^[12]\d{3}$/)})).min(1).max(990)})
 export const ownDecision=z.strictObject({action:z.literal("decideOwnReturn"),environment:env,planId:z.guid(),approve:z.boolean(),reason:z.string().trim().min(3).max(200)})
 export const ownRelease=z.strictObject({action:z.literal("releaseOwnReturn"),environment:env,planId:z.guid()})
 export const ownClose=z.strictObject({action:z.literal("completeOwnReturn"),environment:env,planId:z.guid()})
 type Start=z.infer<typeof ownStart>
-type Selection={lineNumber:number;sku:string;unit:string;unitPrice:string;quantityMicros:string;cfop:string;valueCents:string}
+type Selection={serials?:string[];lineNumber:number;sku:string;unit:string;unitPrice:string;quantityMicros:string;cfop:string;valueCents:string}
 type Plan={id:string;lot_id:string;environment:string;status:string;submitted_by:string;reason:string;destination:"stock"|"service"|"discard";items:Selection[];original_key:string;original_authorized:boolean;customer:string;amount_cents:string}
 async function plan(c:AuthorizedContext,id:string,order?:string){
   const result=(await c.client.query<Plan>(`SELECT p.*,o.customer_tax_id AS customer,coalesce(d.status='authorized' AND d.access_key=p.original_key AND d.environment=p.environment AND ${noPendingCancellation},false) AS original_authorized
@@ -60,7 +61,7 @@ export async function prepareOwnReturn(c:AuthorizedContext,headers:CommandHeader
     UNION ALL SELECT id FROM sales_return_requests WHERE tenant_id=$1 AND lot_id=$2 AND status='pending'`,[c.tenantId,input.lotId])
   if(open.rows.length)conflict("Conclua a devolução já em andamento neste lote")
   if(new Set(input.items.map(i=>i.lineNumber)).size!==input.items.length)invalid("Selecione cada linha apenas uma vez")
-  const lines=(await c.client.query<{line_number:number;sku:string;unit:string;price:string;unit_price:string;qty:string;prior:string;global_qty:string;remaining_money:string}>(`SELECT l.line_number,s.sku,s.unit,s.price_cents AS price,order_line_fiscal_price(s) AS unit_price,
+  const lines=(await c.client.query<{line_number:number;product_id:string;sku:string;unit:string;price:string;unit_price:string;qty:string;prior:string;global_qty:string;remaining_money:string}>(`SELECT l.line_number,s.product_id,s.sku,s.unit,s.price_cents AS price,order_line_fiscal_price(s) AS unit_price,
     l.quantity_micros AS qty,coalesce((SELECT sum(r.quantity_micros) FROM sales_partial_return_items r WHERE r.tenant_id=l.tenant_id AND r.lot_id=l.lot_id AND r.line_number=l.line_number),0)
       +CASE WHEN $4='homologation' THEN coalesce((SELECT sum((e->>'quantityMicros')::numeric) FROM sales_self_return_plans p CROSS JOIN LATERAL jsonb_array_elements(p.items) e WHERE p.tenant_id=l.tenant_id AND p.lot_id=l.lot_id AND p.status='simulated' AND (e->>'lineNumber')::int=l.line_number),0) ELSE 0 END AS prior,
     order_line_delivered(s.tenant_id,s.order_id,s.line_number)-returned.quantity-settled.exchange-pending.quantity AS global_qty,
@@ -88,6 +89,10 @@ export async function prepareOwnReturn(c:AuthorizedContext,headers:CommandHeader
     if(original.taxableQuantity)lineInput.taxableQuantity=decimal(prorate(fixed(original.taxableQuantity,4)),4)
     draftItems.push(lineInput);gross+=total;amount+=value
     selected.push({...choice,sku:line.sku,unit:line.unit,unitPrice:unit,valueCents:value.toString()})
+  }
+  if(input.environment==="production"){
+    const serials=await lotSerials(c,order,input.lotId,"return",selected.map(i=>({line:i.lineNumber,product:lines.find(l=>l.line_number===i.lineNumber)!.product_id,quantity:i.quantityMicros})),input.serials)
+    for(const i of selected){const units=serials.get(i.lineNumber);if(units)i.serials=units}
   }
   const id=randomUUID(),status=policy.approvalAboveCents!==null && amount>BigInt(policy.approvalAboveCents)?"pending":"ready"
   await c.client.query(`INSERT INTO sales_self_return_plans(tenant_id,id,order_id,lot_id,environment,original_key,reason,destination,submitted_by,amount_cents,status,items)
@@ -150,7 +155,8 @@ export async function completeOwnReturn(c:AuthorizedContext,headers:CommandHeade
   let returnId:string|null=null
   if(p.environment==="production"){
     for(const perm of ["inventory.stock.manage","finance.receivables.manage","fiscal.received_nfe.manage"])requirePermission(c,perm)
-    const business={lotId:p.lot_id,receivedId:archived.id,reason:p.reason,destination:p.destination}
+    const serials:SerialSelection=p.items.flatMap(i=>i.serials?[{lineNumber:i.lineNumber,serials:i.serials}]:[])
+    const business={lotId:p.lot_id,receivedId:archived.id,reason:p.reason,destination:p.destination,serials}
     const items=await matchItems(c,order,business,digest,p.id)
     if(items.length!==p.items.length || items.some(i=>!p.items.some(s=>s.lineNumber===i.line && s.quantityMicros===i.quantity && s.valueCents===i.value)))conflict("A nota autorizada diverge da devolução aprovada")
     returnId=await applyPartialReturn(c,headers,order,business,items)

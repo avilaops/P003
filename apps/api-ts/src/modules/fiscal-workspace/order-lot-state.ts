@@ -4,7 +4,7 @@ import { revisionValue } from "../../platform/revision.js"
 
 export type LotEnvironment = "production" | "homologation"
 type Line = { lineNumber:number; productId:string; name:string; sku:string; unit:string; ordered:string; allocated:string; billed:string; delivered:string; available:string; returned:string }
-type Lot = { id:string; draftId:string|null; legacyFull:boolean; environment:LotEnvironment; status:string; deliveredAt:string|null; accessKey:string|null; number:number|null; items:{ lineNumber:number; sku:string; quantity:string }[] }
+type Lot = { id:string; draftId:string|null; legacyFull:boolean; environment:LotEnvironment; status:string; deliveredAt:string|null; accessKey:string|null; number:number|null; items:{ lineNumber:number; sku:string; quantity:string; tracked:boolean }[] }
 
 export async function lotState(c:AuthorizedContext, order:string, environment:LotEnvironment) {
   const args=[c.tenantId,order,environment]
@@ -35,7 +35,7 @@ export async function lotState(c:AuthorizedContext, order:string, environment:Lo
   const lots=(await c.client.query<Lot>(`SELECT l.id,l.draft_id AS "draftId",l.legacy_full AS "legacyFull",l.environment,
       CASE WHEN l.withdrawn THEN 'withdrawn' ELSE coalesce(e.status,CASE WHEN l.draft_id IS NULL THEN 'reserved' ELSE 'draft' END) END AS status,
       l.delivered_at AS "deliveredAt",e.access_key AS "accessKey",e.number,
-      (SELECT jsonb_agg(jsonb_build_object('lineNumber',i.line_number,'sku',s.sku,'quantity',i.quantity_micros::text) ORDER BY i.line_number)
+      (SELECT jsonb_agg(jsonb_build_object('lineNumber',i.line_number,'sku',s.sku,'quantity',i.quantity_micros::text,'tracked',EXISTS(SELECT FROM stock_serial_products t WHERE t.tenant_id=i.tenant_id AND t.product_id=s.product_id)) ORDER BY i.line_number)
        FROM sales_invoice_lot_items i JOIN sales_order_lines s USING(tenant_id,order_id,line_number) WHERE i.tenant_id=l.tenant_id AND i.lot_id=l.id) AS items
     FROM sales_invoice_lots l LEFT JOIN fiscal_nfe_documents e ON e.tenant_id=l.tenant_id AND e.id=l.draft_id
     WHERE l.tenant_id=$1 AND l.order_id=$2 AND l.environment=$3 ORDER BY l.created_at DESC,l.id`,args)).rows

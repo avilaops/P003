@@ -2,12 +2,6 @@
 export const demonstrationRoutes = [
   "/aplicativos",
   "/compras/notas-entrada/[id]",
-  "/compras/sugestoes",
-  "/compras/sugestoes/[id]",
-  "/estoque/inventarios",
-  "/estoque/inventarios/novo",
-  "/estoque/inventarios/[id]",
-  "/estoque/inventarios/[id]/contagem",
   "/estoque/lancamentos/[id]",
   "/eventos",
   "/eventos/[id]",

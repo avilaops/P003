@@ -442,7 +442,7 @@ function Simulator({ transfer, table: initialTable, initialSourceLine, initialPr
           setItems(current=>found ? current.map(item=>item.productId===productId?{...item,quantity:String(Number(item.quantity)+1)}:item) : [...current,{productId, quantity:"1",structureColor:"", swingArmColor:"", upholsteryColor:"",plateHolderColor:"",plateHolderType:""}])
           change()
         }}/>
-        {items.length ? <DataTable aria-label="Equipamentos da simulação" className="table-fixed"><thead><tr className="border-b text-xs text-muted-foreground"><th scope="col" className="py-2 font-medium">Equipamento</th><th scope="col" className="w-20 px-1 py-2 font-medium">Qtd.</th><th scope="col" className="w-11 py-2"><span className="sr-only">Ações</span></th></tr></thead><tbody>{items.map((item, index) => <SelectedProduct key={item.productId} item={item} name={table.data!.items.find(i => i.productId === item.productId)?.name || item.productId} sku={table.data!.items.find(i => i.productId === item.productId)?.sku || ""} tenant={table.tenantId} update={next => { setItems(items.map((i, n) => n === index ? next : i)); change() }} remove={() => { setItems(items.filter((_, n) => n !== index)); change() }} />)}</tbody></DataTable> : <p className="text-xs text-muted-foreground">Adicione equipamentos para iniciar.</p>}
+        {items.length ? <DataTable aria-label="Equipamentos da simulação" className="table-fixed"><thead><tr className="border-b text-xs text-muted-foreground"><th scope="col" className="py-2 font-medium">Equipamento</th><th scope="col" className="w-20 px-1 py-2 font-medium">Qtd.</th><th scope="col" className="w-11 py-2"><span className="sr-only">Ações</span></th></tr></thead><tbody>{items.map((item, index) => <SelectedProduct key={item.productId} item={{ ...item, line: table.line }} name={table.data!.items.find(i => i.productId === item.productId)?.name || item.productId} sku={table.data!.items.find(i => i.productId === item.productId)?.sku || ""} tenant={table.tenantId} update={next => { setItems(items.map((i, n) => n === index ? next : i)); change() }} remove={() => { setItems(items.filter((_, n) => n !== index)); change() }} />)}</tbody></DataTable> : <p className="text-xs text-muted-foreground">Adicione equipamentos para iniciar.</p>}
         {!!items.length && <p className="text-xs text-muted-foreground">{items.length} equipamento{items.length !== 1 ? "s" : ""} · Cores e tipo de anilheiro em Acabamentos.</p>}
         <OrderWeightSummary tenantId={table.tenantId} items={items.map(item => ({ ...item, quantity: /^\d{1,7}$/.test(item.quantity) && Number(item.quantity) >= 1 && Number(item.quantity) <= 1_000_000 ? String(Number(item.quantity)) : "" }))} />
       </fieldset>
@@ -494,7 +494,7 @@ function SelectedProductResource(props: SelectedProductProps) {
 
 function SelectedProductContent({ item, name, sku, tenant, update, remove, orderMode = false, price, priced, disabled = false, product }: SelectedProductProps & { product: FinishResource }) {
   const colors = product.value?.tenantId === tenant ? product.value.data : null
-  const palette = catalogPaletteFor(colors?.finishingPalette)
+  const palette = catalogPaletteFor(item.line === "national" ? null : colors?.finishingPalette)
   const selectedFinishes = [item.structureColor, item.swingArmColor, item.upholsteryColor, item.plateHolderType].filter(Boolean).join(" · ")
   return <>
     <tr>
@@ -507,11 +507,11 @@ function SelectedProductContent({ item, name, sku, tenant, update, remove, order
       {product.error && <div className={orderMode ? "flex flex-wrap items-center gap-2 text-xs" : "space-y-2 rounded-lg border p-2 text-xs"}><p role="alert">{orderMode ? "Acabamentos indisponíveis" : <RequestError message={product.error} status={product.status} />}</p><Button type="button" variant="outline" disabled={product.loading} aria-label={`Recarregar acabamentos de ${name}`} onClick={product.reload}>{product.loading ? "Carregando acabamentos…" : orderMode ? "Tentar de novo" : "Recarregar acabamentos"}</Button></div>}
       {orderMode && product.loading && <p role="status" className="text-xs text-muted-foreground">Carregando acabamentos…</p>}
       {(!orderMode || !!colors && !product.error) && <details className="group min-w-0" onInvalidCapture={event => { event.currentTarget.open = true }}>
-        <summary className="min-h-10 cursor-pointer rounded-md py-2 text-sm font-medium focus-visible:outline-2 focus-visible:outline-ring">Acabamentos<span className="sr-only"> de {name}</span><span className="ml-2 text-xs font-normal text-muted-foreground group-open:hidden">{selectedFinishes || "Escolher cores"}</span></summary>
+        <summary className="min-h-10 cursor-pointer rounded-md py-2 text-sm font-medium focus-visible:outline-2 focus-visible:outline-ring">Acabamentos<span className="sr-only"> de {name}</span><span className="ml-2 text-xs font-normal text-muted-foreground group-open:hidden">{selectedFinishes || (item.line === "national" ? "Tipo de anilheiro" : "Escolher cores")}</span></summary>
         <fieldset disabled={disabled} className="grid min-w-0 gap-4 pt-3 sm:grid-cols-2">
           {orderColorParts.map(color=>{
             const options=orderFinishOptions(item,colors?{structureColors:colors.structureColors,swingArmColors:colors.swingArmColors,upholsteryColors:colors.upholsteryColors,upholsteryConfigurable:colors.upholsteryConfigurable}:undefined,color)
-            if(!options.length&&!item[color.field])return null
+            if(item.line === "national" || !options.length&&!item[color.field])return null
             return <FinishChoice key={color.field} title={color.title} part={color.part} palette={palette} label={color.label+" de "+name} options={options} value={item[color.field]} onChange={value=>update({...item,[color.field]:value})}/>
           })}
           <PlateHolderChoice label={`Tipo de anilheiro de ${name}`} value={item.plateHolderType} onChange={value=>update({...item,plateHolderType:value})}/>

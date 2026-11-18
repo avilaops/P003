@@ -56,7 +56,6 @@ export function useCommand() {
     running.current = true; setBusy(true); setError(""); setStatus(0)
     if (!uncertain) current.current = { url, tenant, body: JSON.stringify(body), etag, key: crypto.randomUUID(), method }
     const command = current.current!
-    const wasUncertain = uncertain
     try {
       const response = await erpFetch(command.url, {
         method: command.method,
@@ -66,7 +65,11 @@ export function useCommand() {
       setStatus(response.status)
       const value = await readJson(response)
       if (!response.ok) {
-        setUncertain(wasUncertain || response.status >= 500); setStale(!wasUncertain && response.status === 412)
+        // An authentication or permission failure cannot confirm the outcome of an earlier attempt.
+        const unconfirmedAccess = uncertain && (response.status === 401 || response.status === 403)
+        const retry = unconfirmedAccess || response.status >= 500 || response.status === 408 || response.status === 429
+        if (!retry) current.current = null
+        setUncertain(retry); setStale(response.status === 412)
         setError(message(value, "Operação recusada"))
         return null
       }

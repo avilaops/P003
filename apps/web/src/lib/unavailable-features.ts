@@ -5,8 +5,6 @@ export type UnavailableFeature = { title: string; purpose: string; related: read
 export const unavailableFeatures: Record<string, UnavailableFeature> = {
   "/aplicativos": { title: "Aplicativos", purpose: "Conectar aplicativos externos ao ERP.", related: ["Integrações", "/preferencias/integracoes"] },
   "/compras/notas-entrada": { title: "Nota fiscal de entrada", purpose: "Consultar o detalhe de uma nota recebida.", related: ["Notas fiscais de entrada", "/compras/notas-entrada"] },
-  "/compras/sugestoes": { title: "Sugestões de compra", purpose: "Calcular o que repor com base em estoque mínimo e demanda dos pedidos.", related: ["Pedidos de compra", "/compras/pedidos"] },
-  "/estoque/inventarios": { title: "Conferência de estoque", purpose: "Contar o estoque físico, comparar com o saldo do sistema e ajustar as divergências.", related: ["Saldos de estoque", "/estoque"] },
   "/estoque/lancamentos": { title: "Lançamento de estoque", purpose: "Consultar o detalhe de uma movimentação de estoque.", related: ["Saldos de estoque", "/estoque"] },
   "/eventos": { title: "Eventos", purpose: "Acompanhar os acontecimentos da empresa em uma linha do tempo.", related: ["Visão geral", "/"] },
   "/financeiro/conta-digital": { title: "Conta digital", purpose: "Movimentar uma conta de pagamento integrada ao ERP.", related: ["Caixas e bancos", "/financeiro/caixas-bancos"] },

@@ -1,7 +1,7 @@
 import { z } from "zod"
 import { normalizedDatabaseId } from "../../platform/database-id.js"
 import { revisionValue, type Revision } from "../../platform/revision.js"
-import { selectPlateHolderType } from "../sales/finishes.js"
+import { checkNationalColors, selectPlateHolderType } from "../sales/finishes.js"
 import { commercialCents as cents, invalidCommercial as invalid, rounded, up, simulateParameters, unsigned32, unsigned64, type CommercialParameters } from "./parameters.js"
 
 const nullableText = z.string().nullable().default(null), uuid = z.guid().transform(value => value.toLowerCase())
@@ -55,6 +55,7 @@ export function calculateNegotiation(p: CommercialParameters, rules: ApprovalRul
   if (numerator <= 0n || numerator > denominator) invalid("Total desejado deve ser positivo e não superar a tabela")
   let totalIpi = 0n, net = 0n
   const items = input.items.map((item, index) => {
+    checkNationalColors(input.line, [item.structureColor, item.swingArmColor, item.upholsteryColor, item.plateHolderColor])
     const source = sources[index]!, unitNet = rounded(BigInt(source.priceCents) * numerator, denominator)
     if (!unitNet) invalid("Desconto deixa um equipamento sem valor comercial")
     const unitTotal = gross(unitNet), lineNet = unitNet * BigInt(item.quantity), ipi = (unitTotal - unitNet) * BigInt(item.quantity)

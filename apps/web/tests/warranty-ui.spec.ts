@@ -38,6 +38,25 @@ test("garantia aberta pela nota recupera a série e grava o protocolo com a orig
   await expect.poll(()=>body).toMatchObject({serialNumber:"SE-28",productId:product,orderId:service,documentId:doc,lineNumber:1})
 })
 
+test("série entregue pelo estoque preenche nota, linha e pedido no protocolo",async({page})=>{
+ const documentId="55555555-5555-4555-8555-555555555555"
+ const origin={documentId,invoiceNumber:"38",lineNumber:2,productId:product,productName:"Banco",orderId:service,orderNumber:"21",customerName:"Cliente",availableUnits:1}
+ await page.route("**/api/erp/warranty-cases?**",r=>r.fulfill({json:{tenantId:tenant,canEdit:true,data:[],total:0}}))
+ await page.route("**/api/erp/warranty-equipment?**",r=>r.fulfill({json:{tenantId:tenant,data:null,matches:[],stockTracked:true,stockOrigins:[origin]}}))
+ await page.route("**/api/erp/warranty-policies?**",r=>r.fulfill({json:{tenantId:tenant,data:[],lots:[],receipts:[]}}))
+ let payload:unknown
+ await page.route("**/api/erp/warranty-cases",r=>{payload=r.request().postDataJSON();return r.fulfill({headers:{etag:'"1"'},json:{tenantId:tenant,data:{id:record}}})})
+ await page.goto("/vendas/garantias/novo")
+ await page.getByLabel("Título",{exact:true}).fill("Falha da unidade")
+ await page.getByLabel("Descrição",{exact:true}).fill("Falha observada após a entrega da unidade.")
+ await page.getByLabel("Número de série").fill("E3-SERIE")
+ await page.getByRole("button",{name:"Consultar série ou lote"}).click()
+ await page.getByRole("button",{name:/NF-e 38 • item 2 • pedido 21/}).click()
+ await expect(page.getByText("Origem selecionada • pedido 21 • NF-e 38 • item 2")).toBeVisible()
+ await page.getByRole("button",{name:"Abrir garantia"}).click()
+ await expect.poll(()=>payload).toMatchObject({serialNumber:"E3-SERIE",orderId:service,documentId,lineNumber:2,productId:product})
+})
+
 test("valor da aprovação financeira é independente da mão de obra", async ({ page }) => {
   let body: unknown
   await page.route("**/api/erp/warranty-cases/*/approval", route => {
@@ -54,7 +73,9 @@ test("valor da aprovação financeira é independente da mão de obra", async ({
 
 test("seleção de ordem para peça usa a revisão da ordem", async ({ page }) => {
   let revision = ""
+  let serials: string[] = []
   await page.route("**/api/erp/warranty-service-orders/*/parts", route => {
+    serials = route.request().postDataJSON().serialNumbers
     revision = route.request().headers()["if-match"]
     return route.fulfill({ headers: { ETag: '"3"' }, json: { tenantId: tenant } })
   })
@@ -62,7 +83,11 @@ test("seleção de ordem para peça usa a revisão da ordem", async ({ page }) =
   await page.getByLabel("Ordem de serviço da peça").selectOption(service)
   await page.getByLabel("Buscar produto da peça").fill("Rolamento")
   await page.getByRole("button", { name: /Rolamento/ }).click()
+  await page.getByLabel("Séries das peças").fill("PE-482\nPE-482")
+  await expect(page.getByRole("button", { name: "Registrar peça" })).toBeDisabled()
+  await page.getByLabel("Séries das peças").fill("PE-482")
   await page.getByRole("button", { name: "Registrar peça" }).click()
+  await expect.poll(() => serials).toEqual(["PE-482"])
   await expect.poll(() => revision).toBe('"2"')
 })
 

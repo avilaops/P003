@@ -24,8 +24,8 @@ export async function prepareProposal(context: AuthorizedContext, input: Proposa
     const product = await loadSaleProduct(context, item.productId), saved = previous?.items.find(line => line.productId === item.productId)
     if (saved && saved.unit !== product.unit) conflict("Unidade do produto mudou; revise o item")
     if (product.status !== "active") conflict("Selecione produtos ativos desta empresa")
-    const finishes = selectFinishes(item, product, saved)
     const quoted = commercial?.prepared.sale.items.find(line => line.productId === item.productId)
+    const finishes = selectFinishes(item, product, saved, quoted?.line)
     const origin = origins.get(item.productId)
     const sameCustomer = previous?.data.customerId === input.customerId
     const agreed = saved && sameCustomer ? fixed(String(saved.unitPrice), 2) : BigInt(origin?.baseCents ?? product.price_cents), price = item.unitPrice === null ? quoted ? BigInt(quoted.unitTotalCents) : agreed : fixed(item.unitPrice, 2)

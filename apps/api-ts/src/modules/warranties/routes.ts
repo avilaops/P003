@@ -7,7 +7,7 @@ import { registerWarrantyService } from "./service.js"
 import { registerWarrantyMaterials } from "./materials.js"
 import { registerWarrantyRecords } from "./records.js"
 import { registerWarrantyMetrics } from "./metrics.js"
-import { resolveCaseEquipment, invoiceLine, registerWarrantyEquipment } from "./equipment.js"
+import { caseEquipmentAndSale, resolveCaseEquipment, invoiceLine, registerWarrantyEquipment } from "./equipment.js"
 import { queryInteger, searchQuery } from "../registrations/query.js"
 import { command, criticalities, event, idParam, invalid, limitedText, manage, parse, readWith, statuses } from "./shared.js"
 
@@ -74,23 +74,24 @@ export function registerWarranties(app: FastifyInstance,deps: AccessDependencies
         const rows = await ctx.client.query("SELECT to_jsonb(t) AS data FROM (" + sql + " WHERE tenant_id=$1 AND case_id=$2 ORDER BY created_at,id) t",[ctx.tenantId,id])
         data[name] = rows.rows.map(row => row.data)
       }
-      const parts = await ctx.client.query('SELECT to_jsonb(t) AS data FROM (SELECT p.id,p.service_order_id AS "serviceOrderId",p.product_id AS "productId",p.product_name AS "productName",p.sku,p.quantity_micros AS "quantityMicros",p.amount_cents AS "amountCents",p.created_at AS "createdAt" FROM warranty_service_order_parts p JOIN warranty_service_orders so ON (so.tenant_id,so.id)=(p.tenant_id,p.service_order_id) WHERE p.tenant_id=$1 AND so.case_id=$2 ORDER BY p.created_at,p.id) t',[ctx.tenantId,id])
+      const parts = await ctx.client.query('SELECT to_jsonb(t) AS data FROM (SELECT p.id,p.service_order_id AS "serviceOrderId",p.product_id AS "productId",p.product_name AS "productName",p.sku,p.quantity_micros AS "quantityMicros",p.amount_cents AS "amountCents",p.created_at AS "createdAt",m.serial_numbers AS "serialNumbers",m.warehouse_id AS "warehouseId",w.name AS "warehouseName" FROM warranty_service_order_parts p JOIN warranty_service_orders so ON (so.tenant_id,so.id)=(p.tenant_id,p.service_order_id) LEFT JOIN stock_movements m ON (m.tenant_id,m.id)=(p.tenant_id,p.stock_movement_id) LEFT JOIN warehouses w ON (w.tenant_id,w.id)=(m.tenant_id,m.warehouse_id) WHERE p.tenant_id=$1 AND so.case_id=$2 ORDER BY p.created_at,p.id) t',[ctx.tenantId,id])
       data.parts = parts.rows.map(row=>row.data)
       return { data }
     })
     return reply.header("cache-control","no-store").header("etag",'"'+String(result.data.revision)+'"').send(result)
   })
   command(app,deps,caseUrl,createInput,"warranty.case.opened","warranty_case",manage,async (ctx,input) => {
-    const equipment=await resolveCaseEquipment(ctx,input)
     if(Boolean(input.documentId)!==Boolean(input.lineNumber)) invalid("Informe a nota e o item de origem")
     const fiscal=input.documentId && input.lineNumber ? await invoiceLine(ctx,input.documentId,input.lineNumber) : undefined
     if(input.documentId && (!fiscal || input.productId && input.productId!==fiscal.productId || input.orderId && input.orderId!==fiscal.orderId)) invalid("A nota e o item devem corresponder ao equipamento vendido")
+    const {equipment,sale}=await caseEquipmentAndSale(ctx,{...input,productId:input.productId??fiscal?.productId,orderId:input.orderId??fiscal?.orderId})
     if (equipment) {
       for (const field of ["orderId","productId","customerId","policyId","documentId","lineNumber"] as const) {
         if (input[field] && input[field] !== equipment[field]) invalid("A origem informada difere do equipamento vendido")
       }
     }
-    const resolved={...input,...fiscal,...equipment}
+    if(sale && input.customerId && input.customerId!==sale.customerId)invalid("O cliente informado diverge do titular da série entregue")
+    const resolved={...input,...fiscal,...sale,...equipment}
     const refs = (await ctx.client.query(`SELECT
       (SELECT customer_id FROM sales_orders WHERE tenant_id=$1 AND id=$2) AS customer,
       ($3::uuid IS NULL OR EXISTS(SELECT FROM parties WHERE tenant_id=$1 AND id=$3 AND is_customer)) AS party,
@@ -100,7 +101,7 @@ export function registerWarranties(app: FastifyInstance,deps: AccessDependencies
     if (!refs.party || !refs.product || !refs.policy || !refs.line || resolved.orderId && (!refs.customer || resolved.customerId && resolved.customerId !== refs.customer)) invalid("Confira os vínculos entre pedido, cliente, produto e política da garantia")
     const id = randomUUID()
     await ctx.client.query("INSERT INTO warranty_cases(id,tenant_id,protocol,title,description,criticality,customer_id,order_id,product_id,policy_id,serial_number,lot,equipment_id,coverage_status,document_id,line_number) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)",
-      [id,ctx.tenantId,"GAR-"+id.replaceAll("-",""),input.title,input.description,input.criticality,resolved.customerId ?? refs.customer,resolved.orderId,resolved.productId,resolved.policyId,equipment?.serialNumber??input.serialNumber,equipment?.lot??input.lot,equipment?.id,equipment?.coverageStatus ?? "pending",resolved.documentId,resolved.lineNumber])
+      [id,ctx.tenantId,"GAR-"+id.replaceAll("-",""),input.title,input.description,input.criticality,resolved.customerId ?? refs.customer,resolved.orderId,resolved.productId,resolved.policyId,equipment?.serialNumber??sale?.serialNumber??input.serialNumber,equipment?.lot??input.lot,equipment?.id,equipment?.coverageStatus ?? "pending",resolved.documentId,resolved.lineNumber])
     await event(ctx,id,"opened","opened",{ title:input.title })
     return { data:await load(ctx,id),aggregateId:id }
   })

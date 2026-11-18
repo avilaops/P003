@@ -53,12 +53,14 @@ export async function inventory() {
   try {
     await app.ready();
     const source = await discover(root, { typescript });
-    const operations = classifyOperations(source.api, app);
+    // Keep the migration denominator stable when adding TypeScript-only operations.
+    const baseline = source.api.filter(route => route.file.endsWith('.rs') || route.file.endsWith('/document-endpoints.json'));
+    const operations = classifyOperations(baseline, app);
     return {
       schemaVersion: 1,
       sourceHash: source.sourceHash,
       registrationSourceHash: await registrationHash(path.join(root, 'apps/api-ts/src')),
-      scope: 'Literal native HTTP operations discovered from production Rust modules; excludes dynamic MCP dispatch and non-HTTP workers.',
+      scope: 'Production native HTTP operations and the registered document endpoint baseline. Excludes new TypeScript-only stock routes, dynamic MCP dispatch and non-HTTP workers.',
       limitation: 'registered_unverified means Fastify has a handler, not that behavior, authorization, persistence or production parity has been verified.',
       counts: {
         total: operations.length,

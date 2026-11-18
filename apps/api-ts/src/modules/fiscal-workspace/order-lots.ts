@@ -1,3 +1,4 @@
+import {serialSelection,lotSerials,type SerialSelection} from "./lot-serials.js"
 import {ownStart,ownDecision,ownRelease,ownClose,prepareOwnReturn,changeOwnReturn,completeOwnReturn,ownEvidence} from "./self-returns.js"
 import {registerSalesReturns} from "./returns-list.js"
 import {applyReturnCredit,returnCreditTitles} from "./return-credit.js"
@@ -23,11 +24,11 @@ const input=z.discriminatedUnion("action",[
   ownStart,ownDecision,ownRelease,ownClose,
   z.strictObject({action:z.literal("prepare"),environment,items:z.array(item).min(1).max(100)}),
   z.strictObject({action:z.literal("withdraw"),environment,lotId:z.guid()}),
-  z.strictObject({action:z.literal("deliver"),environment:z.literal("production"),lotId:z.guid()}),
+  z.strictObject({action:z.literal("deliver"),environment:z.literal("production"),lotId:z.guid(),serials:serialSelection.optional()}),
   z.strictObject({action:z.literal("applyCredit"),environment:z.literal("production"),returnId:z.guid(),receivableId:z.guid(),amountCents:z.string().regex(/^[1-9][0-9]{0,13}$/)}),
   z.strictObject({action:z.literal("decideReturn"),environment:z.literal("production"),requestId:z.guid(),approve:z.boolean(),reason:z.string().trim().min(3).max(200)}),
   z.strictObject({action:z.literal("return"),environment:z.literal("production"),lotId:z.guid(),receivedId:z.string().regex(/^[1-9][0-9]{0,18}$/).refine(i=>BigInt(i)<=9223372036854775807n),
-    reason:z.string().trim().min(3).max(200),destination:z.enum(["stock","service","discard"])})
+    reason:z.string().trim().min(3).max(200),destination:z.enum(["stock","service","discard"]),serials:serialSelection.optional()})
 ])
 function access(c:AuthorizedContext,action?:z.infer<typeof input>["action"]) {
   requirePermission(c,"sales.orders.read")
@@ -44,9 +45,10 @@ function access(c:AuthorizedContext,action?:z.infer<typeof input>["action"]) {
   }
 }
 
-async function deliver(c:AuthorizedContext,headers:CommandHeaders,state:Awaited<ReturnType<typeof lotState>>,lotId:string) {
+async function deliver(c:AuthorizedContext,headers:CommandHeaders,state:Awaited<ReturnType<typeof lotState>>,lotId:string,selection?:SerialSelection) {
   const lot=state.lots.find(l=>l.id===lotId)
   if (!lot || lot.status!=="authorized" || lot.deliveredAt || state.status!=="confirmed") conflict("A entrega exige lote autorizado de produção pendente neste pedido confirmado")
+  const serials=await lotSerials(c,state.orderId,lotId,"deliver",lot.items.map(i=>({line:i.lineNumber,product:state.lines.find(l=>l.lineNumber===i.lineNumber)!.productId,quantity:i.quantity})),selection)
   for (const item of lot.items) {
     const line=state.lines.find(l=>l.lineNumber===item.lineNumber)!
     const qty=BigInt(item.quantity)
@@ -57,8 +59,9 @@ async function deliver(c:AuthorizedContext,headers:CommandHeaders,state:Awaited<
     if (!stock || held<qty || balance<held) conflict("Saldo reservado insuficiente para entregar este lote")
     const movement=randomUUID(),next=balance-qty
     await c.client.query("UPDATE stock_balances SET quantity_micros=$3 WHERE tenant_id=$1 AND product_id=$2",[c.tenantId,line.productId,next])
-    await c.client.query("INSERT INTO stock_movements(id,tenant_id,product_id,direction,quantity_micros,balance_after_micros,reason,source_order_id) VALUES($1,$2,$3,'issue',$4,$5,$6,$7)",
-      [movement,c.tenantId,line.productId,qty,next,`Entrega parcial • lote ${lotId}`,state.orderId])
+    await c.client.query("INSERT INTO stock_movements(id,tenant_id,product_id,direction,quantity_micros,balance_after_micros,reason,source_order_id,sales_invoice_lot_id,serial_numbers) VALUES($1,$2,$3,'issue',$4,$5,$6,$7,$8,$9)",
+      [movement,c.tenantId,line.productId,qty,next,`Entrega parcial • lote ${lotId}`,state.orderId,lotId,serials.get(item.lineNumber)??null])
+    if(serials.has(item.lineNumber))await c.client.query("UPDATE stock_serial_assignments SET serials=ARRAY(SELECT n FROM unnest(serials) n WHERE NOT n=ANY($4::text[])),revision=revision+1 WHERE tenant_id=$1 AND product_id=$2 AND kind='sale' AND document_id=$3 AND direction='issue'",[c.tenantId,line.productId,state.orderId,serials.get(item.lineNumber)])
     await record(c,headers,"stock_movement",movement,"stock.moved",{orderId:state.orderId,lotId,productId:line.productId,quantityMicros:item.quantity,direction:"issue"})
   }
   await c.client.query("UPDATE sales_invoice_lots SET delivered_at=clock_timestamp() WHERE tenant_id=$1 AND id=$2",[c.tenantId,lotId])
@@ -126,7 +129,7 @@ export function registerOrderLots(app:FastifyInstance,deps:AccessDependencies,re
         await c.client.query("UPDATE sales_invoice_lots SET withdrawn=true WHERE tenant_id=$1 AND id=$2",[c.tenantId,lot.id])
         affected=lot.id
       } else if (body.action==="deliver") {
-        await deliver(c,request.headers,state,body.lotId)
+        await deliver(c,request.headers,state,body.lotId,body.serials)
         affected=body.lotId
       } else if(body.action==="applyCredit"){
         affected=await applyReturnCredit(c,request.headers,order,body.returnId,body.receivableId,body.amountCents)

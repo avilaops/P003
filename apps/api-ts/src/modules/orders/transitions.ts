@@ -11,6 +11,7 @@ import { issueOrder, reserveOrder, validateFiscalCompletion } from "./fulfillmen
 import { cancelUnpaid, originateOnCompletion, originateSchedule, verifyReceivables } from "./receivables.js"
 import { checkOrderCredit } from "../commercial/credit.js"
 import { loadOrder } from "./snapshot.js"
+import { canReadRealizedMargin } from "./realized-margin.js"
 
 const targets = { accept: "accepted", confirm: "confirmed", cancel: "cancelled", complete: "completed" } as const
 export function registerOrderTransitions(app: FastifyInstance, dependencies: AppDependencies) {
@@ -26,7 +27,11 @@ export function registerOrderTransitions(app: FastifyInstance, dependencies: App
         // Production rights must still be current when returning an old cancellation.
         if (action === "cancel") await requireCancellationPermissions(context, id)
         const previous = await replay(context, key, scope, input)
-        if (previous) return previous
+        if (previous) {
+          if (canReadRealizedMargin(context)) return previous
+          const { realizedMargin: _margin, ...visible } = previous
+          return visible
+        }
         const current = await loadOrder(context, id), status = String(current.data.status)
         if (current.data.revision !== expected) throw new Problem(412, "revision_conflict", "Outra pessoa alterou o cadastro. Sua edição foi preservada")
         if ((action === "accept" && status === "draft") || (action === "confirm" && ["draft", "accepted"].includes(status))) {

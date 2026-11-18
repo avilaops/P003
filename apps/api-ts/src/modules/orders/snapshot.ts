@@ -1,6 +1,7 @@
 import type { AuthorizedContext } from "../../platform/access.js"
 import { Problem } from "../../platform/problem.js"
 import { orderSummary } from "../sales/shared.js"
+import { realizedMargin } from "./realized-margin.js"
 import { loadCheckout } from "./checkout.js"
 
 export const summary = "SELECT id,number::text AS number,customer_id,customer_name,customer_tax_id,due_date::text AS due_date,(amount_cents::numeric/100)::numeric(16,2)::text AS amount,status,revision,to_json(updated_at)#>>'{}' AS updated_at,(EXISTS(SELECT 1 FROM order_pricing_snapshots s WHERE s.tenant_id=sales_orders.tenant_id AND s.order_id=sales_orders.id) OR EXISTS(SELECT 1 FROM commercial_order_quotes q WHERE q.tenant_id=sales_orders.tenant_id AND q.order_id=sales_orders.id)) AS pricing_origin FROM sales_orders"
@@ -20,5 +21,6 @@ export async function loadOrder(context: AuthorizedContext, id: string) {
   }))
   const checkout = await loadCheckout(context, id)
   const agreement = (await context.client.query("SELECT jsonb_build_object('proposalId',p.id,'proposalNumber',p.number::text,'proposalVersion',v.version,'customer',COALESCE(v.customer_snapshot,jsonb_build_object('legalName',v.customer_name,'taxId',v.customer_tax_id)),'paymentTerms',v.payment_terms,'deliveryTerms',v.delivery_terms,'notes',v.notes) AS data FROM sales_proposals p JOIN sales_proposal_versions v ON v.tenant_id=p.tenant_id AND v.proposal_id=p.id AND v.version=p.current_version WHERE p.tenant_id=$1 AND p.order_id=$2", [context.tenantId, id])).rows[0]?.data
-  return { tenantId: context.tenantId, canEdit: context.permissions.includes("sales.orders.manage"), pricingOrigin: data.pricingOrigin, data, items, ...(checkout ? { checkout } : {}), ...(agreement ? { proposalAgreement: agreement } : {}) }
+  const margin = await realizedMargin(context, id, data.status)
+  return { ...(margin ? { realizedMargin: margin } : {}), tenantId: context.tenantId, canEdit: context.permissions.includes("sales.orders.manage"), pricingOrigin: data.pricingOrigin, data, items, ...(checkout ? { checkout } : {}), ...(agreement ? { proposalAgreement: agreement } : {}) }
 }

@@ -9,9 +9,21 @@ spec.loader.exec_module(gate)
 
 
 class ScopeTests(unittest.TestCase):
+    def test_deployment_readme_does_not_request_a_native_build(self):
+        self.assertFalse(gate.native_api_required(["deploy/README.md"]))
+
+    def test_web_report_model_test_uses_the_typescript_validation(self):
+        self.assertFalse(gate.native_api_required(["scripts/architecture/report-model.test.mjs"]))
+
+    def test_inventory_contract_catalogue_runs_in_project_validation(self):
+        for path in ("verification/contracts.json", "verification/discovery.mjs", "verification/stock-route-discovery.mts",
+                     "verification/ts-migration-inventory.mjs",
+                     "verification/test/contracts.test.mjs", "verification/test/product-context.test.mjs"):
+            self.assertFalse(gate.native_api_required([path]), path)
+
     def test_private_signature_service_has_mandatory_project_scope(self):
         for path in ('apps/contract-signature-service/src/contract_signature_service/worker.py',
-                     'deploy/contracts-validator/compose.yml', 'scripts/contracts/verify-signature-service.py'):
+                     'deploy/contracts-validator/compose.yml', 'scripts/contracts/verify-signature-service.py', 'scripts/contracts/validator-release.py'):
             self.assertFalse(any(gate.plan([path]).values()), path)
             self.assertTrue(gate.signature_check_required([path]), path)
         self.assertTrue(all(gate.plan(['deploy/contracts-validator-unrelated/compose.yml']).values()))
@@ -42,6 +54,7 @@ class ScopeTests(unittest.TestCase):
             self.assertTrue(gate.native_api_required([path]), path)
         self.assertFalse(gate.native_api_required(["apps/api-ts/src/modules/proposals/commands.ts", "migrations/123.sql"]))
         for path in ("apps/api-ts/src/platform/mcp-dispatch.ts", ".github/workflows/ci.yml",
+                     ".github/workflows/regression.yml", "deploy/release-retention.py",
                      "deploy/web.Dockerfile", "apps/fiscal-engine/src/server.ts", "pnpm-lock.yaml"):
             self.assertFalse(gate.native_api_required([path]), path)
         self.assertFalse(gate.native_api_required(["apps/web/src/page.tsx", "docs/design.md"]))

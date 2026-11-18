@@ -1,5 +1,6 @@
 import Fastify, { type FastifyInstance } from "fastify"
 import { randomUUID } from "node:crypto"
+import { registerParticipantRoutes } from "./modules/contract-signatures/participant-routes.js"
 
 import {registerCertificates} from "./modules/fiscal-workspace/certificates.js"
 import {registerFiscalSettings} from "./modules/fiscal-workspace/settings.js"
@@ -12,6 +13,10 @@ import { registerFiscalIncoming } from "./modules/fiscal-workspace/incoming.js"
 import { registerFiscalReceipts } from "./modules/fiscal-incoming/routes.js"
 import { registerOrderLots } from "./modules/fiscal-workspace/order-lots.js"
 import { registerFiscalOutgoing } from "./modules/fiscal-workspace/outgoing.js"
+import { registerLocationRoutes } from "./modules/inventory/location-routes.js"
+import { registerCountRoutes } from "./modules/inventory/count-routes.js"
+import { registerStockRoutes } from "./modules/inventory/routes.js"
+import { registerProduction } from "./modules/production/routes.js"
 import { registerPartyRoutes } from "./modules/parties/routes.js"
 import { registerWarranties } from "./modules/warranties/routes.js"
 import { registerDashboardRoutes } from "./modules/dashboard/routes.js"
@@ -44,6 +49,7 @@ import { registerMcpDispatch } from "./platform/mcp-dispatch.js"
 import { registerDocumentCopies, type DocumentCopyIO } from "./modules/document-copies/routes.js"
 import { registerFinancialEmails } from "./modules/document-copies/financial-routes.js"
 import { registerContractPackage } from "./modules/document-copies/contract-package-routes.js"
+import { registerQualifiedReissue } from "./modules/contract-signatures/reissue.js"
 
 export type AppDependencies = AccessDependencies & { fiscalVault?:import("./modules/outgoing-nfse/certificate-vault.js").FiscalCertificateVault; fiscalOperations?:FiscalOperations; outgoingNfse?: OutgoingNfseDependencies; nfeEmail?: NfeEmailIO; documentCopies?: DocumentCopyIO }
 
@@ -84,6 +90,7 @@ export function buildApp(_dependencies: AppDependencies): FastifyInstance {
     const problem = error instanceof Problem ? error
       : ["FST_ERR_CTP_INVALID_JSON_BODY", "FST_ERR_CTP_EMPTY_JSON_BODY", "FST_ERR_CTP_BODY_TOO_LARGE", "FST_ERR_CTP_INVALID_MEDIA_TYPE"].includes(databaseCode) ? new Problem(422, "invalid_input", request.routeOptions.url === "/api/v1/preferences" ? "Preferências inválidas ou campos desconhecidos" : "JSON inválido ou campos desconhecidos")
       : databaseCode === "23505" ? new Problem(409, "domain_conflict", "Já existe um cadastro com estes dados nesta empresa")
+      : databaseCode === "P4101" ? new Problem(409, "domain_conflict", error instanceof Error ? error.message : "O depósito não permite esta operação")
       : databaseCode === "23503" || databaseCode === "23514" ? new Problem(422, "invalid_input", "Cadastro incompatível com os registros da empresa")
       : new Problem(500, "internal_error", "Erro interno")
     void reply
@@ -102,6 +109,10 @@ export function buildApp(_dependencies: AppDependencies): FastifyInstance {
   registerOrderLots(app, _dependencies)
   registerFiscalIncoming(app, _dependencies)
   registerFiscalReceipts(app, _dependencies)
+  registerStockRoutes(app, _dependencies)
+  registerProduction(app, _dependencies)
+  registerLocationRoutes(app, _dependencies)
+  registerCountRoutes(app, _dependencies)
   registerPartyRoutes(app, _dependencies)
   registerWarranties(app, _dependencies)
   registerDashboardRoutes(app, _dependencies)
@@ -130,5 +141,7 @@ export function buildApp(_dependencies: AppDependencies): FastifyInstance {
   registerDocumentCopies(app, _dependencies, _dependencies.documentCopies)
   registerFinancialEmails(app, _dependencies, _dependencies.documentCopies)
   registerContractPackage(app, _dependencies, _dependencies.documentCopies, _dependencies.nfeEmail?.render)
+  registerQualifiedReissue(app, _dependencies)
+  registerParticipantRoutes(app, _dependencies)
   return app
 }

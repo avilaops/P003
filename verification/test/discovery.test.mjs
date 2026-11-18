@@ -4,7 +4,7 @@ import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { createRequire } from 'node:module';
-import { discover, analyze, normalizedRoute, routePattern, rustRoutes } from '../discovery.mjs';
+import { discover, analyze, normalizedRoute, publicApiRoutes, routePattern, rustRoutes } from '../discovery.mjs';
 
 const typescript = createRequire(new URL('../../apps/web/package.json', import.meta.url))('typescript');
 
@@ -69,7 +69,8 @@ test('real AST discovery links page to BFF and backend and marks inline no-ops w
     'apps/web/src/features/list.tsx': `import "./cycle"; export function List(){fetch('/api/erp/items');fetch(dynamicUrl);return <button onClick={()=>{}}>Salvar</button>}`,
     'apps/web/src/features/cycle.ts': 'import "./list";',
     'apps/web/src/app/api/erp/items/route.ts': 'export const GET=(r:Request)=>forwardErp(r,"/items"); export const POST=(r:Request)=>forwardErp(r,"/items")',
-    'apps/api/src/router.rs': 'fn routes(){Router::new().route("/api/v1/items",get(list).post(create))}',
+    'apps/api/src/router.rs': 'fn routes(){Router::new().route("/api/v1/items",post(create))}',
+    'apps/api-ts/src/modules/document-endpoints.json': JSON.stringify({ items: { GET: '/api/v1/items', POST: '/api/v1/items' } }),
     'apps/web/tests/items.spec.ts': 'test("items",async({page})=>{await page.goto("/items")})',
     'migrations/0001.sql': 'CREATE TABLE items(id uuid);',
   };
@@ -77,7 +78,15 @@ test('real AST discovery links page to BFF and backend and marks inline no-ops w
     for (const [file, source] of Object.entries(files)) { await mkdir(path.dirname(path.join(root, file)), { recursive: true }); await writeFile(path.join(root, file), source); }
     const inventory = await discover(root, { typescript });
     const findings = analyze(inventory);
-    assert.equal(inventory.pages.length, 1); assert.equal(inventory.bff.length, 1); assert.equal(inventory.api.length, 1);
+    assert.equal(inventory.pages.length, 1);
+    assert.equal(inventory.bff.length, 1);
+    const publicRoutes = publicApiRoutes(inventory.api);
+    assert.equal(publicRoutes.size, 1);
+    const items = publicRoutes.get('/api/v1/items');
+    assert.deepEqual([...items.methods].sort(), ['GET', 'POST']);
+    assert.deepEqual([...items.files].sort(), ['apps/api-ts/src/modules/document-endpoints.json', 'apps/api/src/router.rs']);
+    assert.deepEqual(inventory.api.find(route => route.file.endsWith('router.rs')).methods, ['POST']);
+    assert.deepEqual(inventory.api.find(route => route.file.endsWith('document-endpoints.json')).methods, ['GET', 'POST']);
     const page = inventory.pages[0];
     assert.equal(page.path, '/items'); assert.equal(page.runtimeVerdict, 'not_verified_per_route');
     assert.equal(page.dependencies.length, 3); assert.equal(page.emptyActions.length, 1);

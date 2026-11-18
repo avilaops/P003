@@ -15,7 +15,14 @@ export function selectPlateHolderType(requested: string | undefined, previous?: 
   const selected = requested?.trim()
   return !selected || selected.toLowerCase() === "não se aplica" ? null : selected.toLowerCase() === "standard" ? "Standard" : selected.toLowerCase() === "olímpico" ? "Olímpico" : selected === previous ? selected : invalid("Tipo de anilheiro deve ser Standard, Olímpico ou Não se aplica")
 }
-export function selectFinishes(item: FinishInput, product: SaleProduct, saved?: SavedFinishes) {
+export function checkNationalColors(line: string | undefined, colors: (string | null | undefined)[]) {
+  if (line === "national" && colors.some(color => color?.trim())) invalid("A linha nacional não possui seleção de cores")
+}
+export function selectFinishes(item: FinishInput, product: SaleProduct, saved?: SavedFinishes, line?: string) {
+  if (line === "national") {
+    checkNationalColors(line, [item.structureColor, item.swingArmColor, item.upholsteryColor, item.plateHolderColor, item.armColor])
+    return { structure: null, swing: null, upholstery: null, holderColor: null, holderType: selectPlateHolderType(item.plateHolderType) }
+  }
   const previous = (key: keyof SavedFinishes) => typeof saved?.[key] === "string" ? saved[key] as string : undefined
   const structure = selectColor(item.structureColor ?? undefined, product.structure_colors, previous("structureColor"))
   const swing = item.swingArmColor === undefined && saved ? previous("swingArmColor") ?? null : selectColor(item.swingArmColor, product.swing_arm_colors, previous("swingArmColor"))

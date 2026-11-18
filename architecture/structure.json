@@ -46,8 +46,8 @@
     "pos": "Operação do PDV, sessões de caixa, fechamento e histórico, com autorização no backend."
   },
   "routeSurface": {
-    "count": 506,
-    "sha256": "9f026b1c55bca2ca10e83ca640131c7758467991976e9b23a9e80ca801bff83f"
+    "count": 529,
+    "sha256": "bcd996d1fe16780c486005a27b3a957dd6cb5bf1e271ed5aa8bbe1237a6a2793"
   },
   "retiredPaths": [
     "apps/web/src/lib/erp-session.ts",
@@ -91,8 +91,8 @@
     "apps/api/src/platform/financial_settings.rs"
   ],
   "routeSurfaceReview": {
-    "previousPolicyCommit": "c5090e5c6ea2dfd7b07e0bd6e3650b39b0d889ab",
-    "reviewedMainCommit": "f1b6bdf425c6b43c9fc1071bccb70ec36632425a",
-    "changes": "A rota de preferências de vendas foi retirada por decisão operacional. A política comercial permanece na tabela de preços e no fluxo de aprovação do pedido."
+    "previousPolicyCommit": "655ecfa44103399e5734b80a30775f5a55facc94",
+    "reviewedMainCommit": "655ecfa44103399e5734b80a30775f5a55facc94",
+    "changes": "Contratos • preparação das assinaturas, reemissão qualificada e acesso do titular pelo portal."
   }
 }

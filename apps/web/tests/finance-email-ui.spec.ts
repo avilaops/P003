@@ -16,8 +16,8 @@ for (const kind of ["payable","contract","order-list"] as const) test(`envio doc
   const snapshot = { order: { id:record,revision:3,amount:"123.45",dueDate:"2026-12-01" }, company:{legalName:"Empresa",taxId:"1"},customer:{name:"Cliente",taxId:"1"},items:[] }
   if (isOrder) await page.route("**/api/erp/orders?**", route => route.fulfill({json:{tenantId:tenant,canEdit:true,total:1,data:[{...recordData,status:"confirmed"}]}}))
   else await page.route(`**/api/erp/${resource}/${record}`, route => route.fulfill({ headers:{etag:'"3"'}, json:isContract ? {
-    tenantId:tenant,canEdit:true,canSend:true,emailReady:true,files:[{id:record,kind:"preview",position:0,sha256:hash}],data:{
-      id:record,orderId:record,customerId:record,templateName:"Contrato de teste",status:"reviewed",revision:3,snapshot,
+    tenantId:tenant,canEdit:true,canSend:true,emailReady:true,files:[{id:record,kind:"signed",position:0,sha256:hash}],data:{
+      id:record,orderId:record,customerId:record,templateName:"Contrato de teste",status:"completed",revision:3,snapshot,
       recipients:[{role:"Cliente",name:"Cliente",email:"buyer@example.test"}],progress:[],fields:{},
     },
   } : {tenantId:tenant,canEdit:true,data:recordData,payments:[]} }))
@@ -43,17 +43,36 @@ for (const kind of ["payable","contract","order-list"] as const) test(`envio doc
   if (isContract) {
     await page.keyboard.press("Escape")
     const packagePath = `/api/erp/commercial-contracts/${record}/send-package`
+    const recipients = ["buyer@example.test"]
+    const labels = ["Contrato", "Pedido", "Orçamento", "NF-e", "Comprovante de pagamento"]
+    let verified = false
+    const closingHash = "b".repeat(64)
     await page.route(`**${packagePath}`, route => {
-      expect(route.request().postDataJSON()).toEqual({ recipients: ["buyer@example.test"] })
+      if (route.request().method() === "GET") return route.fulfill({ headers: { etag: '"3"' }, json: {
+        tenantId: tenant, contractId: record, recipients, emailReady: true, completePackage: false, packageStatus: null,
+        closingHash: verified ? closingHash : hash,
+        checks: labels.map(label => ({ label, ready: label !== "Contrato" || verified,
+          detail: label !== "Contrato" ? "Disponível no ERP" : verified ? "Assinaturas ICP-Brasil verificadas" : "Falta a assinatura ICP-Brasil de um participante" })),
+      } })
+      expect(route.request().postDataJSON()).toEqual({ recipients, closingHash })
       expect(route.request().headers()["if-match"]).toBe('"3"')
       expect(route.request().headers()["idempotency-key"]).toMatch(/^[a-f0-9-]{36}$/)
       return route.fulfill({ headers: { etag: '"3"' }, json: { tenantId: tenant, data: { id: record }, packageStatus: "sent" } })
     })
     await page.getByRole("button", { name: "Enviar pacote de documentos" }).click()
-    await expect(page.getByText("Confirme o envio do pacote para buyer@example.test.")).toBeVisible()
+    const review = page.getByRole("region", { name: "Conferência do fechamento" })
+    await expect(review.getByRole("listitem")).toHaveCount(labels.length)
+    await expect(review).toContainText("Falta a assinatura ICP-Brasil de um participante")
+    await expect(review.getByRole("button", { name: "Enviar fechamento completo" })).toBeDisabled()
+    await expect(review.getByRole("button", { name: "Enviar apenas os documentos disponíveis" })).toHaveCount(0)
+    await expect(review).toContainText("buyer@example.test")
     expect(posted).toEqual([endpoint])
-    await page.getByRole("button", { name: "Confirmar envio do pacote" }).click()
+    verified = true
+    await review.getByRole("button", { name: "Atualizar conferência" }).click()
+    await expect(review).toContainText("Assinaturas ICP-Brasil verificadas")
+    await review.getByRole("button", { name: "Enviar fechamento completo" }).click()
     await expect.poll(() => posted).toEqual([endpoint, packagePath])
+    await expect(page.getByText("Consulte abaixo o estado do envio do pacote.")).toBeVisible()
   }
 })
 

@@ -1,5 +1,3 @@
-import { InventoryCounts } from "@/features/inventory/inventory-counts"
-
-export default function NewInventoryPage() { return <InventoryCounts /> }
-
+import { CountPage } from "@/features/inventory/count-access"
 export const metadata = { title: "Novo inventário" }
+export default function Page() { return <CountPage create /> }

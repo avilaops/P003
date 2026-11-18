@@ -11,7 +11,8 @@ import { CashNav, controlClass, Failure, SaleReceipt } from "./pos-shared"
 import { money, when, type CashSession, type Envelope, type Listing, type Sale } from "./pos-model"
 
 export function CashHistory() {
-  const selected = useSearchParams().get("caixa")
+  const paramsInUrl = useSearchParams()
+  const selected = paramsInUrl.get("caixa"), selectedSale = paramsInUrl.get("venda")
   const empty = { status: "", register: "", startDate: "", endDate: "" }
   const [draft, setDraft] = useState(empty)
   const [query, setQuery] = useState({ ...empty, offset: 0 })
@@ -36,7 +37,11 @@ export function CashHistory() {
     <p role="status" className="text-xs text-muted-foreground">{history.value.total} {history.value.total===1 ? "caixa" : "caixas"}</p>
     <div className="max-w-full overflow-x-auto rounded-lg border"><DataTable aria-label="Histórico dos caixas"><thead><tr><th>Caixa</th><th>Abertura</th><th>Situação</th><th className="hidden sm:table-cell">Fechamento</th><th><span className="sr-only">Consultar</span></th></tr></thead><tbody>{history.value.data.map(session => <tr key={session.id}><td><span className="font-medium">{session.register}</span><span className="block text-xs text-muted-foreground">Saldo inicial: {money(session.openingAmount)}</span></td><td className="text-xs">{when(session.openedAt)}</td><td>{session.status === "closed" ? "Fechado" : "Aberto"}</td><td className="hidden text-xs sm:table-cell">{when(session.closedAt)}</td><td><Link className="text-sm text-primary underline" href={`/vendas/pdv/fechamento?caixa=${session.id}`}>Conferir</Link></td></tr>)}</tbody></DataTable></div>
     {history.value.total > 20 && <nav aria-label="Paginação do histórico" className="flex items-center justify-between gap-3"><Button variant="outline" disabled={!query.offset} onClick={() => setQuery(value => ({ ...value, offset: Math.max(0, value.offset - 20) }))}>Anterior</Button><span className="text-xs">Página {Math.floor(query.offset / 20) + 1}</span><Button variant="outline" disabled={query.offset + 20 >= history.value.total} onClick={() => setQuery(value => ({ ...value, offset: value.offset + 20 }))}>Próxima</Button></nav>}
+  </>}
+    {history.value && <>
     {selected && <SessionSales id={selected} tenant={history.value.tenantId} onChanged={history.reload} />}
+    {selectedSale && /^[\da-f-]{36}$/i.test(selectedSale) && <SavedSale key={selectedSale} id={selectedSale} tenant={history.value.tenantId}
+      onClose={()=>window.history.replaceState(null,"","/vendas/pdv/historico")} onChanged={history.reload} />}
   </>}</div>
 }
 

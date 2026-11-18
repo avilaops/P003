@@ -7,6 +7,25 @@
     "GET": "/api/v1/commercial-contracts/:id/email",
     "POST": "/api/v1/commercial-contracts/:id/email"
   },
+  "contract-package": {
+    "GET": "/api/v1/commercial-contracts/:id/send-package",
+    "POST": "/api/v1/commercial-contracts/:id/send-package"
+  },
+  "qualified-reissue": {
+    "GET": "/api/v1/commercial-contracts/:id/qualified-reissue",
+    "POST": "/api/v1/commercial-contracts/:id/qualified-reissue"
+  },
+  "prepare-signatures": {
+    "POST": "/api/v1/commercial-contracts/:id/prepare-signatures"
+  },
+  "signer-session": {
+    "GET": "/api/v1/contract-signers/:tenant/:id/session",
+    "POST": "/api/v1/contract-signers/:tenant/:id/session"
+  },
+  "signer-document": {
+    "GET": "/api/v1/contract-signers/:tenant/:id/documents/:documentId",
+    "POST": "/api/v1/contract-signers/:tenant/:id/documents/:documentId"
+  },
   "nfe": {
     "GET": "/api/v1/fiscal/nfe/:id/email",
     "POST": "/api/v1/fiscal/nfe/:id/email"

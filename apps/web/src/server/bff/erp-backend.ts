@@ -1,8 +1,10 @@
 import "server-only"
+import { stockLocationPath } from "./stock-location-path"
+export { stockLocationPath }
 
 // Permanent ownership after the four-module transition. The previous release,
 // rather than traffic flags, is the operational return path.
-export type MigratedModule = "preferences" | "registrations" | "sales" | "reports"
+export type MigratedModule = "preferences" | "registrations" | "sales" | "reports" | "inventory"
 export type BackendEnvironment = { ERP_TYPESCRIPT_API_URL?: string | undefined; ERP_TYPESCRIPT_MODULES?: string | undefined }
 const uuid = "[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}"
 export function salesPolicyResource(method: string, resource: string) {
@@ -25,11 +27,25 @@ const routes: { module: MigratedModule; methods: readonly string[]; path: RegExp
   { module: "sales", methods: ["GET", "PUT"], path: /^\/pos\/settings$/ },
   { module: "sales", methods: ["GET"], path: new RegExp(`^/pos/(?:products|sessions(?:/current|/${uuid})?|sales(?:/${uuid})?)$`, "i") },
   { module: "sales", methods: ["POST"], path: new RegExp(`^/pos/(?:sessions(?:/${uuid}/(?:movements|sales|close))?|sales/${uuid}/cancel)$`, "i") },
+  { module: "inventory", methods: ["GET","POST"], path: /^\/production\/(orders|stages)$/ },
+  { module: "inventory", methods: ["GET","POST"], path: new RegExp("^/production/structures/"+uuid+"$", "i") },
+  { module: "inventory", methods: ["GET"], path: new RegExp("^/production/orders/"+uuid+"$", "i") },
+  { module: "inventory", methods: ["PUT"], path: new RegExp("^/production/stages/"+uuid+"$", "i") },
+  { module: "inventory", methods: ["POST"], path: new RegExp("^/production/orders/"+uuid+"/(?:stage|postings|consumptions(?:/"+uuid+"/reverse)?)$", "i") },
+  { module: "inventory", methods: ["GET","POST"], path: /^\/inventory-counts$/ },
+  { module: "inventory", methods: ["GET"], path: new RegExp(`^/inventory-counts/${uuid}$`, "i") },
+  { module: "inventory", methods: ["POST"], path: new RegExp(`^/inventory-counts/${uuid}/(?:lines|approve|cancel)$`, "i") },
+  { module: "inventory", methods: ["GET","POST"], path: /^\/warehouses$/ },
+  { module: "inventory", methods: ["GET","PUT"], path: new RegExp(`^/warehouses/${uuid}$`, "i") },
+  { module: "inventory", methods: ["GET"], path: /^\/stock$/ },
+  { module: "inventory", methods: ["GET", "POST"], path: /^\/stock\/movements$/ },
   { module: "reports", methods: ["GET", "POST"], path: /^\/financial-report\/email$/ },
   { module: "reports", methods: ["GET", "POST"], path: new RegExp(`^/receivables/${uuid}/email$`, "i") },
   { module: "reports", methods: ["GET", "POST"], path: new RegExp(`^/financial-payables/${uuid}/email$`, "i") },
   { module: "sales", methods: ["GET", "POST"], path: new RegExp(`^/commercial-contracts/${uuid}/email$`, "i") },
-  { module: "sales", methods: ["POST"], path: new RegExp(`^/commercial-contracts/${uuid}/send-package$`, "i") },
+  { module: "sales", methods: ["GET", "POST"], path: new RegExp(`^/commercial-contracts/${uuid}/send-package$`, "i") },
+  { module: "sales", methods: ["GET", "POST"], path: new RegExp(`^/commercial-contracts/${uuid}/qualified-reissue$`, "i") },
+  { module: "sales", methods: ["POST"], path: new RegExp(`^/commercial-contracts/${uuid}/prepare-signatures$`, "i") },
   { module: "sales", methods: ["GET", "POST"], path: new RegExp(`^/(?:orders|proposals)/${uuid}/email$`, "i") },
   { module: "preferences", methods: ["GET", "PUT"], path: /^\/preferences$/ },
   { module: "registrations", methods: ["GET"], path: /^\/products\/finishes$/ },
@@ -75,6 +91,7 @@ export function erpHealthOrigins(rustOrigin: string, environment: BackendEnviron
   return [rustOrigin, typescriptOrigin(environment)]
 }
 export function selectErpBackend(method: string, resource: string, rustOrigin: string, environment: BackendEnvironment) {
+  if (stockLocationPath(resource,method.toUpperCase())) return { origin: typescriptOrigin(environment), backend: "typescript" as const, module: "inventory" as const }
   const route = routes.find(route => route.methods.includes(method.toUpperCase()) && route.path.test(resource))
   if (salesPolicyResource(method, resource)) return { origin: typescriptOrigin(environment), backend: "typescript" as const, module: "sales" as const }
   if (!route) return { origin: rustOrigin, backend: "rust" as const, module: null }

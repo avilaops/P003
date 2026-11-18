@@ -1,4 +1,5 @@
 import {fiscalLots} from "./fiscal-lots.js"
+import {warrantySerialHistory} from "../inventory/serial-history.js"
 import {eligiblePolicies,identification,policies,receiptOptions,traceInput,type Origin} from "./policy.js"
 import { randomUUID } from "node:crypto"
 import type { FastifyInstance } from "fastify"
@@ -10,6 +11,7 @@ const serial=limitedText(1,120)
 const brazilDay="(now() AT TIME ZONE 'America/Sao_Paulo')::date"
 const origins=`SELECT d.id AS "documentId",o.id AS "orderId",o.number::text AS "orderNumber",d.number::text AS "invoiceNumber",o.customer_name AS "customerName",
   l.line_number AS "lineNumber",l.product_id AS "productId",l.name AS "productName",l.sku,p.category_id AS "categoryId",pc.name AS category,m.manufacturer,
+  d.source_order_id AS "directOrderId",lot.id AS "invoiceLotId",coalesce(lot.legacy_full,false) AS "legacyFull",o.customer_id AS "customerId",
   coalesce(co.channel,q.public_snapshot#>>'{input,channel}') AS channel,
   (d.issued_at::timestamptz AT TIME ZONE 'America/Sao_Paulo')::date::text AS "soldOn",
   greatest(0, least(2147483647,l.quantity_micros / 1000000 - (SELECT coalesce(sum(e.units),0) FROM warranty_sold_equipment e WHERE e.tenant_id=o.tenant_id AND e.order_id=o.id AND e.line_number=l.line_number),COALESCE(i.quantity_micros / 1000000,floor(item.quantity)) -
@@ -65,22 +67,41 @@ export async function resolveCaseEquipment(c:AuthorizedContext,input:TraceLookup
 export async function invoiceLine(ctx:AuthorizedContext,doc:string,line:number) {
   return (await ctx.client.query<Origin>(origins+" AND d.id=$2 AND l.line_number=$3",[ctx.tenantId,doc,line])).rows[0]
 }
-export function registerWarrantyEquipment(app:FastifyInstance,deps:AccessDependencies) {
-  app.get("/api/v1/warranty-equipment",async(req,reply)=>reply.header("cache-control","no-store").send(await readWith(req,deps,async ctx=>{
-    const f=parse(z.strictObject({serialNumber:serial.optional(),lot:serial.optional(),documentId:idParam.optional(),lineNumber:z.coerce.number().int().positive().optional()}).refine(v=>Boolean(v.serialNumber||v.lot)),req.query)
-    const matches=await traceMatches(ctx,f)
-    return {data:matches.length===1?matches[0]:null,matches}
-  })))
-  app.get("/api/v1/warranty-origins",async(req,reply)=>reply.header("cache-control","no-store").send(await readWith(req,deps,async ctx=>{
-    const f=parse(z.strictObject({orderId:idParam.optional(),documentId:idParam.optional(),q:limitedText(2,80).optional()}).refine(f=>Boolean(f.orderId || f.documentId || f.q)),req.query)
-    const rows=await ctx.client.query(origins+` AND ($2::uuid IS NULL OR o.id=$2) AND ($3::uuid IS NULL OR d.id=$3) AND ($4::text IS NULL OR strpos(lower(concat_ws(' ',o.number,d.number,o.customer_name,l.sku,l.name)),lower($4))>0) ORDER BY d.issued_at DESC,d.number,l.line_number LIMIT 100`,[ctx.tenantId,f.orderId,f.documentId,f.q])
-    return {data:rows.rows}
-  })))
-  const equipmentInput=z.strictObject({serialNumber:serial.optional(),lot:serial.optional(),units:z.number().int().min(1).max(1000000).default(1),
+async function stockOrigins(c:AuthorizedContext,serialNumber:string) {
+  const units=await warrantySerialHistory(c,serialNumber)
+  const delivered=units.filter(u=>u.delivered)
+  if(!delivered.length)return {known:units.length>0,data:[]}
+  const result=await c.client.query<Origin & {serialNumber:string;movementId:string;stockEventId:string}>(`SELECT f.*,u."serialNumber",u."movementId",u."stockEventId"
+    FROM (${origins}) f JOIN jsonb_to_recordset($2::jsonb) AS u("serialNumber" text,"productId" uuid,"orderId" uuid,"movementId" uuid,"stockEventId" text,"lotId" uuid)
+      ON (f."productId",f."orderId")=(u."productId",u."orderId") AND
+      (f."invoiceLotId"=u."lotId" OR u."lotId" IS NULL AND f."directOrderId"=u."orderId" AND (f."invoiceLotId" IS NULL OR f."legacyFull"))
+    ORDER BY f."documentId",f."lineNumber",u."serialNumber"`,[c.tenantId,JSON.stringify(delivered)])
+  return {known:true,data:result.rows}
+}
+export async function stockOriginForCase(c:AuthorizedContext,input:TraceLookup,decisionReference?:unknown) {
+  if(!input.serialNumber)return undefined
+  const stock=await stockOrigins(c,input.serialNumber)
+  if(!stock.known) {
+    if(input.productId&&(await c.client.query("SELECT 1 FROM stock_serial_products WHERE tenant_id=$1 AND product_id=$2",[c.tenantId,input.productId])).rows.length)
+      invalid("Série sem entrega registrada no estoque para este produto")
+    return undefined
+  }
+  if(!stock.data.length)return conflict("Série sem entrega vigente vinculada a uma nota fiscal autorizada")
+  const matches=stock.data.filter(o=>(!input.productId||o.productId===input.productId)&&(!input.orderId||o.orderId===input.orderId)&&
+    (!input.documentId||o.documentId===input.documentId)&&(!input.lineNumber||o.lineNumber===input.lineNumber))
+  if(!matches.length)return invalid("A série entregue pertence a outro pedido, produto ou item fiscal")
+  if(matches.length!==1||stock.data.length>1&&(!input.documentId||!input.lineNumber||!decisionReference))
+    return invalid("Selecione a nota e o item da série e registre a referência que comprova a origem")
+  return matches[0]
+}
+const equipmentInput=z.strictObject({serialNumber:serial.optional(),lot:serial.optional(),units:z.number().int().min(1).max(1000000).default(1),
    documentId:idParam,lineNumber:z.number().int().positive(),policyId:idParam,trace:traceInput.default({})}).refine(v=>Boolean(v.serialNumber||v.lot)&&(!v.serialNumber||v.units===1))
-  command(app,deps,"/api/v1/warranty-equipment",equipmentInput,"warranty.equipment.registered","warranty_equipment",manage,async(ctx,input)=>{
+async function registerSoldEquipment(ctx:AuthorizedContext,input:z.infer<typeof equipmentInput>){
     const line=await invoiceLine(ctx,input.documentId,input.lineNumber)
     if (!line) return invalid("Selecione um item de nota de venda autorizada em produção")
+    if (!input.serialNumber && (await ctx.client.query("SELECT 1 FROM stock_serial_products WHERE tenant_id=$1 AND product_id=$2",[ctx.tenantId,line.productId])).rows.length)
+      return invalid("Informe a série entregue para o produto rastreado no estoque")
+    const stock=await stockOriginForCase(ctx,{...input,productId:line.productId,orderId:line.orderId},input.trace.reference)
     if (Number(line.availableUnits)<input.units) conflict("Quantidade superior às unidades faturadas disponíveis para identificação")
     const batches=await fiscalLots(ctx,line)
     const batch=batches.find(b=>b.lot.toLowerCase()===input.lot?.toLowerCase())
@@ -92,7 +113,50 @@ export function registerWarrantyEquipment(app:FastifyInstance,deps:AccessDepende
     if (!policy) return invalid("Selecione uma política vigente para a origem e data da venda")
     const id=randomUUID()
     await ctx.client.query(`INSERT INTO warranty_sold_equipment(tenant_id,id,serial_number,lot,units,order_id,line_number,document_id,policy_id,warranty_days,sold_on,policy_snapshot,trace_snapshot)
-     VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,[ctx.tenantId,id,input.serialNumber,input.lot,input.units,line.orderId,line.lineNumber,line.documentId,policy.id,policy.durationDays,line.soldOn,policy,{...trace,lotSource:batch?"NF-e autorizada":input.lot?"declaração":null,registeredBy:ctx.authSubject}])
+     VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,[ctx.tenantId,id,stock?.serialNumber??input.serialNumber,input.lot,input.units,line.orderId,line.lineNumber,line.documentId,policy.id,policy.durationDays,line.soldOn,policy,{...trace,...(stock?{serialSource:"stock",stockEventId:stock.stockEventId,movementId:stock.movementId,invoiceLotId:stock.invoiceLotId}:{}),lotSource:batch?"NF-e autorizada":input.lot?"declaração":null,registeredBy:ctx.authSubject}])
     return {data:{...(await traceMatches(ctx,{equipmentId:id}))[0],revision:1},aggregateId:id}
-  })
+}
+
+export async function caseEquipmentAndSale(ctx:AuthorizedContext,input:TraceLookup & {policyId?:string|null|undefined}) {
+  const registered=await resolveCaseEquipment(ctx,input)
+  const serialNumber=String(registered?.serialNumber??input.serialNumber??"")
+  if(!serialNumber) {
+    if(!registered && input.lot && input.productId && (await ctx.client.query("SELECT 1 FROM stock_serial_products WHERE tenant_id=$1 AND product_id=$2",[ctx.tenantId,input.productId])).rows.length)
+      invalid("Informe a série entregue para o produto rastreado no estoque")
+    return {equipment:registered}
+  }
+  const reference=(registered?.traceSnapshot as Record<string,unknown>|null)?.reference
+  const expected={...input,serialNumber,...(registered ? {productId:String(registered.productId),orderId:String(registered.orderId),documentId:String(registered.documentId),lineNumber:Number(registered.lineNumber)} : {})}
+  const sale=await stockOriginForCase(ctx,expected,reference)
+  if(!sale||registered)return {equipment:registered,sale}
+  const trace=identification(sale,{},[])
+  const policiesForSale=eligiblePolicies(await policies(ctx),trace,sale.soldOn)
+  const selected=input.policyId?policiesForSale.filter(p=>p.id===input.policyId):policiesForSale
+  if(input.policyId&&!selected.length)invalid("A política não se aplica à venda da série entregue")
+  const lots=await fiscalLots(ctx,sale)
+  if(input.lot&&lots.length&&!lots.some(l=>l.lot.toLowerCase()===input.lot?.toLowerCase()))
+    invalid("O lote informado diverge do lote fiscal da série entregue")
+  if(selected.length!==1||lots.length&&!input.lot||input.lot&&!lots.length)return {sale,equipment:undefined}
+  const result=await registerSoldEquipment(ctx,{serialNumber:sale.serialNumber,...(input.lot?{lot:input.lot}:{}),units:1,documentId:sale.documentId,lineNumber:sale.lineNumber,policyId:selected[0]!.id,trace:{}})
+  return {sale,equipment:result.data as Record<string,unknown>}
+}
+
+export function registerWarrantyEquipment(app:FastifyInstance,deps:AccessDependencies) {
+  app.get("/api/v1/warranty-equipment",async(req,reply)=>reply.header("cache-control","no-store").send(await readWith(req,deps,async ctx=>{
+    const f=parse(z.strictObject({serialNumber:serial.optional(),lot:serial.optional(),documentId:idParam.optional(),lineNumber:z.coerce.number().int().positive().optional()}).refine(v=>Boolean(v.serialNumber||v.lot)),req.query)
+    const matches=await traceMatches(ctx,f)
+    const stock=f.serialNumber ? await stockOrigins(ctx,f.serialNumber) : {known:false,data:[]}
+    const valid=stock.known ? matches.filter(e=>stock.data.some(s=>e.documentId===s.documentId&&e.lineNumber===s.lineNumber)) : matches
+    return {data:valid.length===1?valid[0]:null,matches:valid,stockTracked:stock.known,stockOrigins:stock.data}
+  })))
+  app.get("/api/v1/warranty-origins",async(req,reply)=>reply.header("cache-control","no-store").send(await readWith(req,deps,async ctx=>{
+    const f=parse(z.strictObject({orderId:idParam.optional(),documentId:idParam.optional(),q:limitedText(2,80).optional()}).refine(f=>Boolean(f.orderId || f.documentId || f.q)),req.query)
+    if(f.q) {
+      const stock=await stockOrigins(ctx,f.q)
+      if(stock.known)return {data:stock.data.filter(o=>(!f.orderId||f.orderId===o.orderId)&&(!f.documentId||f.documentId===o.documentId))}
+    }
+    const rows=await ctx.client.query(origins+` AND ($2::uuid IS NULL OR o.id=$2) AND ($3::uuid IS NULL OR d.id=$3) AND ($4::text IS NULL OR strpos(lower(concat_ws(' ',o.number,d.number,o.customer_name,l.sku,l.name)),lower($4))>0) ORDER BY d.issued_at DESC,d.number,l.line_number LIMIT 100`,[ctx.tenantId,f.orderId,f.documentId,f.q])
+    return {data:rows.rows}
+  })))
+  command(app,deps,"/api/v1/warranty-equipment",equipmentInput,"warranty.equipment.registered","warranty_equipment",manage,registerSoldEquipment)
 }

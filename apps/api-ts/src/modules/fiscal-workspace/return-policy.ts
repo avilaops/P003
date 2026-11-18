@@ -1,3 +1,4 @@
+import {lotSerials} from "./lot-serials.js"
 import { randomUUID } from "node:crypto"
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
@@ -54,16 +55,17 @@ export async function submitReturn(c:AuthorizedContext,headers:CommandHeaders,or
   if((await c.client.query("SELECT id FROM sales_self_return_plans WHERE tenant_id=$1 AND lot_id=$2 AND status IN('pending','ready')",[c.tenantId,input.lotId])).rows.length)conflict("Conclua ou libere a nota de entrada própria em andamento para este lote")
   const items=await matchItems(c,order,input,digest),amount=items.reduce((s,i)=>s+BigInt(i.value),0n)
   if(policy.approvalAboveCents===null || amount<=BigInt(policy.approvalAboveCents))return {id:await applyPartialReturn(c,headers,order,input,items),status:"applied"}
+  await lotSerials(c,order,input.lotId,"return",items,input.serials)
   const id=randomUUID()
-  await c.client.query(`INSERT INTO sales_return_requests(tenant_id,id,order_id,lot_id,received_id,xml_sha256,reason,destination,amount_cents,policy_revision,requested_by)
-    VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,[c.tenantId,id,order,input.lotId,input.receivedId,digest,input.reason,input.destination,amount,policy.revision,c.authSubject])
+  await c.client.query(`INSERT INTO sales_return_requests(tenant_id,id,order_id,lot_id,received_id,xml_sha256,reason,destination,amount_cents,policy_revision,requested_by,serial_selection)
+    VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12::jsonb)`,[c.tenantId,id,order,input.lotId,input.receivedId,digest,input.reason,input.destination,amount,policy.revision,c.authSubject,JSON.stringify(input.serials??[])])
   return {id,status:"pending"}
 }
 
 export async function pendingReturn(c:AuthorizedContext,order:string,id:string) {
   if(!returnReviewer(c))throw new Problem(403,"forbidden","A decisão exige alçada de aprovação")
   const row=(await c.client.query<ReturnInput & {digest:string;requestedBy:string;amount:string}>(`SELECT lot_id AS "lotId",received_id::text AS "receivedId",reason,destination,
-    xml_sha256 AS digest,requested_by AS "requestedBy",amount_cents::text AS amount FROM sales_return_requests
+    xml_sha256 AS digest,requested_by AS "requestedBy",amount_cents::text AS amount,serial_selection AS serials FROM sales_return_requests
     WHERE tenant_id=$1 AND order_id=$2 AND id=$3 AND status='pending'`,[c.tenantId,order,id])).rows[0]
   if(!row)throw new Problem(409,"domain_conflict","Solicitação indisponível ou já decidida")
   if(row.requestedBy===c.authSubject)throw new Problem(403,"forbidden","Outra pessoa deve decidir esta devolução")

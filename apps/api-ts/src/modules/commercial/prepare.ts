@@ -40,5 +40,5 @@ export async function prepareNegotiation(context: AuthorizedContext, input: Nego
   await applyPriceLists(context,sources,input.customerId,input.channel)
   const { sale, director } = calculateNegotiation(parameters.data, rules, input, sources)
   const raw = { tenantId: context.tenantId, input, rulesRevision, rules, policy: row.policy_snapshot, sources, sale, director }
-  return { kind: "single" as const, sale, director, rules, policy: row.policy_snapshot, sources, digest: createHash("sha256").update(canonicalJson(raw)).digest("hex"), version: revisionValue(row.version) }
+  return { kind: "single" as const, line: input.line, sale, director, rules, policy: row.policy_snapshot, sources, digest: createHash("sha256").update(canonicalJson(raw)).digest("hex"), version: revisionValue(row.version) }
 }

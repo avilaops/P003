@@ -32,11 +32,15 @@ test("saved legacy pricing and its approval use the migrated sales backend", () 
   for (const [method, resource] of [["GET", `/orders/${id}/pricing`], ["POST", `/orders/${id}/pricing/approve`]]) assert.equal(selectErpBackend(method, resource, rust, environment).origin, typescript);
 });
 
+test("completed sales cancellations and their history use TypeScript", () => {
+  assert.equal(selectErpBackend("POST", `/orders/${id}/cancel-completed`, rust, environment).origin, typescript);
+  assert.equal(selectErpBackend("GET", `/orders/${id}/cancellations`, rust, environment).origin, typescript);
+});
+
 test("document previews and email dispatch use the TypeScript backend", () => {
-  for (const resource of [`/orders/${id}/email`, `/proposals/${id}/email`, `/receivables/${id}/email`, `/financial-payables/${id}/email`, `/commercial-contracts/${id}/email`, "/financial-report/email"]) {
+  for (const resource of [`/orders/${id}/email`, `/proposals/${id}/email`, `/receivables/${id}/email`, `/financial-payables/${id}/email`, `/commercial-contracts/${id}/email`, `/commercial-contracts/${id}/send-package`, "/financial-report/email"]) {
     for (const method of ["GET", "POST"]) assert.equal(selectErpBackend(method, resource, rust, environment).origin, typescript, resource);
   }
-  assert.equal(selectErpBackend("POST", `/commercial-contracts/${id}/send-package`, rust, environment).origin, typescript);
 });
 
 test("the eleven complementary order methods, title and proposal origins route to TypeScript", () => {

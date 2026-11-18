@@ -1,3 +1,4 @@
+import {lotSerials,type SerialSelection} from "./lot-serials.js"
 import { randomUUID } from "node:crypto"
 import { requirePermission, type AuthorizedContext } from "../../platform/access.js"
 import { record } from "../../platform/commands.js"
@@ -5,7 +6,7 @@ import { conflict } from "../orders/acceptance.js"
 import type { CommandHeaders } from "../orders/receivables.js"
 import { renderDanfe, sha256 } from "../nfe-email/danfe.js"
 
-export type ReturnInput = {lotId:string; receivedId:string; reason:string; destination:"stock"|"service"|"discard"}
+export type ReturnInput = {lotId:string; receivedId:string; reason:string; destination:"stock"|"service"|"discard";serials?:SerialSelection|undefined}
 type Match = { line:number; product:string; quantity:string; value:string }
 
 // Use the same private XML signature, protocol and schema verification as document downloads.
@@ -88,6 +89,7 @@ async function reverseCommission(c:AuthorizedContext, order:string, reimbursed:b
 }
 
 export async function applyPartialReturn(c:AuthorizedContext, headers:CommandHeaders, order:string, input:ReturnInput, items:Match[]) {
+  const serials=await lotSerials(c,order,input.lotId,"return",items,input.serials)
   const total=items.reduce((sum,item)=>sum+BigInt(item.value),0n)
   const bills=await c.client.query(`SELECT r.id,r.amount_cents,r.status,p.paid,p.last_receipt FROM receivables r LEFT JOIN LATERAL (
       SELECT coalesce(sum(CASE kind WHEN 'receipt' THEN amount_cents ELSE -amount_cents END),0) AS paid,
@@ -117,12 +119,12 @@ export async function applyPartialReturn(c:AuthorizedContext, headers:CommandHea
     await record(c,headers,"receivable",abate.id,"receivable.abated",{orderId:order,returnId:id,amountCents:abate.amount.toString()})
   }
   for (const item of items) {
-    await c.client.query("INSERT INTO sales_partial_return_items VALUES($1,$2,$3,$4,$5,$6)",[c.tenantId,id,input.lotId,item.line,item.quantity,item.value])
+    await c.client.query("INSERT INTO sales_partial_return_items(tenant_id,return_id,lot_id,line_number,quantity_micros,value_cents,serial_numbers) VALUES($1,$2,$3,$4,$5,$6,$7)",[c.tenantId,id,input.lotId,item.line,item.quantity,item.value,serials.get(item.line)??null])
     if (input.destination!=="stock") continue
     const balance=(await c.client.query("UPDATE stock_balances SET quantity_micros=quantity_micros+$3 WHERE tenant_id=$1 AND product_id=$2 RETURNING quantity_micros",[c.tenantId,item.product,item.quantity])).rows[0]
     if (!balance) conflict("Saldo de estoque não encontrado para a linha devolvida")
     const movement=randomUUID()
-    await c.client.query("INSERT INTO stock_movements(id,tenant_id,product_id,direction,quantity_micros,balance_after_micros,reason,source_order_id) VALUES($1,$2,$3,'receipt',$4,$5,$6,$7)",[movement,c.tenantId,item.product,item.quantity,balance.quantity_micros,input.reason,order])
+    await c.client.query("INSERT INTO stock_movements(id,tenant_id,product_id,direction,quantity_micros,balance_after_micros,reason,source_order_id,sales_invoice_lot_id,sales_partial_return_id,serial_numbers) VALUES($1,$2,$3,'receipt',$4,$5,$6,$7,$8,$9,$10)",[movement,c.tenantId,item.product,item.quantity,balance.quantity_micros,input.reason,order,input.lotId,id,serials.get(item.line)??null])
     await record(c,headers,"stock_movement",movement,"stock.moved",{orderId:order,returnId:id,productId:item.product,quantityMicros:item.quantity,direction:"receipt"})
   }
   return id

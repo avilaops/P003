@@ -21,7 +21,7 @@ type Detail=CaseRow & {
   equipment:{invoiceNumber:string;expiresOn:string;remainingDays:number;coverageStatus:string}|null
   timeline:{id:string;eventType:string;status:string|null;createdAt:string}[]
   serviceOrders:(SubRecord & {diagnosis?:string;laborCents?:number})[]
-  parts:{id:string;productName:string;quantityMicros:number;amountCents:number}[]
+  parts:{id:string;productName:string;quantityMicros:number;amountCents:number;serialNumbers?:string[]|null;warehouseName?:string|null}[]
   approvals:{id:string;action:string;decision:string;amountCents:number|null}[]
   rmas:(SubRecord & {reference:string})[]
   quarantines:SubRecord[]
@@ -61,7 +61,10 @@ function CaseWorkspace({snapshot,etag,reload}:{snapshot:ResponseData;etag:string
   const to=next[item.status]
   const [diagnosis,setDiagnosis]=useState(""),[labor,setLabor]=useState("0")
   const [selectedOS,setOS]=useState(""),[part,setPart]=useState<Choice|null>(null),[qty,setQty]=useState("1"),[price,setPrice]=useState("0")
+  const [serialText,setSerialText]=useState("")
+  const serialNumbers=serialText.split(/\r?\n/).map(serial=>serial.trim()).filter(Boolean)
   const order=item.serviceOrders.find(o=>o.id===selectedOS),units=normalizeDecimal(qty,6)
+  const serialQuantityInvalid=serialNumbers.length>0 && (Number(units)!==serialNumbers.length || new Set(serialNumbers).size!==serialNumbers.length)
   const [action,setAction]=useState("exchange"),[decision,setDecision]=useState("approved"),[amount,setAmount]=useState(""),[notes,setNotes]=useState("")
   const money=cents(amount),needsAmount=decision==="approved" && action!=="exchange"
   const [carrier,setCarrier]=useState(""),[tracking,setTracking]=useState(""),[qQty,setQQty]=useState("1"),[reason,setReason]=useState("")
@@ -83,10 +86,13 @@ function CaseWorkspace({snapshot,etag,reload}:{snapshot:ResponseData;etag:string
       {item.serviceOrders.map((o,i)=><p key={o.id}>OS {i+1} • {o.diagnosis || "Diagnóstico em aberto"} • {formatMoney(o.laborCents??0)}</p>)}
       {writable && <Action {...command} url={url+"/service-order"} label="Registrar ordem de serviço" disabled={Boolean(item.serviceOrders.length) || cents(labor)===null} body={{diagnosis:diagnosis.trim()||null,report:{},scheduledAt:null,laborCents:cents(labor)}}>
         <label>Diagnóstico<Input value={diagnosis} onChange={e=>setDiagnosis(e.target.value)}/></label><label>Mão de obra (R$)<Input inputMode="decimal" value={labor} onChange={e=>setLabor(e.target.value)}/></label></Action>}
-      {item.parts.map(p=><p key={p.id}>{p.productName} • {p.quantityMicros/1000000} • {formatMoney(p.amountCents)}</p>)}
-      {writable && item.serviceOrders.length>0 && <Action {...command} url={"/api/erp/warranty-service-orders/"+order?.id+"/parts"} etag={order?'"'+order.revision+'"':""} label="Registrar peça" disabled={!part || !units || Number(units)<=0 || cents(price)===null} body={{productId:part?.id,quantity:units,amountCents:cents(price)}}>
+      {item.parts.map(p=><p key={p.id}>{p.productName} • {p.quantityMicros/1000000} • {formatMoney(p.amountCents)}{p.warehouseName && ` • ${p.warehouseName}`}{p.serialNumbers?.length ? ` • ${p.serialNumbers.join(", ")}` : ""}</p>)}
+      {writable && item.serviceOrders.length>0 && <Action {...command} url={"/api/erp/warranty-service-orders/"+order?.id+"/parts"} etag={order?'"'+order.revision+'"':""} label="Registrar peça" disabled={!part || !units || Number(units)<=0 || cents(price)===null || serialQuantityInvalid} body={{productId:part?.id,quantity:units,amountCents:cents(price),...(serialNumbers.length ? {serialNumbers} : {})}}>
         <label className="grid">Ordem de serviço da peça<select className={select} value={selectedOS} onChange={e=>setOS(e.target.value)}><option value="">Selecione a ordem</option>{item.serviceOrders.map((o,i)=><option key={o.id} value={o.id}>OS {i+1} • {item.protocol}</option>)}</select></label>
-        <Lookup endpoint="products" label="produto da peça" disabled={false} choose={setPart} compact searchOnly/>{part && <p>Peça selecionada • {part.name}</p>}
+        <Lookup endpoint="products" label="produto da peça" disabled={false} choose={choice=>{setPart(choice);setSerialText("")}} compact searchOnly/>{part && <p>Peça selecionada • {part.name}</p>}
+        <label className="grid">Séries das peças<textarea className="min-h-16 rounded-lg border p-2" value={serialText} onChange={e=>setSerialText(e.target.value)} aria-describedby="warranty-part-series-help"/></label>
+        <p id="warranty-part-series-help" className="text-sm text-muted-foreground">Para peças controladas por série, informe uma por unidade, uma por linha. O estoque identifica o depósito.</p>
+        {serialQuantityInvalid && <p role="alert">Informe uma série distinta para cada unidade da peça.</p>}
         <label>Quantidade da peça<Input value={qty} onChange={e=>setQty(e.target.value)}/></label><label>Valor da peça (R$)<Input inputMode="decimal" value={price} onChange={e=>setPrice(e.target.value)}/></label></Action>}
     </section><section className={section}><h2 className="font-semibold">Aprovação por alçada</h2>
       {item.approvals.map(a=><p key={a.id}>{actions[a.action]} • {a.decision==="approved"?"Aprovado":"Rejeitado"}{a.amountCents!==null && " • "+formatMoney(a.amountCents)}</p>)}

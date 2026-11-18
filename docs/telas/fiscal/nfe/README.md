@@ -43,6 +43,8 @@ No pedido, o painel **Faturamento por item e devoluções** reserva quantidades 
 
 • Em **Preferências • Políticas de vendas • Política de devoluções**, configure o prazo em dias corridos desde a entrega e o limite em reais. Valores acima do limite exigem decisão de outro aprovador. Na entrada própria, essa decisão precede a emissão.
 
+• Para produtos rastreados, informe uma série por linha no painel do lote. Na entrega parcial, selecione as unidades reservadas que estão saindo. Na devolução, identifique as unidades recebidas. O estoque volta ao depósito de origem quando o destino é estoque. Assistência e descarte ficam no histórico de cada série.
+
 • Em produção, a conclusão concilia a entrada com o estoque, o destino dos itens, os títulos, o crédito do cliente e as comissões aplicáveis. A homologação registra uma simulação fiscal. Consulte as duas origens por pedido, cliente, chave, ambiente ou situação em [Devoluções de venda](/vendas/devolucoes).
 
 Emissão e consulta passam pela API Fastify e pelo motor fiscal privado. Uma autorização incerta preserva número e XML assinado. A reconciliação consulta a mesma chave. Um evento pendente também pode ser consultado pelo histórico após reabrir a tela.

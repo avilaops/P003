@@ -21,8 +21,8 @@ export const orderColorParts = [
 
 type ColorPart = typeof orderColorParts[number]
 
-export function orderFinishOptions(_item: SelectedOrderItem, product: Partial<ProductFinishes> | undefined, { options }: ColorPart) {
-  if (!product || options === "upholsteryColors" && product.upholsteryConfigurable === false) return []
+export function orderFinishOptions(item: SelectedOrderItem, product: Partial<ProductFinishes> | undefined, { options }: ColorPart) {
+  if (item.line === "national" || !product || options === "upholsteryColors" && product.upholsteryConfigurable === false) return []
   return product[options] ?? []
 }
 
@@ -34,7 +34,7 @@ export function requiredOrderFinishParts(item: SelectedOrderItem, product: Produ
 }
 
 export function compatibleOrderFinishUpdates(source: SelectedOrderItem, items: SelectedOrderItem[], products: Record<string, ProductFinishes>) {
-  const colors = orderColorParts.filter(({ field }) => source[field])
+  const colors = source.line === "national" ? [] : orderColorParts.filter(({ field }) => source[field])
   const updates: SelectedOrderItem[] = []
   const skipped: { productId: string; parts: string[] }[] = []
   for (const item of items) {

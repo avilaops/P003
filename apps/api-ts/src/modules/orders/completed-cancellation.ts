@@ -7,13 +7,14 @@ import { nextRevision, parseRevision, revisionValue } from "../../platform/revis
 import { Problem } from "../../platform/problem.js"
 import { decimal, validateDate } from "../sales/fixed.js"
 import { reconcileCancellation, requireCancellationPermissions } from "./cancellation.js"
+import { heldQuantity } from "./fulfillment.js"
 import { ensureCommissionAccess } from "./commission-ledger.js"
 import { titleSnapshots } from "./finance-snapshot.js"
 import { reversePayment } from "./settlements.js"
 import { orderHead, orderId, stale } from "./supporting-documents.js"
 import type { CommandHeaders } from "./receivables.js"
 
-const command=z.strictObject({reason:z.string().refine(v=>v.trim().length>=15&&v.trim().length<=200&&!/\p{Cc}/u.test(v.trim())),occurredOn:z.string().transform(validateDate)})
+const command=z.strictObject({reason:z.string().refine(v=>v.trim().length>=15&&v.trim().length<=200&&!/\p{Cc}/u.test(v)),occurredOn:z.string().transform(validateDate)})
 const conflict=(message:string)=>new Problem(409,"domain_conflict",message)
 async function restoreStock(c:AuthorizedContext,headers:CommandHeaders,order:string,reason:string) {
   const movements=await c.client.query<{id:string;product_id:string;quantity_micros:string}>(`SELECT m.id,m.product_id,m.quantity_micros FROM stock_movements m
@@ -26,7 +27,7 @@ async function restoreStock(c:AuthorizedContext,headers:CommandHeaders,order:str
   for(const m of movements.rows) {
     const row=(await c.client.query<{quantity_micros:string}>(`UPDATE stock_balances SET quantity_micros=quantity_micros+$3::bigint WHERE tenant_id=$1 AND product_id=$2
       AND quantity_micros<=999999999999999999-$3::bigint RETURNING quantity_micros`,[c.tenantId,m.product_id,m.quantity_micros])).rows[0]
-    if(!row) throw conflict("Saldo físico indisponível ou superior ao limite")
+    if(!row || BigInt(row.quantity_micros) < await heldQuantity(c,m.product_id)) throw conflict("Saldo físico indisponível, reservado ou superior ao limite")
     const id=randomUUID()
     await c.client.query("INSERT INTO stock_movements(id,tenant_id,product_id,direction,quantity_micros,balance_after_micros,reason,reverses_id) VALUES($1,$2,$3,'receipt',$4,$5,$6,$7)",[id,c.tenantId,m.product_id,m.quantity_micros,row.quantity_micros,reason,m.id])
     await record(c,headers,"stock_movement",id,"stock.moved",{sourceId:order,productId:m.product_id,direction:"receipt",quantity:decimal(BigInt(m.quantity_micros),6),balanceAfter:decimal(BigInt(row.quantity_micros),6),reversesId:m.id,reason})
@@ -64,6 +65,8 @@ export function registerCompletedCancellation(app:FastifyInstance,deps:AccessDep
       if(lots.rows.length) throw conflict("Concilie os lotes fiscais e as devoluções por item antes de cancelar integralmente")
       const reason=input.reason.trim(), titles=await titleSnapshots(c,{order:id})
       if(!titles.length||titles.some(t=>t.data.status==="cancelled")||titles.reduce((n,t)=>n+BigInt(t.data.amount.replace(".","")),0n)!==BigInt(head.amount_cents)) throw conflict("Concilie os títulos da venda antes do cancelamento integral")
+      // Warehouse valuation and production reversals use the declared return date in the same transaction.
+      await c.client.query("SELECT set_config('app.stock_effective_on',$1,true)", [input.occurredOn])
       const stockMovementIds=await restoreStock(c,req.headers,id,reason), paymentReversalIds:string[]=[]
       for(const title of titles) {
         for(const p of title.payments.filter(p=>p.kind==="receipt"&&!title.payments.some(r=>r.reversesId===p.id))) {

@@ -7,6 +7,60 @@ import type { DatabasePool } from "../src/platform/database.js"
 import type { DocumentMail } from "../src/platform/document-mail.js"
 import { digest } from "../src/modules/document-copies/source.js"
 
+const signers = [
+  { role: "Cliente", name: "Alice", email: "alice@example.test" },
+  { role: "Testemunha", name: "Bob", email: "bob@example.test" },
+]
+
+// The mailer consumes verdicts persisted by the private validator. Fixtures below
+// model those database records and identify the exact final bytes the mailer uses.
+async function signatureFixture(seed: Pool, tenant: string, contract: string, base: Buffer) {
+  const envelope = randomUUID(), document = randomUUID(), preflight = randomUUID()
+  const policyHash = digest("test signing policy"), trustHash = digest("test trust bundle")
+  const bundle = Buffer.from("synthetic validation evidence"), bundleHash = digest(bundle), baseHash = digest(base)
+  await seed.query(`INSERT INTO contract_signature_envelopes
+    (tenant_id,id,contract_id,policy,policy_sha256,trust_bundle_sha256,participant_count)
+    VALUES($1,$2,$3,'icp_each_participant',$4,$5,$6)`, [tenant, envelope, contract, policyHash, trustHash, signers.length])
+  await seed.query(`INSERT INTO contract_signature_documents(tenant_id,envelope_id,id,position,provider_document_id,sha256,content)
+    VALUES($1,$2,$3,1,'provider-document',$4,$5)`, [tenant, envelope, document, baseHash, base])
+  // Even a completed state cannot substitute for a missing personal signature.
+  await seed.query(`INSERT INTO contract_signature_states(tenant_id,envelope_id,phase,current_participant,document_count,documents_frozen_at,completed_at)
+    VALUES($1,$2,'completed',$3,1,now(),now())`, [tenant, envelope, signers.length])
+  const participants: string[] = []
+  for (const [i, signer] of signers.entries()) {
+    const id = randomUUID()
+    await seed.query(`INSERT INTO contract_signature_participants
+      (tenant_id,envelope_id,id,position,role,name,email,cpf_masked,identity_key_id,identity_nonce,identity_ciphertext)
+      VALUES($1,$2,$3,$4,$5,$6,$7,'***.***.***-00','test',$8,$9)`,
+    [tenant, envelope, id, i + 1, signer.role, signer.name, signer.email, Buffer.alloc(12), Buffer.alloc(27)])
+    participants.push(id)
+  }
+  async function evidence(id: string, participant: string | null, parentHash: string, candidateHash: string) {
+    await seed.query(`INSERT INTO contract_signature_evidence(tenant_id,envelope_id,id,document_id,participant_id,mode,verdict,
+      parent_sha256,candidate_sha256,policy_sha256,trust_bundle_sha256,evidence_set_sha256,report_sha256,bundle_sha256,response_headers,bundle,observed_at)
+      VALUES($1,$2,$3,$4,$5,$6,'accepted',$7,$8,$9,$10,$11,$11,$11,'{}',$12,now())`,
+    [tenant, envelope, id, document, participant, participant ? "increment" : "preflight", parentHash, candidateHash, policyHash, trustHash, bundleHash, bundle])
+  }
+  await evidence(preflight, null, baseHash, baseHash)
+  await seed.query(`INSERT INTO contract_signature_heads(tenant_id,envelope_id,document_id,base_sha256,sha256,preflight_evidence_id)
+    VALUES($1,$2,$3,$4,$4,$5)`, [tenant, envelope, document, baseHash, preflight])
+  let head = base, sequence = 0
+  return async function addSignature() {
+    const participant = participants[sequence]!, previousSequence = sequence || null
+    const revision = randomUUID(), verdict = randomUUID(), parentHash = digest(head)
+    sequence++
+    head = Buffer.concat([head, Buffer.from("\nsynthetic increment " + sequence)])
+    const candidateHash = digest(head)
+    await evidence(verdict, participant, parentHash, candidateHash)
+    await seed.query(`INSERT INTO contract_signature_revisions(tenant_id,envelope_id,document_id,id,sequence,participant_id,
+      base_sha256,parent_sequence,parent_sha256,sha256,content,evidence_id) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
+    [tenant, envelope, document, revision, sequence, participant, baseHash, previousSequence, parentHash, candidateHash, head, verdict])
+    await seed.query(`UPDATE contract_signature_heads SET sequence=$4,revision_id=$5,sha256=$6,revision=revision+1
+      WHERE tenant_id=$1 AND envelope_id=$2 AND document_id=$3`, [tenant, envelope, document, sequence, revision, candidateHash])
+    return head
+  }
+}
+
 export async function verifyDocumentCopies(seed: Pool, pool: DatabasePool, other: string) {
   const tenant = randomUUID(), role = randomUUID(), membership = randomUUID(), order = randomUUID()
   await seed.query("INSERT INTO tenants(id,legal_name,trade_name,tax_id) VALUES($1,'Empresa de documentos','Marca de teste','19131243000197')", [tenant])
@@ -21,8 +75,8 @@ export async function verifyDocumentCopies(seed: Pool, pool: DatabasePool, other
   await seed.query("INSERT INTO purchase_orders(id,tenant_id,supplier_id,supplier_name,supplier_tax_id,due_date,amount_cents,status) VALUES($1,$2,$3,'Fornecedor','11144477735','2026-12-18',12345,'received')", [purchase, tenant, supplier])
   await seed.query("INSERT INTO purchase_receipts(id,tenant_id,order_id,reference,occurred_on,amount_cents) VALUES($1,$2,$3,'Teste','2026-11-17',12345)", [receipt, tenant, purchase])
   await seed.query("INSERT INTO payables(id,tenant_id,receipt_id,supplier_name,due_date,amount_cents) VALUES($1,$2,$3,'Fornecedor','2026-12-18',12345)", [payable, tenant, receipt])
-  await seed.query(`INSERT INTO commercial_contracts(id,tenant_id,customer_id,order_id,template_id,template_name,template_snapshot,snapshot,recipients,fields,fingerprint,status)
-    VALUES($1,$2,$2,$3,1,'Contrato teste','{}',$6,$4,'{}',$5,'completed')`, [contract, tenant, order, JSON.stringify([{ email: "alice@example.test" }, { email: "bob@example.test" }]), digest(contract),
+  await seed.query(`INSERT INTO commercial_contracts(id,tenant_id,customer_id,order_id,template_id,template_name,template_snapshot,snapshot,recipients,fields,fingerprint,status,signature_policy)
+    VALUES($1,$2,$2,$3,1,'Contrato teste','{}',$6,$4,'{}',$5,'completed','icp_each_participant')`, [contract, tenant, order, JSON.stringify(signers), digest(contract),
       { order: { id: order, number: "42", amount: "123.45", revision: 1 }, customer: { name: "Cliente", taxId: "52998224725" }, company: { legalName: "Empresa", tradeName: "Marca do contrato", taxId: "19131243000197" }, items: [] }])
   for (const kind of ["signed", "preview", "audit"])
     await seed.query("INSERT INTO commercial_contract_files(id,tenant_id,contract_id,kind,position,sha256,content) VALUES($1,$2,$3,$4,0,$5,$6)", [randomUUID(), tenant, contract, kind, digest(pdf), pdf])
@@ -108,9 +162,37 @@ export async function verifyDocumentCopies(seed: Pool, pool: DatabasePool, other
     }
     assert.equal(mails.length, 4)
     const packageUrl = `/api/v1/commercial-contracts/${contract}/send-package`
-    const emails = ["alice@example.test", "bob@example.test"]
-    const postPackage = (key = randomUUID(), recipients = emails) => app.inject({ method: "POST", url: packageUrl, payload: { recipients }, headers: { ...headers, "idempotency-key": key, "if-match": '"1"' } })
+    const emails = signers.map(signer => signer.email)
+    const getPackage = async () => {
+      const response = await app.inject({ method: "GET", url: packageUrl, headers })
+      assert.equal(response.statusCode, 200, response.body)
+      assert.equal(response.headers.etag, '"1"')
+      assert.equal(response.headers["cache-control"], "no-store")
+      return response.json<{ checks: { label: string; ready: boolean }[]; closingHash: string; recipients: string[]; packageStatus: string | null; completePackage: boolean }>()
+    }
+    const postPackage = (key = randomUUID(), recipients = emails, closingHash?: string) => app.inject({
+      method: "POST", url: packageUrl, payload: { recipients, closingHash }, headers: { ...headers, "idempotency-key": key, "if-match": '"1"' },
+    })
+    assert.equal((await app.inject({ method: "GET", url: packageUrl, headers: { ...headers, "x-tenant-id": other } })).statusCode, 403)
+    const initial = await getPackage()
+    assert.deepEqual(initial.recipients, emails)
+    assert.match(initial.closingHash, /^[a-f0-9]{64}$/)
+    assert.deepEqual(Object.fromEntries(initial.checks.map(c => [c.label, c.ready])),
+      { "Contrato": false, "Pedido": true, "NF-e": false, "Orçamento": false, "Comprovante de pagamento": false })
+    assert.equal(initial.packageStatus, null)
     assert.equal((await postPackage(randomUUID(), ["different@example.test"])).statusCode, 412)
+    const denied = await postPackage(randomUUID(), emails, initial.closingHash)
+    assert.equal(denied.statusCode, 409, denied.body)
+    assert.match(denied.json().type, /signature_unverified$/)
+    assert.match((await postPackage()).json().type, /signature_unverified$/)
+    const addSignature = await signatureFixture(seed, tenant, contract, pdf)
+    await addSignature()
+    assert.equal((await getPackage()).checks.find(c => c.label === "Contrato")?.ready, false)
+    assert.match((await postPackage()).json().type, /signature_unverified$/)
+    assert.equal(mails.length, 4)
+    assert.equal((await seed.query("SELECT 1 FROM commercial_contract_deliveries WHERE tenant_id=$1 AND contract_id=$2", [tenant, contract])).rowCount, 0)
+    const finalContract = await addSignature()
+    assert.equal((await getPackage()).checks.find(c => c.label === "Contrato")?.ready, true)
     assert.match((await postPackage()).json().type, /nfe_unavailable$/)
     const invoice = randomUUID()
     const xml = (await readFile(new URL("../../api/tests/fixtures/nfe-protocol-synthetic.xml", import.meta.url), "utf8"))
@@ -119,6 +201,8 @@ export async function verifyDocumentCopies(seed: Pool, pool: DatabasePool, other
     await seed.query("INSERT INTO fiscal_nfe_drafts(tenant_id,id,environment,model,profile_revision,company_revision,issuer_snapshot,details,products_total_cents) VALUES($1,$2,'homologation',55,1,1,'{}','{}',1)", [tenant, invoice])
     await seed.query(`INSERT INTO fiscal_nfe_documents(tenant_id,id,source_order_id,status,series,number,issued_at,random_code,access_key,signed_xml,authorized_xml,protocol)
       VALUES($1,$2,$3,'authorized',1,1,'2026-11-17','00000001',$4,'signed-only',$5,'135260000000000')`, [tenant, invoice, order, accessKey, xml])
+    const incomplete = await getPackage()
+    assert.match((await postPackage(randomUUID(), emails, incomplete.closingHash)).json().type, /proposal_unavailable$/)
     outcome = "failed"
     const declined = await postPackage()
     assert.equal(declined.statusCode, 200, declined.body)
@@ -136,6 +220,28 @@ export async function verifyDocumentCopies(seed: Pool, pool: DatabasePool, other
     assert.equal((await postPackage(key)).json().packageStatus, "sent")
     assert.equal((await postPackage()).json().packageStatus, "sent")
     assert.equal(mails.length, 6)
+    const partial = await getPackage()
+    assert.equal(partial.completePackage, false)
+    assert.equal(partial.checks.find(c => c.label === "Comprovante de pagamento")?.ready, true)
+    assert.equal(partial.checks.find(c => c.label === "Orçamento")?.ready, false)
+    const proposal = randomUUID()
+    await seed.query(`WITH proposal AS (
+      INSERT INTO sales_proposals(id,tenant_id,order_id) VALUES($1,$2,$3) RETURNING id,tenant_id
+    ) INSERT INTO sales_proposal_versions(tenant_id,proposal_id,version,customer_id,customer_name,customer_tax_id,valid_until,payment_terms,
+      delivery_terms,amount_cents,status,created_by,sent_at,decided_at,decided_by)
+      SELECT tenant_id,id,1,tenant_id,'Cliente','52998224725','2026-12-18','À vista','Retirada',12345,'accepted','reader',now(),now(),'reader' FROM proposal`,
+    [proposal, tenant, order])
+    const complete = await getPackage()
+    assert.equal(complete.checks.every(c => c.ready), true)
+    assert.notEqual(complete.closingHash, partial.closingHash)
+    assert.equal((await postPackage(randomUUID(), emails, partial.closingHash)).statusCode, 412)
+    const closingKey = randomUUID()
+    const upgrades = await Promise.all([postPackage(closingKey, emails, complete.closingHash), postPackage(closingKey, emails, complete.closingHash)])
+    for (const response of upgrades) assert.ok([200,202].includes(response.statusCode), response.body)
+    assert.equal((await postPackage(closingKey, emails, complete.closingHash)).json().packageStatus, "sent")
+    assert.equal((await postPackage(randomUUID(), emails, complete.closingHash)).json().packageStatus, "sent")
+    assert.equal((await getPackage()).completePackage, true)
+    assert.equal(mails.length, 7)
     const packet = mails.at(-1)!
     assert.deepEqual(packet.to, emails)
     assert.match(packet.subject, /Homologação • sem valor fiscal/)
@@ -148,15 +254,30 @@ export async function verifyDocumentCopies(seed: Pool, pool: DatabasePool, other
       assert.ok(packet.text.includes(file.filename))
       assert.ok(packet.html.includes(file.filename))
     }
-    assert.deepEqual(packet.attachments.map(f => f.contentType), ["application/pdf","application/pdf","application/xml","application/pdf","application/pdf"])
-    assert.deepEqual(packet.attachments[2]!.content,Buffer.from(xml)); assert.deepEqual(packet.attachments.at(-1)!.content,pdf)
+    assert.deepEqual(packet.attachments.map(f => f.contentType), ["application/pdf","application/pdf","application/xml","application/pdf","application/pdf","application/pdf"])
+    assert.deepEqual(packet.attachments[2]!.content, Buffer.from(xml))
+    assert.deepEqual(packet.attachments[4]!.content, finalContract)
+    assert.match(packet.attachments[5]!.filename, /^orcamento-\d+-v1\.pdf$/)
     const manifest = (await seed.query("SELECT attachments,attempts,status FROM commercial_contract_deliveries WHERE tenant_id=$1 AND contract_id=$2",[tenant,contract])).rows[0]
-    assert.equal(manifest.attempts,2)
+    assert.equal(manifest.status, "sent")
+    assert.equal(manifest.attempts, 3)
+    assert.deepEqual(manifest.attachments.map((f: {kind: string}) => f.kind), ["order", "danfe", "nfe", "payment", "contract", "proposal"])
     assert.deepEqual(manifest.attachments.map((f: {sha256:string}) => f.sha256),packet.attachments.map(f => digest(f.content)))
     assert.equal(manifest.attachments[3].paymentId,payment)
+    assert.equal(manifest.attachments[4].signaturePolicy, "icp_each_participant")
+    assert.equal(manifest.attachments[5].proposalId, proposal)
     const saved = await seed.query("SELECT status,revision,send_requested_at FROM commercial_contracts WHERE id=$1", [contract])
     assert.deepEqual(saved.rows[0], { status: "completed", revision: "1", send_requested_at: null })
+    const appendix = Buffer.from("%PDF-1.7\nsecond provider document")
+    await seed.query(`INSERT INTO commercial_contract_files(id,tenant_id,contract_id,kind,position,sha256,content)
+      VALUES($1,$2,$3,'signed',1,$4,$5)`, [randomUUID(), tenant, contract, digest(appendix), appendix])
+    await seed.query(`INSERT INTO contract_signature_documents(tenant_id,envelope_id,id,position,provider_document_id,sha256,content)
+      SELECT tenant_id,id,$3,2,'provider-appendix',$4,$5 FROM contract_signature_envelopes WHERE tenant_id=$1 AND contract_id=$2`,
+    [tenant, contract, randomUUID(), digest(appendix), appendix])
+    // A stale document count and a complete first PDF cannot qualify the unsigned appendix.
+    assert.equal((await getPackage()).checks.find(c => c.label === "Contrato")?.ready, false)
     await seed.query("DELETE FROM role_permissions WHERE role_id=$1 AND permission_code='sales.contracts.package'", [role])
+    assert.equal((await app.inject({ method: "GET", url: packageUrl, headers })).statusCode, 403)
     assert.equal((await app.inject({ method: "GET", url: `/api/v1/commercial-contracts/${contract}/email`, headers })).json().canSend, false)
   } finally {
     await app.close()

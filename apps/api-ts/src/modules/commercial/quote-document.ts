@@ -10,7 +10,8 @@ export async function quoteLines(context:AuthorizedContext,prepared:Prepared) {
   const lines = []
   for (const item of prepared.sale.items) {
     const product = await loadSaleProduct(context, item.productId)
-    const finishes = selectFinishes({ structureColor: item.structureColor, swingArmColor: item.swingArmColor, plateHolderColor: item.plateHolderColor ?? undefined, plateHolderType: item.plateHolderType ?? undefined, upholsteryColor: item.upholsteryColor }, product)
+    const line = prepared.kind === "single" ? prepared.line : ("line" in item ? String(item.line) : undefined)
+    const finishes = selectFinishes({ structureColor: item.structureColor, swingArmColor: item.swingArmColor, plateHolderColor: item.plateHolderColor ?? undefined, plateHolderType: item.plateHolderType ?? undefined, upholsteryColor: item.upholsteryColor }, product, undefined, line)
     lines.push({ priceOrigin:item.priceOrigin??{kind:"published",baseCents:item.tableUnitCents}, productId: item.productId, sku: item.sku, name: item.name, unit: item.unit, quantity: BigInt(item.quantity) * 1000000n, price: BigInt(item.unitTotalCents), amount: BigInt(item.totalCents), ...finishes })
   }
   return lines

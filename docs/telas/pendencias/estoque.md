@@ -1,10 +1,12 @@
-# Estoque e produção: funcionalidades pendentes
+# Estoque e produção • roteiro E1 a E9
 
 [Funcionalidades pendentes](README.md) • [Padrão Protheus](PADRAO-PROTHEUS.md) • [Guias de Estoque](../estoque/README.md)
 
 Referência Protheus: Estoque/Custos (SIGAEST) • saldos por armazém (SB2), movimentos internos (MATA240/MATA241), transferências (MATA261), inventário, rastreabilidade por lote e número de série, recálculo do custo médio (MATA330) e virada de saldos (MATA280); PCP para ordens de produção e estrutura de produto.
 
-## O que já existe (conferido nos guias)
+## Situação na revisão inicial dos guias
+
+A lista abaixo registra o diagnóstico anterior à implementação. Para operar as telas, consulte o [guia atualizado de estoque](../estoque/README.md). O [levantamento da tela 41](../estoque/saldos/LEVANTAMENTO-TELA-41.md) registra a comparação com Protheus e os critérios usados para a grade compartilhada.
 
 - **Saldos:** consolidados por produto e empresa, **sem divisão por depósito**; saldo, reservado e disponível.
 - **Lançamentos:** entrada e saída manuais, estorno de movimento manual com motivo; movimentos de pedido não são estornados por esta tela.

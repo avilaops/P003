@@ -6,7 +6,7 @@ import {OwnReturnForm,ownReturnStatus} from "./own-return"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { useCommand, useResource } from "@/hooks/use-operation"
-import { decimalMicros, inputMicros, type OrderLots, type LotEnvironment } from "./order-lots-model"
+import { decimalMicros, inputMicros, type OrderLots, type FiscalLot, type LotEnvironment } from "./order-lots-model"
 
 const statuses:Record<string,string>={reserved:"Aguardando rascunho",draft:"Rascunho",withdrawn:"Reserva liberada",authorized:"Autorizada",rejected:"Rejeitada",cancelled:"Cancelada",preparing:"Em preparação",prepared:"Preparada",unknown:"Aguardando consulta"}
 const destinations:Record<string,string>={stock:"Estoque",service:"Assistência",discard:"Descarte"}
@@ -44,6 +44,11 @@ export function OrderFiscalLots({id,tenant,permissions,disabled,onChange}:{id:st
   const data=read.value?.tenantId===tenant && read.value.orderId===id && read.value.environment===environment ? read.value:null
   const [amounts,setAmounts]=useState<Record<number,string>>({})
   const [ownLot,setOwnLot]=useState("")
+  const [unitInput,setUnitInput]=useState<Record<string,string>>({})
+  function serialCommand(lot:FiscalLot){
+    const serials=lot.items.filter(i=>i.tracked).map(i=>({lineNumber:i.lineNumber,serials:(unitInput[lot.id+":"+i.lineNumber]||"").split(/\r?\n/).map(n=>n.trim()).filter(Boolean)})).filter(row=>row.serials.length)
+    return serials.length?{serials}:{}
+  }
   const [returnLot,setReturnLot]=useState(""),[received,setReceived]=useState(""),[reason,setReason]=useState(""),[destination,setDestination]=useState("stock")
   const panel=useRef<HTMLDetailsElement>(null),initialized=useRef("")
   const [creditForm,setCreditForm]=useState("")
@@ -67,7 +72,7 @@ export function OrderFiscalLots({id,tenant,permissions,disabled,onChange}:{id:st
     if (!data || !read.etag || disabled) return
     setError(""); setNotice("")
     const result=await action.send<{tenantId:string;orderId:string;id:string;status?:string}>(path,tenant,{...body,environment},read.etag,"POST",v=>v.tenantId===tenant && v.orderId===id && !!v.id)
-    if (result) {setOwnLot("");setCreditForm("");setAmounts({});setReturnLot("");setReceived("");setReason("");setNotice("Operação registrada no pedido.");read.reload();onChange()}
+    if (result) {setUnitInput({});setOwnLot("");setCreditForm("");setAmounts({});setReturnLot("");setReceived("");setReason("");setNotice("Operação registrada no pedido.");read.reload();onChange()}
   }
   function prepare() {
     try {
@@ -79,7 +84,7 @@ export function OrderFiscalLots({id,tenant,permissions,disabled,onChange}:{id:st
   return <details ref={panel} id="faturamento-devolucoes" className="rounded-lg border p-3"><summary className="cursor-pointer font-medium">Faturamento por item e devoluções</summary>
     <div className="mt-4 space-y-4 text-sm">
       <Link className="text-primary underline" href="/vendas/devolucoes">Lista de devoluções</Link>
-      <label className="grid max-w-xs gap-1">Ambiente<select className="h-10 rounded-md border bg-background px-2" value={environment} disabled={locked} onChange={e=>{setEnvironment(e.target.value as LotEnvironment);setAmounts({});setReturnLot("");setError("");setNotice("")}}><option value="production">Produção</option><option value="homologation">Homologação</option></select></label>
+      <label className="grid max-w-xs gap-1">Ambiente<select className="h-10 rounded-md border bg-background px-2" value={environment} disabled={locked} onChange={e=>{setEnvironment(e.target.value as LotEnvironment);setUnitInput({});setOwnLot("");setAmounts({});setReturnLot("");setError("");setNotice("")}}><option value="production">Produção</option><option value="homologation">Homologação</option></select></label>
       {read.loading && <p role="status">Consultando saldos por item…</p>}
       {(error || read.error || action.error) && <p role="alert">{error || read.error || action.error}</p>}
       {notice && <p role="status">{notice}</p>}
@@ -96,17 +101,21 @@ export function OrderFiscalLots({id,tenant,permissions,disabled,onChange}:{id:st
         {data.lots.map(lot=><article key={lot.id} className="space-y-2 border-t pt-3">
           <h3 className="font-medium">{lot.number ? "NF-e "+lot.number : "Lote "+lot.id.slice(0,8)} • {statuses[lot.status] || lot.status}{lot.deliveredAt && " • Entregue"}</h3>
           <p>{lot.items.map(i=>i.sku+" • "+qty(i.quantity)).join(", ")}</p>
+          {environment==="production" && lot.status==="authorized" && (returnLot===lot.id || ownLot===lot.id || !lot.deliveredAt && allowed("sales.orders.manage","inventory.stock.manage")) &&
+            lot.items.filter(i=>i.tracked).map(i=><label key={i.lineNumber} className="grid max-w-lg gap-1">Séries {lot.deliveredAt?"devolvidas":"entregues"} • {i.sku} • uma por linha
+              <textarea className="min-h-16 rounded border bg-background px-2 py-1" disabled={locked} value={unitInput[lot.id+":"+i.lineNumber]||""} onChange={e=>setUnitInput({...unitInput,[lot.id+":"+i.lineNumber]:e.target.value})}/>
+            </label>)}
           <div className="flex flex-wrap gap-3">
             {manage && lot.status==="reserved" && <Link className="text-primary underline" href={`/fiscal/notas-saida/nova?pedido=${id}&lote=${lot.id}&ambiente=${environment}`}>Preparar NF-e do lote</Link>}
             {lot.draftId && <Link className="text-primary underline" href={`/fiscal/notas-saida/${lot.draftId}`+(lot.legacyFull ? "" : `?pedido=${id}&lote=${lot.id}&ambiente=${environment}`)}>Abrir nota</Link>}
             {manage && ["draft","reserved"].includes(lot.status) && <Button variant="outline" size="sm" disabled={locked} onClick={()=>void send({action:"withdraw",lotId:lot.id})}>Liberar saldo do lote</Button>}
-            {environment==="production" && lot.status==="authorized" && !lot.deliveredAt && data.status==="confirmed" && allowed("sales.orders.manage","inventory.stock.manage") && <Button size="sm" disabled={locked} onClick={()=>{if(window.confirm("Registrar a entrega deste lote e baixar o estoque?")) void send({action:"deliver",lotId:lot.id})}}>Registrar entrega</Button>}
+            {environment==="production" && lot.status==="authorized" && !lot.deliveredAt && data.status==="confirmed" && allowed("sales.orders.manage","inventory.stock.manage") && <Button size="sm" disabled={locked} onClick={()=>{if(window.confirm("Registrar a entrega deste lote e baixar o estoque?")) void send({action:"deliver",lotId:lot.id,...serialCommand(lot)})}}>Registrar entrega</Button>}
             {lot.status==="authorized" && lot.deliveredAt && allowed("sales.orders.manage","fiscal.received_nfe.manage","inventory.stock.manage","finance.receivables.manage") && <Button variant="outline" size="sm" disabled={locked} onClick={()=>setReturnLot(lot.id)}>Vincular NF-e recebida do cliente</Button>}
           </div>
           {lot.status==="authorized" && (lot.deliveredAt || environment==="homologation") && manage && !data.ownReturns?.some(p=>p.lotId===lot.id && ["pending","ready"].includes(p.status)) &&
             <Button variant="outline" size="sm" disabled={locked} onClick={()=>setOwnLot(ownLot===lot.id?"":lot.id)}>Emitir NF-e de entrada de devolução</Button>}
-          {ownLot===lot.id && manage && !data.ownReturns?.some(p=>p.lotId===lot.id && ["pending","ready"].includes(p.status)) && <OwnReturnForm lot={lot} locked={locked} send={send}/>}
-          {returnLot===lot.id && allowed("sales.orders.manage","fiscal.received_nfe.manage","inventory.stock.manage","finance.receivables.manage") && <form className="grid max-w-xl gap-2" onSubmit={e=>{e.preventDefault();void send({action:"return",lotId:lot.id,receivedId:received,reason,destination})}}>
+          {ownLot===lot.id && manage && !data.ownReturns?.some(p=>p.lotId===lot.id && ["pending","ready"].includes(p.status)) && <OwnReturnForm lot={lot} locked={locked} send={body=>send({...body,...serialCommand(lot)})}/>}
+          {returnLot===lot.id && allowed("sales.orders.manage","fiscal.received_nfe.manage","inventory.stock.manage","finance.receivables.manage") && <form className="grid max-w-xl gap-2" onSubmit={e=>{e.preventDefault();void send({action:"return",lotId:lot.id,receivedId:received,reason,destination,...serialCommand(lot)})}}>
             <p>Use uma NF-e de devolução recebida do cliente que referencie esta nota. O sistema confere as linhas da entrada e abate os títulos em aberto. O valor restante gera crédito.</p>
             <Link className="text-primary underline" href="/compras/notas-entrada?origem=vendas" target="_blank">Consultar notas de entrada</Link>
             <label>Registro da NF-e de entrada<Input required pattern="[1-9][0-9]*" inputMode="numeric" disabled={locked} value={received} onChange={e=>setReceived(e.target.value)}/></label>

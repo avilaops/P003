@@ -33,6 +33,15 @@ export async function verifyOrderFiscalLots(seed:Pool,app:FastifyInstance,compan
   await seed.query("INSERT INTO staff(id,tenant_id,code,name,is_employee,is_seller,status) VALUES($1,$2,'LOT','Vendedor',false,true,'active')",[staff,company])
   await seed.query("INSERT INTO commission_accounts(tenant_id,seller_staff_id) VALUES($1,$2)",[company,staff])
   await seed.query("INSERT INTO order_commission_terms(tenant_id,order_id,seller_staff_id,seller_name,commission_rate,ipi_rate,payment_day) VALUES($1,$2,$3,'Vendedor',100000,0,10)",[company,order,staff])
+  const warehouse=randomUUID(),units=Array.from({length:10},(_,i)=>"LOTE-"+String(i+1).padStart(2,"0"))
+  await seed.query("INSERT INTO warehouses(tenant_id,id,code,name,status,revision) VALUES($1,$2,'EXP','Expedição','active',1)",[company,warehouse])
+  await seed.query("UPDATE stock_location_settings SET enabled=true WHERE tenant_id=$1",[company])
+  await seed.query("INSERT INTO stock_location_balances(tenant_id,product_id,warehouse_id,quantity_micros) VALUES($1,$2,$3,10000000)",[company,product,warehouse])
+  await seed.query("UPDATE sales_order_lines SET warehouse_id=$3 WHERE tenant_id=$1 AND order_id=$2",[company,order,warehouse])
+  await seed.query("INSERT INTO stock_serial_products(tenant_id,product_id) VALUES($1,$2)",[company,product])
+  await seed.query("INSERT INTO stock_serials(tenant_id,product_id,warehouse_id,serial,status) SELECT $1,$2,$3,s,'available' FROM unnest($4::text[]) s",[company,product,warehouse,units])
+  await seed.query("INSERT INTO stock_serial_assignments(tenant_id,product_id,document_id,kind,direction,serials) VALUES($1,$2,$3,'sale','issue',$4)",[company,product,order,units])
+  const selection=(...serials:string[])=>[{lineNumber:1,serials}]
   await seed.query("UPDATE sales_orders SET status='confirmed' WHERE tenant_id=$1 AND id=$2",[company,order])
   await seed.query("INSERT INTO receivable_payments(id,tenant_id,receivable_id,kind,amount_cents,method,reference,occurred_on) VALUES($1,$2,$3,'receipt',900,'cash','Pagamento parcial',CURRENT_DATE)",[payment,company,title])
   await seed.query(`INSERT INTO commission_entries(id,tenant_id,seller_staff_id,seller_name,order_id,kind,receipt_id,competence,payment_due,base_cents,commission_rate,ipi_rate,payment_day,amount_cents,reason)
@@ -60,7 +69,11 @@ export async function verifyOrderFiscalLots(seed:Pool,app:FastifyInstance,compan
   assert.equal((await state()).lines[0].available,"6000000")
   const replaced=await ok(prepare(6))
   const replacementNote=await authorize(replaced,6,3)
-  await ok({action:"deliver",lotId:first})
+  assert.equal((await command({action:"deliver",lotId:first})).statusCode,409)
+  await ok({action:"deliver",lotId:first,serials:selection(...units.slice(0,4))})
+  assert.equal((await seed.query("SELECT quantity_micros FROM stock_location_reservations WHERE tenant_id=$1 AND order_id=$2 AND warehouse_id=$3",[company,order,warehouse])).rows[0].quantity_micros,"6000000")
+  assert.deepEqual((await seed.query("SELECT serials FROM stock_serial_assignments WHERE tenant_id=$1 AND document_id=$2",[company,order])).rows[0].serials,units.slice(4))
+  assert.deepEqual((await seed.query("SELECT warehouse_id,serial_numbers FROM stock_movements WHERE tenant_id=$1 AND sales_invoice_lot_id=$2",[company,first])).rows[0],{warehouse_id:warehouse,serial_numbers:units.slice(0,4)})
   assert.equal((await command({action:"deliver",lotId:first})).statusCode,409)
   assert.equal((await state()).lines[0].delivered,"4000000")
   await ok({action:"deliver",lotId:replaced})
@@ -72,15 +85,20 @@ export async function verifyOrderFiscalLots(seed:Pool,app:FastifyInstance,compan
   }
   const incomingId=await incoming(2,3), req={action:"return",lotId:first,receivedId:incomingId,destination:"stock",reason:"Retorno parcial"}
   const key=randomUUID(), initial=rev
-  const accepted=await command(req,initial,key)
+  assert.equal((await command(req)).statusCode,409)
+  assert.equal((await command({...req,serials:selection(units[0]!,units[5]!)})).statusCode,409)
+  const stockReturn={...req,serials:selection(units[0]!,units[1]!)}
+  const accepted=await command(stockReturn,initial,key)
   assert.equal(accepted.statusCode,200,accepted.body);rev=accepted.json().revision
-  assert.deepEqual((await command(req,initial,key)).json(),accepted.json())
+  assert.deepEqual((await command(stockReturn,initial,key)).json(),accepted.json())
   assert.equal((await command(req)).statusCode,409)
   assert.equal((await command({...req,receivedId:await incoming(3,4)})).statusCode,409)
   const final=await state()
   assert.equal(final.lines[0].returned,"2000000")
   assert.deepEqual([final.returns[0].creditedCents,final.returns[0].abatedCents,final.returns[0].commissionReversedCents],["100","100","10"])
   assert.equal((await seed.query("SELECT quantity_micros FROM stock_balances WHERE tenant_id=$1 AND product_id=$2",[company,product])).rows[0].quantity_micros,"2000000")
+  assert.deepEqual((await seed.query("SELECT warehouse_id,quantity_micros FROM stock_location_balances WHERE tenant_id=$1 AND product_id=$2",[company,product])).rows[0],{warehouse_id:warehouse,quantity_micros:"2000000"})
+  assert.deepEqual((await seed.query("SELECT serial FROM stock_serials WHERE tenant_id=$1 AND product_id=$2 AND status='available' ORDER BY serial",[company,product])).rows.map(r=>r.serial),units.slice(0,2))
   const bill=(await seed.query("SELECT id,status,amount_cents FROM receivables WHERE tenant_id=$1 AND order_id=$2",[company,order])).rows
   assert.deepEqual(bill,[{id:title,status:"paid",amount_cents:"900"}])
   const futureOrder=randomUUID(),futureBill=randomUUID(),returnId=accepted.json().id
@@ -113,7 +131,8 @@ export async function verifyOrderFiscalLots(seed:Pool,app:FastifyInstance,compan
   await seed.query("UPDATE sales_invoice_lots SET delivered_at=now()-interval '2 days' WHERE tenant_id=$1 AND id=$2",[company,first])
   assert.equal((await command({...req,receivedId:secondId})).statusCode,409)
   assert.equal((await policy(2,"50",2)).statusCode,200)
-  const requestId=await ok({...req,receivedId:secondId})
+  assert.equal((await command({...req,receivedId:secondId,serials:selection(units[0]!)})).statusCode,409)
+  const requestId=await ok({...req,receivedId:secondId,serials:selection(units[2]!),destination:"service"})
   assert.equal((await command({...req,receivedId:secondId})).statusCode,409)
   assert.equal((await state()).lines[0].returned,"2000000")
   const decision={action:"decideReturn",approve:true,requestId,reason:"Conferência concluída",environment:"production"}
@@ -125,6 +144,9 @@ export async function verifyOrderFiscalLots(seed:Pool,app:FastifyInstance,compan
   const decide=()=>app.inject({method:"POST",url:path,headers:{...headers,authorization:"Bearer reviewer","if-match":'"'+rev+'"',"idempotency-key":randomUUID()},payload:decision})
   const approved=await decide();assert.equal(approved.statusCode,200,approved.body);rev=approved.json().revision
   assert.equal((await state()).returnRequests[0].status,"approved")
+  assert.equal((await seed.query("SELECT status FROM stock_serials WHERE tenant_id=$1 AND product_id=$2 AND serial=$3",[company,product,units[2]])).rows[0].status,"service")
+  assert.equal((await seed.query("SELECT quantity_micros FROM stock_location_balances WHERE tenant_id=$1 AND product_id=$2",[company,product])).rows[0].quantity_micros,"2000000")
+  await seed.query("UPDATE stock_location_settings SET enabled=false WHERE tenant_id=$1",[company])
   assert.equal((await state()).lines[0].returned,"3000000")
   assert.equal((await decide()).statusCode,409)
   const claim=randomUUID(),creditApproval=randomUUID()

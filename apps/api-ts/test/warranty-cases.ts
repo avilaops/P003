@@ -62,6 +62,7 @@ export async function verifyWarrantyCases(app: FastifyInstance, db: Pool, tenant
   assert.equal(updated.serviceOrders[0].laborCents, 10000)
   assert.equal(updated.approvals[0].amountCents, 50005)
   await db.query(`GRANT INSERT,UPDATE ON stock_balances,warranty_service_orders,warranty_quarantines TO ${role}; GRANT INSERT ON warranty_service_order_parts,stock_movements TO ${role}`)
+  await db.query(`GRANT UPDATE(stock_changed) ON inventory_count_lines TO ${role}; GRANT INSERT ON stock_cost_inputs TO ${role}; GRANT INSERT,UPDATE ON stock_cost_jobs,stock_cost_dispatch TO ${role}`)
   await db.query("INSERT INTO stock_balances(tenant_id,product_id,quantity_micros) VALUES($1,$2,2500000)",[tenant,product])
   const part = { method:"POST" as const,url:"/api/v1/warranty-service-orders/"+updated.serviceOrders[0].id+"/parts",
     headers:{...headers,"if-match":'"1"',"idempotency-key":randomUUID()},payload:{productId:product,quantity:"1.500000",amountCents:1200} }

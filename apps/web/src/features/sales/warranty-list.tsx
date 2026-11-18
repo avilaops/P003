@@ -52,11 +52,20 @@ export function WarrantyList({initiallyOpen=false}:{initiallyOpen?:boolean}) {
     </>}
   </div>
 }
-function SeriesInfo({lookup,selected,choose}:{lookup:{serialNumber?:string;lot?:string};selected:string;choose:(id:string)=>void}) {
-  const result=useResource<{data:Equipment|null;matches?:Equipment[]}>("/api/erp/warranty-equipment?"+new URLSearchParams(lookup))
+function SeriesInfo({lookup,selected,choose,chooseStock}:{lookup:{serialNumber?:string;lot?:string};selected:string;choose:(id:string)=>void;chooseStock:(o:Origin)=>void}) {
+  const result=useResource<{data:Equipment|null;matches?:Equipment[];stockTracked?:boolean;stockOrigins?:Origin[]}>("/api/erp/warranty-equipment?"+new URLSearchParams(lookup))
   if(result.loading)return <p role="status">Consultando identificação…</p>
   if(result.error)return <p role="alert">{result.error}</p>
   const rows=result.value?.matches??(result.value?.data?[result.value.data]:[])
+  if(!rows.length && result.value?.stockTracked) {
+    const sources=result.value.stockOrigins??[]
+    if(!sources.length)return <p role="status">Série localizada no estoque. A entrega ainda não tem uma nota de venda autorizada disponível para garantia.</p>
+    return <section className="grid gap-2"><h2 className="font-semibold">Entrega da série no estoque</h2>
+      {sources.length>1 && <p>Selecione a nota e o item e informe a referência que comprova a origem.</p>}
+      {sources.map(o=><Button key={o.documentId+":"+o.lineNumber} type="button" variant="outline" onClick={()=>chooseStock(o)}>
+        NF-e {o.invoiceNumber} • item {o.lineNumber} • pedido {o.orderNumber} • {o.productName} • {o.customerName}
+      </Button>)}</section>
+  }
   if(!rows.length)return <p role="status">Série ou lote sem vínculo fiscal. A solicitação seguirá para análise de cobertura.</p>
   return <fieldset className="space-y-2"><legend>Equipamentos com origem fiscal</legend>{rows.map(item=><label className="block" key={item.id}><input type="radio" name="sold-unit" checked={selected===item.id||rows.length===1} onChange={()=>choose(item.id)}/> {[item.customerName,item.productName,"NF-e "+item.invoiceNumber,"Pedido "+item.orderNumber,item.serialNumber,item.lot&&"Lote "+item.lot,item.policySnapshot?.name,"Cobertura até "+item.expiresOn.split("-").reverse().join("/"),item.coverageStatus==="rejected"?"Documento cancelado":item.remainingDays>=0?item.remainingDays+" dias restantes":"Prazo encerrado"].filter(Boolean).join(" • ")}</label>)}</fieldset>
 }
@@ -113,17 +122,23 @@ function CaseForm({tenant,orderId,documentId}:{tenant:string;orderId:string|null
   const [serial,setSerial]=useState(""),[queried,setQueried]=useState(""),[equipmentId,setEquipment]=useState(""),[lot,setLot]=useState("")
   const [customer,setCustomer]=useState<Choice|null>(null),[product,setProduct]=useState<Choice|null>(null),[sourceOrder,setSourceOrder]=useState(orderId)
   const [searchOrigin,setSearchOrigin]=useState(""),[appliedSearch,setAppliedSearch]=useState("")
-  const [fiscal,setFiscal]=useState<Origin|null>(null)
+  const [fiscal,setFiscal]=useState<Origin|null>(null),[inventoryOrigin,setInventoryOrigin]=useState<Origin|null>(null)
+  const [lookupVersion,setLookupVersion]=useState(0)
+  function chooseDelivery(origin:Origin) {
+    setFiscal(origin);setSourceOrder(origin.orderId);setProduct({id:origin.productId,name:origin.productName});setCustomer(null);setEquipment("")
+    setInventoryOrigin(origin)
+  }
   return <form className="grid max-w-3xl gap-3" onSubmit={async e=>{e.preventDefault();const response=await command.send<{data:{id:string}}>("/api/erp/warranty-cases",tenant,{title,description,criticality,serialNumber:serial.trim()||null,lot:lot.trim()||null,...(equipmentId?{equipmentId}:{}),orderId:sourceOrder,documentId:fiscal?.documentId??null,lineNumber:fiscal?.lineNumber??null,productId:product?.id??null,customerId:customer?.id??null});if(response)router.push("/vendas/garantias/"+response.data.id)}}>
     <label>Título<Input required minLength={3} maxLength={160} value={title} onChange={e=>setTitle(e.target.value)}/></label>
     <label className="grid">Descrição<textarea className="min-h-20 rounded-lg border p-2" required minLength={15} maxLength={10000} value={description} onChange={e=>setDescription(e.target.value)}/></label>
     <label>Criticidade <select className={select} value={criticality} onChange={e=>setCriticality(e.target.value)}>{Object.entries(priorities).map(([s,label])=><option key={s} value={s}>{label}</option>)}</select></label>
-    <label>Número de série<Input maxLength={120} value={serial} onChange={e=>{setSerial(e.target.value);setEquipment("")}}/></label>
+    <label>Número de série<Input maxLength={120} value={serial} onChange={e=>{setSerial(e.target.value);setEquipment("");if(inventoryOrigin){setInventoryOrigin(null);setFiscal(null);setSourceOrder(orderId);setProduct(null)}}}/></label>
     <label>Lote<Input maxLength={120} value={lot} onChange={e=>{setLot(e.target.value);setEquipment("")}}/></label>
-    <Button type="button" variant="outline" disabled={!serial.trim()&&!lot.trim()} onClick={()=>{setQueried(JSON.stringify([serial,lot]));setEquipment("")}}>Consultar série ou lote</Button>{queried===JSON.stringify([serial,lot])&&<SeriesInfo lookup={{...(serial.trim()?{serialNumber:serial.trim()}:{}),...(lot.trim()?{lot:lot.trim()}:{})}} selected={equipmentId} choose={setEquipment}/>}
-    {sourceOrder ? <OrderProducts id={sourceOrder} selectProduct={setProduct}/> : <><Lookup endpoint="parties" label="cliente" choose={setCustomer} selectedName={customer?.legalName} disabled={false} compact searchOnly/><Lookup endpoint="products" label="equipamento" choose={setProduct} selectedName={product?.name} disabled={false} compact searchOnly/></>}
-    {!orderId&&!documentId&&<div className="space-y-2"><label>Procurar origem fiscal<Input value={searchOrigin} onChange={e=>setSearchOrigin(e.target.value)} maxLength={80} placeholder="Pedido, NF-e, cliente ou SKU"/></label><Button type="button" variant="outline" disabled={searchOrigin.trim().length<2} onClick={()=>{setAppliedSearch(searchOrigin.trim());setFiscal(null);setSourceOrder(null);setEquipment("")}}>Consultar notas de venda</Button></div>}
-    {(orderId || documentId || appliedSearch) && <InvoiceEquipment key={appliedSearch} query={appliedSearch} orderId={orderId} documentId={documentId} serial={serial} lot={lot} setLot={v=>{setLot(v);setEquipment("")}} selectOrigin={o=>{setFiscal(o);setSourceOrder(o.orderId);setProduct({id:o.productId,name:o.productName})}}/>}
+    <Button type="button" variant="outline" disabled={!serial.trim()&&!lot.trim()} onClick={()=>{setQueried(JSON.stringify([serial,lot]));setEquipment("")}}>Consultar série ou lote</Button>{queried===JSON.stringify([serial,lot])&&<SeriesInfo key={lookupVersion} chooseStock={chooseDelivery} lookup={{...(serial.trim()?{serialNumber:serial.trim()}:{}),...(lot.trim()?{lot:lot.trim()}:{})}} selected={equipmentId} choose={setEquipment}/>}
+    {inventoryOrigin && <TracePolicy key={inventoryOrigin.documentId+":"+inventoryOrigin.lineNumber} line={inventoryOrigin} tenant={tenant} serial={serial} lot={lot} setLot={setLot} reload={()=>setLookupVersion(n=>n+1)}/>}
+    {inventoryOrigin ? <p>Origem selecionada • pedido {inventoryOrigin.orderNumber} • NF-e {inventoryOrigin.invoiceNumber} • item {inventoryOrigin.lineNumber}</p> : sourceOrder ? <OrderProducts id={sourceOrder} selectProduct={setProduct}/> : <><Lookup endpoint="parties" label="cliente" choose={setCustomer} selectedName={customer?.legalName} disabled={false} compact searchOnly/><Lookup endpoint="products" label="equipamento" choose={setProduct} selectedName={product?.name} disabled={false} compact searchOnly/></>}
+    {!orderId&&!documentId&&<div className="space-y-2"><label>Procurar origem fiscal<Input value={searchOrigin} onChange={e=>setSearchOrigin(e.target.value)} maxLength={80} placeholder="Pedido, NF-e, cliente ou SKU"/></label><Button type="button" variant="outline" disabled={searchOrigin.trim().length<2} onClick={()=>{setAppliedSearch(searchOrigin.trim());setFiscal(null);setInventoryOrigin(null);setSourceOrder(null);setEquipment("")}}>Consultar notas de venda</Button></div>}
+    {!inventoryOrigin && (orderId || documentId || appliedSearch) && <InvoiceEquipment key={appliedSearch} query={appliedSearch} orderId={orderId} documentId={documentId} serial={serial} lot={lot} setLot={v=>{setLot(v);setEquipment("")}} selectOrigin={o=>{setFiscal(o);setSourceOrder(o.orderId);setProduct({id:o.productId,name:o.productName})}}/>}
     {product && <p>Equipamento • {product.name}</p>}{command.error && <p role="alert">{command.error}</p>}
     <Button type="submit" disabled={command.busy || title.trim().length<3 || description.trim().length<15}>{command.uncertain?"Conferir abertura":"Abrir garantia"}</Button>
   </form>

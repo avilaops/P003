@@ -1,5 +1,7 @@
 import "server-only"
 import { erpConfiguration } from "@/server/auth/erp-session"
+import { typescriptOrigin } from "@/server/bff/erp-backend"
+import { readMcpPacket } from "./inventory-packet"
 
 const paths = new Set(["/mcp", "/mcp/oauth/register", "/mcp/oauth/token", "/mcp/oauth/revoke", "/.well-known/oauth-protected-resource", "/.well-known/oauth-protected-resource/mcp", "/.well-known/oauth-authorization-server"])
 
@@ -12,8 +14,14 @@ export async function forwardMcp(request: Request, path: string) {
       if (value) headers.set(key, value)
     }
     const init: RequestInit & { duplex?: string } = { method: request.method, headers, redirect: "manual", cache: "no-store", signal: AbortSignal.timeout(125_000) }
-    if (!["GET", "HEAD"].includes(request.method) && request.body) { init.body = request.body; init.duplex = "half" }
-    const response = await fetch(`${erpConfiguration().api}${path}`, init)
+    let upstream = `${erpConfiguration().api}${path}`
+    if (path === "/mcp" && request.method === "POST" && request.headers.get("content-type")?.split(";")[0] === "application/json") {
+      const packet = await readMcpPacket(request)
+      if (!packet) return new Response(null, { status: 413, headers: { "cache-control": "no-store" } })
+      if (packet.inventory) upstream = `${typescriptOrigin({ ERP_TYPESCRIPT_API_URL: process.env.ERP_TYPESCRIPT_API_URL })}/internal/mcp/inventory`
+      init.body = packet.bytes
+    } else if (!["GET", "HEAD"].includes(request.method) && request.body) { init.body = request.body; init.duplex = "half" }
+    const response = await fetch(upstream, init)
     const forwarded = new Headers({ "Cache-Control": "no-store" })
     for (const key of ["content-type", "www-authenticate", "allow", "retry-after", "x-request-id", "mcp-protocol-version", "access-control-allow-origin", "access-control-allow-methods", "access-control-allow-headers", "access-control-expose-headers", "vary"]) {
       const value = response.headers.get(key)
