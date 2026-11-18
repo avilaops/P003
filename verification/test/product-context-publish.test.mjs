@@ -49,14 +49,29 @@ test('a confirmed retry reads the same capture without another PUT', async t => 
   assert.equal(server.writes(), 1);
 });
 
-test('the complete context crosses a one MiB gateway without changing canonical hashes', async t => {
+// The ERP context PUT accepts 2 MiB (other lab routes keep 1 MiB). The real
+// capture measured 1.073 MiB compact before the Sales integration (~+90 KB).
+const contextLimit = 2 * 1024 * 1024;
+
+test('the complete context crosses the two MiB context limit with at least 25% headroom', async t => {
   const envelope = { context, confirmPublication: false };
-  assert.ok(Buffer.byteLength(stableJson(envelope)) > 1024 * 1024);
-  assert.ok(Buffer.byteLength(JSON.stringify(envelope)) < 1024 * 1024);
-  const server = await api(t, { maximumRequestBytes: 1024 * 1024 });
+  const compact = Buffer.byteLength(JSON.stringify(envelope));
+  assert.ok(Buffer.byteLength(stableJson(envelope)) > compact, 'transport must stay compact');
+  assert.ok(compact < contextLimit * 0.75, `compact envelope ${compact} B leaves less than 25% headroom`);
+  const server = await api(t, { maximumRequestBytes: contextLimit });
   const result = await publishContext(context, server);
   assert.equal(result.receipt.contentSha256, context.contentSha256);
   assert.equal(server.writes(), 1);
+});
+
+test('an envelope above the context limit is refused before any request is sent', async t => {
+  const { contentSha256, ...payload } = structuredClone(context);
+  payload.source.contextFiles = Array.from({ length: 20_000 }, (_, index) => ({ path: `apps/web/file-${index}.ts`, sha256: '6'.repeat(64) }));
+  const oversized = { ...payload, contentSha256: sha256(stableJson(payload)) };
+  assert.ok(Buffer.byteLength(JSON.stringify({ context: oversized, confirmPublication: false })) > contextLimit);
+  const server = await api(t);
+  await assert.rejects(publishContext(oversized, server), error => error.code === 'CONTEXT_TOO_LARGE');
+  assert.equal(server.writes(), 0);
 });
 test('a lost PUT response is recovered by receipt and complete readback, without resubmitting', async t => {
   const server = await api(t, { loseResponse: true });
