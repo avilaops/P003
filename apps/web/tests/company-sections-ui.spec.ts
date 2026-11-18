@@ -81,16 +81,17 @@ test("menus omitem os subtítulos redundantes e preservam os destinos", async ({
 })
 
 test("relatórios em MDX preservam ações e cabem no celular", async ({ page }) => {
+  await page.route("**/api/erp/finance/portfolio?**", route => route.fulfill({ json: {tenantId:tenant, allowed:["receivable","payable"], companyName:"Empresa teste", asOf:"2026-11-18", total:0, rows:[], buckets:[], totals:{receivable:"0.00",payable:"0.00",overdueReceivable:"0.00",overduePayable:"0.00",weekReceivable:"0.00",weekPayable:"0.00",futureMovementTitles:0}} }))
   await page.route("**/api/erp/receivables?**", route => route.fulfill({ json: { data: [] } }))
   await page.route("**/api/erp/financial-payables?**", route => route.fulfill({ json: { data: [] } }))
   await page.route("**/api/erp/stock?**", route => route.fulfill({ json: { data: [], total: 0, offset: 0, limit: 100 } }))
   for (const width of [390, 1280]) {
     await page.setViewportSize({ width, height: 900 })
-    for (const [route, title] of [["financeiro", "Relatório financeiro"], ["estoque", "Relatório de estoque"]]) {
+    for (const [route, title] of [["financeiro", "Relatórios financeiros"], ["estoque", "Relatório de estoque"]]) {
       await page.goto("/relatorios/" + route)
       await expect(page.getByRole("heading", { name: title, exact: true })).toBeVisible()
       await expect(page.getByRole("button", { name: "Exportar CSV", exact: true })).toBeDisabled()
-      await expect(page.locator(".erp-page-back")).toHaveAttribute("href", "/relatorios")
+      await expect(page.locator(".erp-page-back")).toHaveAttribute("href", route === "financeiro" ? "/financeiro" : "/relatorios")
       expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width)
     }
   }
