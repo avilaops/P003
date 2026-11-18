@@ -222,6 +222,25 @@ export async function discover(root, options = {}) {
   for (const absolute of productionRustFiles(rustSources, path.join(root, 'apps/api/src'))) {
     api.push(...rustRoutes(rustSources.get(absolute), slash(path.relative(root, absolute))));
   }
+  const documentRoutes = 'apps/api-ts/src/modules/document-endpoints.json';
+  let registry;
+  try { registry = await readFile(path.join(root, documentRoutes), 'utf8'); }
+  catch (error) { if (error.code !== 'ENOENT') throw error; }
+  if (registry) {
+    files.push({ file: documentRoutes, hash: hash(registry) });
+    const routes = new Map();
+    for (const endpoints of Object.values(JSON.parse(registry))) {
+      for (const [method, url] of Object.entries(endpoints)) {
+        if (!verbs.has(method) || !url.startsWith('/api/v1/')) throw Error('Invalid document endpoint: ' + method + ' ' + url);
+        const route = url.replace(/:([a-zA-Z][\w]*)/g, '{$1}');
+        const methods = routes.get(route) || [];
+        if (methods.includes(method)) throw Error('Duplicate document endpoint: ' + method + ' ' + url);
+        methods.push(method);
+        routes.set(route, methods);
+      }
+    }
+    for (const [route, methods] of routes) api.push({ path: route, methods, file: documentRoutes });
+  }
   const testFiles = (await walk(path.join(webRoot, 'tests'))).filter(file => /\.spec\.[cm]?[jt]sx?$/.test(file));
   const browserTests = [];
   for (const absolute of testFiles) {

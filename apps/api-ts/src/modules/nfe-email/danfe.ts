@@ -2,18 +2,18 @@ import { createHash } from "node:crypto"
 import { Problem } from "../../platform/problem.js"
 
 export const sha256 = (bytes: string | Buffer) => createHash("sha256").update(bytes).digest("hex")
-type RenderInput = { tenantId: string; authorization: string; xml: string; accessKey: string; environment: string }
+type RenderInput = { issuerTaxId: string; xml: string; accessKey: string; environment: string }
 
-export async function renderDanfe(input: RenderInput, request = fetch, origin = process.env.ERP_FISCAL_API_URL || "http://127.0.0.1:8080") {
+export async function renderDanfe(input: RenderInput, request = fetch, origin = process.env.ERP_FISCAL_ENGINE_URL || "http://127.0.0.1:8091", token = process.env.ERP_FISCAL_ENGINE_TOKEN) {
   const unavailable = () => new Problem(502, "danfe_unavailable", "Não foi possível gerar o DANFE para anexar à mensagem")
   try {
     const api = new URL(origin)
-    if (api.protocol !== "http:" || !["localhost", "127.0.0.1", "[::1]"].includes(api.hostname) ||
+    if (!token || token.length < 24 || api.protocol !== "http:" || !["localhost", "127.0.0.1", "[::1]"].includes(api.hostname) ||
         api.username || api.password || api.pathname !== "/" || api.search || api.hash) throw unavailable()
-    const response = await request(new URL("/api/v1/fiscal/danfe", api), {
+    const response = await request(new URL("/v1/danfe", api), {
       method: "POST", redirect: "error", signal: AbortSignal.timeout(75_000),
-      headers: { authorization: input.authorization, "x-tenant-id": input.tenantId, "content-type": "application/json", accept: "application/pdf" },
-      body: JSON.stringify({ xml: input.xml }),
+      headers: { authorization: "Bearer " + token, "content-type": "application/json", accept: "application/pdf" },
+      body: JSON.stringify(input),
     })
     const reader = response.body?.getReader()
     if (!response.ok || !reader || response.headers.get("content-type")?.split(";")[0] !== "application/pdf" ||

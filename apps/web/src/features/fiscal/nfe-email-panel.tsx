@@ -6,12 +6,15 @@ import { useCommand, useResource } from "@/hooks/use-operation"
 type NfeEmail = {
   tenantId: string
   recipientEmail: string | null
+  attachments?: string[]
   smtpConfigured: boolean
   status: "ready" | "sending" | "sent" | "unknown" | "failed"
 }
 
-export function NfeEmailPanel({ id, tenantId, onClose }: { id: string; tenantId: string; onClose: () => void }) {
-  const url = `/api/erp/fiscal/nfe/${id}/email`
+type EmailProps = { id: string; tenantId: string; onClose: () => void; kind?: "nfe" | "received-nfses" | "outgoing-nfses"; label?: "NF-e" | "NFC-e" | "NFS-e" }
+
+export function NfeEmailPanel({ id, tenantId, onClose, kind = "nfe", label = "NF-e" }: EmailProps) {
+  const url = `/api/erp/fiscal/${kind}/${id}/email`
   const preview = useResource<NfeEmail>(url)
   const command = useCommand()
   const [result, setResult] = useState<NfeEmail | null>(null)
@@ -33,18 +36,18 @@ export function NfeEmailPanel({ id, tenantId, onClose }: { id: string; tenantId:
     preview.reload()
   }
 
-  return <section id="nfe-email" aria-label="Envio da NF-e por e-mail" className="space-y-3 rounded-xl border p-4">
-    <h3 className="font-semibold">Enviar DANFE e XML</h3>
+  return <section id={`fiscal-email-${id}`} aria-label={`Envio da ${label} por e-mail`} className="space-y-3 rounded-xl border p-4">
+    <h3 className="font-semibold">{label === "NF-e" ? "Enviar DANFE e XML" : `Enviar XML da ${label}`}</h3>
     {preview.loading ? <p role="status">Consultando o destinatário…</p> : preview.error ? <p role="alert">{preview.error}</p>
       : !matchesTenant ? <p role="alert">A empresa da sessão mudou. Reabra a nota.</p>
       : <>
         {recipient ? <p className="break-words">Destinatário • <strong>{recipient}</strong></p> : <p role="status">Cadastre um e-mail para o destinatário desta nota.</p>}
-        {current.status === "sent" ? <p role="status">O serviço de e-mail aceitou a mensagem com os dois anexos.</p>
+        {current.status === "sent" ? <p role="status">O serviço de e-mail aceitou a mensagem {label === "NF-e" ? "com os dois anexos" : "com o XML"}.</p>
           : current.status === "sending" ? <p role="status">Envio em andamento.</p>
           : current.status === "unknown" ? <p role="alert">O serviço de e-mail ainda não confirmou o resultado.</p>
           : !current.smtpConfigured ? <p role="status">O serviço de e-mail está desativado. <Link className="text-primary underline" href="/preferencias/sistema/email">Configurar o e-mail da plataforma</Link></p>
-          : current.status === "failed" ? <p role="alert">O serviço de e-mail recusou o envio do DANFE e do XML.</p>
-          : <p className="text-sm text-muted-foreground">Anexos • DANFE em PDF e XML autorizado da NF-e.</p>}
+          : current.status === "failed" ? <p role="alert">O serviço de e-mail recusou o envio dos documentos.</p>
+          : <p className="text-sm text-muted-foreground">Anexos • {current.attachments?.join(" e ") ?? (label === "NF-e" ? "DANFE em PDF e XML autorizado da NF-e" : "XML da " + label)}.</p>}
       </>}
     {command.error && <p role="alert">{command.error}</p>}
     <div className="flex flex-wrap gap-2">

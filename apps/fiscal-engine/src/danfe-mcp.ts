@@ -6,10 +6,10 @@ import { verifyDanfeSignature } from "./lib/fiscal/danfe-signature.ts";
 type RecordValue = Record<string, unknown>;
 const record = (value: unknown): value is RecordValue => !!value && typeof value === "object" && !Array.isArray(value);
 const rsaSha1Refusal = "Signature method RSA_SHA1 forbidden by configuration";
-const upstream = "http://127.0.0.1:8093/mcp";
+export const fiscalMcpEndpoint = "http://127.0.0.1:8093/mcp";
 
 /** A Streamable HTTP response can leave its SSE connection open after the matching result. */
-async function rpcResponse(response: Response, id: unknown): Promise<RecordValue> {
+export async function rpcResponse(response: Response, id: unknown, maximum = 131_072): Promise<RecordValue> {
   const sse = response.headers.get("content-type")?.startsWith("text/event-stream");
   const parse = (source: string) => {
     const item: unknown = JSON.parse(source);
@@ -20,7 +20,7 @@ async function rpcResponse(response: Response, id: unknown): Promise<RecordValue
   if (!response.body) throw new Error("Resposta MCP vazia");
   for await (const chunk of response.body) {
     bytes += chunk.byteLength;
-    if (bytes > 131_072) throw new Error("Resposta de assinatura excedeu o limite");
+    if (bytes > maximum) throw new Error("Resposta MCP excedeu o limite");
     pending += decoder.decode(chunk, { stream: true });
     if (!sse) continue;
     const frames = pending.split(/\r?\n\r?\n/);
@@ -55,7 +55,7 @@ async function adaptSignature(message: RecordValue, args: RecordValue) {
   blocks[0].text = JSON.stringify(checked);
 }
 
-export async function handleDanfeMcp(request: IncomingMessage, response: ServerResponse, body?: unknown, endpoint = upstream) {
+export async function handleDanfeMcp(request: IncomingMessage, response: ServerResponse, body?: unknown, endpoint = fiscalMcpEndpoint) {
   const headers = new Headers();
   for (const name of ["accept", "authorization", "content-type", "mcp-protocol-version", "mcp-session-id", "last-event-id"]) {
     const value = request.headers[name];

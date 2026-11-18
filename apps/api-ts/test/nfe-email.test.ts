@@ -27,17 +27,19 @@ test("the MIME envelope contains two intact attachments and labels homologation"
 })
 
 test("the renderer only accepts the matching XML, access key, environment and PDF digest", async () => {
-  const request = { xml: xml.toString(), tenantId: "tenant", authorization: "Bearer test", environment: "homologation", accessKey }
+  const request = { xml: xml.toString(), issuerTaxId: "04252011000110", environment: "homologation", accessKey }
+  const token = "private-engine-test-credential"
   const headers = { "content-type": "application/pdf", "content-disposition": `attachment; filename="DANFE-${accessKey}.pdf"`,
     "x-nfe-environment": "2", "x-xml-sha256": sha256(xml), "x-pdf-sha256": sha256(pdf) }
   const response = async (url: Parameters<typeof fetch>[0], init?: RequestInit) => {
-    assert.equal(String(url), "http://127.0.0.1:8080/api/v1/fiscal/danfe")
-    assert.equal(new Headers(init?.headers).get("authorization"), request.authorization)
+    assert.equal(String(url), "http://127.0.0.1:8091/v1/danfe")
+    assert.equal(new Headers(init?.headers).get("authorization"), "Bearer " + token)
+    assert.deepEqual(JSON.parse(String(init?.body)),request)
     return new Response(pdf, { headers })
   }
-  assert.deepEqual(await renderDanfe(request, response, "http://127.0.0.1:8080"), pdf)
+  assert.deepEqual(await renderDanfe(request, response, "http://127.0.0.1:8091", token), pdf)
   headers["x-pdf-sha256"] = sha256("other")
-  await assert.rejects(renderDanfe(request, response, "http://127.0.0.1:8080"), /gerar o DANFE/)
+  await assert.rejects(renderDanfe(request, response, "http://127.0.0.1:8091", token), /gerar o DANFE/)
 })
 
 test("SMTP opens the platform AES-GCM secret with bound settings and honors explicit disable", async () => {

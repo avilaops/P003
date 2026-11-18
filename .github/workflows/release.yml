@@ -10,6 +10,8 @@ jobs:
     timeout-minutes: 5
     outputs:
       sha: ${{ steps.source.outputs.sha }}
+      typescript_only: ${{ steps.components.outputs.typescript_only }}
+      fiscal_mcp: ${{ steps.components.outputs.fiscal_mcp }}
     steps:
     - uses: actions/checkout@v4
       with:
@@ -31,8 +33,23 @@ jobs:
     - uses: actions/checkout@v4
       with:
         ref: ${{ steps.source.outputs.sha }}
+        fetch-depth: 0
         persist-credentials: false
         clean: false
+    - name: Identify immutable components for this release
+      id: components
+      env:
+        REQUIRE_TYPESCRIPT: ${{ inputs.typescript_only || false }}
+        FORCE_NATIVE: ${{ inputs.force_native_rebuild || false }}
+      run: |
+        set -euo pipefail
+        if [[ "$REQUIRE_TYPESCRIPT" == true && "$FORCE_NATIVE" == true ]]; then
+          echo 'Conflicting native build options' >&2
+          exit 1
+        fi
+        args=()
+        if [[ "$REQUIRE_TYPESCRIPT" == true ]]; then args+=(--require); fi
+        python3 scripts/ci/published-components.py select "${args[@]}"
     - uses: pnpm/action-setup@v4
       with:
         version: 11.11.0
@@ -65,6 +82,7 @@ jobs:
       full: true
       publish: true
       force_native_rebuild: ${{ inputs.force_native_rebuild || false }}
+      typescript_only: ${{ needs.select.outputs.typescript_only == 'true' && !inputs.force_native_rebuild }}
   fiscal:
     needs: select
     permissions:
@@ -72,6 +90,7 @@ jobs:
       packages: write
     uses: ./.github/workflows/_validate-fiscal.yml
     with:
+      reuse_mcp_digest: ${{ needs.select.outputs.typescript_only == 'true' && needs.select.outputs.fiscal_mcp || '' }}
       source_sha: ${{ needs.select.outputs.sha }}
       full: true
       publish: true
@@ -97,6 +116,7 @@ jobs:
       source_sha: ${{ needs.select.outputs.sha }}
       full: true
       check_database: true
+      typescript_only: ${{ needs.select.outputs.typescript_only == 'true' && !inputs.force_native_rebuild }}
       openapi_artifact_name: ${{ needs.api.outputs.openapi_artifact_name }}
   evidence:
     needs:
@@ -178,7 +198,22 @@ jobs:
         if-no-files-found: warn
     outputs:
       manifest_artifact_name: erp-release-${{ needs.select.outputs.sha }}-${{ github.run_attempt }}
+  authorize_ssh:
+    name: Authorize SSH activation
+    if: inputs.package_only
+    needs:
+    - select
+    - evidence
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    environment: production
+    steps:
+    - name: Identify approved release manifest
+      env:
+        MANIFEST: ${{ needs.evidence.outputs.manifest_artifact_name }}
+      run: echo "$MANIFEST" >> "$GITHUB_STEP_SUMMARY"
   deploy:
+    if: ${{ !inputs.package_only }}
     needs:
     - select
     - evidence
@@ -299,6 +334,14 @@ jobs:
         description: Full SHA already integrated into main
         type: string
         required: true
+      typescript_only:
+        description: Require reuse of the published native API and fiscal-mcp images
+        type: boolean
+        default: false
+      package_only:
+        description: Produce the validated manifest for a separately authorized SSH deployment
+        type: boolean
+        default: false
       force_native_rebuild:
         description: Rebuild and validate native API even when identical validated inputs exist
         type: boolean

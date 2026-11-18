@@ -149,6 +149,14 @@ config["services"]["api-ts"] = {
     "healthcheck": {"test": ["CMD", "node", "-e", "fetch('http://127.0.0.1:8081/health/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"], "interval": "15s", "timeout": "5s", "start_period": "30s"},
     "security_opt": ["no-new-privileges:true"], "cap_drop": ["ALL"], "mem_limit": "384m", "pids_limit": 128,
 }
+mail_env = Path("/etc/erp-next/document-mail-n8n.env")
+if mail_env.is_symlink():
+    raise SystemExit("Unexpected document mail configuration symlink")
+if mail_env.exists():
+    stat = mail_env.stat()
+    if not mail_env.is_file() or stat.st_uid != 0 or stat.st_mode & 0o777 != 0o600:
+        raise SystemExit("Document mail configuration must be root-owned with mode 0600")
+    config["services"]["api-ts"]["env_file"] = [str(mail_env)]
 api["ERP_TYPESCRIPT_API_URL"] = "http://127.0.0.1:8081"
 web["ERP_TYPESCRIPT_API_URL"] = "http://127.0.0.1:8081"
 web.pop("ERP_TYPESCRIPT_MODULES", None)

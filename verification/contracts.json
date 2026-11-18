@@ -113,6 +113,22 @@
         ]
       },
       {
+        "id": "fiscal-nfse-outgoing",
+        "title": "NFS-e emitidas e envio ao tomador",
+        "goal": "Consultar NFS-e autorizadas da empresa e confirmar o envio do XML original ao tomador cadastrado.",
+        "kind": "product",
+        "actionGroups": [
+          "fiscal-nfse-outgoing"
+        ],
+        "dependencies": [
+          "me"
+        ],
+        "nextStep": "Conferir a autorização da empresa, o destinatário e o recibo de envio na versão publicada.",
+        "additionalSources": [
+          "apps/web/src/features/fiscal/outgoing-nfse-mail.tsx"
+        ]
+      },
+      {
         "id": "fiscal-nfse-received",
         "title": "Importação de NFS-e nacional recebida",
         "goal": "Armazenar XML nacional do tomador com isolamento e origem preservada; assinatura, situação atual, captura incremental e aceite externo permanecem pendentes.",
@@ -1544,7 +1560,7 @@
       {
         "id": "finance-document-email",
         "title": "Envio de documentos financeiros por e-mail",
-        "goal": "Conferir e enviar título a receber ou relatório financeiro pelo SMTP central sem alterar registros contábeis.",
+        "goal": "Conferir e enviar títulos a pagar, títulos a receber e relatórios financeiros pelo n8n com registro de cada tentativa.",
         "kind": "product",
         "actionGroups": [
           "finance-document-email"
@@ -1554,7 +1570,7 @@
           "purchase_payment_chain",
           "company_onboarding"
         ],
-        "nextStep": "Validar confirmação, permissões, revisão/hash e recuperação de envio incerto nos dois contextos."
+        "nextStep": "Validar a confirmação do destinatário, as permissões, a revisão e a recuperação de envios incertos em cada contexto."
       }
     ]
   },
@@ -1604,8 +1620,7 @@
       "actions": [
         "review",
         "send",
-        "sync",
-        "send-package"
+        "sync"
       ]
     },
     {
@@ -1708,7 +1723,8 @@
         "issue",
         "consult",
         "cancel",
-        "correction"
+        "correction",
+        "email"
       ]
     },
     {
@@ -1717,7 +1733,8 @@
       "actions": [
         "emission",
         "xml",
-        "events"
+        "events",
+        "email"
       ]
     },
     {
@@ -29492,16 +29509,16 @@
       "status": "implemented",
       "operation": {"method": "POST", "path": "/api/v1/commercial-contracts/{id}/send-package"},
       "actor": "active_tenant_member",
-      "permissions": ["sales.orders.read", "sales.orders.read", "sales.orders.manage", "sales.contracts.send", "sales.contracts.package"],
-      "input": {"headers": ["Authorization", "X-Tenant-Id", "Idempotency-Key"], "pathParameters": ["id"], "body": null, "query": null},
-      "preconditions": ["Identidade e vínculo ativos na empresa selecionada.", "Contrato revisado, pedido ativo, documentos disponíveis e SMTP configurado"],
-      "transition": {"from": "Contrato revisado, pedido ativo, documentos disponíveis e SMTP configurado", "to": "Entrega registrada com o resultado do envio"},
-      "effects": {"writes": ["commercial_contract_deliveries"], "external": ["SMTP com os documentos do pedido anexados."], "excludes": ["Acesso a registros de outra empresa."]},
-      "concurrency": {"revision": false, "idempotency": true, "rule": "A chave do comando vincula a repetição à solicitação original."},
-      "response": {"successStatuses": [200], "errorStatuses": [400, 401, 403, 404, 409, 428], "action": "Enviar pacote de documentos por e-mail"},
-      "recovery": "Consultar o estado atual e preservar a chave ao repetir a mesma solicitação.",
-      "ui": {"pages": [], "bff": {"method": "POST", "path": "/api/erp/commercial-contracts/[id]/[action]", "action": "send-package"}, "gap": "Página consumidora não inventariada nesta ficha."},
-      "sources": ["apps/api/src/domains/contracts/mod.rs", "apps/web/src/app/api/erp/commercial-contracts/[id]/[action]/route.ts"],
+      "permissions": ["sales.orders.read", "sales.orders.manage", "sales.contracts.send", "sales.contracts.package"],
+      "input": {"headers": ["Authorization", "X-Tenant-Id", "Idempotency-Key"], "pathParameters": ["id"], "query": null, "body": {"source": "apps/api-ts/src/modules/document-copies/contract-package-routes.ts", "type": "payload"}},
+      "preconditions": ["Contrato revisado, pedido ativo, PDFs preservados e NF-e modelo 55 autorizada com a identidade fiscal do cliente do contrato.", "O navegador envia If-Match e a lista conferida de destinatários do contrato. O endpoint aceita corpo vazio para comandos anteriores."],
+      "transition": {"from": "Documento e cadastro da empresa ativa", "to": "Tentativa de envio registrada com resultado do transporte."},
+      "effects": {"writes": ["commercial_contract_deliveries preserva o manifesto dos anexos, tentativas e resultado. domain_commands, audit_log e outbox_events registram o comando."], "external": ["O n8n envia PDF do pedido preservado, DANFE, XML autorizado, comprovantes de recebimentos quitados e PDFs do contrato."], "excludes": ["O ciclo de assinatura e os convites continuam sob responsabilidade do provedor de assinaturas."]},
+      "concurrency": {"revision": false, "idempotency": true, "rule": "If-Match é conferido quando presente. Reserve o pacote antes do envio. O mesmo comando consulta o recibo e uma chave nova também respeita entrega confirmada ou incerta."},
+      "response": {"successStatuses": [200, 202], "errorStatuses": [400, 401, 403, 404, 409, 412, 413, 422, 428, 502, 503], "action": "Enviar pacote de documentos por e-mail"},
+      "recovery": "Conferir a prévia após mudança de dados. Repetir a consulta do resultado com a mesma chave quando o envio estiver pendente.",
+      "ui": {"pages": ["/servicos/contratos/[id]"], "bff": {"method": "POST", "path": "/api/erp/commercial-contracts/[id]/send-package"}, "gap": null},
+      "sources": ["apps/api-ts/src/modules/document-copies/contract-package-routes.ts", "apps/api-ts/src/modules/document-copies/contract-package.ts", "apps/api-ts/src/modules/document-copies/source.ts", "apps/api-ts/src/modules/sales/mail-document.ts", "apps/api-ts/src/modules/nfe-email/document.ts", "apps/api-ts/src/modules/nfe-email/danfe.ts", "apps/api-ts/src/platform/document-mail.ts", "migrations/202611060111_commercial_contract_deliveries.sql", "apps/web/src/features/contracts/contracts.tsx", "apps/web/src/app/api/erp/commercial-contracts/[id]/send-package/route.ts"],
       "verification": {"status": "not_verified_by_catalog", "criteria": ["interface", "request", "authorization", "domain", "persistence", "effects", "failure", "response"]}
     },
     {
@@ -30424,7 +30441,7 @@
       },
       "preconditions": [
         "Empresa ativa, proposta da empresa e permissões atuais de consulta e gestão.",
-        "Corpo vazio; revalidar cliente, fontes de preço, perfil fiscal e alçada sem adquirir o bloqueio de escrita já mantido pelo envio SMTP."
+        "Corpo vazio; revalidar cliente, fontes de preço, perfil fiscal e alçada sem adquirir o bloqueio de escrita já mantido pelo comando de envio de e-mail."
       ],
       "transition": {
         "from": "Versão atual da proposta comercial",
@@ -30488,7 +30505,7 @@
       },
       "preconditions": [
         "Empresa ativa, autorização e isolamento por tenant.",
-        "Proposta pertencente à empresa; consulta retorna disponibilidade do SMTP, destinatário e até 50 entregas."
+        "Proposta pertencente à empresa; consulta retorna disponibilidade do n8n, destinatário e até 50 entregas."
       ],
       "transition": {
         "from": "Proposta e histórico de entregas da empresa",
@@ -30530,8 +30547,9 @@
         "gap": null
       },
       "sources": [
-        "apps/api/src/domains/sales/proposal_email.rs",
-        "apps/api/src/domains/sales/proposals.rs",
+        "apps/api-ts/src/modules/sales/mail-routes.ts",
+        "apps/api-ts/src/modules/sales/mail-document.ts",
+        "apps/api-ts/src/platform/document-mail.ts",
         "apps/web/src/app/api/erp/proposals/[id]/email/route.ts",
         "apps/web/src/features/sales/proposal-email.tsx"
       ],
@@ -30573,14 +30591,14 @@
           "id"
         ],
         "body": {
-          "source": "apps/api/src/domains/sales/proposal_email.rs",
-          "type": "ProposalEmailInput"
+          "source": "apps/api-ts/src/modules/sales/mail-routes.ts",
+          "type": "inputSchema"
         },
         "query": null
       },
       "preconditions": [
         "Empresa ativa, autorização e isolamento por tenant.",
-        "Versão atual válida em draft ou sent, ainda sem pedido; SMTP configurado.",
+        "Versão atual válida em draft ou sent, ainda sem pedido; n8n configurado.",
         "Destinatário, assunto e mensagem validados; anexo gerado do snapshot comercial no servidor."
       ],
       "transition": {
@@ -30589,11 +30607,11 @@
       },
       "effects": {
         "writes": [
-          "Intenção de entrega uncertain e comando idempotente persistidos antes do SMTP; resultado e auditoria registrados após envio.",
+          "Intenção de entrega uncertain e comando idempotente persistidos antes do envio ao n8n; resultado e auditoria registrados após envio.",
           "Em sucesso, versão ainda atual marcada sent e revisão incrementada."
         ],
         "external": [
-          "Envio SMTP com anexo do snapshot comercial capturado."
+          "O n8n envia o HTML da versão conferida da proposta."
         ],
         "excludes": [
           "Resultado HTTP 200 não comprova entrega ao destinatário; falha ou incerteza permanece explícita."
@@ -30621,7 +30639,7 @@
         ],
         "action": "Enviar proposta por e-mail"
       },
-      "recovery": "Consultar o recibo após resultado incerto; repetir mesma chave e corpo sem reenviar SMTP; ausência de configuração retorna 503 sem escrita.",
+      "recovery": "Consultar o recibo após resultado incerto; repetir mesma chave e corpo sem repetir o envio ao n8n; ausência de configuração retorna 503 sem escrita.",
       "ui": {
         "pages": [
           "/vendas/propostas/[id]"
@@ -30633,8 +30651,9 @@
         "gap": null
       },
       "sources": [
-        "apps/api/src/domains/sales/proposal_email.rs",
-        "apps/api/src/domains/sales/proposals.rs",
+        "apps/api-ts/src/modules/sales/mail-routes.ts",
+        "apps/api-ts/src/modules/sales/mail-document.ts",
+        "apps/api-ts/src/platform/document-mail.ts",
         "apps/web/src/app/api/erp/proposals/[id]/email/route.ts",
         "apps/web/src/features/sales/proposal-email.tsx"
       ],
@@ -30676,7 +30695,7 @@
       },
       "preconditions": [
         "Empresa ativa, autorização e isolamento por tenant.",
-        "Pedido da empresa; consulta destinatário, configuração SMTP e até 50 entregas."
+        "Pedido da empresa; consulta destinatário, configuração do n8n e até 50 entregas."
       ],
       "transition": {
         "from": "Pedido e histórico de envios",
@@ -30709,6 +30728,7 @@
       "recovery": "Conferir empresa e permissão antes de repetir.",
       "ui": {
         "pages": [
+          "/vendas/pedidos",
           "/vendas/pedidos/[id]"
         ],
         "bff": {
@@ -30718,10 +30738,12 @@
         "gap": null
       },
       "sources": [
-        "apps/api/src/domains/sales/order_email.rs",
-        "apps/api/src/domains/sales.rs",
+        "apps/api-ts/src/modules/sales/mail-routes.ts",
+        "apps/api-ts/src/modules/sales/mail-document.ts",
+        "apps/api-ts/src/platform/document-mail.ts",
         "apps/web/src/app/api/erp/orders/[id]/email/route.ts",
-        "apps/web/src/features/sales/order-email.tsx"
+        "apps/web/src/features/sales/order-email.tsx",
+        "apps/web/src/features/sales/sales-record-list.tsx"
       ],
       "verification": {
         "status": "not_verified_by_catalog",
@@ -30761,14 +30783,14 @@
           "id"
         ],
         "body": {
-          "source": "apps/api/src/domains/sales/order_email.rs",
-          "type": "OrderEmailInput"
+          "source": "apps/api-ts/src/modules/sales/mail-routes.ts",
+          "type": "inputSchema"
         },
         "query": null
       },
       "preconditions": [
         "Pedido da empresa, não cancelado, com revisão atual e permissão de gestão.",
-        "Destinatário, assunto e mensagem válidos; SMTP configurado; sem entrega anterior uncertain.",
+        "Destinatário, assunto e mensagem válidos; n8n configurado; sem entrega anterior uncertain.",
         "Anexo PDF gerado do snapshot comercial no servidor."
       ],
       "transition": {
@@ -30777,10 +30799,10 @@
       },
       "effects": {
         "writes": [
-          "Intenção uncertain e comando persistidos antes do SMTP; resultado e auditoria registrados depois."
+          "Intenção uncertain e comando persistidos antes do envio ao n8n; resultado e auditoria registrados depois."
         ],
         "external": [
-          "Envio SMTP com anexo do snapshot comercial capturado."
+          "O n8n envia o PDF do pedido."
         ],
         "excludes": [
           "Resultado HTTP 200 não comprova entrega ao destinatário; falha ou incerteza permanece explícita."
@@ -30808,9 +30830,10 @@
         ],
         "action": "Enviar pedido por e-mail"
       },
-      "recovery": "Consultar o recibo após resultado incerto; repetir mesma chave e corpo sem reenviar SMTP; ausência de configuração retorna 503 sem escrita.",
+      "recovery": "Consultar o recibo após resultado incerto; repetir mesma chave e corpo sem repetir o envio ao n8n; ausência de configuração retorna 503 sem escrita.",
       "ui": {
         "pages": [
+          "/vendas/pedidos",
           "/vendas/pedidos/[id]"
         ],
         "bff": {
@@ -30820,10 +30843,12 @@
         "gap": null
       },
       "sources": [
-        "apps/api/src/domains/sales/order_email.rs",
-        "apps/api/src/domains/sales.rs",
+        "apps/api-ts/src/modules/sales/mail-routes.ts",
+        "apps/api-ts/src/modules/sales/mail-document.ts",
+        "apps/api-ts/src/platform/document-mail.ts",
         "apps/web/src/app/api/erp/orders/[id]/email/route.ts",
-        "apps/web/src/features/sales/order-email.tsx"
+        "apps/web/src/features/sales/order-email.tsx",
+        "apps/web/src/features/sales/sales-record-list.tsx"
       ],
       "verification": {
         "status": "not_verified_by_catalog",
@@ -31957,7 +31982,7 @@
       "preconditions": [
         "Empresa ativa e permissões financeiras do contexto; nenhum acesso comercial exigido.",
         "Título pertencente à empresa; destinatário sugerido do cadastro preservado ou cliente.",
-        "Consulta disponibilidade SMTP, revisão/hash do documento e até 50 entregas sem escrita."
+        "Consulta a disponibilidade do n8n, revisão/hash do documento e até 50 entregas sem escrita."
       ],
       "transition": {
         "from": "Snapshot financeiro e histórico de envios",
@@ -31999,9 +32024,10 @@
         "gap": null
       },
       "sources": [
-        "apps/api/src/domains/finance/email.rs",
-        "apps/api/src/domains/finance/document.rs",
-        "apps/api/src/domains/finance.rs",
+        "apps/api-ts/src/modules/document-copies/financial-routes.ts",
+        "apps/api-ts/src/modules/document-copies/financial-snapshot.ts",
+        "apps/api-ts/src/modules/document-copies/financial-pdf.ts",
+        "apps/api-ts/src/platform/document-mail.ts",
         "migrations/202611150001_finance_document_email.sql",
         "apps/web/src/app/api/erp/receivables/[id]/email/route.ts",
         "apps/web/src/features/finance/financial-document-email.tsx",
@@ -32045,15 +32071,15 @@
           "id"
         ],
         "body": {
-          "source": "apps/api/src/domains/finance/email.rs",
-          "type": "FinanceEmailInput"
+          "source": "apps/api-ts/src/modules/document-copies/financial-routes.ts",
+          "type": "input"
         },
         "query": null
       },
       "preconditions": [
         "Empresa ativa e permissões financeiras do contexto; nenhum acesso comercial exigido.",
         "Título pertencente à empresa; destinatário sugerido do cadastro preservado ou cliente.",
-        "If-Match e snapshotHash conferidos contra o snapshot atual, título não cancelado, SMTP central disponível e nenhum envio incerto no contexto.",
+        "If-Match e snapshotHash conferidos contra o snapshot atual, título não cancelado, n8n disponível e nenhum envio incerto no contexto.",
         "PDF gerado exclusivamente no servidor; nenhum anexo, HTML ou URL aceito do navegador."
       ],
       "transition": {
@@ -32062,10 +32088,10 @@
       },
       "effects": {
         "writes": [
-          "Snapshot, PDF, hashes, envelope e comando persistidos antes do SMTP; resultado e auditoria registrados depois."
+          "Snapshot, PDF, hashes, envelope e comando persistidos antes do envio ao n8n; resultado e auditoria registrados depois."
         ],
         "external": [
-          "SMTP central com PDF do snapshot autorizado."
+          "O n8n envia o PDF do documento conferido."
         ],
         "excludes": [
           "Não registra pagamento, altera saldo ou revisão financeira, comprova conciliação ou garante entrega ao destinatário."
@@ -32074,7 +32100,7 @@
       "concurrency": {
         "revision": true,
         "idempotency": true,
-        "rule": "If-Match numérico e hash obrigatório; relatório usa revisão 1 mais hash de todas as fontes. Replay consulta recibo preservado antes de recapturar e nunca reenvia SMTP."
+        "rule": "If-Match numérico e hash obrigatório; relatório usa revisão 1 mais hash de todas as fontes. Replay consulta recibo preservado antes de recapturar e nunca repete o envio ao n8n."
       },
       "response": {
         "successStatuses": [
@@ -32105,9 +32131,10 @@
         "gap": null
       },
       "sources": [
-        "apps/api/src/domains/finance/email.rs",
-        "apps/api/src/domains/finance/document.rs",
-        "apps/api/src/domains/finance.rs",
+        "apps/api-ts/src/modules/document-copies/financial-routes.ts",
+        "apps/api-ts/src/modules/document-copies/financial-snapshot.ts",
+        "apps/api-ts/src/modules/document-copies/financial-pdf.ts",
+        "apps/api-ts/src/platform/document-mail.ts",
         "migrations/202611150001_finance_document_email.sql",
         "apps/web/src/app/api/erp/receivables/[id]/email/route.ts",
         "apps/web/src/features/finance/financial-document-email.tsx",
@@ -32151,7 +32178,7 @@
       "preconditions": [
         "Empresa ativa e permissões financeiras do contexto; nenhum acesso comercial exigido.",
         "Captura única MVCC com os primeiros 100 títulos de cada fonte, ordenados por vencimento e ID.",
-        "Consulta disponibilidade SMTP, revisão/hash do documento e até 50 entregas sem escrita."
+        "Consulta a disponibilidade do n8n, revisão/hash do documento e até 50 entregas sem escrita."
       ],
       "transition": {
         "from": "Snapshot financeiro e histórico de envios",
@@ -32193,9 +32220,10 @@
         "gap": null
       },
       "sources": [
-        "apps/api/src/domains/finance/email.rs",
-        "apps/api/src/domains/finance/document.rs",
-        "apps/api/src/domains/finance.rs",
+        "apps/api-ts/src/modules/document-copies/financial-routes.ts",
+        "apps/api-ts/src/modules/document-copies/financial-snapshot.ts",
+        "apps/api-ts/src/modules/document-copies/financial-pdf.ts",
+        "apps/api-ts/src/platform/document-mail.ts",
         "migrations/202611150001_finance_document_email.sql",
         "apps/web/src/app/api/erp/financial-report/email/route.ts",
         "apps/web/src/features/finance/financial-document-email.tsx",
@@ -32239,15 +32267,15 @@
         ],
         "pathParameters": [],
         "body": {
-          "source": "apps/api/src/domains/finance/email.rs",
-          "type": "FinanceEmailInput"
+          "source": "apps/api-ts/src/modules/document-copies/financial-routes.ts",
+          "type": "input"
         },
         "query": null
       },
       "preconditions": [
         "Empresa ativa e permissões financeiras do contexto; nenhum acesso comercial exigido.",
         "Captura única MVCC com os primeiros 100 títulos de cada fonte, ordenados por vencimento e ID.",
-        "If-Match e snapshotHash conferidos contra o snapshot atual, título não cancelado, SMTP central disponível e nenhum envio incerto no contexto.",
+        "If-Match e snapshotHash conferidos contra o snapshot atual, título não cancelado, n8n disponível e nenhum envio incerto no contexto.",
         "PDF gerado exclusivamente no servidor; nenhum anexo, HTML ou URL aceito do navegador."
       ],
       "transition": {
@@ -32256,10 +32284,10 @@
       },
       "effects": {
         "writes": [
-          "Snapshot, PDF, hashes, envelope e comando persistidos antes do SMTP; resultado e auditoria registrados depois."
+          "Snapshot, PDF, hashes, envelope e comando persistidos antes do envio ao n8n; resultado e auditoria registrados depois."
         ],
         "external": [
-          "SMTP central com PDF do snapshot autorizado."
+          "O n8n envia o PDF do documento conferido."
         ],
         "excludes": [
           "Não registra pagamento, altera saldo ou revisão financeira, comprova conciliação ou garante entrega ao destinatário."
@@ -32268,7 +32296,7 @@
       "concurrency": {
         "revision": true,
         "idempotency": true,
-        "rule": "If-Match numérico e hash obrigatório; relatório usa revisão 1 mais hash de todas as fontes. Replay consulta recibo preservado antes de recapturar e nunca reenvia SMTP."
+        "rule": "If-Match numérico e hash obrigatório; relatório usa revisão 1 mais hash de todas as fontes. Replay consulta recibo preservado antes de recapturar e nunca repete o envio ao n8n."
       },
       "response": {
         "successStatuses": [
@@ -32299,9 +32327,10 @@
         "gap": null
       },
       "sources": [
-        "apps/api/src/domains/finance/email.rs",
-        "apps/api/src/domains/finance/document.rs",
-        "apps/api/src/domains/finance.rs",
+        "apps/api-ts/src/modules/document-copies/financial-routes.ts",
+        "apps/api-ts/src/modules/document-copies/financial-snapshot.ts",
+        "apps/api-ts/src/modules/document-copies/financial-pdf.ts",
+        "apps/api-ts/src/platform/document-mail.ts",
         "migrations/202611150001_finance_document_email.sql",
         "apps/web/src/app/api/erp/financial-report/email/route.ts",
         "apps/web/src/features/finance/financial-document-email.tsx",
@@ -32525,6 +32554,204 @@
           "response"
         ]
       }
+    },
+    {
+      "id": "get-api-v1-financial-payables-id-email",
+      "flow": "finance-document-email",
+      "status": "implemented",
+      "operation": {"method": "GET", "path": "/api/v1/financial-payables/{id}/email"},
+      "actor": "active_tenant_member",
+      "permissions": ["finance.payables.read"],
+      "input": {"headers": ["Authorization", "X-Tenant-Id"], "pathParameters": ["id"], "query": null},
+      "preconditions": ["Fornecedor do recebimento de compra ou colaborador da obrigação salarial identificado na empresa."],
+      "transition": {"from": "Documento e cadastro da empresa ativa", "to": "Prévia do documento, destinatário e estado consultados."},
+      "effects": {"writes": [], "external": [], "excludes": ["As demais empresas permanecem isoladas pela autorização e pelo banco."]},
+      "concurrency": {"revision": false, "idempotency": false, "rule": "Consulta sem cabeçalhos de comando."},
+      "response": {"successStatuses": [200], "errorStatuses": [400, 401, 403, 404, 409], "action": "Conferir envio de título a pagar por e-mail"},
+      "recovery": "Conferir empresa, permissões e disponibilidade do documento antes de consultar novamente.",
+      "ui": {"pages": ["/financeiro/contas-pagar/[id]"], "bff": {"method": "GET", "path": "/api/erp/financial-payables/[id]/email"}, "gap": null},
+      "sources": ["apps/api-ts/src/modules/document-copies/routes.ts", "apps/api-ts/src/modules/document-copies/source.ts", "migrations/202611170006_document_copy_email.sql", "apps/web/src/features/finance/financial-document-email.tsx", "apps/api-ts/src/modules/document-copies/payable.ts", "apps/api-ts/src/modules/document-copies/financial-pdf.ts", "apps/web/src/features/purchasing/payables.tsx", "apps/api-ts/src/platform/document-mail.ts", "apps/web/src/app/api/erp/financial-payables/[id]/email/route.ts"],
+      "verification": {"status": "not_verified_by_catalog", "criteria": ["interface", "request", "authorization", "domain", "persistence", "effects", "failure", "response"]}
+    },
+    {
+      "id": "post-api-v1-financial-payables-id-email",
+      "flow": "finance-document-email",
+      "status": "implemented",
+      "operation": {"method": "POST", "path": "/api/v1/financial-payables/{id}/email"},
+      "actor": "active_tenant_member",
+      "permissions": ["finance.payables.read", "finance.payables.manage"],
+      "input": {"headers": ["Authorization", "X-Tenant-Id", "If-Match", "Idempotency-Key"], "pathParameters": ["id"], "query": null, "body": {"source": "apps/api-ts/src/modules/document-copies/routes.ts", "type": "inputSchema"}},
+      "preconditions": ["Fornecedor do recebimento de compra ou colaborador da obrigação salarial identificado na empresa.", "E-mail cadastrado, assunto e mensagem conferidos. If-Match e snapshotHash correspondem ao documento, ao destinatário e ao histórico atuais."],
+      "transition": {"from": "Documento e cadastro da empresa ativa", "to": "Tentativa de envio registrada com resultado do transporte."},
+      "effects": {"writes": ["document_copy_email_deliveries registra comando, hashes dos anexos e destinatários antes do transporte.", "audit_log e outbox_events registram a solicitação.", "O PDF do título fica preservado junto ao envio."], "external": ["Transporte n8n com os PDFs do documento conferido."], "excludes": ["A operação preserva os saldos e o ciclo de assinaturas."]},
+      "concurrency": {"revision": true, "idempotency": true, "rule": "Validar a revisão confirmada e a chave do comando. A repetição consulta o recibo persistido."},
+      "response": {"successStatuses": [200, 202], "errorStatuses": [400, 401, 403, 404, 409, 412, 422, 428, 503], "action": "Enviar título a pagar por e-mail"},
+      "recovery": "Conferir a prévia após mudança de dados. Repetir a consulta do resultado com a mesma chave quando o envio estiver pendente.",
+      "ui": {"pages": ["/financeiro/contas-pagar/[id]"], "bff": {"method": "POST", "path": "/api/erp/financial-payables/[id]/email"}, "gap": null},
+      "sources": ["apps/api-ts/src/modules/document-copies/routes.ts", "apps/api-ts/src/modules/document-copies/source.ts", "migrations/202611170006_document_copy_email.sql", "apps/web/src/features/finance/financial-document-email.tsx", "apps/api-ts/src/modules/document-copies/payable.ts", "apps/api-ts/src/modules/document-copies/financial-pdf.ts", "apps/web/src/features/purchasing/payables.tsx", "apps/api-ts/src/platform/document-mail.ts", "apps/web/src/app/api/erp/financial-payables/[id]/email/route.ts"],
+      "verification": {"status": "not_verified_by_catalog", "criteria": ["interface", "request", "authorization", "domain", "persistence", "effects", "failure", "response"]}
+    },
+    {
+      "id": "get-api-v1-commercial-contracts-id-email",
+      "flow": "commercial-contracts",
+      "status": "implemented",
+      "operation": {"method": "GET", "path": "/api/v1/commercial-contracts/{id}/email"},
+      "actor": "active_tenant_member",
+      "permissions": ["sales.orders.read"],
+      "input": {"headers": ["Authorization", "X-Tenant-Id"], "pathParameters": ["id"], "query": null},
+      "preconditions": ["Pedido ativo e contrato revisado ou assinado com PDFs preservados e destinatários registrados."],
+      "transition": {"from": "Documento e cadastro da empresa ativa", "to": "Prévia do documento, destinatário e estado consultados."},
+      "effects": {"writes": [], "external": [], "excludes": ["As demais empresas permanecem isoladas pela autorização e pelo banco."]},
+      "concurrency": {"revision": false, "idempotency": false, "rule": "Consulta sem cabeçalhos de comando."},
+      "response": {"successStatuses": [200], "errorStatuses": [400, 401, 403, 404, 409], "action": "Conferir envio de cópia do contrato por e-mail"},
+      "recovery": "Conferir empresa, permissões e disponibilidade do documento antes de consultar novamente.",
+      "ui": {"pages": ["/servicos/contratos/[id]"], "bff": {"method": "GET", "path": "/api/erp/commercial-contracts/[id]/email"}, "gap": null},
+      "sources": ["apps/api-ts/src/modules/document-copies/routes.ts", "apps/api-ts/src/modules/document-copies/source.ts", "migrations/202611170006_document_copy_email.sql", "apps/web/src/features/finance/financial-document-email.tsx", "apps/web/src/features/contracts/contracts.tsx", "apps/api-ts/src/platform/document-mail.ts", "apps/web/src/app/api/erp/commercial-contracts/[id]/email/route.ts"],
+      "verification": {"status": "not_verified_by_catalog", "criteria": ["interface", "request", "authorization", "domain", "persistence", "effects", "failure", "response"]}
+    },
+    {
+      "id": "post-api-v1-commercial-contracts-id-email",
+      "flow": "commercial-contracts",
+      "status": "implemented",
+      "operation": {"method": "POST", "path": "/api/v1/commercial-contracts/{id}/email"},
+      "actor": "active_tenant_member",
+      "permissions": ["sales.orders.read", "sales.orders.manage", "sales.contracts.send", "sales.contracts.package"],
+      "input": {"headers": ["Authorization", "X-Tenant-Id", "If-Match", "Idempotency-Key"], "pathParameters": ["id"], "query": null, "body": {"source": "apps/api-ts/src/modules/document-copies/routes.ts", "type": "inputSchema"}},
+      "preconditions": ["Pedido ativo e contrato revisado ou assinado com PDFs preservados e destinatários registrados.", "E-mail cadastrado, assunto e mensagem conferidos. If-Match e snapshotHash correspondem ao documento, ao destinatário e ao histórico atuais."],
+      "transition": {"from": "Documento e cadastro da empresa ativa", "to": "Tentativa de envio registrada com resultado do transporte."},
+      "effects": {"writes": ["document_copy_email_deliveries registra comando, hashes dos anexos e destinatários antes do transporte.", "audit_log e outbox_events registram a solicitação."], "external": ["Transporte n8n com os PDFs do documento conferido."], "excludes": ["A operação preserva os saldos e o ciclo de assinaturas."]},
+      "concurrency": {"revision": true, "idempotency": true, "rule": "Validar a revisão confirmada e a chave do comando. A repetição consulta o recibo persistido."},
+      "response": {"successStatuses": [200, 202], "errorStatuses": [400, 401, 403, 404, 409, 412, 422, 428, 503], "action": "Enviar cópia do contrato por e-mail"},
+      "recovery": "Conferir a prévia após mudança de dados. Repetir a consulta do resultado com a mesma chave quando o envio estiver pendente.",
+      "ui": {"pages": ["/servicos/contratos/[id]"], "bff": {"method": "POST", "path": "/api/erp/commercial-contracts/[id]/email"}, "gap": null},
+      "sources": ["apps/api-ts/src/modules/document-copies/routes.ts", "apps/api-ts/src/modules/document-copies/source.ts", "migrations/202611170006_document_copy_email.sql", "apps/web/src/features/finance/financial-document-email.tsx", "apps/web/src/features/contracts/contracts.tsx", "apps/api-ts/src/platform/document-mail.ts", "apps/web/src/app/api/erp/commercial-contracts/[id]/email/route.ts"],
+      "verification": {"status": "not_verified_by_catalog", "criteria": ["interface", "request", "authorization", "domain", "persistence", "effects", "failure", "response"]}
+    },
+    {
+      "id": "get-api-v1-fiscal-nfe-id-email",
+      "flow": "fiscal-emission",
+      "status": "implemented",
+      "operation": {"method": "GET", "path": "/api/v1/fiscal/nfe/{id}/email"},
+      "actor": "active_tenant_member",
+      "permissions": ["fiscal.nfe.issue"],
+      "input": {"headers": ["Authorization", "X-Tenant-Id"], "pathParameters": ["id"], "query": null},
+      "preconditions": ["NF-e modelo 55 ou NFC-e modelo 65 autorizada, emitida pela empresa ativa e vinculada ao protocolo do XML."],
+      "transition": {"from": "Documento e cadastro da empresa ativa", "to": "Prévia do documento, destinatário e estado consultados."},
+      "effects": {"writes": [], "external": [], "excludes": ["As demais empresas permanecem isoladas pela autorização e pelo banco."]},
+      "concurrency": {"revision": false, "idempotency": false, "rule": "Consulta sem cabeçalhos de comando."},
+      "response": {"successStatuses": [200, 202], "errorStatuses": [400, 401, 403, 404, 409], "action": "Conferir envio de NF-e ou NFC-e por e-mail"},
+      "recovery": "Conferir empresa, permissões e disponibilidade do documento antes de consultar novamente.",
+      "ui": {"pages": ["/fiscal/notas-saida/[id]", "/fiscal/nfce/[id]"], "bff": {"method": "GET", "path": "/api/erp/fiscal/nfe/[id]/[action]", "action": "email"}, "gap": null},
+      "sources": ["apps/api-ts/src/modules/nfe-email/routes.ts", "apps/api-ts/src/modules/nfe-email/document.ts", "apps/api-ts/src/modules/nfe-email/smtp.ts", "apps/api-ts/src/platform/document-mail.ts", "migrations/202611170005_fiscal_nfe_email.sql", "migrations/202611170007_fiscal_document_email.sql", "apps/web/src/features/fiscal/nfe-email-panel.tsx", "apps/web/src/features/fiscal/emission-actions.tsx", "apps/web/src/server/bff/erp-fiscal-proxy.ts", "apps/api-ts/src/modules/nfe-email/danfe.ts", "apps/web/src/app/api/erp/fiscal/nfe/[id]/[action]/route.ts"],
+      "verification": {"status": "not_verified_by_catalog", "criteria": ["interface", "request", "authorization", "domain", "persistence", "effects", "failure", "response"]}
+    },
+    {
+      "id": "post-api-v1-fiscal-nfe-id-email",
+      "flow": "fiscal-emission",
+      "status": "implemented",
+      "operation": {"method": "POST", "path": "/api/v1/fiscal/nfe/{id}/email"},
+      "actor": "active_tenant_member",
+      "permissions": ["fiscal.nfe.issue"],
+      "input": {"headers": ["Authorization", "X-Tenant-Id", "If-Match", "Idempotency-Key"], "pathParameters": ["id"], "query": null, "body": {"source": "apps/api-ts/src/modules/nfe-email/routes.ts", "type": "confirmation"}},
+      "preconditions": ["NF-e modelo 55 ou NFC-e modelo 65 autorizada, emitida pela empresa ativa e vinculada ao protocolo do XML.", "O destinatário confirmado coincide com o cadastro e o ETag forte confere na revalidação de documento, empresa e histórico."],
+      "transition": {"from": "Documento e cadastro da empresa ativa", "to": "Tentativa de envio registrada com resultado do transporte."},
+      "effects": {"writes": ["fiscal_nfe_email_deliveries registra a chave, o documento, o destinatário, as impressões digitais e o recibo.", "A solicitação produz auditoria e evento de outbox."], "external": ["n8n entrega XML autorizado e DANFE para modelo 55 e XML autorizado para modelo 65.", "Sem configuração de n8n, o transporte fiscal usa o SMTP previamente configurado."], "excludes": ["O envio preserva a autorização fiscal e a identidade do destinatário."]},
+      "concurrency": {"revision": true, "idempotency": true, "rule": "Validar a revisão confirmada e a chave do comando. A repetição consulta o recibo persistido."},
+      "response": {"successStatuses": [200, 202], "errorStatuses": [400, 401, 403, 404, 409, 412, 422, 428, 503], "action": "Enviar NF-e ou NFC-e por e-mail"},
+      "recovery": "Conferir a prévia após mudança de dados. Repetir a consulta do resultado com a mesma chave quando o envio estiver pendente.",
+      "ui": {"pages": ["/fiscal/notas-saida/[id]", "/fiscal/nfce/[id]"], "bff": {"method": "POST", "path": "/api/erp/fiscal/nfe/[id]/[action]", "action": "email"}, "gap": null},
+      "sources": ["apps/api-ts/src/modules/nfe-email/routes.ts", "apps/api-ts/src/modules/nfe-email/document.ts", "apps/api-ts/src/modules/nfe-email/smtp.ts", "apps/api-ts/src/platform/document-mail.ts", "migrations/202611170005_fiscal_nfe_email.sql", "migrations/202611170007_fiscal_document_email.sql", "apps/web/src/features/fiscal/nfe-email-panel.tsx", "apps/web/src/features/fiscal/emission-actions.tsx", "apps/web/src/server/bff/erp-fiscal-proxy.ts", "apps/api-ts/src/modules/nfe-email/danfe.ts", "apps/web/src/app/api/erp/fiscal/nfe/[id]/[action]/route.ts"],
+      "verification": {"status": "not_verified_by_catalog", "criteria": ["interface", "request", "authorization", "domain", "persistence", "effects", "failure", "response"]}
+    },
+    {
+      "id": "get-api-v1-fiscal-received-nfses-id-email",
+      "flow": "fiscal-nfse-received",
+      "status": "implemented",
+      "operation": {"method": "GET", "path": "/api/v1/fiscal/received-nfses/{id}/email"},
+      "actor": "active_tenant_member",
+      "permissions": ["fiscal.nfse.read", "fiscal.nfse.import"],
+      "input": {"headers": ["Authorization", "X-Tenant-Id"], "pathParameters": ["id"], "query": null},
+      "preconditions": ["XML original importado da NFS-e recebida pertence à empresa tomadora."],
+      "transition": {"from": "Documento e cadastro da empresa ativa", "to": "Prévia do documento, destinatário e estado consultados."},
+      "effects": {"writes": [], "external": [], "excludes": ["As demais empresas permanecem isoladas pela autorização e pelo banco."]},
+      "concurrency": {"revision": false, "idempotency": false, "rule": "Consulta sem cabeçalhos de comando."},
+      "response": {"successStatuses": [200, 202], "errorStatuses": [400, 401, 403, 404, 409], "action": "Conferir envio de NFS-e recebida por e-mail"},
+      "recovery": "Conferir empresa, permissões e disponibilidade do documento antes de consultar novamente.",
+      "ui": {"pages": ["/fiscal/nfses"], "bff": {"method": "GET", "path": "/api/erp/fiscal/received-nfses/[id]/email"}, "gap": null},
+      "sources": ["apps/api-ts/src/modules/nfe-email/routes.ts", "apps/api-ts/src/modules/nfe-email/document.ts", "apps/api-ts/src/modules/nfe-email/smtp.ts", "apps/api-ts/src/platform/document-mail.ts", "migrations/202611170005_fiscal_nfe_email.sql", "migrations/202611170007_fiscal_document_email.sql", "apps/web/src/features/fiscal/nfe-email-panel.tsx", "apps/web/src/features/fiscal/nfse-received-screen.tsx", "apps/web/src/server/bff/erp-fiscal-proxy.ts", "apps/web/src/app/api/erp/fiscal/received-nfses/[id]/email/route.ts"],
+      "verification": {"status": "not_verified_by_catalog", "criteria": ["interface", "request", "authorization", "domain", "persistence", "effects", "failure", "response"]}
+    },
+    {
+      "id": "post-api-v1-fiscal-received-nfses-id-email",
+      "flow": "fiscal-nfse-received",
+      "status": "implemented",
+      "operation": {"method": "POST", "path": "/api/v1/fiscal/received-nfses/{id}/email"},
+      "actor": "active_tenant_member",
+      "permissions": ["fiscal.nfse.read", "fiscal.nfse.import"],
+      "input": {"headers": ["Authorization", "X-Tenant-Id", "If-Match", "Idempotency-Key"], "pathParameters": ["id"], "query": null, "body": {"source": "apps/api-ts/src/modules/nfe-email/routes.ts", "type": "confirmation"}},
+      "preconditions": ["XML original importado da NFS-e recebida pertence à empresa tomadora.", "O destinatário confirmado coincide com o cadastro e o ETag forte confere na revalidação de documento, empresa e histórico."],
+      "transition": {"from": "Documento e cadastro da empresa ativa", "to": "Tentativa de envio registrada com resultado do transporte."},
+      "effects": {"writes": ["fiscal_nfe_email_deliveries registra a chave, o documento, o destinatário, as impressões digitais e o recibo.", "A solicitação produz auditoria e evento de outbox."], "external": ["n8n entrega o XML original ao endereço cadastrado da empresa tomadora.", "Sem configuração de n8n, o transporte fiscal usa o SMTP previamente configurado."], "excludes": ["O envio preserva a autorização fiscal e a identidade do destinatário."]},
+      "concurrency": {"revision": true, "idempotency": true, "rule": "Validar a revisão confirmada e a chave do comando. A repetição consulta o recibo persistido."},
+      "response": {"successStatuses": [200, 202], "errorStatuses": [400, 401, 403, 404, 409, 412, 422, 428, 503], "action": "Enviar NFS-e recebida por e-mail"},
+      "recovery": "Conferir a prévia após mudança de dados. Repetir a consulta do resultado com a mesma chave quando o envio estiver pendente.",
+      "ui": {"pages": ["/fiscal/nfses"], "bff": {"method": "POST", "path": "/api/erp/fiscal/received-nfses/[id]/email"}, "gap": null},
+      "sources": ["apps/api-ts/src/modules/nfe-email/routes.ts", "apps/api-ts/src/modules/nfe-email/document.ts", "apps/api-ts/src/modules/nfe-email/smtp.ts", "apps/api-ts/src/platform/document-mail.ts", "migrations/202611170005_fiscal_nfe_email.sql", "migrations/202611170007_fiscal_document_email.sql", "apps/web/src/features/fiscal/nfe-email-panel.tsx", "apps/web/src/features/fiscal/nfse-received-screen.tsx", "apps/web/src/server/bff/erp-fiscal-proxy.ts", "apps/web/src/app/api/erp/fiscal/received-nfses/[id]/email/route.ts"],
+      "verification": {"status": "not_verified_by_catalog", "criteria": ["interface", "request", "authorization", "domain", "persistence", "effects", "failure", "response"]}
+    },
+    {
+      "id": "get-api-v1-fiscal-outgoing-nfses-id-email",
+      "flow": "fiscal-nfse-outgoing",
+      "status": "implemented",
+      "operation": {"method": "GET", "path": "/api/v1/fiscal/outgoing-nfses/{id}/email"},
+      "actor": "active_tenant_member",
+      "permissions": ["fiscal.outgoing_nfse.read", "fiscal.outgoing_nfse.issue"],
+      "input": {"headers": ["Authorization", "X-Tenant-Id"], "pathParameters": ["id"], "query": null},
+      "preconditions": ["NFS-e autorizada emitida pela empresa ativa com XML original vinculado ao prestador e ao tomador."],
+      "transition": {"from": "Documento e cadastro da empresa ativa", "to": "Prévia do documento, destinatário e estado consultados."},
+      "effects": {"writes": [], "external": [], "excludes": ["As demais empresas permanecem isoladas pela autorização e pelo banco."]},
+      "concurrency": {"revision": false, "idempotency": false, "rule": "Consulta sem cabeçalhos de comando."},
+      "response": {"successStatuses": [200, 202], "errorStatuses": [400, 401, 403, 404, 409], "action": "Conferir envio de NFS-e emitida por e-mail"},
+      "recovery": "Conferir empresa, permissões e disponibilidade do documento antes de consultar novamente.",
+      "ui": {"pages": ["/fiscal/nfses/emitidas"], "bff": {"method": "GET", "path": "/api/erp/fiscal/outgoing-nfses/[id]/email"}, "gap": null},
+      "sources": ["apps/api-ts/src/modules/nfe-email/routes.ts", "apps/api-ts/src/modules/nfe-email/document.ts", "apps/api-ts/src/modules/nfe-email/smtp.ts", "apps/api-ts/src/platform/document-mail.ts", "migrations/202611170005_fiscal_nfe_email.sql", "migrations/202611170007_fiscal_document_email.sql", "apps/web/src/features/fiscal/nfe-email-panel.tsx", "apps/web/src/features/fiscal/outgoing-nfse-mail.tsx", "apps/web/src/server/bff/erp-fiscal-proxy.ts", "apps/web/src/app/api/erp/fiscal/outgoing-nfses/[id]/email/route.ts"],
+      "verification": {"status": "not_verified_by_catalog", "criteria": ["interface", "request", "authorization", "domain", "persistence", "effects", "failure", "response"]}
+    },
+    {
+      "id": "post-api-v1-fiscal-outgoing-nfses-id-email",
+      "flow": "fiscal-nfse-outgoing",
+      "status": "implemented",
+      "operation": {"method": "POST", "path": "/api/v1/fiscal/outgoing-nfses/{id}/email"},
+      "actor": "active_tenant_member",
+      "permissions": ["fiscal.outgoing_nfse.read", "fiscal.outgoing_nfse.issue"],
+      "input": {"headers": ["Authorization", "X-Tenant-Id", "If-Match", "Idempotency-Key"], "pathParameters": ["id"], "query": null, "body": {"source": "apps/api-ts/src/modules/nfe-email/routes.ts", "type": "confirmation"}},
+      "preconditions": ["NFS-e autorizada emitida pela empresa ativa com XML original vinculado ao prestador e ao tomador.", "O destinatário confirmado coincide com o cadastro e o ETag forte confere na revalidação de documento, empresa e histórico."],
+      "transition": {"from": "Documento e cadastro da empresa ativa", "to": "Tentativa de envio registrada com resultado do transporte."},
+      "effects": {"writes": ["fiscal_nfe_email_deliveries registra a chave, o documento, o destinatário, as impressões digitais e o recibo.", "A solicitação produz auditoria e evento de outbox."], "external": ["n8n entrega o XML original ao endereço cadastrado da empresa tomadora.", "Sem configuração de n8n, o transporte fiscal usa o SMTP previamente configurado."], "excludes": ["O envio preserva a autorização fiscal e a identidade do destinatário."]},
+      "concurrency": {"revision": true, "idempotency": true, "rule": "Validar a revisão confirmada e a chave do comando. A repetição consulta o recibo persistido."},
+      "response": {"successStatuses": [200, 202], "errorStatuses": [400, 401, 403, 404, 409, 412, 422, 428, 503], "action": "Enviar NFS-e emitida por e-mail"},
+      "recovery": "Conferir a prévia após mudança de dados. Repetir a consulta do resultado com a mesma chave quando o envio estiver pendente.",
+      "ui": {"pages": ["/fiscal/nfses/emitidas"], "bff": {"method": "POST", "path": "/api/erp/fiscal/outgoing-nfses/[id]/email"}, "gap": null},
+      "sources": ["apps/api-ts/src/modules/nfe-email/routes.ts", "apps/api-ts/src/modules/nfe-email/document.ts", "apps/api-ts/src/modules/nfe-email/smtp.ts", "apps/api-ts/src/platform/document-mail.ts", "migrations/202611170005_fiscal_nfe_email.sql", "migrations/202611170007_fiscal_document_email.sql", "apps/web/src/features/fiscal/nfe-email-panel.tsx", "apps/web/src/features/fiscal/outgoing-nfse-mail.tsx", "apps/web/src/server/bff/erp-fiscal-proxy.ts", "apps/web/src/app/api/erp/fiscal/outgoing-nfses/[id]/email/route.ts"],
+      "verification": {"status": "not_verified_by_catalog", "criteria": ["interface", "request", "authorization", "domain", "persistence", "effects", "failure", "response"]}
+    },
+    {
+      "id": "get-api-v1-fiscal-outgoing-nfses",
+      "flow": "fiscal-nfse-outgoing",
+      "status": "implemented",
+      "operation": {"method": "GET", "path": "/api/v1/fiscal/outgoing-nfses"},
+      "actor": "active_tenant_member",
+      "permissions": ["fiscal.outgoing_nfse.read"],
+      "input": {"headers": ["Authorization", "X-Tenant-Id"], "pathParameters": [], "query": {"source": "apps/api-ts/src/modules/nfe-email/routes.ts", "type": "offset", "description": "Deslocamento inteiro de 0 a 1.000.000."}},
+      "preconditions": ["Vínculo ativo na empresa e permissão de consulta das emissões."],
+      "transition": {"from": "Documento e cadastro da empresa ativa", "to": "Página de até 25 NFS-e autorizadas com XML disponível, empresa, indicação de próxima página e permissão de envio."},
+      "effects": {"writes": [], "external": [], "excludes": ["As demais empresas permanecem isoladas pela autorização e pelo banco."]},
+      "concurrency": {"revision": false, "idempotency": false, "rule": "Consulta sem cabeçalhos de comando."},
+      "response": {"successStatuses": [200], "errorStatuses": [400, 401, 403], "action": "Listar NFS-e emitidas disponíveis para envio"},
+      "recovery": "Conferir empresa, permissões e disponibilidade do documento antes de consultar novamente.",
+      "ui": {"pages": ["/fiscal/nfses/emitidas"], "bff": {"method": "GET", "path": "/api/erp/fiscal/outgoing-nfses"}, "gap": null},
+      "sources": ["apps/api-ts/src/modules/nfe-email/routes.ts", "apps/web/src/features/fiscal/outgoing-nfse-mail.tsx", "apps/web/src/server/bff/erp-fiscal-proxy.ts", "apps/web/src/app/api/erp/fiscal/outgoing-nfses/route.ts"],
+      "verification": {"status": "not_verified_by_catalog", "criteria": ["interface", "request", "authorization", "domain", "persistence", "effects", "failure", "response"]}
     }
   ],
   "actionsAppendix": [
