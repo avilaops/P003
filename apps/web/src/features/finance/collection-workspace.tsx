@@ -21,7 +21,7 @@ type Charge = {
   cents: string
   providerId: string | null
   reviewReason: string | null
-  instructions: { barcode?: string; qrCode?: string; ticketUrl?: string } | null
+  instructions: { barcode?: string; qrCode?: string; ticketUrl?: string; boletoReference?: string | null } | null
   receivableIds: string[]
 }
 type Data = {
@@ -251,7 +251,8 @@ function Collections({ group, groupTenant }: { group?: Group; groupTenant?: stri
                     <Input readOnly value={c.instructions.qrCode} />
                   </label>
                 )}
-                {c.instructions?.barcode && <p className="break-all">{c.instructions.barcode}</p>}
+                {c.instructions?.boletoReference && <p>Referência do boleto • {c.instructions.boletoReference}</p>}
+                {c.instructions?.barcode && <p className="break-all">Código de barras • {c.instructions.barcode}</p>}
                 {c.instructions?.ticketUrl && (
                   <a href={c.instructions.ticketUrl} className="underline" target="_blank" rel="noreferrer">
                     Abrir boleto

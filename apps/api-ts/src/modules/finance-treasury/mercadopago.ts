@@ -108,7 +108,11 @@ export const paymentSchema = z.object({
   date_approved: z.string().nullish(),
   transaction_amount_refunded: z.number().nullish(),
   transaction_details: z
-    .object({ net_received_amount: z.number().nullish(), external_resource_url: z.string().nullish() })
+    .object({
+      net_received_amount: z.number().nullish(),
+      external_resource_url: z.string().nullish(),
+      payment_method_reference_id: z.string().nullish(),
+    })
     .nullish(),
   point_of_interaction: z.object({ transaction_data: z.object({ qr_code: z.string().nullish() }).nullish() }).nullish(),
   barcode: z.object({ content: z.string().nullish() }).nullish(),

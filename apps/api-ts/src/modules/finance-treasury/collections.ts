@@ -32,7 +32,12 @@ type Charge = {
   provider_request: Record<string, unknown>
   state: string
   provider_id: string | null
-  instructions: Record<string, unknown> | null
+  instructions: {
+    qrCode?: string | null
+    barcode?: string | null
+    ticketUrl?: string | null
+    boletoReference?: string | null
+  } | null
   settled_at: string | null
 }
 export async function getCharge(ctx: AuthorizedContext, id: string) {
@@ -187,9 +192,13 @@ export async function reserveCharge(
   if (!party?.email) throw conflict("Cadastre o e-mail do pagador")
   if (!cfg.live && !/^(?:test_user[^@]*@testuser\.com|[^@]+@example\.(?:org|com|net))$/i.test(party.email))
     throw conflict("Use um cliente de homologação com e-mail de teste")
-  const addr = party.addresses.find((a) => a.primary) ?? party.addresses[0]
-  if (!addr && input.billingType === "BOLETO")
-    throw conflict("Cadastre o endereço do pagador de teste para emitir boleto")
+  const addr = party.addresses.find((a) => a?.primary) ?? party.addresses[0]
+  if (input.billingType === "BOLETO") {
+    const complete = addr && typeof addr.postalCode === "string" && /^\d{5}-?\d{3}$/.test(addr.postalCode)
+      && /^[A-Z]{2}$/.test(addr.state)
+      && [addr.street, addr.number, addr.district, addr.city].every(value => typeof value === "string" && value.trim())
+    if (!complete) throw conflict("Cadastre o endereço completo do pagador para emitir o boleto")
+  }
   const names = party.legal_name.trim().split(/\s+/),
     chargeId = randomUUID()
   const providerRequest = {
@@ -206,7 +215,7 @@ export async function reserveCharge(
       ...(addr
         ? {
             address: {
-              zip_code: addr.postalCode,
+              zip_code: input.billingType === "BOLETO" ? addr.postalCode.replace("-", "") : addr.postalCode,
               street_name: addr.street,
               street_number: addr.number,
               neighborhood: addr.district,
@@ -277,9 +286,13 @@ export async function observePayment(
   if (old.rows.length) return { chargeId: charge.id, state: charge.state, duplicate: true }
   const link = p.transaction_details?.external_resource_url
   const instructions = {
-    qrCode: p.point_of_interaction?.transaction_data?.qr_code ?? null,
-    barcode: p.barcode?.content ?? null,
-    ticketUrl: link && /^https:\/\/(www\.)?mercadopago\.com(?:\.br)?\//i.test(link) ? link : null,
+    qrCode: p.point_of_interaction?.transaction_data?.qr_code ?? charge.instructions?.qrCode ?? null,
+    barcode: p.barcode?.content ?? charge.instructions?.barcode ?? null,
+    boletoReference: charge.method === "BOLETO"
+      ? p.transaction_details?.payment_method_reference_id ?? charge.instructions?.boletoReference ?? null
+      : null,
+    ticketUrl: link && /^https:\/\/(www\.)?mercadopago\.com(?:\.br)?\//i.test(link)
+      ? link : charge.instructions?.ticketUrl ?? null,
   }
   let state = charge.state,
     reason: string | null = null,

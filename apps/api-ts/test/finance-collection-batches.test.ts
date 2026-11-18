@@ -6,11 +6,12 @@ import { Pool } from "pg"
 import { buildApp } from "../src/app.js"
 import { PgClientAdapter, withTenantTransaction } from "../src/platform/database.js"
 import { getCharge, observePayment, reserveCharge } from "../src/modules/finance-treasury/collections.js"
+import { verifyBoleto } from "./treasury-boleto-cases.js"
 
 test(
   "borderô multiempresa preserva valores de clientes distintos, reserva, histórico e retorno",
   { skip: !process.env.API_TS_TEST_ADMIN_URL },
-  async () => {
+  async (t) => {
     const url = new URL(process.env.API_TS_TEST_ADMIN_URL!),
       suffix = randomUUID().replaceAll("-", "")
     const db = "batch_" + suffix,
@@ -291,6 +292,9 @@ test(
       } finally {
         globalThis.fetch = originalFetch
       }
+      await t.test("emissão, reconsulta e liquidação idempotente de boleto pela API", async () => {
+        await verifyBoleto(app, seed, { tenant, bank, batchId: active, receivable: items[1]!.id })
+      })
     } finally {
       for (const [k, v] of Object.entries(previous))
         if (v === undefined) delete process.env[k]
