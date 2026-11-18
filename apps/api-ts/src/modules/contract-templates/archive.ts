@@ -1,4 +1,5 @@
 import type { FastifyInstance } from "fastify"
+import endpoints from "../document-endpoints.json" with { type: "json" }
 import { z } from "zod"
 
 import { authorizeRequest, requirePermission, type AccessDependencies, type AuthorizedContext } from "../../platform/access.js"
@@ -83,7 +84,7 @@ export async function archiveTemplateDraft(
 }
 
 export function registerContractTemplateArchive(app: FastifyInstance, dependencies: AccessDependencies, portal: TemplatePortal = templatePortal()) {
-  app.post<{ Params: { id: string } }>("/api/v1/contract-template-drafts/:id/archive", async (request, reply) => {
+  app.post<{ Params: { id: string } }>(endpoints["contract-template-archive"].POST, async (request, reply) => {
     const id = draftId.safeParse(request.params.id)
     if (!id.success) throw new Problem(404, "not_found", "Modelo não encontrado")
     const expected = parseRevision(request.headers["if-match"])
