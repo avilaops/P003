@@ -71,10 +71,10 @@ export function registerCompanyPeriods(app: FastifyInstance, deps: AppDependenci
         [tenantId, id, input.action, input.throughDate, input.reason, ctx.authSubject],
       )
       await record(ctx, req.headers, "finance_company_period", id, "finance.company-period." + input.action, input)
-      const value = { tenantId, data: { id, ...input } }
+      const value = { tenantId, data: { id, revision: 1, ...input } }
       await remember(ctx, key, "finance.company-period", input, value)
       return value
     })
-    return reply.header("cache-control", "no-store").send(result)
+    return reply.header("etag", '"1"').header("cache-control", "no-store").send(result)
   })
 }

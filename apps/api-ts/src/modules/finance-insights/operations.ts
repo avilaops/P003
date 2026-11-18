@@ -1,3 +1,4 @@
+import { postOperation } from "../finance-management/operation-postings.js"
 import { randomUUID } from "node:crypto"
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
@@ -104,14 +105,16 @@ async function createOperation(context: AuthorizedContext, headers: Headers, inp
     await writableAccount(context, input.accountId, input.occurredOn)
     if (input.orderId) {
       const order = await client.query(
-        "SELECT id FROM sales_orders WHERE tenant_id=$1 AND id=$2 AND customer_id=$3 AND status IN ('draft','accepted','confirmed')",
+        input.side === "receivable"
+          ? "SELECT id FROM sales_orders WHERE tenant_id=$1 AND id=$2 AND customer_id=$3 AND status IN ('draft','accepted','confirmed')"
+          : "SELECT id FROM purchase_orders WHERE tenant_id=$1 AND id=$2 AND supplier_id=$3 AND status IN ('draft','confirmed','partially_received')",
         [tenantId, input.orderId, input.partyId],
       )
-      if (input.side !== "receivable" || !order.rows.length) conflict("Pedido incompatível com a antecipação")
+      if (!order.rows.length) conflict("Pedido incompatível com a antecipação")
     }
     entryId = randomUUID()
     await client.query(
-      "INSERT INTO financial_account_entries(id,tenant_id,account_id,direction,amount_cents,occurred_on,description,reference) VALUES($1,$2,$3,$4,$5,$6,$7,$8)",
+      "INSERT INTO financial_account_entries(id,tenant_id,account_id,direction,amount_cents,occurred_on,description,reference,category_id) VALUES($1,$2,$3,$4,$5,$6,$7,$8,finance_ledger_nature($2,'advance',$4))",
       [
         entryId,
         tenantId,
@@ -131,12 +134,21 @@ async function createOperation(context: AuthorizedContext, headers: Headers, inp
     if (input.kind === "allocation") {
       const advance = (
         await client.query(
-          "SELECT a.principal_cents-coalesce((SELECT sum(principal_cents) FROM finance_active_operations WHERE tenant_id=a.tenant_id AND advance_id=a.id),0) AS remaining FROM finance_active_operations a WHERE a.tenant_id=$1 AND a.id=$2 AND a.kind='advance' AND a.side=$3 AND a.party_id=$4 AND a.occurred_on<=$5",
+          "SELECT a.order_id,a.purchase_order_id,a.principal_cents-coalesce((SELECT sum(principal_cents) FROM finance_active_operations WHERE tenant_id=a.tenant_id AND advance_id=a.id),0) AS remaining FROM finance_active_operations a WHERE a.tenant_id=$1 AND a.id=$2 AND a.kind='advance' AND a.side=$3 AND a.party_id=$4 AND a.occurred_on<=$5",
           [tenantId, input.advanceId, input.side, input.partyId, input.occurredOn],
         )
       ).rows[0]
       if (!advance || BigInt(String(advance.remaining)) < principal)
         conflict("Saldo de adiantamento insuficiente na data selecionada")
+      if (advance.order_id && rows.some((r) => r.order_id !== advance.order_id))
+        conflict("O adiantamento pertence a outro pedido de venda")
+      if (advance.purchase_order_id) {
+        const matching = await client.query(
+          "SELECT p.id FROM payables p JOIN purchase_receipts r ON (r.tenant_id,r.id)=(p.tenant_id,p.receipt_id) WHERE p.tenant_id=$1 AND r.order_id=$2 AND p.id=ANY($3::uuid[])",
+          [tenantId, advance.purchase_order_id, selection.map((t) => t.id)],
+        )
+        if (matching.rows.length !== selection.length) conflict("O adiantamento pertence a outro pedido de compra")
+      }
     }
     if (input.kind === "billing_group") {
       if (
@@ -155,7 +167,7 @@ async function createOperation(context: AuthorizedContext, headers: Headers, inp
       if (existing.rows.length) conflict("Uma parcela já integra outra cobrança agrupada")
       const charged = await client.query(
         "SELECT FROM finance_collection_items WHERE tenant_id=$1 AND receivable_id=ANY($2::uuid[]) LIMIT 1",
-        [tenantId, selection.map(item => item.id)],
+        [tenantId, selection.map((item) => item.id)],
       )
       if (charged.rows.length) conflict("Uma parcela já possui cobrança bancária")
     }
@@ -168,7 +180,7 @@ async function createOperation(context: AuthorizedContext, headers: Headers, inp
     }
   }
   await client.query(
-    "INSERT INTO finance_operations(id,tenant_id,kind,side,party_id,occurred_on,due_on,reason,principal_cents,interest_cents,advance_id,entry_id,order_id) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)",
+    "INSERT INTO finance_operations(id,tenant_id,kind,side,party_id,occurred_on,due_on,reason,principal_cents,interest_cents,advance_id,entry_id,order_id,purchase_order_id) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)",
     [
       id,
       tenantId,
@@ -182,7 +194,8 @@ async function createOperation(context: AuthorizedContext, headers: Headers, inp
       input.kind === "restructure" ? String(cents(input.interest)) : "0",
       input.kind === "allocation" ? input.advanceId : null,
       entryId,
-      input.kind === "advance" ? (input.orderId ?? null) : null,
+      input.kind === "advance" && input.side === "receivable" ? (input.orderId ?? null) : null,
+      input.kind === "advance" && input.side === "payable" ? (input.orderId ?? null) : null,
     ],
   )
   for (const item of selection) {
@@ -257,6 +270,7 @@ async function createOperation(context: AuthorizedContext, headers: Headers, inp
         ],
       )
   }
+  if (input.kind === "advance" || input.kind === "restructure") await postOperation(context, headers, id)
   await record(context, headers, "finance_operation", id, "finance." + input.kind + ".created", {
     partyId: input.partyId,
     side: input.side,
@@ -268,24 +282,30 @@ async function createOperation(context: AuthorizedContext, headers: Headers, inp
 
 // The finance operator selects the order when recording the advance. At completion
 // only that advance and that order's open installments may be discharged.
-export async function allocateOrderAdvances(context: AuthorizedContext, headers: Headers, orderId: string) {
+export async function allocateOrderAdvances(
+  context: AuthorizedContext,
+  headers: Headers,
+  orderId: string,
+  purchase?: { titleId: string; occurredOn: string },
+) {
+  const side = purchase ? "payable" : "receivable"
   const advances = (
     await context.client.query(
       `SELECT a.id,a.party_id,a.principal_cents-coalesce(sum(used.principal_cents),0) AS balance,
-    (current_timestamp AT TIME ZONE 'America/Sao_Paulo')::date::text AS day
+    coalesce($3::date,(current_timestamp AT TIME ZONE 'America/Sao_Paulo')::date)::text AS day
     FROM finance_active_operations a LEFT JOIN finance_active_operations used ON (a.tenant_id,a.id)=(used.tenant_id,used.advance_id)
-    WHERE a.tenant_id=$1 AND a.order_id=$2 AND a.kind='advance' AND a.side='receivable'
-      AND a.occurred_on<=(current_timestamp AT TIME ZONE 'America/Sao_Paulo')::date
+    WHERE a.tenant_id=$1 AND ${purchase ? "a.purchase_order_id" : "a.order_id"}=$2 AND a.kind='advance' AND a.side=$4
+      AND a.occurred_on<=coalesce($3::date,(current_timestamp AT TIME ZONE 'America/Sao_Paulo')::date)
     GROUP BY a.id,a.party_id,a.principal_cents,a.occurred_on HAVING a.principal_cents>coalesce(sum(used.principal_cents),0) ORDER BY a.occurred_on,a.id`,
-      [context.tenantId, orderId],
+      [context.tenantId, orderId, purchase?.occurredOn ?? null, side],
     )
   ).rows
   for (const advance of advances) {
     let remaining = BigInt(String(advance.balance))
     const titles = (
       await context.client.query(
-        "SELECT id,revision,open_cents FROM finance_portfolio WHERE tenant_id=$1 AND party_id=$2 AND order_id=$3 AND side='receivable' AND status='open' ORDER BY due_date,id",
-        [context.tenantId, advance.party_id, orderId],
+        `SELECT id,revision,open_cents FROM finance_portfolio WHERE tenant_id=$1 AND party_id=$2 AND ${purchase ? "id" : "order_id"}=$3 AND side=$4 AND status='open' ORDER BY due_date,id`,
+        [context.tenantId, advance.party_id, purchase?.titleId ?? orderId, side],
       )
     ).rows
     const items: Target[] = []
@@ -293,8 +313,7 @@ export async function allocateOrderAdvances(context: AuthorizedContext, headers:
       if (!remaining) break
       const open = BigInt(String(title.open_cents))
       const applied = open < remaining ? open : remaining
-      if (applied > 0n)
-        items.push({ id: String(title.id), revision: String(title.revision), side: "receivable", amount: money(applied) })
+      if (applied > 0n) items.push({ id: String(title.id), revision: String(title.revision), side, amount: money(applied) })
       remaining -= applied
     }
     if (items.length)
@@ -303,10 +322,12 @@ export async function allocateOrderAdvances(context: AuthorizedContext, headers:
         headers,
         {
           kind: "allocation",
-          side: "receivable",
+          side,
           partyId: String(advance.party_id),
           occurredOn: String(advance.day),
-          reason: "Compensação do adiantamento no faturamento do pedido",
+          reason: purchase
+            ? "Compensação de adiantamento no recebimento da compra"
+            : "Compensação do adiantamento no faturamento do pedido",
           advanceId: String(advance.id),
           targets: items,
         },
@@ -321,11 +342,12 @@ export function registerOperationRoutes(app: FastifyInstance, deps: AppDependenc
     const input = validate(operation, request.body),
       key = commandKey(request.headers["idempotency-key"])
     const data = await authorizeRequest(request, deps, async (context) => {
-      requirePermission(context, "finance." + input.side + "s.manage")
-      if (input.kind === "offset") {
-        requirePermission(context, "finance.receivables.manage")
-        requirePermission(context, "finance.payables.manage")
+      const requiredSides = input.kind === "offset" ? ["receivable", "payable"] : [input.side]
+      for (const side of requiredSides) {
+        requirePermission(context, "finance." + side + "s.read")
+        requirePermission(context, "finance." + side + "s.manage")
       }
+      if (input.kind === "advance") requirePermission(context, "finance.account_entries.manage")
       const prior = await replay(context, key, "finance.operation", input)
       if (prior) return prior
       if (input.kind === "restructure") {
@@ -383,6 +405,7 @@ export function registerOperationRoutes(app: FastifyInstance, deps: AppDependenc
         ])
       ).rows[0]
       if (!review) throw new Problem(404, "not_found", "Solicitação não encontrada")
+      requirePermission(ctx, "finance." + review.side + "s.read")
       requirePermission(ctx, "finance." + review.side + "s.manage")
       const prior = await replay(ctx, key, "finance.operation.decision", input)
       if (prior) return prior
@@ -417,14 +440,15 @@ export function registerOperationRoutes(app: FastifyInstance, deps: AppDependenc
       )
       const reviews = await context.client.query(
         `SELECT id,side,status,requested_at::text AS "requestedAt",request->>'reason' AS reason,
-        request->'schedule' AS schedule,requested_by<>$3 AND status='pending' AND $4 AS "mayDecide"
+        request->'schedule' AS schedule,requested_by<>$3 AND status='pending' AND $4 AND side=ANY($6::text[]) AS "mayDecide"
         FROM finance_operation_reviews WHERE tenant_id=$1 AND party_id=$2 AND side=ANY($5::text[]) ORDER BY requested_at DESC`,
         [
           context.tenantId,
           input.partyId,
           context.authSubject,
           context.permissions.includes("finance.settlements.approve"),
-          allowed,
+          input.side ? allowed.filter((s) => s === input.side) : allowed,
+          allowed.filter((s) => context.permissions.includes("finance." + s + "s.manage")),
         ],
       )
       return { tenantId: context.tenantId, data: rows.rows, reviews: reviews.rows }

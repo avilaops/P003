@@ -56,7 +56,10 @@ export function registerFinancePartners(app: FastifyInstance, deps: AppDependenc
           (SELECT ${decimal("limit_cents")} FROM credit) AS "creditLimit",
           ${decimal("(SELECT limit_cents FROM credit)-coalesce(sum(open_cents) FILTER(WHERE side='receivable'),0)")} AS "creditAvailable",
           coalesce((SELECT revision::text FROM credit),'1') AS revision,
-          (SELECT coalesce(jsonb_agg(jsonb_build_object('id',id,'number',number,'amount',${decimal("amount_cents")}) ORDER BY id),'[]') FROM orders) AS orders
+          (SELECT coalesce(jsonb_agg(jsonb_build_object('id',id,'number',number,'amount',${decimal("amount_cents")}) ORDER BY id),'[]') FROM orders) AS orders,
+          (SELECT coalesce(jsonb_agg(jsonb_build_object('id',p.id,'number',left(p.id::text,8),'amount',${decimal("p.amount_cents")}) ORDER BY p.created_at,p.id),'[]')
+            FROM purchase_orders p WHERE p.tenant_id=$1 AND p.supplier_id=$2 AND 'payable'=ANY($3::text[])
+              AND p.status IN ('draft','confirmed','partially_received')) AS "purchaseOrders"
         FROM wallet`,
           [ctx.tenantId, partyId, allowed, sales],
         )

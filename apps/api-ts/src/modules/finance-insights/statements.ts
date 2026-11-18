@@ -75,7 +75,8 @@ export function registerStatementRoutes(app: FastifyInstance, deps: AppDependenc
           f.orders === "yes",
         ],
       )
-      return { tenantId: context.tenantId, data: rows.rows }
+      const company = await context.client.query("SELECT legal_name FROM tenants WHERE id=$1", [context.tenantId])
+      return { tenantId: context.tenantId, companyName: String(company.rows[0]!.legal_name), data: rows.rows }
     })
     return reply.header("cache-control", "no-store").send(data)
   })
@@ -87,34 +88,44 @@ export function registerStatementRoutes(app: FastifyInstance, deps: AppDependenc
       requirePermission(context, "finance.payables.read")
       const sums = await context.client.query(
         `WITH recognized AS (
-        SELECT p.category_id,p.side AS kind,sum(p.amount_cents)::numeric AS value FROM finance_portfolio p
+        SELECT p.category_id,p.side AS kind,sum(p.amount_cents)::numeric AS value,NULL::text AS caption FROM finance_portfolio p
         LEFT JOIN sales_orders o ON o.tenant_id=p.tenant_id AND o.id=p.order_id
         WHERE p.tenant_id=$1 AND p.finance_operation_id IS NULL AND p.status<>'cancelled'
           AND (p.side='payable' OR o.status='completed') AND p.competence_on BETWEEN $2::date AND $3::date
           GROUP BY p.category_id,p.side
         UNION ALL
-        SELECT NULL,side, sum(interest_cents) FROM finance_operations WHERE tenant_id=$1 AND kind='restructure'
+        SELECT NULL,side, sum(interest_cents),'Juros de renegociação' FROM finance_operations WHERE tenant_id=$1 AND kind='restructure'
           AND occurred_on BETWEEN $2::date AND $3::date AND interest_cents>0 GROUP BY side
         UNION ALL
-        SELECT NULL,o.side,-sum(o.interest_cents) FROM finance_operation_reversals r JOIN finance_operations o
+        SELECT NULL,o.side,-sum(o.interest_cents),'Juros de renegociação' FROM finance_operation_reversals r JOIN finance_operations o
           ON (o.tenant_id,o.id)=(r.tenant_id,r.operation_id) WHERE r.tenant_id=$1 AND o.kind='restructure'
           AND r.occurred_on BETWEEN $2::date AND $3::date AND o.interest_cents>0 GROUP BY o.side
         UNION ALL
-        SELECT category_id,'receivable',sum((net_cents-amount_cents)*CASE WHEN kind='receipt' THEN 1 ELSE -1 END)
+        SELECT category_id,'receivable',sum((net_cents-amount_cents)*CASE WHEN kind='receipt' THEN 1 ELSE -1 END),NULL
           FROM receivable_payments WHERE tenant_id=$1 AND occurred_on BETWEEN $2::date AND $3::date AND net_cents<>amount_cents GROUP BY category_id
         UNION ALL
-        SELECT category_id,'payable',sum((net_cents-amount_cents)*CASE WHEN kind='payment' THEN 1 ELSE -1 END)
+        SELECT category_id,'payable',sum((net_cents-amount_cents)*CASE WHEN kind='payment' THEN 1 ELSE -1 END),NULL
           FROM payable_payments WHERE tenant_id=$1 AND occurred_on BETWEEN $2::date AND $3::date AND net_cents<>amount_cents GROUP BY category_id
+        UNION ALL
+        SELECT e.category_id,'payable',sum(e.amount_cents),'Tarifas de cobrança'
+          FROM finance_collection_charges ch JOIN financial_account_entries e ON (e.tenant_id,e.id)=(ch.tenant_id,ch.fee_entry_id)
+          WHERE ch.tenant_id=$1 AND e.occurred_on BETWEEN $2::date AND $3::date GROUP BY e.category_id
       ), categories AS (
-        SELECT r.category_id,c.name,r.kind,sum(value) AS value FROM recognized r
+        SELECT r.category_id,coalesce(c.name,r.caption) AS name,r.kind,sum(value) AS value FROM recognized r
         LEFT JOIN financial_categories c ON c.tenant_id=$1 AND c.id=r.category_id WHERE $4::uuid IS NULL OR r.category_id=$4
-        GROUP BY r.category_id,c.name,r.kind
+        GROUP BY r.category_id,coalesce(c.name,r.caption),r.kind HAVING sum(value)<>0
       )
       SELECT category_id AS "categoryId",coalesce(name,'Sem classificação') AS category,kind,${decimal("value")} AS amount,
         ${decimal("sum(CASE WHEN kind='receivable' THEN value ELSE -value END) OVER()")} AS result FROM categories ORDER BY kind,category`,
         [context.tenantId, f.from, f.to, f.categoryId ?? null],
       )
-      return { tenantId: context.tenantId, data: sums.rows, result: sums.rows[0]?.result ?? "0.00" }
+      const company = await context.client.query("SELECT legal_name FROM tenants WHERE id=$1", [context.tenantId])
+      return {
+        tenantId: context.tenantId,
+        companyName: String(company.rows[0]!.legal_name),
+        data: sums.rows,
+        result: sums.rows[0]?.result ?? "0.00",
+      }
     })
     return reply.header("cache-control", "no-store").send(data)
   })

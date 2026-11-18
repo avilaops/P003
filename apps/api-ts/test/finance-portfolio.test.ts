@@ -112,6 +112,7 @@ test(
           payload,
         })
         assert.equal(reply.statusCode, status, reply.body)
+        if (status < 300) assert.match(String(reply.headers.etag), /^"\d+"$/)
         return reply.json()
       }
       const get = async (path: string) => {
@@ -203,9 +204,92 @@ test(
       assert.equal((await get("company-periods")).cutoff, null)
       assert.ok((await write("operations", advanceBody)).data.id)
 
+      const purchase = randomUUID(),
+        receipt = randomUUID(),
+        payable = randomUUID()
+      await seed.query(
+        "INSERT INTO purchase_orders(id,tenant_id,supplier_id,supplier_name,supplier_tax_id,due_date,amount_cents,status) VALUES($1,$2,$3,'Cliente piloto','04252011000110',$4,8000,'received')",
+        [purchase, tenant, customer, day],
+      )
+      await seed.query(
+        "INSERT INTO purchase_receipts(id,tenant_id,order_id,reference,occurred_on,amount_cents) VALUES($1,$2,$3,'Compra piloto',$4,8000)",
+        [receipt, tenant, purchase, day],
+      )
+      await seed.query(
+        "INSERT INTO payables(id,tenant_id,receipt_id,supplier_name,due_date,amount_cents) VALUES($1,$2,$3,'Cliente piloto',$4,8000)",
+        [payable, tenant, receipt, day],
+      )
+      const beforeOffset = (await get("cashflow?" + period)).data[0].realized
+      const offset = await write("operations", {
+        ...wallet,
+        kind: "offset",
+        targets: [await target(4, "80"), { side: "payable", id: payable, amount: "80.00", revision: "1" }],
+      })
+      assert.equal((await get("partner?partyId=" + customer)).position.payable, "0.00")
+      assert.equal((await get("cashflow?" + period)).data[0].realized, beforeOffset)
+      await reverse(offset.data.id)
+      assert.equal((await get("partner?partyId=" + customer)).position.payable, "80.00")
+
+      const order = randomUUID()
+      await seed.query(
+        "INSERT INTO sales_orders(id,tenant_id,customer_id,customer_name,customer_tax_id,due_date,amount_cents,status) VALUES($1,$2,$3,'Cliente piloto','04252011000110',$4,50000,'confirmed')",
+        [order, tenant, customer, day],
+      )
+      const orderAdvance = await write("operations", { ...advanceBody, orderId: order })
+      assert.equal((await get("cashflow?" + period + "&orders=yes")).data[0].forecastIn, "105100.00")
+      await seed.query(
+        "INSERT INTO role_permissions(role_id,permission_code) VALUES($1,'sales.orders.read'),($1,'sales.orders.manage')",
+        [role],
+      )
+      const complete = await app.inject({
+        method: "POST",
+        url: "/api/v1/orders/" + order + "/complete",
+        headers: { ...headers, "if-match": '"1"', "idempotency-key": randomUUID() },
+      })
+      assert.equal(complete.statusCode, 200, complete.body)
+      const auto = (await get("operations?partyId=" + customer)).data.find((v: { id: string }) => v.id === orderAdvance.data.id)
+      assert.equal(auto.available, "0.00")
+      assert.equal((await get("cashflow?" + period + "&orders=yes")).data[0].forecastIn, "104850.00")
+      const ledger = await get("balances")
+      assert.equal(ledger.data[0].balance, "500.00")
+
+      const vendorOrder = randomUUID(),
+        product = randomUUID()
+      await seed.query(
+        "INSERT INTO products(id,tenant_id,sku,name,unit,price_cents,status) VALUES($1,$2,'PILOTO','Produto teste','UN',10000,'active')",
+        [product, tenant],
+      )
+      await seed.query(
+        "INSERT INTO purchase_orders(id,tenant_id,supplier_id,supplier_name,supplier_tax_id,due_date,amount_cents,status) VALUES($1,$2,$3,'Cliente piloto','04252011000110',$4,10000,'confirmed')",
+        [vendorOrder, tenant, customer, day],
+      )
+      await seed.query(
+        "INSERT INTO purchase_order_lines(tenant_id,order_id,product_id,line_number,sku,name,unit,quantity_micros,cost_cents,amount_cents) VALUES($1,$2,$3,1,'PILOTO','Produto teste','UN',1000000,10000,10000)",
+        [tenant, vendorOrder, product],
+      )
+      const vendorAdvance = await write("operations", { ...advanceBody, side: "payable", orderId: vendorOrder, amount: "50.00" })
+      await seed.query(
+        "INSERT INTO role_permissions(role_id,permission_code) SELECT $1,code FROM permissions WHERE code IN ('purchasing.orders.read','purchasing.receipts.create','inventory.stock.manage') ON CONFLICT DO NOTHING",
+        [role],
+      )
+      const received = await app.inject({
+        method: "POST",
+        url: "/api/v1/purchase-orders/" + vendorOrder + "/receipts",
+        headers: { ...headers, "if-match": '"1"', "idempotency-key": randomUUID() },
+        payload: { reference: "Entrada do fornecedor", occurredOn: day, items: [{ productId: product, quantity: "1.000000" }] },
+      })
+      assert.equal(received.statusCode, 201, received.body)
+      const purchaseBalance = (await get("operations?partyId=" + customer)).data.find(
+        (v: { id: string }) => v.id === vendorAdvance.data.id,
+      )
+      assert.equal(purchaseBalance.available, "0.00")
+      assert.equal((await get("partner?partyId=" + customer)).position.payable, "130.00")
+      assert.equal((await get("balances")).data[0].balance, "450.00")
+
       await seed.query("DELETE FROM role_permissions WHERE role_id=$1 AND permission_code='finance.receivables.read'", [role])
       const restricted = await app.inject({ method: "GET", url: "/api/v1/finance/portfolio", headers })
-      assert.equal(restricted.json().total, 0)
+      assert.equal(restricted.json().total, 2)
+      assert.equal(restricted.json().rows[0].side, "payable")
     } finally {
       await app.close()
       await pool.close()

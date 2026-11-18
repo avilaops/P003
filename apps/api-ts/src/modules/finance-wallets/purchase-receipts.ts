@@ -7,6 +7,7 @@ import { commandKey, replay, remember, record } from "../../platform/commands.js
 import { parseRevision, revisionValue, nextRevision } from "../../platform/revision.js"
 import { decimal, fixed, validateDate } from "../sales/fixed.js"
 import { heldQuantity } from "../orders/fulfillment.js"
+import { allocateOrderAdvances } from "../finance-insights/operations.js"
 import { onPurchaseReceipt, onPurchaseReversal } from "../finance-management/accrual.js"
 import { queryInteger } from "../registrations/query.js"
 import { conflict, currentRevision, invalid, loadWallet, missing } from "./snapshot.js"
@@ -250,6 +251,7 @@ async function receive(
     [t, orderId, status, revision],
   )
   await onPurchaseReceipt(ctx, headers, receiptId)
+  if(payableId) await allocateOrderAdvances(ctx,headers,orderId,{titleId:payableId,occurredOn:input.occurredOn})
   await record(ctx, headers, "purchase_receipt", receiptId, "purchase.received", {
     orderId,
     payableId,

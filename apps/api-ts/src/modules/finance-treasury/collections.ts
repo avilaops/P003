@@ -318,7 +318,7 @@ export async function observePayment(
       if (fee > 0n) {
         feeId = randomUUID()
         await ctx.client.query(
-          "INSERT INTO financial_account_entries(id,tenant_id,account_id,direction,amount_cents,occurred_on,description,reference) VALUES($1,$2,$3,'debit',$4,$5,'Tarifa Mercado Pago',$6)",
+          "INSERT INTO financial_account_entries(id,tenant_id,account_id,direction,amount_cents,occurred_on,description,reference,category_id) VALUES($1,$2,$3,'debit',$4,$5,'Tarifa Mercado Pago',$6,finance_ledger_nature($2,'fee','debit'))",
           [feeId, ctx.tenantId, charge.account_id, fee, occurredOn, ref],
         )
       }

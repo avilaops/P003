@@ -36,6 +36,7 @@ type PartnerData = {
     creditLimit: string | null
     creditAvailable: string | null
     orders: { id: string; number: string; amount: string }[]
+    purchaseOrders: { id: string; number: string; amount: string }[]
   }
 }
 function CreditLimit({ data, etag, onSaved }: { data: PartnerData; etag: string; onSaved: () => void }) {
@@ -267,6 +268,7 @@ function PartnerPosition({ id, group }: { id: string; group: boolean }) {
           selected={selected}
           history={history.value?.data ?? []}
           orders={p.orders}
+          purchaseOrders={p.purchaseOrders ?? []}
           group={group}
           onSaved={reload}
         />

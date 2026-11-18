@@ -16,6 +16,7 @@ export type PortfolioRow = {
 export type Portfolio = {
   tenantId: string
   allowed: Side[]
+  companyName: string
   asOf: string
   total: number
   rows: PortfolioRow[]
@@ -47,6 +48,12 @@ export function reais(amount: string) {
   const [integer, decimal = "00"] = amount.split(".")
   const absolute = BigInt(integer!.replace("-", ""))
   return (amount.startsWith("-") ? "−" : "") + "R$ " + absolute.toLocaleString("pt-BR") + "," + decimal.padEnd(2, "0")
+}
+export function overdueShare(overdue: string, outstanding: string) {
+  const balance = BigInt(outstanding.replace(".", ""))
+  if (!balance) return "Sem saldo em aberto"
+  const basisPoints = (BigInt(overdue.replace(".", "")) * BigInt(10000) + balance / BigInt(2)) / balance
+  return (basisPoints / BigInt(100)).toString() + "," + (basisPoints % BigInt(100)).toString().padStart(2, "0") + "%"
 }
 export function dateLabel(value: string) {
   return value.split("-").reverse().join("/")

@@ -31,14 +31,26 @@ type Props = {
   partyId: string
   writable: Side[]
   orders: { id: string; number: string; amount: string }[]
+  purchaseOrders: { id: string; number: string; amount: string }[]
   group: boolean
   selected: PortfolioRow[]
   history: FinancialOperation[]
   onSaved: () => void
 }
-export function PartnerOperations({ tenantId, partyId, writable, orders, group, selected, history, onSaved }: Props) {
+export function PartnerOperations({
+  tenantId,
+  partyId,
+  writable,
+  orders,
+  purchaseOrders,
+  group,
+  selected,
+  history,
+  onSaved,
+}: Props) {
   const [kind, setKind] = useState<Kind>(group ? "billing_group" : "advance")
   const [side, setSide] = useState<Side>(group ? "receivable" : writable[0]!)
+  const availableOrders = side === "receivable" ? orders : purchaseOrders
   const [date, setDate] = useState(localDay),
     [due, setDue] = useState(localDay),
     [reason, setReason] = useState("")
@@ -178,12 +190,12 @@ export function PartnerOperations({ tenantId, partyId, writable, orders, group, 
                 ))}
               </select>
             </label>
-            {side === "receivable" && orders.length > 0 && (
+            {availableOrders.length > 0 && (
               <label className="grid gap-1 text-sm">
-                Pedido do adiantamento
+                {side === "receivable" ? "Pedido de venda do adiantamento" : "Pedido de compra do adiantamento"}
                 <select className={fieldStyle} value={order} onChange={(e) => setOrder(e.target.value)}>
                   <option value="">Sem pedido</option>
-                  {orders.map((o) => (
+                  {availableOrders.map((o) => (
                     <option key={o.id} value={o.id}>
                       Pedido {o.number} • {reais(o.amount)}
                     </option>

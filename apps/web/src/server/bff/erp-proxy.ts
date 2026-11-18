@@ -222,7 +222,7 @@ export async function forwardErp(request: Request, resource: string) {
         upstream.searchParams.set(key, value)
       }
     }
-    if (posResource || documentEmailResource) {
+    if (posResource || (documentEmailResource && !financialRoute)) {
       const query = new URL(request.url).searchParams
       const allowed = resource === "/pos/products" ? ["search", "destination", "taxpayer", "offset", "limit"] : resource === "/pos/sessions/current" ? ["register"] : resource === "/pos/sessions" ? ["status", "register", "startDate", "endDate", "offset", "limit"] : resource === "/pos/sales" ? ["sessionId", "status", "offset", "limit"] : []
       for (const [key, value] of query) {

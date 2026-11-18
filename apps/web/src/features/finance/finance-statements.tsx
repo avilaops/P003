@@ -38,7 +38,7 @@ export function FinanceStatements({ type }: { type: "income" | "cashflow" }) {
   }
   const accounts = useResource<{ data: { id: string; name: string }[] }>(cash ? "/api/erp/financial-accounts?limit=100" : "")
   const categories = useResource<{ data: { id: string; name: string }[] }>("/api/erp/financial-categories?limit=100")
-  const result = useResource<{ tenantId: string; result?: string; data: (CashDay | Line)[] }>(
+  const result = useResource<{ tenantId: string; companyName: string; result?: string; data: (CashDay | Line)[] }>(
     "/api/erp/finance/" + (cash ? "cashflow" : "income-statement") + "?" + args,
   )
   const columns = cash
@@ -59,6 +59,13 @@ export function FinanceStatements({ type }: { type: "income" | "cashflow" }) {
   )
   return (
     <section className="space-y-4">
+      {result.value && (
+        <p>
+          {result.value.companyName} •{" "}
+          {cash ? "Movimentos por data de caixa e previsão por vencimento" : "Resultado por competência"} • {dateLabel(from)} a{" "}
+          {dateLabel(to)}
+        </p>
+      )}
       <div className="flex flex-wrap items-end gap-3">
         <label className="grid gap-1">
           De

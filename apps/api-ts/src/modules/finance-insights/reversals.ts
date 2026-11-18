@@ -57,7 +57,7 @@ async function reverse(context: AuthorizedContext, headers: Headers, input: Inpu
     await writableAccount(context, String(original.account_id), input.occurredOn)
     entryId = randomUUID()
     await client.query(
-      "INSERT INTO financial_account_entries(id,tenant_id,account_id,direction,amount_cents,occurred_on,description,reference) VALUES($1,$2,$3,$4,$5,$6,$7,$8)",
+      "INSERT INTO financial_account_entries(id,tenant_id,account_id,direction,amount_cents,occurred_on,description,reference,category_id) VALUES($1,$2,$3,$4,$5,$6,$7,$8,finance_ledger_nature($2,'advance',$4))",
       [
         entryId,
         tenantId,
@@ -123,7 +123,7 @@ async function reverse(context: AuthorizedContext, headers: Headers, input: Inpu
     reason: input.reason,
     entryId,
   })
-  const result = { tenantId, data: { id: input.id, status: "reversed" } }
+  const result = { tenantId, data: { id: input.id, status: "reversed", revision: 2 } }
   await remember(context, key, "finance.operation.reverse", input, result)
   return result
 }
@@ -133,6 +133,6 @@ export function registerOperationReversals(app: FastifyInstance, deps: AppDepend
     const input = validate(reversal, request.body),
       key = commandKey(request.headers["idempotency-key"])
     const result = await authorizeRequest(request, deps, (ctx) => reverse(ctx, request.headers, input, key))
-    return reply.header("cache-control", "no-store").send(result)
+    return reply.header("etag", '"2"').header("cache-control", "no-store").send(result)
   })
 }

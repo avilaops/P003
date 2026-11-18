@@ -45,3 +45,9 @@ Os testes Node do BFF verificam a lista permitida, recursos mantidos em Rust, co
 Os 65 handlers dos 43 caminhos migrados e seus helpers exclusivos são compilados somente em testes ou com `--features migration-reference`. A compilação de produção mantém os nomes de transporte como aliases do gateway e deriva as operações não migradas normalmente. O fragmento OpenAPI versionado conserva as operações migradas e 85 schemas exportados, incluindo dois componentes que a referência registra sem referência transitiva. Os testes comparam esse fragmento à referência e os documentos completos das duas compilações.
 
 O retorno operacional seleciona uma release anterior completa, com suas imagens e configuração, conforme [o procedimento atual](typescript-api-transition-finalization.md). `ERP_TYPESCRIPT_MODULES` foi aposentada e não restaura handlers ausentes da imagem. Falha ou perda de resposta nunca seleciona outro backend ou repete um comando.
+
+## Financeiro
+
+A API TypeScript atende as carteiras, baixas e anexos, compras até o recebimento, obrigações de folha, operações por parceiro, extrato, conciliação, cobrança, sessões de caixa, comissões, relatórios e contabilidade. As rotas aceitas pelo BFF estão no [catálogo financeiro](../../apps/web/src/server/bff/finance-resources.ts) e no [catálogo de sessões do PDV](../../apps/web/src/server/bff/pos-resources.ts). O callback de pagamentos usa uma rota pública distinta por empresa e conta e verifica a assinatura no backend.
+
+Os envios de cópias financeiras preservam o transporte de documentos via n8n. O [roteiro de aceite local](../superpowers/plans/2026-11-17-financeiro-integral.md) descreve as seis telas, as verificações com PostgreSQL e a dependência de homologação bancária.
