@@ -113,3 +113,41 @@ test("estoque respeita consulta e cabe no celular", async ({ page, context }) =>
   })).status()).toBe(403)
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true)
 })
+
+test("estoque conserva depósito e SKU entre saldos, Kardex e transferência", async ({page,context}) => {
+  await session(context)
+  const name = "Produto para transferência", id = await product(context,name)
+  const command = () => ({...headers,"Idempotency-Key":randomUUID()})
+  const warehouse = await context.request.post("/api/erp/warehouses", {headers:command(),data:{
+    code:"SHOWROOM",name:"Showroom",status:"active",location:null,notes:null,
+  }})
+  expect(warehouse.status(),await warehouse.text()).toBe(201)
+  const second = (await warehouse.json()).data.id as string
+  const opening = await context.request.post("/api/erp/stock/movements", {headers:command(),data:{
+    productId:id,direction:"receipt",quantity:"10.000000",reason:"Posição inicial conferida",
+  }})
+  expect(opening.status(),await opening.text()).toBe(201)
+  await page.goto("/estoque/transferencias")
+  await page.getByRole("checkbox",{name:"Controlar saldos por depósito"}).check()
+  await page.getByRole("button",{name:"Salvar parâmetros"}).click()
+  await expect(page.getByRole("status").filter({hasText:"Parâmetros de depósito salvos."})).toBeVisible()
+  await page.getByLabel("Destino",{exact:true}).selectOption(second)
+  await page.getByLabel("Buscar produto ou SKU na origem").fill(name)
+  await page.getByRole("button",{name:/^Adicionar /}).click()
+  await page.getByLabel(/^Quantidade •/).fill("2")
+  await page.getByLabel("Motivo",{exact:true}).fill("Exposição na loja")
+  await page.getByRole("button",{name:"Confirmar transferência"}).click()
+  await expect(page.getByRole("status").filter({hasText:"Transferência registrada."})).toBeVisible()
+  await page.goto("/estoque/saldos")
+  await page.getByRole("combobox",{name:"Depósito",exact:true}).selectOption(second)
+  const row = page.getByRole("row").filter({hasText:name})
+  await expect(row.getByRole("cell",{name:"Showroom",exact:true})).toBeVisible()
+  await row.getByRole("link",{name:/Ver movimentos/}).click()
+  await expect(page).toHaveURL(new RegExp("warehouseId="+second))
+  await expect(page.getByRole("heading",{name})).toBeVisible()
+  await expect(page.getByText("Exposição na loja",{exact:true})).toBeVisible()
+  await expect(page.getByText("Saldo após o movimento • 2 UN",{exact:true})).toBeVisible()
+  await page.getByRole("link",{name:"Voltar à consulta"}).click()
+  await expect(page.getByRole("combobox",{name:"Depósito",exact:true})).toHaveValue(second)
+  await expect(row.getByRole("link",{name:/Ver movimentos/})).toBeFocused()
+})

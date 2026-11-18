@@ -1,8 +1,10 @@
+import type { Warehouse } from "./stock-location-model"
 export type StockProduct = { productId: string; sku: string; name: string; unit: string; status: string }
 export type Stock = StockProduct & { quantity: string; reserved: string; available: string }
-type Page<T> = { tenantId: string; canEdit: boolean; data: T[]; total: number; offset: number; limit: number }
+type Page<T> = { tenantId: string; canEdit: boolean; data: T[]; total: number; offset: number; limit: number; warehouses?: Warehouse[] }
 export type StockList = Page<Stock>
 export type Movement = { id: string; productId: string; direction: "receipt" | "issue"; quantity: string; balanceAfter: string;
+  warehouseId?: string | null; localBalanceAfter?: string | null; transferId?: string | null;
   reason: string; occurredAt: string; reversesId: string | null; sourceOrderId: string | null;
   sourcePurchaseReceiptId: string | null; sourcePosSaleId: string | null; productionOrderId: string | null;
   sourceWarrantyCaseId: string | null; sourceInventoryCountId: string | null; returnSourceId: string | null; canReverse: boolean }

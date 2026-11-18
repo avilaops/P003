@@ -1,4 +1,5 @@
 import "server-only"
+import { stockLocationPath } from "./stock-location-path"
 
 // Permanent ownership after the four-module transition. The previous release,
 // rather than traffic flags, is the operational return path.
@@ -6,6 +7,8 @@ export type MigratedModule = "preferences" | "registrations" | "sales" | "report
 export type BackendEnvironment = { ERP_TYPESCRIPT_API_URL?: string | undefined; ERP_TYPESCRIPT_MODULES?: string | undefined }
 const uuid = "[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}"
 const routes: { module: MigratedModule; methods: readonly string[]; path: RegExp }[] = [
+  { module: "inventory", methods: ["GET","POST"], path: /^\/warehouses$/ },
+  { module: "inventory", methods: ["GET","PUT"], path: new RegExp(`^/warehouses/${uuid}$`, "i") },
   { module: "inventory", methods: ["GET"], path: /^\/stock$/ },
   { module: "inventory", methods: ["GET", "POST"], path: /^\/stock\/movements$/ },
   { module: "preferences", methods: ["GET", "PUT"], path: /^\/preferences$/ },
@@ -38,6 +41,7 @@ export function erpHealthOrigins(rustOrigin: string, environment: BackendEnviron
   return [rustOrigin, typescriptOrigin(environment)]
 }
 export function selectErpBackend(method: string, resource: string, rustOrigin: string, environment: BackendEnvironment) {
+  if (stockLocationPath(resource,method.toUpperCase())) return { origin: typescriptOrigin(environment), backend: "typescript" as const, module: "inventory" as const }
   const route = routes.find(route => route.methods.includes(method.toUpperCase()) && route.path.test(resource))
   if (!route) return { origin: rustOrigin, backend: "rust" as const, module: null }
   return { origin: typescriptOrigin(environment), backend: "typescript" as const, module: route.module }

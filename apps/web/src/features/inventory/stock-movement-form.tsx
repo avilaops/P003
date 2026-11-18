@@ -8,14 +8,17 @@ import { Button } from "@/components/ui/button"
 import { useNavigationGuard } from "@/components/shell/navigation-guard"
 import { commercialQuantity } from "@/features/sales/order-presentation"
 import type { Movement, StockProduct } from "./stock-model"
+import type { Warehouse } from "./stock-location-model"
 
-export function StockMovementForm({ tenant, product, reversal, resetReversal, confirmed, setLocked }: {
+export function StockMovementForm({ tenant, product, reversal, resetReversal, confirmed, setLocked, warehouses, selectedWarehouse }: {
   tenant: string; product: StockProduct; reversal: Movement | null; resetReversal: () => void
+  warehouses?: Warehouse[] | undefined; selectedWarehouse?: string | null
   confirmed: (message: string) => void; setLocked: (value: boolean) => void
 }) {
   const [direction, setDirection] = useState<"receipt" | "issue">(reversal?.direction === "receipt" ? "issue" : "receipt")
   const [quantity, setQuantity] = useState(reversal?.quantity || "")
   const [reason, setReason] = useState("")
+  const [warehouseId,setWarehouse] = useState(selectedWarehouse||"")
   const [saving, setSaving] = useState(false), [uncertain, setUncertain] = useState(false)
   const [error, setError] = useState("")
   const pending = useRef(false), command = useRef<{ key: string; body: string } | null>(null)
@@ -26,7 +29,8 @@ export function StockMovementForm({ tenant, product, reversal, resetReversal, co
     const normalized = normalizeDecimal(quantity, 6)
     if (!uncertain && (!normalized || normalized === "0.000000")) { setError("Informe quantidade positiva com até seis casas decimais"); return }
     if (!uncertain) command.current = { key: crypto.randomUUID(),
-      body: JSON.stringify({ productId: product.productId, direction, quantity: normalized, reason, reversesId: reversal?.id || null }) }
+      body: JSON.stringify({ productId: product.productId, direction, quantity: normalized, reason, reversesId: reversal?.id || null,
+        ...(!reversal && warehouseId ? {warehouseId} : {}) }) }
     const attempt = command.current!
     pending.current = true
     setSaving(true); setLocked(true); setError("")
@@ -55,6 +59,8 @@ export function StockMovementForm({ tenant, product, reversal, resetReversal, co
     <h3 className="font-semibold">{reversal ? "Estornar movimento" : "Novo lançamento"}</h3>
     {reversal && <p className="break-all">Movimento original • {reversal.id}</p>}
     <fieldset disabled={saving || uncertain || product.status !== "active"} className="grid min-w-0 gap-3 sm:grid-cols-2">
+      {Boolean(warehouses?.length) && !reversal && <label>Depósito<select className="block h-9 w-full rounded-lg border px-3" value={warehouseId} onChange={e=>setWarehouse(e.target.value)}>
+        <option value="">Depósito de abertura</option>{warehouses?.map(w=><option key={w.id} value={w.id}>{w.code} • {w.name}</option>)}</select></label>}
       <label>Direção<select className="block h-9 w-full rounded-lg border px-3" value={direction} disabled={Boolean(reversal)}
         onChange={event => setDirection(event.target.value as typeof direction)}><option value="receipt">Entrada</option><option value="issue">Saída</option></select></label>
       <label>Quantidade (vírgula ou ponto)<Input required inputMode="decimal" pattern={decimalPattern(6)} maxLength={19} disabled={Boolean(reversal)} value={quantity} onChange={event => setQuantity(event.target.value)} /></label>

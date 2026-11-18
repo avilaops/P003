@@ -12,6 +12,7 @@ import { sameJson } from "../../platform/json.js"
 import { integer, parseListQuery } from "../registrations/query.js"
 
 const definitions = {
+  warehouses: { table: "warehouses", event: "warehouse", read: "inventory.stock.read", manage: "inventory.stock.manage", extras: ["location"] },
   "product-categories": { table: "product_categories", event: "product_category", read: "catalog.categories.read", manage: "catalog.categories.manage", extras: ["parent_id", "sort_order"] },
   "product-groups": { table: "product_groups", event: "product_group", read: "catalog.products.read", manage: "catalog.products.manage", extras: [] },
   "tag-groups": { table: "tag_groups", event: "tag_group", read: "catalog.products.read", manage: "catalog.products.manage", extras: [] },
@@ -26,6 +27,7 @@ const baseInput = z.object({
 }).strict()
 
 const inputSchemas = {
+  warehouses: baseInput.extend({ location: z.string().trim().refine(value => [...value].length <= 200 && !/\p{Cc}/u.test(value)).nullish().transform(value => value || null) }).strict(),
   "product-categories": baseInput.extend({ parentId: databaseId.nullable().optional().default(null), sortOrder: z.number().int().min(0).max(999_999) }).strict(),
   "product-groups": baseInput,
   "tag-groups": baseInput,
@@ -48,6 +50,7 @@ function output(row: Record<string, unknown>, extras: readonly string[]) {
   if (extras.includes("parent_id")) value.parentId = row.parent_id
   if (extras.includes("sort_order")) value.sortOrder = integer(row.sort_order)
   if (extras.includes("group_id")) value.groupId = row.group_id
+  if (extras.includes("location")) value.location = row.location
   return value
 }
 
@@ -131,7 +134,7 @@ export function registerReferenceRoutes(app: FastifyInstance, dependencies: AppD
         await validateRelations(context, resource, recordId, values)
         const extras = definition.extras
         const columns = ["id", "tenant_id", "code", "name", "status", "notes", "revision", ...extras]
-        const extraValues = extras.map(column => values[column === "parent_id" ? "parentId" : column === "sort_order" ? "sortOrder" : "groupId"])
+        const extraValues = extras.map(column => values[column === "parent_id" ? "parentId" : column === "sort_order" ? "sortOrder" : column === "group_id" ? "groupId" : column])
         const parameters = [recordId, context.tenantId, values.code, values.name, values.status, values.notes, 1, ...extraValues]
         await context.client.query(`INSERT INTO ${definition.table}(${columns.join(",")}) VALUES(${parameters.map((_, index) => `$${index + 1}`).join(",")})`, parameters)
         const row = await load(context.client, context.tenantId, recordId)

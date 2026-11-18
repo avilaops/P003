@@ -22,10 +22,11 @@ export function StockHistory({ productId, tenant, manual }: { productId: string;
   const path = usePathname(), params = useSearchParams()
   const from = params.get("from") || ""
   const listPath = ["/estoque", "/estoque/saldos", historyPath, manualPath].includes(from) ? from : "/estoque/saldos"
-  const listQuery = { tenant, q: params.get("q"), offset: pageOffset(params.get("offset")) }
+  const warehouseId = params.get("warehouseId")
+  const listQuery = { tenant, q: params.get("q"), offset: pageOffset(params.get("offset")), warehouseId }
   const startDate = params.get("startDate") || "", endDate = params.get("endDate") || ""
   const offset = pageOffset(params.get("movementOffset"))
-  const query = stockUrl("/api/erp/stock/movements", { productId, startDate, endDate, offset, limit: pageSize })
+  const query = stockUrl("/api/erp/stock/movements", { productId, startDate, endDate, offset, limit: pageSize, warehouseId })
   const resource = useResource<History>(query)
   const history = resource.value?.tenantId === tenant && resource.value.product?.productId === productId.toLowerCase() ? resource.value : null
   const [reversal, setReversal] = useState<Movement | null>(null), [locked, setLocked] = useState(false)
@@ -46,9 +47,10 @@ export function StockHistory({ productId, tenant, manual }: { productId: string;
       <section aria-label="Movimentos do produto" className="form-section min-w-0 space-y-4">
         <h2 className="break-words font-semibold">{history.product.name}</h2>
         <p className="break-words">SKU {history.product.sku} • Unidade {history.product.unit}</p>
+        {warehouseId && <p>Depósito • {history.warehouses?.find(w=>w.id===warehouseId)?.name || warehouseId}</p>}
         {!history.canEdit && <p>Somente consulta. Você não pode movimentar o estoque.</p>}
         {!manual && history.canEdit && <GuardedLink className={textLink} href={stockUrl(manualPath, details)}>Novo lançamento</GuardedLink>}
-        {manual && history.canEdit && <StockMovementForm key={reversal?.id || "new"} product={history.product} tenant={tenant} reversal={reversal}
+        {manual && history.canEdit && <StockMovementForm key={reversal?.id || "new"} product={history.product} tenant={tenant} reversal={reversal} warehouses={history.warehouses} selectedWarehouse={warehouseId}
           setLocked={value => { setLocked(value); if (value) setNotice("") }} resetReversal={() => setReversal(null)} confirmed={message => { setNotice(message); resource.reload() }} />}
         {notice && <p role="status">{notice}</p>}
         {manual && <GuardedLink className={textLink} href={stockUrl(historyPath, details)}>Consultar Kardex</GuardedLink>}
@@ -68,7 +70,9 @@ export function StockHistory({ productId, tenant, manual }: { productId: string;
         <h3 className="font-medium">Histórico registrado</h3>
         {history.data.length ? <ol className="divide-y border-y">{history.data.map(movement => <li key={movement.id} className="min-w-0 space-y-1 py-3 [overflow-wrap:anywhere]">
           <strong>{movement.direction === "receipt" ? "Entrada" : "Saída"} de {commercialQuantity(movement.quantity)} {history.product.unit}</strong>
-          <p>{movement.reason}</p><p>Saldo após o movimento • {commercialQuantity(movement.balanceAfter)} {history.product.unit}</p>
+          <p>{movement.reason}</p><p>Saldo após o movimento • {commercialQuantity(warehouseId && movement.localBalanceAfter ? movement.localBalanceAfter : movement.balanceAfter)} {history.product.unit}</p>
+          {movement.warehouseId && Boolean(history.warehouses?.length) && <p>Depósito • {history.warehouses?.find(w=>w.id===movement.warehouseId)?.name||movement.warehouseId}</p>}
+          {movement.transferId && <GuardedLink className={textLink} href={"/estoque/transferencias?documento="+movement.transferId}>Transferência • {movement.transferId}</GuardedLink>}
           <time dateTime={movement.occurredAt}>{new Date(movement.occurredAt).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" })}</time>
           <p className="text-xs text-muted-foreground">ID • {movement.id}</p>
           {origins.map(([key, label]) => movement[key] && <p key={key}>{label} • {movement[key]}</p>)}
