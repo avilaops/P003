@@ -2,6 +2,10 @@ import "server-only"
 import type { Schema } from "@/lib/api/types"
 
 import { currentSession, erpConfiguration, uuidPattern } from "@/server/auth/erp-session"
+import { typescriptOrigin } from "./erp-backend"
+
+const archivePath = /^\/([a-f0-9-]{36})\/archive$/i
+const defaultDraft = (tenant: string) => process.env[`ERP_DEFAULT_CONTRACT_DRAFT_${tenant.replaceAll("-", "").toUpperCase()}`]
 
 const contractPath = /^(?:|\/options\/[a-f0-9-]{36}|\/[a-f0-9-]{36}(?:\/(?:review|send|send-package|sync)|\/files\/[a-f0-9-]{36})?)$/i
 
@@ -14,7 +18,7 @@ export async function contractTemplatesProxy(request: Request, path = "") {
 }
 
 async function forwardContracts(request: Request, path: string, templates: boolean) {
-  const allowedPath = templates ? /^(?:|\/catalog|\/[a-f0-9-]{36}(?:\/(?:pdf|import|publish))?)$/i : contractPath
+  const allowedPath = templates ? /^(?:|\/catalog|\/[a-f0-9-]{36}(?:\/(?:pdf|import|publish|archive))?)$/i : contractPath
   if (!allowedPath.test(path)) return Response.json({ title: "Recurso inválido" }, { status: 404 })
   try {
     const session = await currentSession()
@@ -22,7 +26,11 @@ async function forwardContracts(request: Request, path: string, templates: boole
     const config = erpConfiguration()
     if (request.method !== "GET" && request.headers.get("origin") !== config.origin) return Response.json({ title: "Origem não autorizada" }, { status: 403 })
     if (request.method !== "GET" && request.headers.get("x-tenant-id") !== session.tenantId) return Response.json({ title: "A empresa da sessão mudou. Recarregue antes de continuar" }, { status: 409 })
-    const url = new URL(`${config.api}/api/v1/${templates ? "contract-template-drafts" : "commercial-contracts"}${path}`)
+    // Archiving is implemented by the TypeScript API; the other template operations keep their current origin.
+    const archive = templates ? archivePath.exec(path) : null
+    if (archive && request.method !== "POST") return Response.json({ title: "Método não permitido" }, { status: 405 })
+    if (archive && archive[1].toLowerCase() === defaultDraft(session.tenantId)?.toLowerCase()) return Response.json({ title: "Este é o modelo padrão da empresa nos pedidos. Defina outro modelo padrão antes de excluí-lo" }, { status: 409 })
+    const url = new URL(`${archive ? typescriptOrigin({ ERP_TYPESCRIPT_API_URL: process.env.ERP_TYPESCRIPT_API_URL }) : config.api}/api/v1/${templates ? "contract-template-drafts" : "commercial-contracts"}${path}`)
     for (const [key, value] of new URL(request.url).searchParams) {
       if (templates || path || !["orderId", "customerId", "offset"].includes(key) || new URL(request.url).searchParams.getAll(key).length !== 1) return Response.json({ title: "Filtro inválido" }, { status: 400 })
       url.searchParams.set(key, value)
@@ -49,7 +57,7 @@ async function forwardContracts(request: Request, path: string, templates: boole
     const output = new Headers({ "Cache-Control": "no-store, no-transform", "X-Content-Type-Options": "nosniff", "Content-Type": upstream.headers.get("content-type") || "application/json" })
     for (const key of ["etag", "content-disposition"]) { const value = upstream.headers.get(key); if (value) output.set(key, value) }
     if (!templates && request.method === "GET" && path.startsWith("/options/") && upstream.ok) {
-      const draftId = process.env[`ERP_DEFAULT_CONTRACT_DRAFT_${session.tenantId.replaceAll("-", "").toUpperCase()}`]
+      const draftId = defaultDraft(session.tenantId)
       if (draftId) {
         const options: Schema<"ContractOptions"> = await upstream.json()
         if (options.tenantId !== session.tenantId) return Response.json({ title: "A empresa do pedido mudou" }, { status: 409, headers: output })

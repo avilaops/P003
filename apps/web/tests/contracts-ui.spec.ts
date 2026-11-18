@@ -38,6 +38,7 @@ let pdf: Buffer
 let templateDraft: { id: string; definition: unknown; revision: number } | null = null
 let templateSaves = 0
 let templatePublications = 0
+let templateArchives = 0
 function detail() {
   return { tenantId: tenant, canEdit: true, canSend, emailReady, email: sends ? null : { subject: "Pedido PV-000042 e contrato para assinatura", text: "Pedido PV-000042\n\nCliente: Cliente de validação\n\nTotal do pedido: R$ 100,00\n\nO e-mail inclui o link individual para revisar e assinar o contrato." }, data: { id: contractId, orderId, customerId, templateName: commercial ? "Contrato comercial com quatro signatários" : "Contrato de validação", status, revision, snapshot: contractSnapshot(), recipients: commercial ? generatedRecipients : [{ name: "Cliente de validação", role: "Cliente", email: "validation@example.test" }], fields: commercial || inherited ? generatedFields : { cliente_nome: "Cliente de validação", condicoes: "Validação autorizada" }, externalId: 7, problem: null, sendRequestedAt: sends ? "2026-10-29T00:00:00Z" : null, progress: [], reviewedAt: reviewCalls ? "2026-10-29T00:00:00Z" : null, completedAt: null }, files: [{ id: fileId, kind: "preview", position: 0, sha256: createHash("sha256").update(pdf).digest("hex") }] }
 }
@@ -67,6 +68,18 @@ const upstream = createServer(async (request, response) => {
       templateDraft = { id: importMatch[1], revision: 1, definition: { name: "Modelo do serviço conectado", pages: 1, roles: ["Cliente"], fields: [{ id: "imported-signature", name: "assinatura", kind: "signature", role: "Cliente", required: true, page: 1, x: 8.57, y: 84.51, width: 82.86, height: 8.42, additionalAreas: [{ page: 1, x: 8.57, y: 45.23, width: 40.42, height: 8.42 }] }] } }
       response.setHeader("ETag", '"1"')
       response.end(JSON.stringify({ id: templateDraft.id, tenantId: tenant, revision: 1 })); return
+    }
+    const archiveMatch = url.pathname.match(/^\/api\/v1\/contract-template-drafts\/([a-f0-9-]+)\/archive$/)
+    if (archiveMatch) {
+      expect(request.method).toBe("POST")
+      expect(templateDraft?.id).toBe(archiveMatch[1])
+      expect(request.headers["if-match"]).toBe(`"${templateDraft!.revision}"`)
+      expect(request.headers["idempotency-key"]).toMatch(/^[a-f0-9-]{36}$/)
+      templateArchives++
+      const next = templateDraft!.revision + 1
+      templateDraft = null
+      response.setHeader("ETag", `"${next}"`)
+      response.end(JSON.stringify({ tenantId: tenant, id: archiveMatch[1], archived: true, revision: String(next), archivedTemplates: [99] })); return
     }
     if (url.pathname === "/api/v1/contract-template-drafts") {
       response.end(JSON.stringify({ tenantId: tenant, canEdit: true, data: templateDraft ? [{ id: templateDraft.id, name: "Modelo técnico do editor", revision: templateDraft.revision }] : [] })); return
@@ -166,7 +179,7 @@ test.beforeAll(async ({ browser }) => {
 test.afterAll(async () => { await new Promise<void>(resolve => upstream.close(() => resolve())) })
 test.beforeEach(() => {
   templateSpecific = false; largeTemplate = false; generationProblem = ""
-  templateDraft = null; templateSaves = 0; templatePublications = 0
+  templateDraft = null; templateSaves = 0; templatePublications = 0; templateArchives = 0
   status = "created"; revision = 1; canSend = true; emailReady = false
   generated = false; sends = 0; reviewCalls = 0; commercial = false; inherited = false; generationCalls = 0
   generatedRecipients = []; generatedFields = {}; generationKeys = []; failures.length = 0
@@ -283,6 +296,22 @@ test("modelo conectado abre copia no editor sem envio ou alteracao do original",
   await expect(page.getByText("Rascunho salvo. Ainda não publicado para os pedidos.", { exact: true })).toBeVisible()
   expect(templateSaves).toBe(1)
   expect(templateDraft!.definition).toMatchObject({ fields: [{ x: 8.57, width: 82.86, additionalAreas: [{ page: 1, x: 8.57, y: 45.23, width: 40.42, height: 8.42 }] }] })
+  expect(sends).toBe(0)
+  expect(failures).toEqual([])
+})
+
+test("modelos excluem um rascunho após confirmação e preservam a lista sem ele", async ({ page, context }) => {
+  templateDraft = { id: "77777777-7777-4777-8777-777777777777", revision: 3, definition: { name: "Modelo técnico do editor", pages: 1, roles: ["Cliente"], fields: [] } }
+  await context.addCookies([cookie()])
+  await page.goto("/servicos/contratos/modelos")
+  const remove = page.getByRole("button", { name: "Excluir modelo Modelo técnico do editor", exact: true })
+  page.once("dialog", dialog => void dialog.dismiss())
+  await remove.click()
+  expect(templateArchives).toBe(0)
+  page.once("dialog", dialog => { expect(dialog.message()).toContain("Contratos já gerados"); void dialog.accept() })
+  await remove.click()
+  await expect(page.getByText("Nenhum rascunho cadastrado.", { exact: true })).toBeVisible()
+  expect(templateArchives).toBe(1)
   expect(sends).toBe(0)
   expect(failures).toEqual([])
 })
