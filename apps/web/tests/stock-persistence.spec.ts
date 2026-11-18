@@ -278,7 +278,21 @@ test("estoque conserva depósito e SKU entre saldos, Kardex e transferência", a
   await expect(page.getByLabel("Quantidade (vírgula ou ponto)")).toBeVisible()
   await page.getByRole("link",{name:"Voltar à consulta"}).click()
   await expect(page).toHaveURL(filtered)
+  const emptyProduct = "Produto sem saldo no Showroom"
+  await product(context, emptyProduct)
   await page.goto("/estoque/depositos/" + second)
+  await page.getByRole("link", {name:"Ver saldos do depósito"}).click()
+  await expect(page).toHaveURL(url => url.pathname === "/estoque/saldos" && url.searchParams.get("warehouseId") === second &&
+    url.searchParams.get("inStock") === "1" && url.searchParams.get("tenant") === tenant)
+  await expect(page.getByRole("checkbox", {name:"Somente produtos com saldo físico positivo"})).toBeChecked()
+  await expect(page.getByRole("combobox", {name:"Depósito",exact:true})).toHaveValue(second)
+  const balances = page.getByRole("table", {name:"Saldos por produto"})
+  await expect(balances.getByRole("rowheader").filter({hasText:name})).toBeVisible()
+  const balanceColumn = (await balances.getByRole("columnheader").allTextContents()).indexOf("Saldo")
+  expect(balanceColumn).toBeGreaterThan(0)
+  await expect(balances.getByRole("row").filter({hasText:name}).locator("th, td").nth(balanceColumn)).toHaveText("2")
+  await expect(balances.getByRole("row").filter({hasText:emptyProduct})).toHaveCount(0)
+  await page.goBack()
   await page.getByRole("link", { name: "Ver movimentos do depósito" }).click()
   await expect(page).toHaveURL(url => url.pathname === "/relatorios/estoque/analises" && url.searchParams.get("dataset") === "stock_movement_activity" &&
     url.searchParams.get("warehouseId") === second && url.searchParams.get("tenant") === tenant)

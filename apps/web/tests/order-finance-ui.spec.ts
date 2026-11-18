@@ -147,6 +147,7 @@ test("carteira confirma lote e encaminha classificação, aprovação e centros 
   await page.goto("/financeiro/contas-receber")
   await page.getByText("Baixa em lote",{exact:true}).click()
   const form=page.locator("form").filter({has:page.getByRole("button",{name:"Confirmar baixas selecionadas"})})
+  await expect(form.getByRole("checkbox")).toHaveCount(2)
   for(const box of await form.getByRole("checkbox").all())await box.check()
   await form.getByLabel("Conta financeira").selectOption(accountId)
   await form.getByLabel("Data da baixa").fill("2027-01-02")

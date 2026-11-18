@@ -1,6 +1,6 @@
 # Depósitos
 
-[Todas as telas](../../../README.md) · [Estoque](../README.md)
+[Todas as telas](../../../README.md) • [Estoque](../README.md)
 
 Cadastrar os locais usados no controle de estoque.
 
@@ -15,6 +15,7 @@ Cadastrar os locais usados no controle de estoque.
 
 - Buscar, cadastrar e editar depósitos
 - Arquivar ou reativar conforme os vínculos
+- Abrir um depósito e escolher **Ver saldos do depósito** para consultar os produtos com saldo físico positivo naquele local. A grade mostra SKU, unidade, saldo, reservado e disponível. Esse atalho exige acesso de leitura ao estoque e controle de saldos por depósito ativo.
 
 ## Regras e limites
 

@@ -13,7 +13,7 @@ import { GuardedLink as Link, useNavigationGuard, useListNavigationHref } from "
 import { useRouter } from "next/navigation"
 import { useId, useState } from "react"
 import { PageHeader } from "@/components/page-header"
-import { StockAnalysisLink } from "@/features/inventory/stock-analysis-link"
+import { WarehouseStockLinks } from "@/features/inventory/stock-analysis-link"
 import { RecordCompany } from "@/components/record-company"
 import { Button } from "@/components/ui/button"
 import { SearchInput } from "@/components/search-input"
@@ -104,7 +104,7 @@ function Detail({ kind, value }: { kind: ReferenceKind; value: ReferenceSnapshot
   if (kind === "contas-financeiras") values.push(["Tipo de conta", accountTypes[data.accountType as keyof typeof accountTypes]], ["Banco", String(data.bank || "Não informado")], ["Agência", String(data.branch || "Não informada")], ["Número da conta", String(data.accountNumber || "Não informado")])
   if (kind === "formas-pagamento") values.push(["Modalidade", modalities[data.modality as keyof typeof modalities]], ["Prazo de referência (dias)", String(data.settlementDays)])
   return <><PageHeader eyebrow={kind === "depositos" ? config.title : `Cadastros · ${config.title}`} title={data.name} description={config.description}
-    actions={kind === "depositos" && <StockAnalysisLink dataset="stock_movement_activity" tenant={value.tenantId} warehouseId={data.id}>Ver movimentos do depósito</StockAnalysisLink>} /><Link className={linkClass} href={`${referencePath(kind)}`}>Voltar à listagem</Link><section className="compact-records form-section mt-3 min-w-0 space-y-3">
+    actions={kind === "depositos" && <WarehouseStockLinks tenant={value.tenantId} warehouseId={data.id} />} /><Link className={linkClass} href={`${referencePath(kind)}`}>Voltar à listagem</Link><section className="compact-records form-section mt-3 min-w-0 space-y-3">
     <RecordCompany key={value.tenantId} tenantId={value.tenantId} />
     <dl className="grid min-w-0 gap-4 sm:grid-cols-2">{values.map(([label, text]) => <div className="min-w-0" key={label}><dt className="text-sm text-muted-foreground">{label}</dt><dd className="mt-1 whitespace-pre-wrap break-words">{kind === "contas-financeiras" && label === "Banco" && data.bank ? <BankIdentity value={String(data.bank)} /> : text}</dd></div>)}
       {(kind === "categorias-produtos" || kind === "categorias-financeiras") && <div><dt className="text-sm text-muted-foreground">Categoria superior</dt><dd className="mt-1">{data.parentId ? <Link className={linkClass} href={`${referencePath(kind)}/${data.parentId}`}><ParentName kind={kind} id={String(data.parentId)} /></Link> : "Nenhuma"}</dd></div>}
