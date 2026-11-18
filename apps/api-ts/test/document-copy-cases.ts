@@ -9,7 +9,7 @@ import { digest } from "../src/modules/document-copies/source.js"
 
 export async function verifyDocumentCopies(seed: Pool, pool: DatabasePool, other: string) {
   const tenant = randomUUID(), role = randomUUID(), membership = randomUUID(), order = randomUUID()
-  await seed.query("INSERT INTO tenants(id,legal_name,tax_id) VALUES($1,'Empresa de documentos','19131243000197')", [tenant])
+  await seed.query("INSERT INTO tenants(id,legal_name,trade_name,tax_id) VALUES($1,'Empresa de documentos','Marca de teste','19131243000197')", [tenant])
   await seed.query("INSERT INTO tenant_memberships(id,tenant_id,identity_id) SELECT $1,$2,id FROM identities WHERE auth_subject='reader'", [membership, tenant])
   await seed.query("INSERT INTO roles(id,tenant_id,code,name) VALUES($1,$2,'documents','Documentos')", [role, tenant])
   await seed.query("INSERT INTO membership_roles(membership_id,role_id) VALUES($1,$2)", [membership, role])
@@ -23,7 +23,7 @@ export async function verifyDocumentCopies(seed: Pool, pool: DatabasePool, other
   await seed.query("INSERT INTO payables(id,tenant_id,receipt_id,supplier_name,due_date,amount_cents) VALUES($1,$2,$3,'Fornecedor','2026-12-18',12345)", [payable, tenant, receipt])
   await seed.query(`INSERT INTO commercial_contracts(id,tenant_id,customer_id,order_id,template_id,template_name,template_snapshot,snapshot,recipients,fields,fingerprint,status)
     VALUES($1,$2,$2,$3,1,'Contrato teste','{}',$6,$4,'{}',$5,'completed')`, [contract, tenant, order, JSON.stringify([{ email: "alice@example.test" }, { email: "bob@example.test" }]), digest(contract),
-      { order: { id: order, number: "42", amount: "123.45", revision: 1 }, customer: { name: "Cliente", taxId: "52998224725" }, company: { legalName: "Empresa", taxId: "19131243000197" }, items: [] }])
+      { order: { id: order, number: "42", amount: "123.45", revision: 1 }, customer: { name: "Cliente", taxId: "52998224725" }, company: { legalName: "Empresa", tradeName: "Marca do contrato", taxId: "19131243000197" }, items: [] }])
   for (const kind of ["signed", "preview", "audit"])
     await seed.query("INSERT INTO commercial_contract_files(id,tenant_id,contract_id,kind,position,sha256,content) VALUES($1,$2,$3,$4,0,$5,$6)", [randomUUID(), tenant, contract, kind, digest(pdf), pdf])
   const permissions = ["finance.receivables.read", "finance.receivables.manage", "finance.payables.read", "finance.payables.manage", "sales.orders.read", "sales.orders.manage", "sales.contracts.send", "sales.contracts.package"]
@@ -36,6 +36,20 @@ export async function verifyDocumentCopies(seed: Pool, pool: DatabasePool, other
     nfeEmail: { render: async () => Buffer.from("%PDF-DANFE"), sender: async () => async () => "sent" },
   })
   const headers = { authorization: "Bearer reader", "x-tenant-id": tenant }
+  const customSubject = "  Demonstrativo para conferência  "
+  const customMessage = "  Olá!\n\nConfira o campo <valor> no anexo.  "
+  function checkMail(mail: DocumentMail, company: string) {
+    assert.equal(mail.subject, customSubject)
+    assert.ok(mail.text.includes(customMessage))
+    assert.ok(mail.text.includes(company))
+    assert.ok(mail.html)
+    assert.ok(mail.html.includes(company))
+    assert.ok(mail.html.includes("&lt;valor&gt;"))
+    for (const { filename } of mail.attachments) {
+      assert.ok(mail.text.includes(filename))
+      assert.ok(mail.html.includes(filename))
+    }
+  }
   try {
     for (const [resource, id, expected] of [["financial-payables", payable, "supplier@example.test"], ["commercial-contracts", contract, "alice@example.test, bob@example.test"]] as const) {
       const url = `/api/v1/${resource}/${id}/email`, key = randomUUID()
@@ -44,9 +58,11 @@ export async function verifyDocumentCopies(seed: Pool, pool: DatabasePool, other
       assert.equal(get.statusCode, 200, get.body)
       const preview = get.json()
       assert.equal(preview.recipient, expected); assert.equal(preview.canSend, true); assert.equal(preview.recordCount, 1)
+      assert.ok(preview.suggestedSubject.includes(resource === "financial-payables" ? "Marca de teste" : "Marca do contrato"))
+      assert.match(preview.suggestedMessage, resource === "financial-payables" ? /Olá, Fornecedor!/ : /cópia assinada do contrato/)
       const post = (recipient: string) => app.inject({
         method: "POST", url, headers: { ...headers, "if-match": String(get.headers.etag), "idempotency-key": key },
-        payload: { recipient, subject: "Documento", message: "Confira o PDF.", snapshotHash: preview.snapshotHash }
+        payload: { recipient, subject: customSubject, message: customMessage, snapshotHash: preview.snapshotHash }
       })
       assert.equal((await post("other@example.test")).statusCode, 412)
       const [first, second] = await Promise.all([post(expected), post(expected)])
@@ -54,6 +70,7 @@ export async function verifyDocumentCopies(seed: Pool, pool: DatabasePool, other
       assert.equal((await post(expected)).json().delivery.status, "sent")
       const history = (await app.inject({ method: "GET", url, headers })).json()
       assert.equal(history.deliveries.length, 1)
+      checkMail(mails.at(-1)!, resource === "financial-payables" ? "Marca de teste" : "Marca do contrato")
     }
     assert.equal(mails.length, 2)
     assert.equal(mails[0]!.attachments[0]!.content.subarray(0, 5).toString(), "%PDF-")
@@ -68,13 +85,21 @@ export async function verifyDocumentCopies(seed: Pool, pool: DatabasePool, other
       assert.match(preview.json().snapshotHash, /^[0-9a-f]{64}$/)
       const isReport = url.includes("financial-report")
       assert.equal(preview.json().recordCount, isReport ? 2 : 1)
-      const key = randomUUID(), payload = { recipient: "financial@example.test", subject: "Demonstrativo", message: "Em anexo.", snapshotHash: preview.json().snapshotHash }
+      assert.match(preview.json().suggestedSubject, /Marca de teste/)
+      assert.match(preview.json().suggestedMessage, isReport ? /contas a receber e a pagar/ : /recebimentos que registramos/)
+      const key = randomUUID(), payload = { recipient: "financial@example.test", subject: customSubject, message: customMessage, snapshotHash: preview.json().snapshotHash }
       const post = (hash: string) => app.inject({ method: "POST", url, headers: { ...headers, "if-match": String(preview.headers.etag), "idempotency-key": key }, payload: { ...payload, snapshotHash: hash } })
       assert.equal((await post("a".repeat(64))).statusCode, 412)
       const sent = await post(payload.snapshotHash)
       assert.equal(sent.statusCode, 200, sent.body); assert.equal(sent.json().delivery.status, "sent")
       assert.equal((await post(payload.snapshotHash)).json().delivery.id, sent.json().delivery.id)
-      const stored = (await seed.query("SELECT pdf_content,pdf_sha256,snapshot,filename FROM finance_document_email_deliveries WHERE id=$1", [sent.json().delivery.id])).rows[0]
+      checkMail(mails.at(-1)!, "Marca de teste")
+      if (isReport) assert.doesNotMatch(mails.at(-1)!.text, /Cliente|Fornecedor/)
+      const stored = (await seed.query("SELECT pdf_content,pdf_sha256,snapshot,filename,subject,message FROM finance_document_email_deliveries WHERE id=$1", [sent.json().delivery.id])).rows[0]
+      assert.equal(stored.subject, customSubject)
+      assert.equal(stored.message, customMessage)
+      assert.equal(stored.snapshot.company.legalName, "Empresa de documentos")
+      assert.equal("tradeName" in stored.snapshot.company, false)
       assert.equal(stored.pdf_sha256, digest(stored.pdf_content))
       if (isReport) {
         assert.equal(stored.snapshot.rows.length, 2)
@@ -105,6 +130,7 @@ export async function verifyDocumentCopies(seed: Pool, pool: DatabasePool, other
     assert.equal(declined.statusCode, 200, declined.body)
     assert.equal(declined.json().packageStatus, "failed")
     assert.equal(mails.at(-1)!.attachments.some(f => f.filename.startsWith("comprovante-")), false)
+    assert.doesNotMatch(mails.at(-1)!.text, /comprovante de recebimento/i)
     outcome = "sent"
     const payment = randomUUID()
     await seed.query(`INSERT INTO receivable_payments(id,tenant_id,receivable_id,kind,amount_cents,method,reference,occurred_on)
@@ -120,6 +146,14 @@ export async function verifyDocumentCopies(seed: Pool, pool: DatabasePool, other
     assert.deepEqual(packet.to, emails)
     assert.match(packet.subject, /Homologação • sem valor fiscal/)
     assert.ok(packet.text.includes("Homologação • sem valor fiscal"))
+    assert.ok(packet.html)
+    assert.ok(packet.html.includes("Homologação • sem valor fiscal"))
+    assert.match(packet.text, /comprovante de recebimento/)
+    assert.doesNotMatch(packet.text, /Olá, Cliente/)
+    for (const file of packet.attachments) {
+      assert.ok(packet.text.includes(file.filename))
+      assert.ok(packet.html.includes(file.filename))
+    }
     assert.deepEqual(packet.attachments.map(f => f.contentType), ["application/pdf","application/pdf","application/xml","application/pdf","application/pdf"])
     assert.deepEqual(packet.attachments[2]!.content,Buffer.from(xml)); assert.deepEqual(packet.attachments.at(-1)!.content,pdf)
     const manifest = (await seed.query("SELECT attachments,attempts,status FROM commercial_contract_deliveries WHERE tenant_id=$1 AND contract_id=$2",[tenant,contract])).rows[0]

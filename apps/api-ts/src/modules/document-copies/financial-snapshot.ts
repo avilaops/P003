@@ -52,6 +52,15 @@ async function reportSnapshot(context: AuthorizedContext, filters: Filters) {
   ] as const
   return {
     snapshot, hash: digest(canonicalJson(snapshot)), revision: 1, allowed: true, recipient: null, title, scope,
+    suggestedSubject: filters.side ? "Relatório financeiro • " + sideLabel[filters.side] : "Relatório financeiro • contas a receber e a pagar",
+    suggestedMessage: filters.side
+      ? `Olá!\n\nO PDF reúne todos os títulos do filtro da carteira ${sideLabel[filters.side]}, com vencimentos, valores registrados e saldos.`
+      : "Olá!\n\nO PDF reúne as contas a receber e a pagar que correspondem aos filtros da consulta, com vencimentos, valores registrados e saldos.",
+    emailDetails: [
+      { label: "Posição em", value: date(asOf) },
+      { label: "Títulos a receber no relatório", value: String(rows.filter(row => row.side === "receivable").length) },
+      { label: "Títulos a pagar no relatório", value: String(rows.filter(row => row.side === "payable").length) },
+    ],
     count: total, summary: { companyName: company.legalName, asOf, totals },
     pdf: () => financialPdf(title, company.legalName, pdf => {
       writeCompany(pdf, company)
@@ -105,6 +114,9 @@ export async function financialSnapshot(context: AuthorizedContext, id: string |
   const title = "Título a receber", scope = "Um título a receber • valores e recebimentos declarados no sistema"
   return {
     snapshot, hash: digest(stringifyJson(snapshot)), revision: receivable.revision, allowed: row.status !== "cancelled",
+    suggestedSubject: `Demonstrativo do título • vencimento em ${date(row.due_date)}`,
+    suggestedMessage: "Olá!\n\nNo PDF em anexo, você encontra o valor original do título, os recebimentos que registramos e o saldo.\n\nSe tiver alguma dúvida sobre esses valores, fale conosco.",
+    emailDetails: [{ label: "Vencimento", value: date(row.due_date) }, { label: "Valor do título", value: brl(receivable.amountCents) }],
     recipient: row.recipient, title, scope, count: 1, summary: undefined,
     pdf: () => financialPdf(title, row.company.legalName, pdf => {
       writeCompany(pdf, row.company)

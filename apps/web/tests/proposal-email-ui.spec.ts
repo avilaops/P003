@@ -13,11 +13,11 @@ for (const width of [390, 1280]) test(`proposta abre envio explícito e atualiza
   let sent = false
   await page.route(`**/api/erp/proposals/${record}`, route => route.fulfill({ headers: { ETag: sent ? '"4"' : '"3"' }, json: { tenantId: tenant, canEdit: true, data: { ...proposal, revision: sent ? 4 : 3, status: sent ? "sent" : "draft" }, items: [], versions: [proposal] } }))
   await page.route(`**/api/erp/proposals/${record}/email`, route => {
-    if (route.request().method() === "GET") return route.fulfill({ json: { tenantId: tenant, recipient: "cliente@example.test", canSend: true, emailReady: true, deliveries: [] } })
+    if (route.request().method() === "GET") return route.fulfill({ json: { tenantId: tenant, recipient: "cliente@example.test", canSend: true, emailReady: true, deliveries: [], suggestedSubject: "Proposta 2 • versão 1 • Empresa", suggestedMessage: "Preparamos a proposta para o cliente." } })
     sends++; sent = true
     expect(route.request().headers()["if-match"]).toBe('"3"')
     expect(route.request().headers()["idempotency-key"]).toMatch(/^[a-f0-9-]{36}$/)
-    expect(route.request().postDataJSON()).toMatchObject({ recipient: "cliente@example.test", subject: "Proposta 2 · versão 1", message: "Confira a proposta em anexo." })
+    expect(route.request().postDataJSON()).toMatchObject({ recipient: "cliente@example.test", subject: "Proposta 2 • versão 1 • Empresa", message: "Confira a proposta em anexo." })
     return route.fulfill({ headers: { ETag: '"4"' }, json: { tenantId: tenant, revision: 4, delivery: { id: record, recipient: "cliente@example.test", status: "sent", createdAt: "2026-11-11T12:00:00Z" } } })
   })
   await page.setViewportSize({ width, height: 852 })
@@ -26,6 +26,7 @@ for (const width of [390, 1280]) test(`proposta abre envio explícito e atualiza
   await page.getByRole("button", { name: "Enviar por e-mail", exact: true }).click()
   const dialog = page.getByRole("dialog")
   await expect(dialog.getByLabel("Destinatário", { exact: true })).toHaveValue("cliente@example.test")
+  await expect(dialog.getByLabel("Mensagem", { exact: true })).toHaveValue("Preparamos a proposta para o cliente.")
   expect(sends).toBe(0)
   await dialog.getByLabel("Mensagem", { exact: true }).fill("Confira a proposta em anexo.")
   await dialog.getByRole("button", { name: "Enviar e-mail com anexo", exact: true }).click()
