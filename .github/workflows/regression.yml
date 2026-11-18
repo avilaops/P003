@@ -76,10 +76,13 @@ jobs:
         }
         require_private_package
         docker tag "avila-validator-approved:$SOURCE" "$REGISTRY:sha-$SOURCE"
-        docker push "$REGISTRY:sha-$SOURCE"
+        set -o pipefail
+        push_log="$RUNNER_TEMP/validator-push.log"
+        docker push "$REGISTRY:sha-$SOURCE" 2>&1 | tee "$push_log"
         require_private_package
-        reference=$(docker image inspect --format '{{index .RepoDigests 0}}' "$REGISTRY:sha-$SOURCE")
-        [[ "${reference%@*}" == "$REGISTRY" && "${reference#*@}" =~ ^sha256:[0-9a-f]{64}$ ]]
+        digest=$(awk -v tag="sha-$SOURCE:" '$1 == tag && $2 == "digest:" && $4 == "size:" {print $3}' "$push_log")
+        [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]]
+        reference="$REGISTRY@$digest"
         docker buildx imagetools inspect "$reference" >/dev/null
         jq -n --arg source "$SOURCE" --arg image "$reference" --argjson run "$GITHUB_RUN_ID" --argjson attempt "$GITHUB_RUN_ATTEMPT" \
           --slurpfile verification artifacts/verification/contract-signature-service.json \
