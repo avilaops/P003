@@ -115,7 +115,7 @@ python scripts/contracts/validator-release.py start "$SHA"
 python scripts/contracts/validator-release.py smoke "$SHA"
 ```
 
-O comando `stage` verifica o run, a tentativa, o SHA, o digest do ZIP e a evidência da CI. Ele instala o manifesto complementar e a configuração pública imutável em `/etc/erp-next/contract-signatures/releases/<sha>`. O comando `start` baixa a imagem pelo digest e aplica o Compose. O gateway recebe o alias TLS `contract-signature-gateway` na rede privada `erp-next_erp`. O teste `smoke` envia um PDF vazio, confere o preflight positivo e autentica o bundle retornado pelo worker. O host precisa de acesso de leitura ao pacote GHCR privado.
+O comando `stage` verifica o run, a tentativa, o SHA, o digest do ZIP e a evidência da CI. Ele instala o manifesto complementar e a configuração pública imutável em `/etc/erp-next/contract-signatures/releases/<sha>`. O comando `start` baixa a imagem pelo digest e aplica o Compose. O gateway recebe o alias TLS `contract-signature-gateway` na rede privada `erp-next_erp`. O teste `smoke` aplica um selo técnico descartável a uma página em branco, confere o preflight positivo e autentica o bundle retornado pelo worker. O host precisa de acesso de leitura ao pacote GHCR privado.
 
 A preparação inicial de chaves usa `python3 prepare-host.py` dentro do host como root. O diretório `/etc/erp-next/contract-signatures` contém a CA dedicada, a chave do gateway, o HMAC de transporte e o chaveiro de cifragem de CPFs. Inclua esse diretório no backup privado com controle de acesso. A leitura do cliente usa UID 1000 e a do gateway, UID 10001. Preserve as chaves de identidade de envelopes existentes ao rotacionar o chaveiro. O certificado do gateway expira em um ano.
 

@@ -1,10 +1,13 @@
 import assert from "node:assert/strict"
 import { test } from "node:test"
 import { createHash } from "node:crypto"
-import { createRequire } from "node:module"
+import { createRequire, registerHooks } from "node:module"
 import { readFileSync } from "node:fs"
 import "./helpers/register-typescript.mjs"
 
+registerHooks({ resolve(specifier, context, next) {
+  return specifier === "server-only" ? {url:"data:text/javascript,export {}",shortCircuit:true} : next(specifier,context)
+} })
 const { participantPortal } = await import("../src/server/contracts/participant-portal.ts")
 const tenant = "a0000000-0000-4000-8000-000000000001"
 const id = "a0000000-0000-4000-8000-000000000002"

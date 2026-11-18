@@ -1,3 +1,5 @@
+import "server-only"
+
 import { documentsPage, entryPage, messagePage, responseHeaders, type SigningFile } from "./participant-page"
 import { createHash } from "node:crypto"
 

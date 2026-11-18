@@ -8,6 +8,7 @@ const sourceUnavailable = () => new Problem(409, "signature_source_pending", "A 
 async function freeze(ctx: WorkflowContext, env: Envelope) {
   const args = [ctx.tenantId,env.envelopeId,env.contractId]
   // Synchronisation commits provider completion and all ordered files together.
+  await ctx.client.query("SELECT id FROM commercial_contracts WHERE tenant_id=$1 AND id=$2 FOR UPDATE",[ctx.tenantId,env.contractId])
   const source = (await ctx.client.query<{ count: number; total: string; valid: boolean }>(`
     SELECT count(f.id)::int AS count,coalesce(sum(octet_length(f.content)),0)::text AS total,
       count(f.id)>0 AND min(f.position)=0 AND max(f.position)=count(f.id)-1

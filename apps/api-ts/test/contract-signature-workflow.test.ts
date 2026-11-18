@@ -58,7 +58,7 @@ test("PostgreSQL enforces ordered personal signing for all frozen PDFs, authenti
     await seed.query("CREATE ROLE " + role + " NOLOGIN NOSUPERUSER NOBYPASSRLS")
     await seed.query("GRANT SELECT ON ALL TABLES IN SCHEMA public TO " + role)
     await seed.query("GRANT INSERT ON contract_signature_documents,contract_signature_jobs,contract_signature_evidence,contract_signature_revisions,contract_signature_heads,contract_signature_uploads TO "+role)
-    await seed.query("GRANT UPDATE ON contract_signature_jobs,contract_signature_states,contract_signature_heads,contract_signature_uploads TO "+role)
+    await seed.query("GRANT UPDATE ON commercial_contracts,contract_signature_jobs,contract_signature_states,contract_signature_heads,contract_signature_uploads TO "+role)
     await seed.query("GRANT DELETE ON contract_signature_uploads,contract_signature_jobs TO "+role)
     await seed.query("INSERT INTO tenants(id,legal_name,tax_id) VALUES($1,'Teste','04252011000110')",[tenant])
     await seed.query("INSERT INTO parties(id,tenant_id,person_type,legal_name,tax_id,is_customer,is_supplier,status) VALUES($1,$1,'fisica','Teste','52998224725',true,false,'active')",[tenant])

@@ -172,6 +172,15 @@ export async function uploadSigningDocument(tx: WorkflowTransaction, input: Sign
       WHERE tenant_id=$1 AND envelope_id=$2 AND sequence=$3 AND preflight_evidence_id IS NOT NULL`, [tenantId,envelopeId,next])).rows[0]!.count
     const advance = accepted === env.documentCount
     const completed = advance && next === env.people
+    if (completed) {
+      // Provider files reference this row. The lock serializes a new rendition with final completion.
+      await ctx.client.query("SELECT id FROM commercial_contracts WHERE tenant_id=$1 AND id=$2 FOR UPDATE",[tenantId,env.contractId])
+      const source = (await ctx.client.query<{ count: number; matched: number }>(`SELECT count(*)::int AS count,count(d.id)::int AS matched
+        FROM commercial_contract_files f LEFT JOIN contract_signature_documents d ON d.tenant_id=f.tenant_id AND d.envelope_id=$3
+          AND d.provider_document_id=f.id::text AND d.position=f.position+1 AND d.sha256=f.sha256
+        WHERE f.tenant_id=$1 AND f.contract_id=$2 AND f.kind='signed'`,[tenantId,env.contractId,envelopeId])).rows[0]
+      if (source?.count !== env.documentCount || source.matched !== env.documentCount) throw stale()
+    }
     const charged = await ctx.client.query(`UPDATE contract_signature_states SET reserved_bytes=reserved_bytes-$3,
       stored_bytes=stored_bytes+$3+$4,updated_at=clock_timestamp(),revision=revision+CASE WHEN $5 THEN 1 ELSE 0 END,
       current_participant=CASE WHEN $5 AND NOT $6 THEN current_participant+1 ELSE current_participant END,

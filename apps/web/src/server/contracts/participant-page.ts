@@ -1,3 +1,5 @@
+import "server-only"
+
 export type SigningFile = { id: string; filename: string; position: number; done: boolean; stageRevision: string; headRevision: string; parentSha256: string }
 
 export const responseHeaders = {
@@ -9,7 +11,7 @@ export const responseHeaders = {
   "content-security-policy": "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'"
 }
 const html = (value: string) => value.replace(/[&<>"']/g, char => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char]!)
-const styles = `*{box-sizing:border-box}body{font:1rem/1.55 system-ui,sans-serif;color:#153330;background:#f4f7f5;margin:0}header,main{max-width:45rem;margin:auto;padding:1.4rem}header{font-weight:700;color:#146958}main{margin:2vh auto 8vh}h1{font-size:clamp(1.8rem,5vw,2.65rem);line-height:1.13;margin:0 0 1rem}h2{font-size:1.1rem;margin:0 0 .6rem}article{background:white;border:1px solid #b9cdc4;border-radius:.8rem;padding:1.2rem;margin:1rem 0;overflow-wrap:anywhere}button{font:inherit;font-weight:650;padding:.65rem 1rem;color:white;background:#12624f;border:0;border-radius:.45rem;cursor:pointer}a{color:#095d54;font-weight:600}label,input{display:block}input{font:inherit;max-width:100%;margin:.5rem 0 1rem}form{margin:1rem 0}a:focus-visible,button:focus-visible,input:focus-visible{outline:3px solid #2563eb;outline-offset:3px}`
+const styles = `:root{--workspace-font-title:clamp(28px,2.4vw,32px);--workspace-font-section:18px}*{box-sizing:border-box}body{font:1rem/1.55 system-ui,sans-serif;color:#153330;background:#f4f7f5;margin:0}header,main{max-width:45rem;margin:auto;padding:1.4rem}header{font-weight:700;color:#146958}main{margin:2vh auto 8vh}h1{font-size:var(--workspace-font-title);line-height:1.13;margin:0 0 1rem}h2{font-size:var(--workspace-font-section);margin:0 0 .6rem}article{background:white;border:1px solid #b9cdc4;border-radius:.8rem;padding:1.2rem;margin:1rem 0;overflow-wrap:anywhere}button{font:inherit;font-weight:650;padding:.65rem 1rem;color:white;background:#12624f;border:0;border-radius:.45rem;cursor:pointer}a{color:#095d54;font-weight:600}label,input{display:block}input{font:inherit;max-width:100%;margin:.5rem 0 1rem}form{margin:1rem 0}a:focus-visible,button:focus-visible,input:focus-visible{outline:3px solid #2563eb;outline-offset:3px}`
 function page(content: string, status = 200) {
   return new Response(`<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Assinatura com e-CPF • Ávila Ops</title><style>${styles}</style></head><body><header>Ávila Ops • Contratos</header><main>${content}</main></body></html>`,
     { status, headers: { ...responseHeaders, "content-type": "text/html; charset=utf-8" } })
