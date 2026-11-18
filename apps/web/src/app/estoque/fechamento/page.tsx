@@ -2,7 +2,7 @@ import {Suspense} from "react"
 import {connection} from "next/server"
 import {currentWorkspaceAccess,WorkspaceAccessNotice} from "@/features/access/workspace-access"
 import {StockPeriods} from "@/features/inventory/stock-periods"
-export const metadata={title:"Custos e fechamento mensal"}
+export const metadata = { title: "Custos e fechamento mensal" }
 async function Content(){
   await connection()
   const access=await currentWorkspaceAccess()
