@@ -50,10 +50,23 @@ export function financeRows(receivables: FinancialAccount[], payables: Financial
 
 export function stockMetrics(result: StockResult | null) {
   const items = result?.data || []
+  const grouped=(key:"quantity"|"reserved")=>{
+    const units=new Map<string,bigint>()
+    for(const item of items){
+      const [whole,fraction=""]=item[key].split(".")
+      const micros=BigInt(whole+fraction.padEnd(6,"0"))
+      units.set(item.unit,(units.get(item.unit)||BigInt(0))+micros)
+    }
+    return [...units].map(([unit,micros])=>{
+      const scale=BigInt(1000000)
+      const fraction=String(micros%scale).padStart(6,"0").replace(/0+$/,"")
+      return (micros/scale).toLocaleString("pt-BR")+(fraction?","+fraction:"")+" "+unit
+    }).join(" • ")||"0"
+  }
   return {
     products: result?.total || 0,
-    quantity: items.reduce((sum, item) => sum + decimal(item.quantity), 0),
-    reserved: items.reduce((sum, item) => sum + decimal(item.reserved), 0),
+    quantity: grouped("quantity"),
+    reserved: grouped("reserved"),
     unavailable: items.filter(item => decimal(item.available) <= 0).length,
   }
 }
