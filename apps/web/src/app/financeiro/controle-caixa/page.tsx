@@ -1,4 +1,11 @@
-import { FinanceCapabilityUnavailable } from "@/features/finance/finance-capability-unavailable"
-export default function Page() { return <FinanceCapabilityUnavailable title="Controle de caixa" description="Abertura, movimentações e fechamento persistente de caixa." /> }
+import { Suspense } from "react"
+import { PosAccess } from "@/features/pos/pos-access"
+export default function Page() {
+  return (
+    <Suspense fallback={<p role="status">Consultando o caixa…</p>}>
+      <PosAccess view="closing" />
+    </Suspense>
+  )
+}
 
 export const metadata = { title: "Controle de caixa" }

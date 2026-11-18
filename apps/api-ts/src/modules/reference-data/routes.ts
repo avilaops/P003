@@ -12,6 +12,9 @@ import { sameJson } from "../../platform/json.js"
 import { integer, parseListQuery } from "../registrations/query.js"
 
 const definitions = {
+  "financial-categories": { table: "financial_categories", event: "financial_category", read: "finance.categories.read", manage: "finance.categories.manage", extras: ["parent_id", "direction"] },
+  "payment-methods": { table: "payment_methods", event: "payment_method", read: "finance.payment_methods.read", manage: "finance.payment_methods.manage", extras: ["modality", "settlement_days"] },
+  "financial-accounts": { table: "financial_accounts", event: "financial_account", read: "finance.accounts.read", manage: "finance.accounts.manage", extras: ["account_type", "bank", "branch", "account_number"] },
   "product-categories": { table: "product_categories", event: "product_category", read: "catalog.categories.read", manage: "catalog.categories.manage", extras: ["parent_id", "sort_order"] },
   "product-groups": { table: "product_groups", event: "product_group", read: "catalog.products.read", manage: "catalog.products.manage", extras: [] },
   "tag-groups": { table: "tag_groups", event: "tag_group", read: "catalog.products.read", manage: "catalog.products.manage", extras: [] },
@@ -25,7 +28,14 @@ const baseInput = z.object({
   notes: z.string().trim().refine(value => [...value].length <= 1000 && !/\p{Cc}/u.test(value)).nullable().optional().transform(value => value || null),
 }).strict()
 
+const optionalBankField = (max: number) => z.string().trim().max(max).regex(/^[^\p{Cc}]*$/u).nullable().optional().transform(value => value || null)
 const inputSchemas = {
+  "financial-categories": baseInput.extend({ parentId: databaseId.nullish().default(null), direction: z.enum(["income","expense"]) }).strict(),
+  "payment-methods": baseInput.extend({ modality: z.enum(["pix","cash","bank_transfer","credit_card","debit_card","boleto","other"]), settlementDays: z.number().int().min(0).max(365) }).strict(),
+  "financial-accounts": baseInput.extend({
+    accountType: z.enum(["bank", "cash", "internal"]), bank: optionalBankField(100),
+    branch: optionalBankField(30), accountNumber: optionalBankField(50),
+  }).strict().refine(value => value.accountType === "bank" || (!value.bank && !value.branch && !value.accountNumber)),
   "product-categories": baseInput.extend({ parentId: databaseId.nullable().optional().default(null), sortOrder: z.number().int().min(0).max(999_999) }).strict(),
   "product-groups": baseInput,
   "tag-groups": baseInput,
@@ -43,11 +53,12 @@ function commandKey(value: string | string[] | undefined) {
   return parsed.data
 }
 
+function fieldName(column: string) {
+  return column.replace(/_([a-z])/g, (_, letter: string) => letter.toUpperCase())
+}
 function output(row: Record<string, unknown>, extras: readonly string[]) {
   const value: Record<string, unknown> = { id: row.id, revision: revisionValue(row.revision), code: row.code, name: row.name, status: row.status, notes: row.notes }
-  if (extras.includes("parent_id")) value.parentId = row.parent_id
-  if (extras.includes("sort_order")) value.sortOrder = integer(row.sort_order)
-  if (extras.includes("group_id")) value.groupId = row.group_id
+  for (const column of extras) value[fieldName(column)] = column === "sort_order" ? integer(row[column]) : row[column]
   return value
 }
 
@@ -55,18 +66,24 @@ function revisionOf(snapshot: Record<string, unknown>) { return String((snapshot
 
 async function validateRelations(context: AuthorizedContext, resource: string, id: string, input: Record<string, unknown>) {
   const { client, tenantId } = context
-  if (resource === "product-categories") {
+  if (resource === "product-categories" || resource === "financial-categories") {
+    const table = definitions[resource].table
     if (input.parentId) {
-      const parent = await client.query("SELECT status FROM product_categories WHERE tenant_id=$1 AND id=$2", [tenantId, input.parentId])
+      const parent = await client.query(`SELECT status${resource === "financial-categories" ? ",direction" : ""} FROM ${table} WHERE tenant_id=$1 AND id=$2`, [tenantId, input.parentId])
       if (!parent.rows[0]) throw new Problem(409, "domain_conflict", "Categoria superior não pertence a esta empresa")
       if (input.status === "active" && parent.rows[0].status !== "active") throw new Problem(409, "domain_conflict", "Categoria ativa exige categoria superior ativa")
-      const cycle = await client.query<{ exists: boolean }>("WITH RECURSIVE ancestors AS (SELECT id,parent_id FROM product_categories WHERE tenant_id=$1 AND id=$2 UNION SELECT p.id,p.parent_id FROM product_categories p JOIN ancestors a ON p.id=a.parent_id WHERE p.tenant_id=$1) SELECT EXISTS(SELECT 1 FROM ancestors WHERE id=$3) AS exists", [tenantId, input.parentId, id])
+      if (resource === "financial-categories" && parent.rows[0].direction !== input.direction) throw new Problem(409, "domain_conflict", "Categorias da mesma hierarquia devem ter a mesma natureza")
+      const cycle = await client.query<{ exists: boolean }>(`WITH RECURSIVE ancestors AS (SELECT id,parent_id FROM ${table} WHERE tenant_id=$1 AND id=$2 UNION SELECT p.id,p.parent_id FROM ${table} p JOIN ancestors a ON p.id=a.parent_id WHERE p.tenant_id=$1) SELECT EXISTS(SELECT 1 FROM ancestors WHERE id=$3) AS exists`, [tenantId, input.parentId, id])
       if (cycle.rows[0]?.exists) throw new Problem(409, "domain_conflict", "A categoria superior criaria um ciclo")
     }
     if (input.status === "archived") {
-      const children = await client.query<{ exists: boolean }>("SELECT EXISTS(SELECT 1 FROM product_categories WHERE tenant_id=$1 AND parent_id=$2 AND status='active') AS exists", [tenantId, id])
+      const children = await client.query<{ exists: boolean }>(`SELECT EXISTS(SELECT 1 FROM ${table} WHERE tenant_id=$1 AND parent_id=$2 AND status='active') AS exists`, [tenantId, id])
       if (children.rows[0]?.exists) throw new Problem(409, "domain_conflict", "Arquive ou mova as subcategorias ativas antes da categoria superior")
     }
+  }
+  if (resource === "financial-categories") {
+    const inconsistent = await client.query("SELECT 1 FROM financial_categories WHERE tenant_id=$1 AND parent_id=$2 AND direction<>$3 LIMIT 1",[tenantId,id,input.direction])
+    if (inconsistent.rows.length) throw new Problem(409, "domain_conflict", "A natureza diverge das subcategorias existentes")
   }
   if (resource === "tags" && input.groupId) {
     const group = await client.query("SELECT status FROM tag_groups WHERE tenant_id=$1 AND id=$2", [tenantId, input.groupId])
@@ -131,7 +148,7 @@ export function registerReferenceRoutes(app: FastifyInstance, dependencies: AppD
         await validateRelations(context, resource, recordId, values)
         const extras = definition.extras
         const columns = ["id", "tenant_id", "code", "name", "status", "notes", "revision", ...extras]
-        const extraValues = extras.map(column => values[column === "parent_id" ? "parentId" : column === "sort_order" ? "sortOrder" : "groupId"])
+        const extraValues = extras.map(column => values[fieldName(column)])
         const parameters = [recordId, context.tenantId, values.code, values.name, values.status, values.notes, 1, ...extraValues]
         await context.client.query(`INSERT INTO ${definition.table}(${columns.join(",")}) VALUES(${parameters.map((_, index) => `$${index + 1}`).join(",")})`, parameters)
         const row = await load(context.client, context.tenantId, recordId)
@@ -170,7 +187,7 @@ export function registerReferenceRoutes(app: FastifyInstance, dependencies: AppD
         const values = parsed.data as Record<string, unknown>
         await validateRelations(context, resource, request.params.id, values)
         const assignments = ["code", "name", "status", "notes", ...definition.extras]
-        const updateValues = assignments.map(column => values[column === "parent_id" ? "parentId" : column === "sort_order" ? "sortOrder" : column === "group_id" ? "groupId" : column])
+        const updateValues = assignments.map(column => values[fieldName(column)])
         const updated = await context.client.query(`UPDATE ${definition.table} SET ${assignments.map((column, index) => `${column}=$${index + 3}`).join(",")},revision=revision+1,updated_at=now() WHERE tenant_id=$1 AND id=$2 AND revision=$${updateValues.length + 3} RETURNING 1 AS affected`, [context.tenantId, request.params.id, ...updateValues, expected])
         if (!updated.rows[0]) throw new Problem(412, "revision_conflict", "O cadastro foi alterado por outra pessoa")
         const row = await load(context.client, context.tenantId, request.params.id)
