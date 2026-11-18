@@ -50,6 +50,18 @@ class WorkflowTests(unittest.TestCase):
         self.assertNotIn('continue-on-error', step)
         self.assertGreaterEqual(policy['timeout-minutes'], 15)
 
+    def test_validator_push_requires_existing_private_account_package(self):
+        steps = self.workflows()['regression.yml']['jobs']['contracts-validator']['steps']
+        publish = next(step['run'] for step in steps if 'docker push' in step.get('run', ''))
+        self.assertIn('endpoint="users/avilaops/packages/container/erp-next-contract-validator"', publish)
+        self.assertIn('gh api "$endpoint" > "$RUNNER_TEMP/validator-destination.json" || return 1', publish)
+        self.assertIn('.visibility == "private"', publish)
+        self.assertIn('length == 1', publish)
+        commands = publish.splitlines()
+        push = commands.index('docker push "$REGISTRY:sha-$SOURCE"')
+        self.assertIn('require_private_package', commands[:push])
+        self.assertIn('require_private_package', commands[push+1:])
+
     def test_signature_core_is_verified_conditionally_in_the_shared_policy_job(self):
         self.assertTrue((ROOT / 'apps/contract-signature-validator/pyproject.toml').is_file())
         steps = self.workflows()['_validate-project.yml']['jobs']['policy']['steps']
