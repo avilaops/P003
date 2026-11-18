@@ -7,11 +7,13 @@ import {useCommand,useResource} from "@/hooks/use-operation"
 import {decimalPattern,normalizeDecimal} from "@/lib/decimal-input"
 import {commercialQuantity} from "@/features/sales/order-presentation"
 import type {StockList,StockProduct} from "@/features/inventory/stock-model"
+import { useConfirmNavigation } from "@/components/shell/navigation-guard"
+import { useProductionDraftGuard } from "./use-production-draft-guard"
 
 type Item={productId:string;name:string;sku:string;unit:string;quantity:string}
 type Version=Item&{version:number;actor:string;createdAt:string}
 type Structure={tenantId:string;version:number;canEdit:boolean;components:Version[]}
-type Props={tenant:string}
+type Props={tenant:string;locked:boolean;onPendingChange:(pending:boolean)=>void}
 function Picker({tenant,label,choose}:{tenant:string;label:string;choose:(p:StockProduct)=>void}){
   const [q,setQ]=useState(""),result=useResource<StockList>("/api/erp/stock?limit=20&status=active&q="+encodeURIComponent(q))
   return <div><label>{label}<Input type="search" value={q} onChange={e=>setQ(e.target.value)} maxLength={160}/></label>
@@ -19,14 +21,17 @@ function Picker({tenant,label,choose}:{tenant:string;label:string;choose:(p:Stoc
       <li key={p.productId}><Button type="button" variant="ghost" onClick={()=>{choose(p);setQ("")}}>{p.name} • {p.sku}</Button></li>)}</ul>}
     {result.error&&<p role="alert">{result.error}</p>}</div>
 }
-export function Structures({tenant}:Props){
+export function Structures({tenant,locked,onPendingChange}:Props){
   const [product,setProduct]=useState<StockProduct|null>(null)
+  const confirmNavigation = useConfirmNavigation()
   return <details className="form-section space-y-3"><summary>Estruturas de produto</summary>
-    <Picker tenant={tenant} label="Buscar produto acabado" choose={setProduct}/>
-    {product&&<Versions key={product.productId} tenant={tenant} product={product}/>}
+    <fieldset disabled={locked}><Picker tenant={tenant} label="Buscar produto acabado" choose={next=>{
+      if (!product || (next.productId !== product.productId && confirmNavigation())) setProduct(next)
+    }}/></fieldset>
+    {product&&<Versions key={product.productId} tenant={tenant} product={product} onPendingChange={onPendingChange}/>}
   </details>
 }
-function Versions({tenant,product}:{tenant:string;product:StockProduct}){
+function Versions({tenant,product,onPendingChange}:{tenant:string;product:StockProduct;onPendingChange:Props["onPendingChange"]}){
   const url="/api/erp/production/structures/"+product.productId,result=useResource<Structure>(url)
   const data=result.value?.tenantId===tenant?result.value:null
   const [notice,setNotice]=useState("")
@@ -34,15 +39,19 @@ function Versions({tenant,product}:{tenant:string;product:StockProduct}){
     {notice&&<p role="status">{notice}</p>}
     {result.loading?<p role="status">Consultando estrutura…</p>:!data?<p role="alert">{result.error||"Consulta de estrutura indisponível."}</p>:<>
       <p>{data.version?"Versão vigente • "+data.version:"Primeira estrutura deste produto"}</p>
-      {data.canEdit&&<Editor key={data.version} tenant={tenant} product={product} data={data} url={url} refresh={result.reload}
+      {data.canEdit&&<Editor key={data.version} tenant={tenant} product={product} data={data} url={url} refresh={result.reload} onPendingChange={onPendingChange}
         saved={()=>{setNotice("Versão da estrutura publicada.");result.reload()}}/>}
       {data.components.length>0&&<details><summary>Histórico de versões</summary><ul>{data.components.map(c=>
         <li key={c.version+c.productId}>Versão {c.version} • {c.name} • {commercialQuantity(c.quantity)} {c.unit} • {c.actor}</li>)}</ul></details>}
     </>}</div>
 }
-function Editor({tenant,product,data,url,saved,refresh}:{tenant:string;product:StockProduct;data:Structure;url:string;saved:()=>void;refresh:()=>void}){
-  const [items,setItems]=useState<Item[]>(data.components.filter(c=>c.version===data.version))
+function Editor({tenant,product,data,url,saved,refresh,onPendingChange}:{tenant:string;product:StockProduct;data:Structure;url:string;saved:()=>void;refresh:()=>void;onPendingChange:Props["onPendingChange"]}){
+  const committed = data.components.filter(component => component.version === data.version)
+  const [items,setItems]=useState<Item[]>(committed)
   const cmd=useCommand(),[error,setError]=useState("")
+  const dirty = items.length !== committed.length || items.some((item, index) =>
+    item.productId !== committed[index].productId || normalizeDecimal(item.quantity, 6) !== normalizeDecimal(committed[index].quantity, 6))
+  useProductionDraftGuard(dirty, cmd, "Descartar as alterações da estrutura ainda não publicada?", onPendingChange)
   return <form className="space-y-3" onSubmit={async e=>{
     e.preventDefault()
     const components=items.map(c=>({productId:c.productId,quantity:normalizeDecimal(c.quantity,6)}))

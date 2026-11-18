@@ -1,16 +1,17 @@
 import { erpFetch } from "@/lib/api/client"
 import { downloadCsv } from "@/lib/csv-export"
+import { statusLabel } from "./stock-analysis-filters"
 
 export type StockAnalysisResult={
   tenantId:string; dataset:string; title:string; method:string; columns:{key:string;label:string}[]; data:Record<string,string|number|null>[]
   total:number;limit:number;offset:number;startDate:string;endDate:string;product:{id:string;name:string;sku:string;unit:string}|null
 }
-const textKeys=new Set(["sku","product","unit","status","document","reason","warehouse","kind","reference","history","class"])
+const textKeys=new Set(["sku","product","unit","status","document","reason","warehouse","kind","reference","history","class","stage"])
 export function exportCell(key:string,value:string|number|null){
   if(value===null){
     if(key==="last_issue")return "Sem saída registrada"
     if(key==="positive_since")return "Sem data registrada"
-    return ["value","cost","share","cumulative","class","turnover","coverage","accuracy","idle_days"].includes(key)?"A apurar":""
+    return ["value","cost","share","cumulative","class","turnover","coverage","accuracy","idle_days","progress"].includes(key)?"A apurar":""
   }
   const s=String(value)
   if(textKeys.has(key)&&/^[\s\uFEFF]*[=+@-]|^[\t\r\n]/u.test(s))return "'"+s
@@ -26,5 +27,8 @@ export async function allStockRows(query:URLSearchParams,tenant:string,signal?:A
   return body as StockAnalysisResult
 }
 export function downloadStockCsv(report:StockAnalysisResult,columns=report.columns,filename=report.dataset+".csv"){
-  downloadCsv(filename,[columns.map(c=>c.label),...report.data.map(row=>columns.map(c=>exportCell(c.key,row[c.key]??null)))])
+  downloadCsv(filename,[columns.map(c=>c.label),...report.data.map(row=>columns.map(c=>{
+    const value=row[c.key]??null
+    return exportCell(c.key,c.key==="status" && report.dataset!=="stock_position" && typeof value==="string"?statusLabel(report.dataset,value):value)
+  }))])
 }

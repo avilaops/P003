@@ -5,24 +5,32 @@ import {Input} from "@/components/ui/input"
 import {useCommand} from "@/hooks/use-operation"
 import {decimalPattern,normalizeDecimal} from "@/lib/decimal-input"
 import {commercialQuantity} from "@/features/sales/order-presentation"
-import Link from "next/link"
+import { useState } from "react"
+import { GuardedLink as Link } from "@/components/shell/navigation-guard"
+import { useProductionDraftGuard } from "./use-production-draft-guard"
 
 type Planned={productId:string;name:string;sku:string;unit:string;total:string;reserved:string}
 type Posting={id:string;produced:string;loss:string;minutes:number;value:string|null;receiptId:string|null;reversed:boolean}
 export type ProductionExtension={planned?:Planned[];postings?:Posting[]}
-type Props=ProductionExtension&{productId:string;jobId:string;tenant:string;revision:number;open:boolean;canConsume:boolean;version?:number|null;refresh:()=>void;saved:()=>void}
-export function PostingPanel({productId,jobId,tenant,revision,open,canConsume,version,planned=[],postings=[],saved,refresh}:Props){
+type Props=ProductionExtension&{productId:string;jobId:string;tenant:string;revision:number;open:boolean;canConsume:boolean;version?:number|null;refresh:()=>void;saved:()=>void;onPendingChange:(pending:boolean)=>void}
+export function PostingPanel({productId,jobId,tenant,revision,open,canConsume,version,planned=[],postings=[],saved,refresh,onPendingChange}:Props){
   const cmd=useCommand()
+  const [dirty, setDirty] = useState(false)
+  useProductionDraftGuard(dirty, cmd, "Descartar os dados do apontamento ainda não confirmado?", onPendingChange)
   return <section className="space-y-3 rounded border p-3"><h3 className="font-semibold">Apontamento de produção</h3>
     {version&&<p>Estrutura da ordem • Versão {version}</p>}
     {planned.length>0&&<ul>{planned.map(c=><li key={c.productId}>{c.name} • {c.sku} • Previsto {commercialQuantity(c.total)} {c.unit} • Empenhado {commercialQuantity(c.reserved)} {c.unit}</li>)}</ul>}
-    {canConsume&&open&&<form className="space-y-3" onSubmit={async e=>{
+    {canConsume&&open&&<form className="space-y-3" onChange={event => {
+      const inputs = Array.from(event.currentTarget.elements)
+      setDirty(inputs.some(input => input instanceof HTMLInputElement && input.value !== input.defaultValue))
+    }} onSubmit={async e=>{
       e.preventDefault()
-      const fields=new FormData(e.currentTarget)
+      const form = e.currentTarget
+      const fields=new FormData(form)
       const body={produced:normalizeDecimal(String(fields.get("produced")),6),loss:normalizeDecimal(String(fields.get("loss")),6),
         minutes:Number(fields.get("minutes")),additionalCost:normalizeDecimal(String(fields.get("additionalCost")),2),reason:String(fields.get("reason"))}
       const result=await cmd.send("/api/erp/production/orders/"+jobId+"/postings",tenant,body,'"'+revision+'"',"POST",(r:{tenantId:string;data:{id:string}})=>r.tenantId===tenant&&r.data.id===jobId)
-      if(result)saved()
+      if(result){form.reset();setDirty(false);saved()}
     }}><fieldset disabled={cmd.busy||cmd.uncertain} className="grid gap-3 sm:grid-cols-2">
       <label>Quantidade produzida<Input name="produced" inputMode="decimal" required pattern={decimalPattern(6)}/></label>
       <label>Perda em unidades<Input name="loss" inputMode="decimal" required defaultValue="0" pattern={decimalPattern(6)}/></label>

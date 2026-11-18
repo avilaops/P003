@@ -11,8 +11,10 @@ import { SearchInput } from "@/components/search-input"
 import { useResource } from "@/hooks/use-operation"
 import { commercialQuantity } from "@/features/sales/order-presentation"
 import { StockHistory } from "./stock-history"
+import { StockAnalysisLink } from "./stock-analysis-link"
+import { StockAnalysis } from "@/features/reports/stock-analysis"
 import { stockMoney } from "./stock-model"
-import { historyPath, manualPath, pageOffset, pageSize, stockUrl, textLink, type StockList } from "./stock-model"
+import { historyPath, manualPath, movementLedgerReturn, pageOffset, pageSize, stockUrl, textLink, type StockList } from "./stock-model"
 
 export function StockWorkspace({ tenant, path: pathname }: { tenant: string; path: string }) {
   const search = useSearchParams(), router = useRouter()
@@ -28,6 +30,9 @@ export function StockWorkspace({ tenant, path: pathname }: { tenant: string; pat
     }
   }, [outdated, owner, pathname, productId, router, search, tenant])
   if (outdated) return <p role="status">Carregando o estoque da empresa ativa…</p>
+  if (pathname === historyPath && (search.get("dataset") === "stock_movement_ledger" ||
+      (!productId && search.get("view") !== "products" && !["q","focus","inStock","offset"].some(key => search.has(key)))))
+    return <StockAnalysis tenant={tenant} movementLedger />
   if ((pathname === historyPath || pathname === manualPath) && productId)
     return <StockHistory key={productId} productId={productId} tenant={tenant} manual={pathname === manualPath} />
   return <StockGrid tenant={tenant} path={pathname} />
@@ -38,6 +43,9 @@ function StockGrid({ tenant, path }: { tenant: string; path: string }) {
   const q = search.get("q") || "", offset = pageOffset(search.get("offset"))
   const focus = search.get("focus")
   const warehouseId = search.get("warehouseId")
+  const view = path === historyPath ? "products" : null
+  const returnQuery = movementLedgerReturn(search.get("returnQuery"), tenant)
+  const ledgerPeriod = { startDate: search.get("startDate"), endDate: search.get("endDate"), direction: search.get("direction") }
   const inStock = search.get("inStock")==="1" ? "1" : null
   const list = useResource<StockList>(stockUrl("/api/erp/stock", { q, offset, limit: pageSize, warehouseId, inStock }))
   const stocks = list.value?.tenantId === tenant ? list.value : null
@@ -54,13 +62,21 @@ function StockGrid({ tenant, path }: { tenant: string; path: string }) {
   }, [stocks, focus, focusKey])
   function setQuery(q: string | null, offset: number) {
     const latestQuery = q ?? new URLSearchParams(window.location.search).get("q")
-    window.history.replaceState(null, "", stockUrl(path, { tenant, q: latestQuery, offset, warehouseId, inStock }))
+    window.history.replaceState(null, "", stockUrl(path, { tenant, view, returnQuery, ...ledgerPeriod, q: latestQuery, offset, warehouseId, inStock }))
   }
   const manual = path === manualPath
-  const title = manual ? "Novo lançamento de estoque" : path === historyPath ? "Lançamentos de estoque" : "Saldos de estoque"
+  const movements = path === historyPath
+  const title = manual ? "Novo lançamento de estoque" : movements ? "Lançamentos de estoque" : "Saldos de estoque"
   return <div className="workspace-page-frame">
-    <PageHeader title={title} actions={<div className="flex flex-wrap gap-3"><Link href="/estoque/series" className={textLink}>Rastrear número de série</Link><Link href="/cadastros/produtos" className={textLink}>Consultar catálogo</Link></div>} />
+    <PageHeader title={title} actions={<>
+      {movements && <StockAnalysisLink tenant={tenant} dataset="stock_movement_activity" warehouseId={warehouseId}>Consultar atividade de movimentação</StockAnalysisLink>}
+      {(movements || (manual && returnQuery)) && <Link href={returnQuery ? historyPath + "?" + returnQuery : historyPath} className={textLink}>Consultar lançamentos gerais</Link>}
+      {movements && stocks?.canEdit && <Link href={stockUrl(manualPath, { tenant, q, warehouseId, inStock, offset, returnQuery, ...ledgerPeriod })} className={textLink}>Novo lançamento</Link>}
+      <Link href="/estoque/series" className={textLink}>Rastrear número de série</Link>
+      <Link href="/cadastros/produtos" className={textLink}>Consultar catálogo</Link>
+    </>} />
     <section className="form-section min-w-0 space-y-4" aria-label="Consulta de saldos">
+      {movements && <h2 className="font-semibold">Selecionar produto para consultar o Kardex</h2>}
       <form className="flex flex-wrap items-end gap-2" onSubmit={event => {
         event.preventDefault()
         setQuery(String(new FormData(event.currentTarget).get("q") || "").trim(), 0)
@@ -70,11 +86,11 @@ function StockGrid({ tenant, path }: { tenant: string; path: string }) {
       </form>
       {Boolean(stocks?.warehouses?.length || warehouseId) && <label className="block">Depósito
         <select className="ml-2 min-h-10 rounded border px-2" value={warehouseId||""} onChange={e=>
-          window.history.replaceState(null,"",stockUrl(path,{tenant,q,warehouseId:e.target.value,offset:0,inStock}))}>
+          window.history.replaceState(null,"",stockUrl(path,{tenant,view,returnQuery,...ledgerPeriod,q,warehouseId:e.target.value,offset:0,inStock}))}>
           <option value="">Todos os depósitos</option>
           {stocks?.warehouses?.map(w=><option key={w.id} value={w.id}>{w.code} • {w.name}</option>)}</select></label>}
       <label className="flex items-center gap-2"><input type="checkbox" checked={Boolean(inStock)} onChange={e=>
-        window.history.replaceState(null,"",stockUrl(path,{tenant,q,warehouseId,inStock:e.target.checked?"1":null}))}/>Somente produtos com saldo físico positivo</label>
+        window.history.replaceState(null,"",stockUrl(path,{tenant,view,returnQuery,...ledgerPeriod,q,warehouseId,inStock:e.target.checked?"1":null}))}/>Somente produtos com saldo físico positivo</label>
       {list.loading ? <p role="status">Carregando saldos…</p> : !stocks ?
         <div role="alert"><p>{list.error || "A empresa da sessão mudou. Atualize a consulta."}</p><Button variant="outline" onClick={list.reload}>Tentar novamente</Button></div> : <>
         <p className="text-sm text-muted-foreground">{stocks.total} produto(s) • {stocks.canEdit ? "Consulta e movimentação" : "Somente consulta"}</p>
@@ -85,7 +101,9 @@ function StockGrid({ tenant, path }: { tenant: string; path: string }) {
             {["Saldo", "Reservado", "Disponível", "Valor"].map(label => <th key={label} className="hidden text-right lg:table-cell" scope="col">{label}</th>)}
             <th scope="col" className="lg:w-[17%]"><span className="lg:sr-only">Quantidades e ação</span></th></tr></thead>
           <tbody>{stocks.data.map(stock => {
-            const href = stockUrl(manual && stocks.canEdit ? manualPath : historyPath, { productId: stock.productId, sku: stock.sku, tenant, from: path, q, offset, warehouseId,inStock })
+            const href = stockUrl(manual && stocks.canEdit ? manualPath : historyPath, {
+              productId: stock.productId, sku: stock.sku, tenant, from: path, q, offset, warehouseId, inStock, returnQuery, ...ledgerPeriod,
+            })
             return <tr key={stock.productId} className="[overflow-wrap:anywhere]"><th scope="row" className="align-top">
               <span className="block font-medium">{stock.name}</span><span className="block text-xs font-normal text-muted-foreground">{stock.status === "active" ? "Ativo" : "Arquivado"}</span>
               <span className="mt-1 block text-sm font-normal lg:hidden">SKU {stock.sku}<br />Unidade {stock.unit}{warehouseName && <><br />Depósito {warehouseName}</>}</span></th>
@@ -105,7 +123,7 @@ function StockGrid({ tenant, path }: { tenant: string; path: string }) {
                 {manual && stocks.canEdit ? "Lançar movimento" : "Ver movimentos"}</Link></td></tr>
           })}</tbody>
         </DataTable> : <p>{stocks.total ? "Nenhum produto nesta página." : "Nenhum produto encontrado."}</p>}
-        <Pagination offset={offset} total={stocks.total} pageSize={pageSize} maxOffset={100000} onOffsetChange={value => setQuery(null, value)} />
+        {(stocks.total > pageSize || offset > 0) && <Pagination offset={offset} total={stocks.total} pageSize={pageSize} maxOffset={100000} onOffsetChange={value => setQuery(null, value)} />}
       </>}
       <Link className={textLink} href="/estoque/fechamento">Custos e fechamento mensal</Link>
       <Link className={textLink} href="/cadastros/produtos/novo" target="_blank" rel="noopener noreferrer">Cadastrar produto</Link>

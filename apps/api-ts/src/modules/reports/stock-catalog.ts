@@ -7,12 +7,36 @@ const sources = {
   stock_divergences: {label:"Divergências de inventário",method:"Linhas contadas com diferença em inventários aprovados no período. A diferença é a quantidade contada menos a esperada.",columns:{...product,date:"Aprovação",reference:"Inventário",warehouse:"Depósito",expected:"Esperado",counted:"Contado",difference:"Diferença"}},
   stock_abc: {label:"ABC de estoque",method:"Valor do estoque na data final, do maior para o menor. A classe usa a participação acumulada anterior ao item: A abaixo de 80%, B abaixo de 95% e C nos demais. Valores desconhecidos não participam da base.",columns:{...product,quantity:"Saldo",value:"Valor em estoque (R$)",share:"Participação (%)",cumulative:"Acumulado (%)",class:"Classe ABC"}},
   stock_accuracy: {label:"Acurácia de inventário",method:"Percentual de linhas contadas sem diferença sobre as linhas contadas em inventários aprovados no período. Sem contagens, o percentual é indeterminado.",columns:{lines:"Linhas contadas",matched:"Linhas concordantes",accuracy:"Acurácia (%)"}},
+  stock_movement_activity: {
+    label:"Atividade de movimentação",
+    method:"Entradas e saídas por data efetiva, depósito e unidade. Cada lançamento conta como um movimento, inclusive transferências e estornos.",
+    columns:{date:"Data efetiva",warehouse:"Depósito",unit:"Unidade",receipts:"Quantidade de entrada",issues:"Quantidade de saída",receipt_count:"Entradas",issue_count:"Saídas",movements:"Movimentos"},
+  },
+  stock_movement_ledger: {
+    label:"Lançamentos de estoque",
+    method:"Movimentos individuais por data efetiva, do mais recente ao mais antigo. A origem identifica o documento vinculado ao lançamento. Um estorno manual referencia o movimento original.",
+    columns:{date:"Data efetiva",...product,warehouse:"Depósito",kind:"Tipo de origem",document:"Documento de origem",receipts:"Entrada",issues:"Saída",reason:"Motivo"},
+  },
+  stock_count_progress: {
+    label:"Progresso dos inventários",
+    method:"Sessões abertas no período, com situação atual e percentual de linhas contadas. Ao selecionar um SKU, o progresso considera somente as linhas desse produto.",
+    columns:{date:"Data de abertura",reference:"Inventário",warehouse:"Depósito",status:"Situação",lines:"Linhas",counted_lines:"Linhas contadas",pending_lines:"Linhas pendentes",progress:"Progresso (%)"},
+  },
+  stock_production_progress: {
+    label:"Andamento da produção",
+    method:"Ordens de produção abertas no período, agrupadas pela etapa e situação atuais e pelo SKU, nome e unidade do produto acabado registrados na ordem. A quantidade é a planejada nas ordens. O depósito corresponde ao registrado na ordem.",
+    columns:{stage:"Etapa",status:"Situação",...product,orders:"Ordens",quantity:"Quantidade planejada"},
+  },
 } as const
 export type StockDataset=keyof typeof sources
 export const stockCatalog:Record<StockDataset,{label:string;method:string;columns:Record<string,string>}>=sources
 export function stockSource(id:string): id is StockDataset {return Object.hasOwn(stockCatalog,id)}
-export function countSource(id:string) {return id==="stock_divergences" || id==="stock_accuracy"}
-export const stockPermission=(id:string)=>countSource(id)?"inventory.counts.read":"inventory.stock.read"
+export function countSource(id:string) {return id==="stock_divergences" || id==="stock_accuracy" || id==="stock_count_progress"}
+export function stockPermission(id:string) {
+  if(countSource(id))return "inventory.counts.read"
+  if(id==="stock_production_progress")return "production.read"
+  return "inventory.stock.read"
+}
 export function visibleStockCatalog(permissions:string[]) {
   return Object.fromEntries(Object.entries(stockCatalog).filter(([key])=>permissions.includes("inventory.stock.read")&&permissions.includes(stockPermission(key))))
 }
