@@ -609,7 +609,10 @@ test("estoque mantém busca, página e foco no SKU com barra e invalida a seleç
   for (const [width,height] of [[360,800],[1366,768],[1920,1080]]) {
     await page.setViewportSize({ width, height })
     await expect(link).toBeVisible()
-    if (width === 360) await expect(table.locator("dl")).toHaveText("Saldo0Reservado0Disponível0")
+    if (width === 360) {
+      await expect(table.locator("dl dt")).toHaveText(["Saldo","Reservado","Disponível","Valor"])
+      await expect(table.locator("dl dd")).toHaveText(["0","0","0","A apurar"])
+    }
     else await expect(table.getByRole("columnheader")).toHaveText(["Produto","SKU","Unidade","Saldo","Reservado","Disponível","Quantidades e ação"])
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
   }

@@ -47,6 +47,7 @@ def native_api_required(paths):
         "pnpm-lock.yaml", "pnpm-workspace.yaml", "package.json", "deploy/web.Dockerfile", "deploy/CI-CD.md", "deploy/README.md",
         "deploy/migrate-release.py", "deploy/production-deploy.sh", "deploy/compose.yaml",
         "deploy/fiscal-compose.yaml", "deploy/api-ts.env.example", "scripts/ci/pr-gate.py",
+        "scripts/architecture/report-model.test.mjs",
         "scripts/ci/published-components.py", "scripts/ci/test_pr_gate.py",
         "scripts/ci/test_typescript_api.py", "scripts/ci/test_published_components.py",
         ".github/workflows/ci.yml", ".github/workflows/_validate-project.yml",

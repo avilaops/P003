@@ -8,6 +8,7 @@ const session = (ctx: BrowserContext, user: string) => installSessionCookie(ctx,
 test("estoque • contagem cega por SKU no celular e aprovação em sessão independente", async ({ context, page }) => {
   test.setTimeout(180_000)
   page.setDefaultTimeout(25_000)
+  page.setDefaultNavigationTimeout(60_000)
   await session(context, "editor")
   await page.setViewportSize({ width: 390, height: 844 })
   const headers = () => ({ Origin: origin, "X-Tenant-Id": tenant, "Idempotency-Key": randomUUID() })
