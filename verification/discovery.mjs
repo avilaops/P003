@@ -329,10 +329,12 @@ export function analyze(inventory, catalogue = null) {
       if (!mappings.length) {
         findings.push({ severity: 'info', code: 'dynamic_forward_requires_runtime', path: route.path, evidence: [route.file], detail: 'O recurso abrangente pode conter vários segmentos; uma rota de parâmetro único não determina seus destinos ou métodos.' });
       } else for (const method of route.methods) {
-        const targets = mappings.filter(action => action.ui.bff.method === method && typeof action.ui.bff.resource === 'string');
+        const targets = mappings.filter(action => action.ui.bff.method === method && (typeof action.ui.bff.resource === 'string' || typeof action.ui.bff.action === 'string'));
         if (!targets.length) findings.push({ severity: 'error', code: 'bff_dispatch_method_unmapped', path: route.path, evidence: [route.file], detail: `${method} sem destinos explícitos no catálogo.` });
         for (const action of targets) {
-          const target = route.path.replace('/api/erp/', '/api/v1/').replace(catchAllSegment, action.ui.bff.resource);
+          const target = typeof action.ui.bff.resource === 'string'
+            ? route.path.replace('/api/erp/', '/api/v1/').replace(catchAllSegment, action.ui.bff.resource)
+            : action.operation.path;
           const backend = api.get(normalizedRoute(target));
           if (!backend) findings.push({ severity: 'error', code: 'bff_target_missing', path: route.path, evidence: [route.file], detail: `Recurso declarado aponta para ${target}, ausente da API.` });
           else if (!backend.methods.includes(method)) findings.push({ severity: 'error', code: 'bff_method_missing', path: route.path, evidence: [route.file, backend.file], detail: `${method} não encontrado no destino ${backend.path}.` });
