@@ -11,6 +11,7 @@ import { SearchInput } from "@/components/search-input"
 import { useResource } from "@/hooks/use-operation"
 import { commercialQuantity } from "@/features/sales/order-presentation"
 import { StockHistory } from "./stock-history"
+import { StockAnalysisLink } from "./stock-analysis-link"
 import { stockMoney } from "./stock-model"
 import { historyPath, manualPath, pageOffset, pageSize, stockUrl, textLink, type StockList } from "./stock-model"
 
@@ -57,10 +58,17 @@ function StockGrid({ tenant, path }: { tenant: string; path: string }) {
     window.history.replaceState(null, "", stockUrl(path, { tenant, q: latestQuery, offset, warehouseId, inStock }))
   }
   const manual = path === manualPath
-  const title = manual ? "Novo lançamento de estoque" : path === historyPath ? "Lançamentos de estoque" : "Saldos de estoque"
+  const movements = path === historyPath
+  const title = manual ? "Novo lançamento de estoque" : movements ? "Lançamentos de estoque" : "Saldos de estoque"
   return <div className="workspace-page-frame">
-    <PageHeader title={title} actions={<div className="flex flex-wrap gap-3"><Link href="/estoque/series" className={textLink}>Rastrear número de série</Link><Link href="/cadastros/produtos" className={textLink}>Consultar catálogo</Link></div>} />
+    <PageHeader title={title} actions={<>
+      {movements && <StockAnalysisLink tenant={tenant} dataset="stock_movement_activity" warehouseId={warehouseId}>Consultar atividade de movimentação</StockAnalysisLink>}
+      {movements && stocks?.canEdit && <Link href={stockUrl(manualPath, { tenant, q, warehouseId, inStock, offset })} className={textLink}>Novo lançamento</Link>}
+      <Link href="/estoque/series" className={textLink}>Rastrear número de série</Link>
+      <Link href="/cadastros/produtos" className={textLink}>Consultar catálogo</Link>
+    </>} />
     <section className="form-section min-w-0 space-y-4" aria-label="Consulta de saldos">
+      {movements && <h2 className="font-semibold">Selecionar produto para consultar o Kardex</h2>}
       <form className="flex flex-wrap items-end gap-2" onSubmit={event => {
         event.preventDefault()
         setQuery(String(new FormData(event.currentTarget).get("q") || "").trim(), 0)
@@ -105,7 +113,7 @@ function StockGrid({ tenant, path }: { tenant: string; path: string }) {
                 {manual && stocks.canEdit ? "Lançar movimento" : "Ver movimentos"}</Link></td></tr>
           })}</tbody>
         </DataTable> : <p>{stocks.total ? "Nenhum produto nesta página." : "Nenhum produto encontrado."}</p>}
-        <Pagination offset={offset} total={stocks.total} pageSize={pageSize} maxOffset={100000} onOffsetChange={value => setQuery(null, value)} />
+        {(stocks.total > pageSize || offset > 0) && <Pagination offset={offset} total={stocks.total} pageSize={pageSize} maxOffset={100000} onOffsetChange={value => setQuery(null, value)} />}
       </>}
       <Link className={textLink} href="/estoque/fechamento">Custos e fechamento mensal</Link>
       <Link className={textLink} href="/cadastros/produtos/novo" target="_blank" rel="noopener noreferrer">Cadastrar produto</Link>

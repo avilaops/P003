@@ -1,19 +1,22 @@
 "use client"
 
 import Link from "next/link"
-import { useRouter } from "next/navigation"
-import { useState } from "react"
+import { useRouter, useSearchParams } from "next/navigation"
 import { PageHeader } from "@/components/page-header"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Pagination } from "@/components/workspace/pagination"
+import { DataTable } from "@/components/workspace/data-table"
 import { useResource } from "@/hooks/use-operation"
 import { countEndpoint, countLabels, countPath, type CountList } from "./count-model"
 import { useCountCommand } from "./use-count-command"
-import { textLink } from "./stock-model"
+import { pageOffset, stockUrl, textLink } from "./stock-model"
+import { StockAnalysisLink } from "./stock-analysis-link"
 
 export function InventoryCounts({ tenant, create }: { tenant: string; create: boolean }) {
-  const [offset, setOffset] = useState(0)
+  const params = useSearchParams()
+  const offset = !create && params.get("tenant") === tenant ? pageOffset(params.get("offset")) : 0
+  const listPage = { tenant: offset ? tenant : null, offset }
   const list = useResource<CountList>(countEndpoint + "?limit=25&offset=" + offset)
   const data = list.value?.tenantId === tenant ? list.value : null
   return (
@@ -22,11 +25,11 @@ export function InventoryCounts({ tenant, create }: { tenant: string; create: bo
         title={create ? "Novo inventário" : "Conferência de estoque"}
         back={create ? { href: countPath, label: "Inventários" } : undefined}
         actions={
-          data?.canEdit && !create ? (
-            <Link className={textLink} href={countPath + "/novo"}>
-              Criar inventário
-            </Link>
-          ) : null
+          !create && <>
+            {data?.canEdit && <Link className={textLink} href={countPath + "/novo"}>Criar inventário</Link>}
+            <Link className={textLink} href="/estoque/saldos">Consultar saldos</Link>
+            <StockAnalysisLink dataset="stock_count_progress" tenant={tenant}>Progresso dos inventários</StockAnalysisLink>
+          </>
         }
       />
       {!data ? (
@@ -46,22 +49,21 @@ export function InventoryCounts({ tenant, create }: { tenant: string; create: bo
       ) : (
         <section aria-label="Sessões de inventário" className="form-section space-y-3">
           {data.data.length ? (
-            <ul className="divide-y">
-              {data.data.map((s) => (
-                <li key={s.id} className="py-2">
-                  <Link href={countPath + "/" + s.id} className={textLink}>
-                    {s.reference}
-                  </Link>
-                  <p>
-                    {countLabels[s.status]} • {s.countedLines} de {s.lineCount} produtos contados{s.warehouseName && " • " + s.warehouseName}
-                  </p>
-                </li>
-              ))}
-            </ul>
+            <DataTable aria-label="Sessões de inventário" className="table-fixed [overflow-wrap:anywhere] [&_td]:px-2 [&_th]:px-2">
+              <thead><tr><th scope="col">Inventário</th><th scope="col" className="hidden sm:table-cell">Depósito</th>
+                <th scope="col">Situação</th><th scope="col" className="text-right">Produtos contados</th></tr></thead>
+              <tbody>{data.data.map(session => <tr key={session.id}>
+                <th scope="row"><Link href={stockUrl(countPath + "/" + session.id, listPage)} className={textLink}>{session.reference}</Link>
+                  {session.warehouseName && <span className="block text-xs font-normal text-muted-foreground sm:hidden">{session.warehouseName}</span>}</th>
+                <td className="hidden sm:table-cell">{session.warehouseName || "Estoque consolidado"}</td>
+                <td>{countLabels[session.status]}</td><td className="text-right tabular-nums">{session.countedLines} de {session.lineCount}</td>
+              </tr>)}</tbody>
+            </DataTable>
           ) : (
-            <p>Nenhum inventário nesta página.</p>
+            <p role="status">{offset ? "Nenhum inventário nesta página." : "Nenhum inventário registrado nesta empresa."}</p>
           )}
-          <Pagination offset={offset} pageSize={25} total={data.total} maxOffset={100000} onOffsetChange={setOffset} />
+          {(data.total > 25 || offset > 0) && <Pagination offset={offset} pageSize={25} total={data.total} maxOffset={100000}
+            onOffsetChange={next => window.history.pushState(null, "", stockUrl(countPath, { tenant, offset: next }))} />}
         </section>
       )}
     </div>

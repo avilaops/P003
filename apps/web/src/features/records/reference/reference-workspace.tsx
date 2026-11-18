@@ -13,6 +13,7 @@ import { GuardedLink as Link, useNavigationGuard, useListNavigationHref } from "
 import { useRouter } from "next/navigation"
 import { useId, useState } from "react"
 import { PageHeader } from "@/components/page-header"
+import { StockAnalysisLink } from "@/features/inventory/stock-analysis-link"
 import { RecordCompany } from "@/components/record-company"
 import { Button } from "@/components/ui/button"
 import { SearchInput } from "@/components/search-input"
@@ -44,7 +45,10 @@ function List({ kind }: { kind: ReferenceKind }) {
  const firstUse = !!result.value && !result.value.data.length && !filtered
  const createLink = result.value?.canEdit && <Link className="inline-flex min-h-9 items-center rounded-lg bg-primary px-3 text-sm font-medium text-primary-foreground" href={`${referencePath(kind)}/novo`}>{config.create}</Link>
  return <section className="compact-records form-section min-w-0 space-y-3" aria-label={config.title}>
-  <div className="flex flex-wrap items-center justify-between gap-2"><h2 className="font-semibold">{config.title}</h2>{!firstUse && createLink}</div>
+  {kind === "depositos" ? <PageHeader title={config.title} actions={<>
+   {!firstUse && createLink}
+   <Link className={linkClass + " inline-flex min-h-9 items-center"} href="/estoque/transferencias">Saldos por depósito e transferências</Link>
+  </>} /> : <div className="flex flex-wrap items-center justify-between gap-2"><h2 className="font-semibold">{config.title}</h2>{!firstUse && createLink}</div>}
   {!firstUse && <form className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto_auto] items-end gap-2 lg:grid-cols-[minmax(0,1fr)_10rem_auto_auto]" onSubmit={event => { event.preventDefault(); const fields = new FormData(event.currentTarget); search({ q: String(fields.get("q") || ""), status: String(fields.get("status") || ""), role: "", offset: 0 }) }}>
    <label className="col-span-3 min-w-0 space-y-1 text-sm lg:col-span-1">Buscar nome ou código<SearchInput defaultValue={query.q} onSearch={searchForm} name="q" placeholder="Nome ou código" maxLength={160} /></label>
    <label className="min-w-0 space-y-1 text-sm">Situação<select key={query.status} name="status" defaultValue={query.status} className={selectClass}><option value="">Todas</option><option value="active">Ativos</option><option value="archived">Arquivados</option></select></label>
@@ -99,7 +103,8 @@ function Detail({ kind, value }: { kind: ReferenceKind; value: ReferenceSnapshot
   if (kind === "categorias-financeiras") values.push(["Natureza", data.direction === "income" ? "Receita" : "Despesa"])
   if (kind === "contas-financeiras") values.push(["Tipo de conta", accountTypes[data.accountType as keyof typeof accountTypes]], ["Banco", String(data.bank || "Não informado")], ["Agência", String(data.branch || "Não informada")], ["Número da conta", String(data.accountNumber || "Não informado")])
   if (kind === "formas-pagamento") values.push(["Modalidade", modalities[data.modality as keyof typeof modalities]], ["Prazo de referência (dias)", String(data.settlementDays)])
-  return <><PageHeader eyebrow={`Cadastros · ${config.title}`} title={data.name} description={config.description} /><Link className={linkClass} href={`${referencePath(kind)}`}>Voltar à listagem</Link><section className="compact-records form-section mt-3 min-w-0 space-y-3">
+  return <><PageHeader eyebrow={kind === "depositos" ? config.title : `Cadastros · ${config.title}`} title={data.name} description={config.description}
+    actions={kind === "depositos" && <StockAnalysisLink dataset="stock_movement_activity" tenant={value.tenantId} warehouseId={data.id}>Ver movimentos do depósito</StockAnalysisLink>} /><Link className={linkClass} href={`${referencePath(kind)}`}>Voltar à listagem</Link><section className="compact-records form-section mt-3 min-w-0 space-y-3">
     <RecordCompany key={value.tenantId} tenantId={value.tenantId} />
     <dl className="grid min-w-0 gap-4 sm:grid-cols-2">{values.map(([label, text]) => <div className="min-w-0" key={label}><dt className="text-sm text-muted-foreground">{label}</dt><dd className="mt-1 whitespace-pre-wrap break-words">{kind === "contas-financeiras" && label === "Banco" && data.bank ? <BankIdentity value={String(data.bank)} /> : text}</dd></div>)}
       {(kind === "categorias-produtos" || kind === "categorias-financeiras") && <div><dt className="text-sm text-muted-foreground">Categoria superior</dt><dd className="mt-1">{data.parentId ? <Link className={linkClass} href={`${referencePath(kind)}/${data.parentId}`}><ParentName kind={kind} id={String(data.parentId)} /></Link> : "Nenhuma"}</dd></div>}
@@ -161,7 +166,8 @@ function Editor({ kind, initial, tenantId, etag, reload }: { kind: ReferenceKind
   function change(key: string, value: string | number | null) { setDraft(previous => ({ ...previous, [key]: value, ...(key === "direction" && previous.direction !== value ? { parentId: null } : {}) })); setDirty(true) }
   function input(key: string, label: string, max: number, required = false) { return <label key={key} className="block min-w-0 space-y-2">{label}<Input required={required} maxLength={max} value={String(draft[key] ?? "")} onChange={event => change(key, event.target.value || (required ? "" : null))} /></label> }
   function select(key: string, label: string, options: Record<string, string>) { return <label className="block min-w-0 space-y-2">{label}<select className={selectClass} value={String(draft[key])} onChange={event => change(key, event.target.value)}>{Object.entries(options).map(([value, text]) => <option key={value} value={value}>{text}</option>)}</select></label> }
-  return <><PageHeader eyebrow={`Cadastros · ${config.title}`} title={`${initial ? "Editar" : "Novo cadastro de"} ${config.singular}`} description={config.description} />
+  return <><PageHeader eyebrow={kind === "depositos" ? config.title : `Cadastros · ${config.title}`}
+    title={kind === "depositos" && !initial ? config.create : `${initial ? "Editar" : "Novo cadastro de"} ${config.singular}`} description={config.description} />
     <Link className={linkClass} href={initial ? `${referencePath(kind)}/${initial.data.id}` : referencePath(kind)}>Voltar</Link>
     <section className="compact-records form-section mt-3 min-w-0 space-y-3">
       {kind === "tags" && <TagGroupPicker selected={draft.groupId as string | null} disabled={frozen} choose={id => change("groupId", id)} />}
