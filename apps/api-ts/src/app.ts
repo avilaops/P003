@@ -4,6 +4,10 @@ import { randomUUID } from "node:crypto"
 import { registerPartyRoutes } from "./modules/parties/routes.js"
 import { registerDashboardRoutes } from "./modules/dashboard/routes.js"
 import { registerReportRoutes } from "./modules/reports/routes.js"
+import { registerFinanceInsightRoutes } from "./modules/finance-insights/routes.js"
+import { registerFinanceWalletRoutes } from "./modules/finance-wallets/routes.js"
+import { registerFinanceManagementRoutes } from "./modules/finance-management/routes.js"
+import { registerFinanceTreasuryRoutes } from "./modules/finance-treasury/routes.js"
 import { registerCommercialApprovalRoutes } from "./modules/commercial/approvals.js"
 import { registerCommercialSimulation } from "./modules/commercial/simulation.js"
 import { registerCommercialConversion } from "./modules/commercial/conversion.js"
@@ -61,6 +65,7 @@ export function buildApp(_dependencies: AppDependencies): FastifyInstance {
     const databaseCode = typeof error === "object" && error !== null && "code" in error ? String(error.code) : ""
     const problem = error instanceof Problem ? error
       : ["FST_ERR_CTP_INVALID_JSON_BODY", "FST_ERR_CTP_EMPTY_JSON_BODY", "FST_ERR_CTP_BODY_TOO_LARGE", "FST_ERR_CTP_INVALID_MEDIA_TYPE"].includes(databaseCode) ? new Problem(422, "invalid_input", request.routeOptions.url === "/api/v1/preferences" ? "Preferências inválidas ou campos desconhecidos" : "JSON inválido ou campos desconhecidos")
+      : databaseCode === "PF001" ? new Problem(409, "domain_conflict", "O período financeiro da empresa está fechado para a data informada")
       : databaseCode === "23505" ? new Problem(409, "domain_conflict", "Já existe um cadastro com estes dados nesta empresa")
       : databaseCode === "23503" || databaseCode === "23514" ? new Problem(422, "invalid_input", "Cadastro incompatível com os registros da empresa")
       : new Problem(500, "internal_error", "Erro interno")
@@ -73,6 +78,10 @@ export function buildApp(_dependencies: AppDependencies): FastifyInstance {
   registerPartyRoutes(app, _dependencies)
   registerDashboardRoutes(app, _dependencies)
   registerReportRoutes(app, _dependencies)
+  registerFinanceInsightRoutes(app, _dependencies)
+  registerFinanceWalletRoutes(app, _dependencies)
+  registerFinanceManagementRoutes(app, _dependencies)
+  registerFinanceTreasuryRoutes(app, _dependencies)
   registerCommercialApprovalRoutes(app, _dependencies)
   registerCommercialSimulation(app, _dependencies)
   registerCommercialConversion(app, _dependencies)

@@ -1,8 +1,9 @@
 import "server-only"
+import { financeRoute } from "./finance-resources"
 
 // Permanent ownership after the four-module transition. The previous release,
 // rather than traffic flags, is the operational return path.
-export type MigratedModule = "preferences" | "registrations" | "sales" | "reports"
+export type MigratedModule = "preferences" | "registrations" | "sales" | "reports" | "finance"
 export type BackendEnvironment = { ERP_TYPESCRIPT_API_URL?: string | undefined; ERP_TYPESCRIPT_MODULES?: string | undefined }
 const uuid = "[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}"
 const routes: { module: MigratedModule; methods: readonly string[]; path: RegExp }[] = [
@@ -36,6 +37,7 @@ export function erpHealthOrigins(rustOrigin: string, environment: BackendEnviron
   return [rustOrigin, typescriptOrigin(environment)]
 }
 export function selectErpBackend(method: string, resource: string, rustOrigin: string, environment: BackendEnvironment) {
+  if (financeRoute(method, resource)) return { origin: typescriptOrigin(environment), backend: "typescript" as const, module: "finance" as const }
   const route = routes.find(route => route.methods.includes(method.toUpperCase()) && route.path.test(resource))
   if (!route) return { origin: rustOrigin, backend: "rust" as const, module: null }
   return { origin: typescriptOrigin(environment), backend: "typescript" as const, module: route.module }

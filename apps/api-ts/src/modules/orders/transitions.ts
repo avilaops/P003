@@ -10,6 +10,8 @@ import { reconcileUnshipped, requireCancellationPermissions } from "./cancellati
 import { issueOrder, reserveOrder, validateFiscalCompletion } from "./fulfillment.js"
 import { cancelUnpaid, originateOnCompletion, originateSchedule, verifyReceivables } from "./receivables.js"
 import { loadOrder } from "./snapshot.js"
+import { allocateOrderAdvances } from "../finance-insights/operations.js"
+import { freezeOrderPolicies, onInvoicedOrder } from "../finance-management/accrual.js"
 
 const targets = { accept: "accepted", confirm: "confirmed", cancel: "cancelled", complete: "completed" } as const
 export function registerOrderTransitions(app: FastifyInstance, dependencies: AppDependencies) {
@@ -51,6 +53,7 @@ export function registerOrderTransitions(app: FastifyInstance, dependencies: App
           }
           if (action === "complete") await originateOnCompletion(context, request.headers, id)
         }
+        if ((action === "accept" || action === "confirm") && status === "draft") await freezeOrderPolicies(context, id)
         const next = nextRevision(expected)
         if (action === "cancel") {
           await cancelUnpaid(context, request.headers, id)
@@ -58,6 +61,10 @@ export function registerOrderTransitions(app: FastifyInstance, dependencies: App
         }
         await context.client.query("UPDATE sales_orders SET status=$3,revision=$4,updated_at=now() WHERE tenant_id=$1 AND id=$2", [context.tenantId, id, target, next])
         await record(context, request.headers, "sales_order", id, `order.${target}`, { previousRevision: expected, revision: next, previousStatus: status, status: target })
+        if (action === "complete") {
+          await onInvoicedOrder(context, request.headers, id)
+          await allocateOrderAdvances(context, request.headers, id)
+        }
         const result = await loadOrder(context, id)
         await remember(context, key, scope, input, result)
         return result

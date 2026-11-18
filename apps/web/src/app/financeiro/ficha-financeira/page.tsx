@@ -1,4 +1,4 @@
-import { FinanceCapabilityUnavailable } from "@/features/finance/finance-capability-unavailable"
-export default function Page() { return <FinanceCapabilityUnavailable title="Ficha financeira" description="Histórico financeiro consolidado da pessoa ou empresa." /> }
+import { PartnerWorkspace } from "@/features/finance/partner-workspace"
 
 export const metadata = { title: "Ficha financeira" }
+export default function Page() { return <PartnerWorkspace /> }

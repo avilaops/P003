@@ -2,6 +2,8 @@
 
 [Todas as telas](../../README.md)
 
+[Levantamento de desenvolvimento • Financeiro do ERP e referência TOTVS Protheus](LEVANTAMENTO-2026-11-17.md)
+
 Escolha a tela que deseja consultar. Novo cadastro, consulta e edição ficam no mesmo guia da listagem.
 
 | Tela | Para que serve |
