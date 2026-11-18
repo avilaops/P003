@@ -184,8 +184,8 @@ export function TreasuryReconciliation({ accountId, tenantId, type }: { accountI
                 </Button>
               </div>
             </section>
-            <section className="space-y-2">
-              <h3 className="text-sm font-semibold">Movimentos do ERP disponíveis</h3>
+            <section className="space-y-2" aria-labelledby="treasury-available-entries">
+              <h3 id="treasury-available-entries" className="text-sm font-semibold">Movimentos do ERP disponíveis</h3>
               {!data.entries.length && <p className="text-sm text-muted-foreground">Nenhum movimento disponível nesta página.</p>}
               {data.entries.map((entry) => (
                 <label key={entry.id} className="flex items-start gap-2 rounded-md border p-2 text-sm">
@@ -241,7 +241,7 @@ export function TreasuryReconciliation({ accountId, tenantId, type }: { accountI
                   <label className="grid gap-1 text-sm">
                     Natureza do novo movimento
                     <select value={categoryId} onChange={(e) => setCategoryId(e.target.value)} disabled={disabled}>
-                      <option value="">Padrão da conta</option>
+                      <option value="">Natureza padrão de entrada ou saída</option>
                       {natures.value?.data
                         .filter((c) => c.direction === (BigInt(line.cents) > BigInt(0) ? "income" : "expense"))
                         .map((c) => (

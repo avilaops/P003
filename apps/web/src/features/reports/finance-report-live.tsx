@@ -5,6 +5,7 @@ import { useSearchParams } from "next/navigation"
 import { Suspense, useState } from "react"
 import { PageHeader } from "@/components/page-header"
 import { Button } from "@/components/ui/button"
+import { DataTable } from "@/components/workspace/data-table"
 import { ReportActions, ReportDocument, useReportPreview } from "@/components/documents/report-document"
 import { EmptyState, ErrorState, LoadingState } from "@/components/workspace/resource-state"
 import { FinancialDocumentEmail } from "@/features/finance/financial-document-email"
@@ -257,7 +258,7 @@ function PortfolioReport() {
                   <EmptyState title="Nenhum título encontrado">Confira os filtros da carteira.</EmptyState>
                 ) : (
                   <div className="overflow-x-auto">
-                    <table className="w-full text-left text-sm">
+                    <DataTable>
                       <caption className="sr-only">Títulos do filtro</caption>
                       <thead>
                         <tr>
@@ -285,7 +286,7 @@ function PortfolioReport() {
                           </tr>
                         ))}
                       </tbody>
-                    </table>
+                    </DataTable>
                   </div>
                 )}
                 <div className="flex gap-2">

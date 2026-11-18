@@ -2,6 +2,7 @@
 
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
+import { PageTitle } from "@/components/workspace/page-title"
 import { Input } from "@/components/ui/input"
 import { RequestError } from "@/components/feedback/session-recovery"
 import { useCommand, useResource } from "@/hooks/use-operation"
@@ -97,7 +98,7 @@ function Collections({ group, groupTenant }: { group?: Group; groupTenant?: stri
   }
   return (
     <main className="mx-auto max-w-5xl space-y-5 px-4 py-7">
-      <h1 className="text-2xl font-semibold">Cobranças e retornos</h1>
+      <PageTitle>Cobranças e retornos</PageTitle>
       {resource.error && <RequestError message={resource.error} status={resource.status} />}
       {resource.loading && <p role="status">Consultando cobranças…</p>}
       {snapshot && bank && (!groupTenant || groupTenant === snapshot.tenantId) && (

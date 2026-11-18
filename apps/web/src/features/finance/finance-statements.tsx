@@ -2,6 +2,7 @@
 
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
+import { DataTable } from "@/components/workspace/data-table"
 import { useResource } from "@/hooks/use-operation"
 import { downloadCsv } from "@/lib/csv-export"
 import { dateLabel, fieldStyle, localDay, reais, sideLabels, type Side } from "./finance-insights-model"
@@ -163,7 +164,7 @@ export function FinanceStatements({ type }: { type: "income" | "cashflow" }) {
             <p>Nenhum lançamento no período.</p>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full text-left text-sm">
+              <DataTable>
                 <thead>
                   <tr>
                     {columns.map((c) => (
@@ -184,7 +185,7 @@ export function FinanceStatements({ type }: { type: "income" | "cashflow" }) {
                     </tr>
                   ))}
                 </tbody>
-              </table>
+              </DataTable>
             </div>
           )}
         </>

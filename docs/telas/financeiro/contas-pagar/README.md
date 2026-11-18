@@ -16,7 +16,10 @@ Acompanhar obrigações a pagar e a área de pagamentos da equipe.
 ## O que você pode fazer
 
 - Pesquisar e abrir uma obrigação
-- Registrar as ações financeiras autorizadas
+- Conferir o título de origem, a natureza, o centro de custo e a conta para o pagamento
+- Registrar uma baixa individual ou em lote e acompanhar os itens que dependem de aprovação
+- Conferir o principal abatido, os encargos e o líquido no extrato
+- Estornar uma baixa com motivo e consultar o comprovante vinculado
 - Acessar os pagamentos de funcionários
 
 ## Regras e limites
@@ -25,7 +28,7 @@ Registrar uma obrigação não executa transferência bancária. A área de func
 
 ## Referências para manutenção
 
-Guia conferido no código de 12/11/2026. As ações dependem das permissões e da configuração da empresa. Relatos técnicos antigos descrevem a etapa em que foram escritos.
+As ações disponíveis dependem das permissões do operador e da configuração da empresa.
 
 - [FUNCIONARIOS-E-PAGAMENTOS](referencias/FUNCIONARIOS-E-PAGAMENTOS.md)
 - [purchase-access](../../../../apps/web/src/features/purchasing/purchase-access.tsx)

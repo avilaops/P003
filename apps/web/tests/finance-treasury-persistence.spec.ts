@@ -147,7 +147,7 @@ test("Chromium • agrupamento, cobrança Pix, webhook, retorno e conciliação 
     const ofx = await imported
     expect(ofx.ok(), await ofx.text()).toBeTruthy()
     await page.getByRole("radio", { name: /Liquidação Pix agrupada/ }).check()
-    const entries = page.getByRole("checkbox")
+    const entries = page.getByRole("region", { name: "Movimentos do ERP disponíveis" }).getByRole("checkbox")
     await expect(entries).toHaveCount(3)
     for (let i = 0; i < 3; i++) await entries.nth(i).check()
     const matched = submitted("finance-treasury/match")

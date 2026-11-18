@@ -18,10 +18,10 @@ Consultar contas financeiras e o extrato interno disponível no ERP.
 
 ## Regras e limites
 
-Extrato interno não comprova conciliação ou conexão automática com o banco.
+O saldo interno vem dos movimentos da conta. O último saldo informado pelo banco e o total dos movimentos conciliados aparecem com suas referências. Para conferir uma diferença, abra a linha importada, vincule os lançamentos correspondentes ou registre a classificação do movimento. [Importação, conciliação e fechamento](OPERACAO-BANCARIA.md)
 
 ## Referências para manutenção
 
-Guia conferido no código de 12/11/2026. As ações dependem das permissões e da configuração da empresa. Relatos técnicos antigos descrevem a etapa em que foram escritos.
+As ações disponíveis dependem das permissões do operador e da configuração da empresa.
 
 - [financial-account-ledger](../../../../apps/web/src/features/finance/financial-account-ledger.tsx)
