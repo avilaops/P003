@@ -91,7 +91,9 @@ export async function resolveSender(client: DatabaseClient, env = process.env): 
   return async (envelope: Envelope) => {
     try {
       const receipt = await mail.sendMail({ from: settings.from, ...nfeMessage(envelope) })
-      return receipt.accepted.some(address => address.toLowerCase() === envelope.recipient.toLowerCase()) ? "sent" : "failed"
+      const recipient = envelope.recipient.toLowerCase()
+      if (receipt.accepted.some(address => address.toLowerCase() === recipient)) return "sent"
+      return receipt.rejected.some(address => address.toLowerCase() === recipient) ? "failed" : "unknown"
     } catch (error) { return smtpFailure(error) }
     finally { mail.close() }
   }
