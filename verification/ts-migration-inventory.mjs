@@ -60,7 +60,7 @@ export async function inventory() {
       schemaVersion: 1,
       sourceHash: source.sourceHash,
       registrationSourceHash: await registrationHash(path.join(root, 'apps/api-ts/src')),
-      scope: 'Production native HTTP operations and the registered document endpoint baseline. Excludes new TypeScript-only stock routes, dynamic MCP dispatch and non-HTTP workers.',
+      scope: 'Production native HTTP operations and the registered document endpoint baseline. Excludes new TypeScript-only stock and financial routes, dynamic MCP dispatch and non-HTTP workers.',
       limitation: 'registered_unverified means Fastify has a handler, not that behavior, authorization, persistence or production parity has been verified.',
       counts: {
         total: operations.length,
