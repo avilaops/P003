@@ -1,4 +1,7 @@
-import { FinanceCapabilityUnavailable } from "@/features/finance/finance-capability-unavailable"
-export default function Page() { return <FinanceCapabilityUnavailable title="Espaço do contador" description="Documentos e informações financeiras para o contador." /> }
+import {PageHeader} from "@/components/page-header"
+import {AccountingWorkspace} from "@/features/finance/accounting-workspace"
 
-export const metadata = { title: "Espaço do contador" }
+export const metadata = {title:"Espaço do contador"}
+export default function Page() {
+  return <main className="workspace-page-frame space-y-5"><PageHeader eyebrow="Financeiro" title="Espaço do contador" description="Plano de contas, regras de contabilização e livros por competência."/><AccountingWorkspace/></main>
+}
