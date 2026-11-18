@@ -19,7 +19,7 @@ const sources = {
   },
   stock_production_progress: {
     label:"Andamento da produção",
-    method:"Ordens de produção abertas no período, agrupadas pela etapa e situação atuais, produto acabado e unidade. A quantidade é a planejada nas ordens. O depósito corresponde ao registrado na ordem.",
+    method:"Ordens de produção abertas no período, agrupadas pela etapa e situação atuais e pelo SKU, nome e unidade do produto acabado registrados na ordem. A quantidade é a planejada nas ordens. O depósito corresponde ao registrado na ordem.",
     columns:{stage:"Etapa",status:"Situação",...product,orders:"Ordens",quantity:"Quantidade planejada"},
   },
 } as const

@@ -42,16 +42,15 @@ const queries = {
   },
   stock_production_progress: {
     sql: `SELECT s.name AS stage,s.position,s.id AS stage_id,o.status,
-        p.id AS product_id,p.sku,p.name AS product,o.unit,
+        o.product_id,o.sku,o.name AS product,o.unit,
         count(*)::float8 AS orders,(sum(o.quantity_micros)*0.000001)::text AS quantity
       FROM production_orders o
       JOIN production_stages s ON (s.tenant_id,s.id)=(o.tenant_id,o.stage_id)
-      JOIN products p ON (p.tenant_id,p.id)=(o.tenant_id,o.product_id)
       WHERE o.tenant_id=$1 AND ${openingPeriod("o.created_at")}
         AND ($4::uuid IS NULL OR o.product_id=$4) AND ($5::uuid IS NULL OR o.warehouse_id=$5)
         AND ($6::text IS NULL OR o.status=$6)
-      GROUP BY s.id,o.status,p.id,o.unit`,
-    order: "position,stage,stage_id,status,sku,product_id,unit",
+      GROUP BY s.id,o.status,o.product_id,o.sku,o.name,o.unit`,
+    order: "position,stage,stage_id,status,sku,product_id,product,unit",
   },
 }
 

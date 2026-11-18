@@ -117,6 +117,19 @@ test("relatórios operacionais de estoque • HTTP e PostgreSQL", {skip:!admin},
     assert.equal((await report(production+"&productionStatus=ready")).total,1)
     assert.equal((await report(production+"&productionStatus=cancelled")).total,0)
     assert.equal((await report(production+"&all=true")).total,3)
+
+    await seed.query("UPDATE products SET sku='CADEIRA-V2',name='Cadeira revisada' WHERE tenant_id=$1 AND id=$2",[tenant,item])
+    await job(item,stage,"open",5_000_000,site,"2024-04-02T02:59:59Z")
+    await seed.query("UPDATE products SET name='Cadeira atual' WHERE tenant_id=$1 AND id=$2",[tenant,item])
+    await job(item,stage,"open",7_000_000,site,"2024-04-02T02:59:59Z")
+    const history = production+"&productionStatus=open&productId="+item
+    const snapshots = (await report(history+"&all=true")).data
+    assert.deepEqual(snapshots,[
+      {stage:"Montagem",status:"open",sku:"CADEIRA",product:"Cadeira",unit:"UN",orders:2,quantity:"3.000001"},
+      {stage:"Montagem",status:"open",sku:"CADEIRA-V2",product:"Cadeira atual",unit:"UN",orders:1,quantity:"7.000000"},
+      {stage:"Montagem",status:"open",sku:"CADEIRA-V2",product:"Cadeira revisada",unit:"UN",orders:1,quantity:"5.000000"},
+    ])
+    assert.deepEqual((await report(history+"&offset=2&limit=1")).data,snapshots.slice(2))
   })
 
   await t.test("permissões por fonte, definições salvas, isolamento por empresa e parâmetros inválidos", async () => {

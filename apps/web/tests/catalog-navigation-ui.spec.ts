@@ -603,7 +603,12 @@ test("estoque mantém busca, página e foco no SKU com barra e invalida a seleç
   await expect(table).toBeVisible()
   await page.getByRole("textbox", { name: "Buscar produto ou SKU" }).fill("Banco")
   await expect(page).toHaveURL(/q=Banco/)
-  await page.getByRole("button", { name: "Próxima", exact: true }).click()
+  await page.setViewportSize({ width: 360, height: 800 })
+  const nextPage = page.getByRole("button", { name: "Próxima", exact: true })
+  await expect(nextPage).toBeEnabled()
+  await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight))
+  await expect(nextPage).toBeInViewport({ ratio: 1 })
+  await nextPage.click()
   await expect(page).toHaveURL(/q=Banco&offset=25/)
   const link = table.getByRole("link", { name: "Ver movimentos de Banco Flex • SKU LD/B-02" })
   for (const [width,height] of [[360,800],[1366,768],[1920,1080]]) {
