@@ -7,6 +7,13 @@ const methods = new Set(['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIO
 const text = value => typeof value === 'string' && value.trim().length > 0;
 const texts = value => Array.isArray(value) && value.every(text);
 const key = operation => `${operation.method} ${normalizedRoute(operation.path)}`;
+const participantPortal = '/icp/[tenant]/[id]/[[...action]]';
+const participantTargets = new Map([
+  ['GET /', '/api/v1/contract-signers/{tenant}/{id}/session'],
+  ['POST entrar', '/api/v1/contract-signers/{tenant}/{id}/session'],
+  ['GET baixar/{documentId}', '/api/v1/contract-signers/{tenant}/{id}/documents/{documentId}'],
+  ['POST enviar/{documentId}', '/api/v1/contract-signers/{tenant}/{id}/documents/{documentId}'],
+]);
 
 // This assesses the definition and static coverage of contracts. It never
 // turns documentation, a matched route or an existing test file into a pass.
@@ -71,6 +78,7 @@ export function assessContracts(catalogue, inventory) {
       }
       coveredBff.add(key(proxy));
       let expected = proxy.path.replace('/api/erp/', '/api/v1/').replace('[id]', '{id}');
+      if (proxy.path === participantPortal) expected = participantTargets.get(`${proxy.method} ${proxy.action}`) || '';
       const dispatchParameter = proxy.path.includes('[format]') ? 'format' : 'action';
       if (proxy.path.includes(`[${dispatchParameter}]`)) {
         const dispatch = catalogue.dispatches.find(item => item?.path === proxy.path && item.method === proxy.method);

@@ -1,5 +1,6 @@
 import Fastify, { type FastifyInstance } from "fastify"
 import { randomUUID } from "node:crypto"
+import { registerParticipantRoutes } from "./modules/contract-signatures/participant-routes.js"
 
 import { registerPartyRoutes } from "./modules/parties/routes.js"
 import { registerDashboardRoutes } from "./modules/dashboard/routes.js"
@@ -26,6 +27,7 @@ import { registerMcpDispatch } from "./platform/mcp-dispatch.js"
 import { registerDocumentCopies, type DocumentCopyIO } from "./modules/document-copies/routes.js"
 import { registerFinancialEmails } from "./modules/document-copies/financial-routes.js"
 import { registerContractPackage } from "./modules/document-copies/contract-package-routes.js"
+import { registerQualifiedReissue } from "./modules/contract-signatures/reissue.js"
 
 export type AppDependencies = AccessDependencies & { outgoingNfse?: OutgoingNfseDependencies; nfeEmail?: NfeEmailIO; documentCopies?: DocumentCopyIO }
 
@@ -96,5 +98,7 @@ export function buildApp(_dependencies: AppDependencies): FastifyInstance {
   registerDocumentCopies(app, _dependencies, _dependencies.documentCopies)
   registerFinancialEmails(app, _dependencies, _dependencies.documentCopies)
   registerContractPackage(app, _dependencies, _dependencies.documentCopies, _dependencies.nfeEmail?.render)
+  registerQualifiedReissue(app, _dependencies)
+  registerParticipantRoutes(app, _dependencies)
   return app
 }

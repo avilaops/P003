@@ -78,7 +78,7 @@ async function htmlDocument(d: Document) {
     '<footer class="commercial-document-footer">' + escape(d.identity) + " • Documento comercial • ERP Next</footer></article></body></html>"
 }
 
-function orderPdf(d: Document) {
+function commercialPdf(d: Document) {
   const pdf = new PDFDocument({ size:"A4", margin:42, bufferPages:true, info:{ Title:d.identity, Author:d.company } })
   const chunks: Buffer[] = []
   const done = new Promise<Buffer>((resolve,reject) => {
@@ -109,7 +109,7 @@ function orderPdf(d: Document) {
     band(s.title)
     font().text(s.lines.join("\n"),48,pdf.y,{ width:width-12 }).moveDown()
   }
-  group(section("Cliente",...d.customer)); group(section("Identificação",d.dates)); band("Itens do pedido")
+  group(section("Cliente",...d.customer)); group(section("Identificação",d.dates)); band(d.weight ? "Itens do pedido" : "Itens da proposta")
   const rows = d.items.map(item => [[text(item.name), "Código • " + text(item.sku), ...finishes(item)].join("\n"),
     decimal(item.quantity) + " " + text(item.unit), decimal(item.unitPrice,true), decimal(item.amount,true)])
   font(false,8)
@@ -118,7 +118,8 @@ function orderPdf(d: Document) {
     defaultStyle:{ padding:5, border:[0,0,0.5,0], borderColor:"#d6d6d6" },
     data:[["Produto","Quantidade","Unitário","Total"],...rows] })
   pdf.moveDown()
-  group(section("Total do pedido",d.total)); group(section("Peso bruto total",d.weight!))
+  group(section(d.weight ? "Total do pedido" : "Total da proposta",d.total))
+  if (d.weight) group(section("Peso bruto total",d.weight))
   for (const s of d.sections) group(s)
   const pages = pdf.bufferedPageRange().count
   for (let i = 0; i < pages; i++) {
@@ -133,17 +134,27 @@ function orderPdf(d: Document) {
   return done
 }
 
+function proposalDocument(proposal: Awaited<ReturnType<typeof loadProposal>>, header: Pick<Document,"company" | "issuer" | "logo">): Document {
+  const { data,items } = proposal
+  const status = data.expired ? "Expirada" : data.status === "cancelled" ? "Cancelada" : stages[text(data.status)] ?? "Não informado"
+  return { ...header, name:"Proposta comercial", identity:"Proposta " + data.number + " • Versão " + data.version + " • " + status,
+    customer:[text(data.customerName),"CPF/CNPJ • " + text(data.customerTaxId)], dates:"Emissão • " + date(data.createdAt) + " • Validade • " + date(data.validUntil),
+    items, total:decimal(data.amount,true), sections:[section("Condições de pagamento",text(data.paymentTerms)),
+      section("Condições de entrega",text(data.deliveryTerms)), section("Observações",text(data.notes))].filter(s => s.lines.length) }
+}
+
+export function acceptedProposalPdf(proposal: Awaited<ReturnType<typeof loadProposal>>, company: { legalName: string; taxId?: string }) {
+  return commercialPdf(proposalDocument(proposal, { company: company.legalName, issuer: company.taxId ? ["CPF/CNPJ • " + company.taxId] : [], logo: "" }))
+}
+
 export async function salesMailDocument(context: AuthorizedContext, kind: "order" | "proposal", id: string) {
   const company = (await context.client.query("SELECT t.legal_name,t.tax_id,p.details FROM tenants t LEFT JOIN company_profiles p ON p.tenant_id=t.id WHERE t.id=$1",[context.tenantId])).rows[0]!
   const profile = fields(company.details)
   const header = { company:text(company.legal_name), issuer:["CPF/CNPJ • " + text(company.tax_id),join(profile,addressFields),join(profile,["phone","email","website"])].filter(Boolean), logo:imageData(profile.logoDataUrl) }
   if (kind === "proposal") {
-    const { data,items } = await loadProposal(context,id)
-    const status = data.expired ? "Expirada" : data.status === "cancelled" ? "Cancelada" : stages[text(data.status)] ?? "Não informado"
-    const html = await htmlDocument({ ...header, name:"Proposta comercial", identity:"Proposta " + data.number + " • Versão " + data.version + " • " + status,
-      customer:[text(data.customerName),"CPF/CNPJ • " + text(data.customerTaxId)], dates:"Emissão • " + date(data.createdAt) + " • Validade • " + date(data.validUntil),
-      items, total:decimal(data.amount,true), sections:[section("Condições de pagamento",text(data.paymentTerms)),
-        section("Condições de entrega",text(data.deliveryTerms)), section("Observações",text(data.notes))].filter(s => s.lines.length) })
+    const proposal = await loadProposal(context,id)
+    const { data } = proposal
+    const html = await htmlDocument(proposalDocument(proposal,header))
     return { html, attachment:{ filename:"proposta-" + data.number + "-v" + data.version + ".html",contentType:"text/html; charset=utf-8",content:Buffer.from(html) } }
   }
   const { data,items,checkout,proposalAgreement } = await loadOrder(context,id)
@@ -168,7 +179,7 @@ export async function salesMailDocument(context: AuthorizedContext, kind: "order
   const d: Document = { ...header, name:"Pedido de venda", identity:number + " • Revisão " + data.revision + " • " + (data.status === "accepted" ? "Encomenda aceita" : stages[text(data.status)] ?? "Não informado"),
     dates:"Vencimento • " + date(data.dueDate),customer:customerLines,items,total:decimal(data.amount,true),weight:weight(items),sections:sections.filter(s => s.lines.length) }
   const html = await htmlDocument(d)
-  return { html, attachment:{ filename:"pedido-" + number + "-r" + data.revision + ".pdf",contentType:"application/pdf",content:await orderPdf(d) } }
+  return { html, attachment:{ filename:"pedido-" + number + "-r" + data.revision + ".pdf",contentType:"application/pdf",content:await commercialPdf(d) } }
 }
 
 export function preservedOrderPdf(snapshot: Fields) {
@@ -176,7 +187,7 @@ export function preservedOrderPdf(snapshot: Fields) {
   const terms = fields(snapshot.commercialTerms ?? snapshot.proposal)
   const contacts = (party: Fields) => [text(party.taxId) && "CPF/CNPJ • " + text(party.taxId), text(party.email), text(party.phone),
     join(primary(party.addresses), addressFields), join(party, addressFields)].filter(Boolean)
-  return orderPdf({
+  return commercialPdf({
     name: "Pedido de venda", identity: text(order.number) + " • Revisão " + text(order.revision) + " • Cópia preservada no contrato",
     company: text(company.legalName), issuer: contacts(company), logo: imageData(company.logoDataUrl),
     customer: [text(customer.name), ...contacts(customer)], dates: "Vencimento • " + date(order.dueDate),

@@ -4,6 +4,10 @@ import { accessHref, recoveryDestination } from "@/lib/return-to"
 
 export function proxy(request: NextRequest) {
   const pathname = request.nextUrl.pathname
+  if (pathname === "/icp" || pathname.startsWith("/icp/")) {
+    if (request.headers.get("host")?.toLowerCase() !== "contrato.avilaops.com") return new NextResponse(null, { status: 404 })
+    return NextResponse.next()
+  }
   if (pathname === "/mcp" || pathname.startsWith("/mcp/") || ["/.well-known/oauth-protected-resource", "/.well-known/oauth-protected-resource/mcp", "/.well-known/oauth-authorization-server"].includes(pathname)) return NextResponse.next()
   if (pathname === "/_next/image") {
     const source = request.nextUrl.searchParams.get("url") || ""
@@ -29,5 +33,7 @@ export function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/_next/image", "/((?!api/|_next/|favicon.ico|robots.txt|sitemap.xml|.*\\.(?:png|jpg|jpeg|svg|webp|avif|ico|woff2?)$).*)"],
+  // The upload handler enforces the same host boundary directly and reads a bounded stream.
+  // Bypassing Next's proxy here permits the full 32 MiB signed PDF without double buffering.
+  matcher: ["/_next/image", "/((?!icp/[^/]+/[^/]+/enviar/[^/]+/?$|api/|_next/|favicon.ico|robots.txt|sitemap.xml|.*\\.(?:png|jpg|jpeg|svg|webp|avif|ico|woff2?)$).*)"],
 }

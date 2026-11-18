@@ -19,6 +19,8 @@ import { Input } from "@/components/ui/input"
 import { useCommand, useResource } from "@/hooks/use-operation"
 import { contractFieldLabels as fieldLabels } from "./contract-fields"
 import { ContractDocumentFields } from "./contract-document-fields"
+import { PackageReview } from "./package-review"
+import { QualifiedReissue } from "./qualified-reissue"
 
 type Recipient = Schema<"ContractRecipient">
 type ContractSummary = Schema<"ContractSummary">
@@ -140,13 +142,13 @@ export function ContractDetail({ id, orderId }: { id: string; orderId?: string }
   const [pendingAction, setPendingAction] = useState("")
   const [selectedFile, setSelectedFile] = useState("")
   const [packageReview, setPackageReview] = useState("")
-  async function action(name: string) {
+  async function action(name: string, closingHash?: string) {
     if (boundary.isLocked() || !result.value) return
     setPendingAction(name); setNotice("")
     const current = result.value
     const packageAction = name === "send-package"
     const updated = await command.send<Detail>(`/api/erp/commercial-contracts/${id}/${name}`, current.tenantId,
-      packageAction ? { recipients: current.data.recipients.map(r => r.email) } : {}, result.etag, "POST",
+      packageAction ? { recipients: current.data.recipients.map(r => r.email), ...(closingHash && { closingHash }) } : {}, result.etag, "POST",
       packageAction ? value => value.tenantId === current.tenantId && value.data?.id === id && Boolean(value.packageStatus) : undefined)
     if (updated && packageAction) setPackageReview("")
     if (updated) { setNotice(name === "review" ? "Revisão registrada." : name === "send" ? "Solicitação registrada. Confira abaixo o estado confirmado pelo serviço." : name === "send-package" ? "Consulte abaixo o estado do envio do pacote." : "Andamento consultado no serviço de contratos."); result.reload() }
@@ -170,6 +172,9 @@ export function ContractDetail({ id, orderId }: { id: string; orderId?: string }
         {currentFile && <><div className="flex flex-wrap gap-4"><a className={linkClass} href={fileUrl(currentFile)} target="_blank" rel="noreferrer">Abrir documento</a><a className={linkClass} href={fileUrl(currentFile)} download={`${currentFile.kind}-${contract.id}.pdf`}>Baixar PDF</a></div><iframe title={currentFile.kind === "audit" ? "Trilha de assinatura" : "Documento do contrato"} src={fileUrl(currentFile)} className="h-[65vh] min-h-96 w-full rounded-lg border" /><p className="break-all text-xs text-muted-foreground">Cópia preservada no servidor Avila Ops · SHA-256: {currentFile.sha256}</p></>}
       </section>
       <aside className="space-y-5">
+        {canEdit && canSend && <section className="form-section space-y-3"><h2 className="font-semibold">Assinaturas ICP-Brasil</h2>
+          <QualifiedReissue key={result.value.tenantId + id + result.etag} id={id} tenantId={result.value.tenantId} etag={result.etag}
+            recipients={contract.recipients} disabled={blocked} portalCompleted={contract.status === "completed"} /></section>}
         <ProposalTerms proposal={contract.snapshot.proposal} />
         {email && <section className="form-section min-w-0 space-y-3" aria-label="E-mail do pedido e contrato"><h2 className="font-semibold">E-mail do pedido e contrato</h2><p className="text-sm text-muted-foreground">Cada destinatário recebe o resumo abaixo e seu link individual para o mesmo contrato.</p><p className="break-words font-medium">Assunto: {email.subject}</p><p className="whitespace-pre-wrap break-words text-sm">{email.text}</p></section>}
         <section className="form-section space-y-4"><h2 className="font-semibold">Destinatários e andamento</h2><ul className="space-y-4">{contract.recipients.map(recipient => {
@@ -186,13 +191,11 @@ export function ContractDetail({ id, orderId }: { id: string; orderId?: string }
           {canEdit && canSend && contract.status === "reviewed" && <div className="space-y-3 border-t pt-4"><p>O pedido e o link do contrato seguem juntos para os destinatários acima, pelo e-mail configurado no serviço de contratos.</p><Button disabled={blocked || !emailReady || !email} onClick={() => action("send")}>Enviar pedido e contrato</Button>{!email && <p role="status">Atualize a integração antes de enviar o pedido e o contrato juntos.</p>}</div>}
           {canEdit && canSend && canMailDocuments && ["reviewed", "send_requested", "sent", "opened", "completed"].includes(contract.status) && <div className="space-y-3 border-t pt-4">
             {files.some(f => f.kind === (contract.status === "completed" ? "signed" : "preview")) && <FinancialDocumentEmail contractId={id} tenantId={result.value.tenantId} disabled={boundary.primaryLocked || command.busy || command.uncertain || command.stale} onLockChange={boundary.setSecondaryLocked} />}
-            <p>O pacote reúne pedido, NF-e autorizada e contrato preservado. Quando o recebível estiver quitado, inclui o comprovante de pagamento.</p>
+            <p>Confira o orçamento, o pedido, o contrato, a NF-e e os comprovantes de recebimento antes de enviá-los juntos.</p>
             {packageStatus && <p role="status">Último pacote documental • {packageStatus === "sent" ? "enviado" : packageStatus === "failed" ? "falhou" : packageStatus === "sending" ? "em envio" : "resultado incerto"}.</p>}
-            {packageReview === result.etag && result.etag ? <div className="space-y-2">
-              <p>Confirme o envio do pacote para {contract.recipients.map(r => r.email).join(", ")}.</p>
-              <Button disabled={blocked} onClick={() => action("send-package")}>Confirmar envio do pacote</Button>
-              <Button variant="outline" disabled={blocked} onClick={() => setPackageReview("")}>Cancelar</Button>
-            </div> : <Button variant="outline" disabled={blocked || !result.etag || ["sending", "unknown", "sent"].includes(packageStatus || "")} onClick={() => setPackageReview(result.etag)}>Enviar pacote de documentos</Button>}</div>}
+            {packageReview === result.etag && result.etag ? <PackageReview id={id} tenantId={result.value.tenantId} etag={result.etag} blocked={blocked}
+              send={hash => void action("send-package", hash)} close={() => setPackageReview("")} />
+              : <Button variant="outline" disabled={blocked || !result.etag} onClick={() => setPackageReview(result.etag)}>Enviar pacote de documentos</Button>}</div>}
           {canEdit && !canSend && <p className="text-sm">A revisão e o envio exigem permissão específica para contratos.</p>}
         </section>
         <section className="form-section space-y-3"><h2 className="font-semibold">Dados preservados</h2><p>{contract.snapshot.company.legalName}</p><p>{contract.snapshot.customer.name} · {contract.snapshot.customer.taxId}</p><p>R$ {contract.snapshot.order.amount.replace(".", ",")} · Pedido na revisão {contract.snapshot.order.revision}</p><details><summary className="cursor-pointer font-medium">Conferir campos utilizados</summary><dl className="mt-3 space-y-3">{Object.entries(contract.fields).map(([key, value]) => <div key={key}><dt className="text-sm font-medium">{fieldLabels[key] || key}</dt><dd className="whitespace-pre-wrap break-words text-sm">{value || "Não informado"}</dd></div>)}</dl></details><p className="break-all text-xs text-muted-foreground">Contrato {contract.id}{contract.externalId ? ` · Solicitação ${contract.externalId}` : ""}</p></section>

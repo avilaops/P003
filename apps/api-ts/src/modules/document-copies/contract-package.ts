@@ -4,34 +4,38 @@ import { renderDocumentEmail } from "../../platform/document-mail-template.js"
 import { Problem } from "../../platform/problem.js"
 import { readDocument } from "../nfe-email/document.js"
 import { renderDanfe } from "../nfe-email/danfe.js"
-import { preservedOrderPdf } from "../sales/mail-document.js"
+import { acceptedProposalPdf, preservedOrderPdf } from "../sales/mail-document.js"
+import { loadProposal } from "../proposals/snapshot.js"
 import { brl, financialPdf } from "./financial-pdf.js"
 import { copySource, digest } from "./source.js"
+import { qualifiedContract } from "./qualified-contract.js"
 
 type Snapshot = {
   company: { legalName: string; tradeName?: string; taxId?: string }; customer: { name: string; taxId?: string }
   order: { number: string; amount: string; revision: number }
+  proposal?: { id: string; version: number } | null
 }
 type Payment = { id: string; amount: string; method: string; reference: string; date: string; count: number }
 type Attachment = DocumentMail["attachments"][number]
 export async function packageSource(context: AuthorizedContext, id: string) {
   const source = await copySource(context, "contract", id)
-  if (!source.allowed || !source.recipients.length) throw new Problem(409, "contract_unavailable", "Confira a revisão, o PDF e os destinatários do contrato")
-  const row = (await context.client.query<{ snapshot: Snapshot; order_id: string; nfe_id: string | null }>(`
-    SELECT c.snapshot,c.order_id,(SELECT d.id FROM fiscal_nfe_documents d
+  const qualified = await qualifiedContract(context, id)
+  const row = (await context.client.query<{ snapshot: Snapshot; order_id: string; nfe_id: string | null; proposal_id: string | null; version: number | null }>(`
+    SELECT c.snapshot,c.order_id,p.id AS proposal_id,v.version,(SELECT d.id FROM fiscal_nfe_documents d
       WHERE d.tenant_id=c.tenant_id AND d.source_order_id=c.order_id AND d.model=55 AND d.status='authorized' AND d.authorized_xml IS NOT NULL
       ORDER BY (d.environment='production') DESC,d.updated_at DESC,d.id LIMIT 1) AS nfe_id
-    FROM commercial_contracts c WHERE c.tenant_id=$1 AND c.id=$2`, [context.tenantId, id])).rows[0]!
-  if (!row.nfe_id) throw new Problem(409, "nfe_unavailable", "O pedido ainda não possui NF-e autorizada")
-  const invoice = await readDocument(context, row.nfe_id)
+    FROM commercial_contracts c
+    LEFT JOIN sales_proposals p ON p.tenant_id=c.tenant_id AND p.order_id=c.order_id
+    LEFT JOIN sales_proposal_versions v ON v.tenant_id=p.tenant_id AND v.proposal_id=p.id AND v.version=p.current_version
+      AND v.status='accepted' AND v.customer_id=c.customer_id
+    WHERE c.tenant_id=$1 AND c.id=$2`, [context.tenantId, id])).rows[0]!
+  const invoice = row.nfe_id ? await readDocument(context, row.nfe_id) : null
   const { snapshot } = row
-  if (!invoice.recipient_tax_id || invoice.recipient_tax_id !== snapshot.customer?.taxId) {
-    throw new Problem(409, "nfe_customer_mismatch", "O destinatário da NF-e difere do cliente preservado no contrato")
-  }
-  if (!/^\d+(?:\.\d{2})?$/.test(snapshot.order?.amount) || !snapshot.order?.number || !snapshot.company?.legalName || !snapshot.customer?.name) {
-    throw new Problem(409, "invalid_snapshot", "Os dados preservados do pedido estão incompletos")
-  }
-  const [whole, cents = "00"] = snapshot.order.amount.split(".")
+  const validOrder = /^\d+(?:\.\d{2})?$/.test(snapshot.order?.amount) && !!snapshot.order?.number && !!snapshot.company?.legalName && !!snapshot.customer?.name
+  const [whole, cents = "00"] = (validOrder ? snapshot.order.amount : "0").split(".")
+  const pinned = snapshot.proposal
+  const proposal = row.proposal_id && row.version && (!pinned || (pinned.id === row.proposal_id && pinned.version === row.version))
+    ? await loadProposal(context, row.proposal_id, row.version) : null
   const amount = BigInt(whole! + cents)
   const payments = (await context.client.query<Payment>(`
     WITH titles AS (
@@ -45,12 +49,30 @@ export async function packageSource(context: AuthorizedContext, id: string) {
     FROM settled CROSS JOIN titles t JOIN receivable_payments p ON p.tenant_id=$1 AND p.receivable_id=t.id
     WHERE p.kind='receipt' AND NOT EXISTS(SELECT 1 FROM receivable_payments reversed WHERE reversed.tenant_id=p.tenant_id AND reversed.reverses_id=p.id)
     ORDER BY p.occurred_on,p.id`, [context.tenantId, row.order_id, amount])).rows
-  const signature = digest(JSON.stringify([source.hash, row.nfe_id, digest(invoice.xml), invoice.environment, payments]))
-  return { source, snapshot, invoice, payments, amount, signature }
+  const signature = digest(JSON.stringify([source.hash, qualified?.heads, snapshot, row.nfe_id, invoice && digest(invoice.xml), invoice?.environment,
+    proposal && [row.proposal_id, row.version, proposal.items], payments]))
+  const checks = [
+    { label: "Contrato", ready: !!qualified && source.allowed && !!source.recipients.length, detail: !qualified ? "Falta validar a assinatura ICP-Brasil de cada participante em todos os PDFs finais" : !source.allowed || !source.recipients.length ? "Confira o pedido e os destinatários do contrato" : `${qualified.signers} participante(s) • assinaturas ICP-Brasil verificadas em ${qualified.documents} PDF(s)`, code: "signature_unverified" },
+    { label: "Pedido", ready: validOrder, detail: validOrder ? "Pedido " + snapshot.order.number : "Os dados preservados do pedido estão incompletos", code: "invalid_snapshot" },
+    { label: "NF-e", ready: !!invoice?.recipient_tax_id && invoice.recipient_tax_id === snapshot.customer?.taxId,
+      detail: !invoice ? "O pedido ainda não possui NF-e autorizada" : invoice.recipient_tax_id !== snapshot.customer?.taxId ? "O destinatário da NF-e difere do cliente do contrato" : "DANFE e XML • " + (invoice.environment === "homologation" ? "Homologação • sem valor fiscal" : "Produção"),
+      code: invoice ? "nfe_customer_mismatch" : "nfe_unavailable" },
+    { label: "Orçamento", ready: !!proposal, detail: proposal ? "Proposta " + proposal.data.number + " • versão " + proposal.data.version : "Falta uma proposta aceita e vinculada a este pedido e cliente", code: "proposal_unavailable" },
+    { label: "Comprovante de pagamento", ready: !!payments.length, detail: payments.length ? payments.length + " recibo(s) do ERP • quitação integral" : "Falta registrar a quitação integral dos títulos deste pedido", code: "payment_unavailable" },
+  ]
+  return { source, qualified, snapshot, invoice, proposal, payments, amount, signature, checks }
 }
 
-export async function packageFiles(input: Awaited<ReturnType<typeof packageSource>>, contracts: Attachment[], render: typeof renderDanfe) {
-  const { invoice, snapshot, payments, amount } = input
+export function confirmPackage(input: Awaited<ReturnType<typeof packageSource>>, complete: boolean) {
+  const missing = input.checks.find(check => !check.ready && (complete || !["proposal_unavailable", "payment_unavailable"].includes(check.code)))
+  if (missing) throw new Problem(409, missing.code, missing.detail)
+  if (!input.qualified) throw new Problem(409, "signature_unverified", "Falta a comprovação das assinaturas ICP-Brasil")
+  if (!input.invoice) throw new Problem(409, "nfe_unavailable", "O pedido ainda não possui NF-e autorizada")
+  return { ...input, invoice: input.invoice, qualified: input.qualified }
+}
+
+export async function packageFiles(input: ReturnType<typeof confirmPackage>, contracts: Attachment[], render: typeof renderDanfe) {
+  const { invoice, proposal, snapshot, payments, amount } = input
   const number = snapshot.order.number
   const filenameNumber = number.replace(/[^A-Za-z0-9_-]/g, "_")
   const notice = invoice.environment === "homologation" ? "Homologação • sem valor fiscal" : ""
@@ -82,9 +104,13 @@ export async function packageFiles(input: Awaited<ReturnType<typeof packageSourc
     })
     add("payment", pdf(`comprovante-pagamento-${payment.id}.pdf`, receipt), { paymentId: payment.id, amountCents: BigInt(payment.amount), settlementTotalCents: amount, titleCount: payment.count })
   }
-  for (const file of contracts) add("contract", file)
+  for (const file of contracts) add("contract", file, { signaturePolicy:"icp_each_participant", envelopeId:input.qualified.envelope })
+  if (proposal) {
+    const { id, number, version } = proposal.data
+    add("proposal", pdf(`orcamento-${number}-v${version}.pdf`, await acceptedProposalPdf(proposal,snapshot.company)), { proposalId: id, version })
+  }
   const receiptMessage = payments.length === 1 ? "Incluímos também o comprovante de recebimento." : payments.length > 1 ? "Incluímos também os comprovantes de recebimento." : ""
-  const message = ["Olá!", `Reunimos os documentos do pedido ${number}. Em anexo estão o pedido, o DANFE, o XML autorizado da NF-e e a cópia do contrato.`, receiptMessage].filter(Boolean).join("\n\n")
+  const message = ["Olá!", `Reunimos os documentos do pedido ${number}. Em anexo estão o pedido, o DANFE, o XML autorizado da NF-e e a cópia do contrato.`, proposal && "O orçamento aceito que originou este pedido segue em PDF.", receiptMessage].filter(Boolean).join("\n\n")
   const content = renderDocumentEmail({ company: snapshot.company.tradeName?.trim() || snapshot.company.legalName, title: `Documentos do pedido ${number}`, message,
     details: [{ label: "NF-e", value: `${invoice.number} • série ${invoice.series}` }], notice, attachments })
   return { attachments, manifest, subject, ...content }
