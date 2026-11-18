@@ -19,3 +19,16 @@ A matriz cobre isolamento por empresa, permissões/revogação, consultas, revis
 O processo usa `API_TS_HOST=127.0.0.1` e `API_TS_PORT=8081` por padrão, respeita `AUTH_USERINFO_URL` da mesma origem do issuer, limita conexões e encerra o pool ao receber SIGTERM/SIGINT. `/health/ready` consulta o banco real e não revela o erro interno. O processo é obrigatório no Compose e no runtime; a saúde pública exige as duas APIs.
 
 `POST /internal/mcp/dispatch` é privado e revalida o access token, o grant, o recurso `ERP_MCP_ORIGIN/mcp`, a expiração, a revogação e o escopo no PostgreSQL. A identidade existe apenas no contexto assíncrono desse despacho; cabeçalhos não podem declarar um usuário. O token MCP continua inválido como token Auth na API normal. Não há redirecionamento, retry de comando ou retorno automático ao Rust. Recuperação usa a [release anterior completa](../../docs/architecture/typescript-api-transition-finalization.md).
+
+## Browser Use
+
+`POST /api/v1/integrations/browser-use/runs` executa uma tarefa de agente na Browser Use Cloud (API V4, `browser-use-sdk/v4`) e devolve `{ runId, sessionId, result, totalCostUsd }`. O corpo aceita somente `task` (até 4.000 caracteres) e, opcionalmente, `model`. Sem `model`, vale o padrão do projeto Browser Use. Um modelo explícito, como `bu-ultrafast`, é repassado sem alteração.
+
+- Exige autenticação, `x-tenant-id` e a permissão `platform.company.manage`, porque cada execução consome créditos. A permissão é conferida em uma transação curta, só de leitura, liberada antes da execução.
+- Toda execução tem `maxCostUsd: 1`. A resposta só é aceita com status `completed` e `result` preenchido. Os outros casos respondem `502 integration_failed`, sem repassar o texto de erro do provedor.
+- Se a execução não terminar em 5 minutos, ela é cancelada e a rota responde `504 integration_timeout`. Uma falha ao criar a execução responde `502 integration_unavailable` e não é repetida, porque a execução pode já existir.
+- Sem `BROWSER_USE_API_KEY`, ou com o valor vazio, a rota responde `503 integration_unavailable`.
+
+A chave é lida somente no servidor. Em desenvolvimento, `pnpm --filter api-ts dev` carrega `apps/api-ts/.env.local` quando o arquivo existe. Esse arquivo é ignorado pelo Git. Em produção, a chave é a única credencial de terceiros aceita no processo TypeScript, e nunca chega aos processos web ou Rust. No layout Compose, ela vai em `api-ts.env` (veja `deploy/api-ts.env.example`). No `compose.json` gerado por `deploy/production-deploy.sh`, ela é lida do `api-ts` anterior ou do serviço `api` e conservada entre releases. No runtime Cloudflare, ela faz parte de `TYPESCRIPT_KEYS`, em `deploy/cloudflare/runtime-configuration.mjs`. Sem a chave, a rota responde 503.
+
+`test/browser-use.test.ts` e `test/browser-use-routes.test.ts` cobrem o fluxo com clientes simulados, sem gasto real.
