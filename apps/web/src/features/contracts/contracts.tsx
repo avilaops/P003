@@ -26,7 +26,7 @@ type Recipient = Schema<"ContractRecipient">
 type ContractSummary = Schema<"ContractSummary">
 type StoredFile = Schema<"ContractFile">
 type Detail = Schema<"ContractDetail"> & { packageStatus?: "sending" | "sent" | "failed" | "unknown"; packageUpdatedAt?: string }
-type Options = Omit<Schema<"ContractOptions">, "templates"> & { templates: (Schema<"ContractOptions">["templates"][number] & { defaults?: Record<string, string>; generationProblem?: string | null })[] }
+type Options = Omit<Schema<"ContractOptions">, "templates"> & { preferredTemplateId?: number | null; templates: (Schema<"ContractOptions">["templates"][number] & { defaults?: Record<string, string>; generationProblem?: string | null })[] }
 const linkClass = "font-medium text-primary underline underline-offset-4"
 const selectClass = "block min-h-10 w-full rounded-lg border bg-background px-3 py-2"
 const labels: Record<string, string> = { creation_requested: "Geração em conferência", created: "Pronto para revisão", reviewed: "Revisado", send_requested: "Envio solicitado", sent: "Transmissão confirmada pelo serviço", opened: "Aberto pelo destinatário", completed: "Assinatura concluída", declined: "Assinatura recusada", expired: "Prazo expirado" }
@@ -74,26 +74,26 @@ export function ContractGenerator({ orderId }: { orderId: string }) {
     <PageHeader eyebrow="Vendas / Pedido e contrato" title="Gerar contrato" description="Confira os dados do pedido e complete os campos do modelo. A prévia será revisada antes do envio conjunto por e-mail." />
     <Link className={linkClass} href={`/vendas/pedidos/${orderId}/contratos`}>Voltar aos contratos do pedido</Link>
     {result.value.configured && !result.value.emailReady && <p className="mt-4 rounded-lg border p-4" role="status">O e-mail de assinatura ainda não foi validado. Você pode gerar e revisar a prévia; o envio ficará bloqueado.</p>}
-    {!result.value.canEdit ? <p className="mt-5" role="status">Seu acesso permite apenas consulta de pedidos e contratos.</p> : !result.value.configured || !result.value.templates.length ? <section className="form-section mt-5 space-y-3"><h2 className="font-semibold">Modelo ainda não disponível</h2><p>A conexão e os modelos de contrato desta empresa precisam ser configurados pelo administrador.</p><Button variant="outline" onClick={result.reload}>Consultar novamente</Button></section> : <GeneratorForm key={`${orderId}:${result.value.snapshot.order.revision}`} options={result.value} reload={result.reload} />}
+    {!result.value.canEdit ? <p className="mt-5" role="status">Seu acesso permite apenas consulta de pedidos e contratos.</p> : !result.value.configured || !result.value.templates.length ? <section className="form-section mt-5 space-y-3"><h2 className="font-semibold">Modelo ainda não disponível</h2><p>A conexão e os modelos de contrato desta empresa precisam ser configurados pelo administrador.</p><Button variant="outline" onClick={result.reload}>Consultar novamente</Button></section> : <GeneratorForm key={`${result.value.tenantId}:${orderId}:${result.value.snapshot.order.revision}:${result.value.preferredTemplateId}`} options={result.value} reload={result.reload} />}
   </>
 }
 
 function GeneratorForm({ options, reload }: { options: Options; reload: () => void }) {
   const router = useRouter()
   const command = useCommand()
-  const [selected, setSelected] = useState(options.templates[0].id)
-  const template = options.templates.find(value => value.id === selected)!
-  const defaults = template.defaults ?? options.defaults
+  const [selected, setSelected] = useState<number | null>(options.preferredTemplateId === undefined ? options.templates[0].id : options.preferredTemplateId)
+  const template = options.templates.find(value => value.id === selected)
+  const defaults = template?.defaults ?? options.defaults
   const [fields, setFields] = useState<Record<string, string>>({})
   const [recipients, setRecipients] = useState<Record<string, Recipient>>({})
   const locked = command.busy || command.uncertain || command.stale
   function recipient(role: string, index: number): Recipient {
     return recipients[role] || { role, name: index === 0 ? options.snapshot.customer.name : "", email: index === 0 ? options.snapshot.customer.email || "" : "" }
   }
-  const missing = template.fields.filter(field => field.required && !((Object.hasOwn(defaults, field.name) ? defaults[field.name] : fields[field.name] || "")).trim())
+  const missing = (template?.fields ?? []).filter(field => field.required && !((Object.hasOwn(defaults, field.name) ? defaults[field.name] : fields[field.name] || "")).trim())
   return <form className="mt-5 space-y-5" onSubmit={async event => {
     event.preventDefault()
-    if (template.generationProblem) return
+    if (!template || template.generationProblem) return
     const result = await command.send<Detail>("/api/erp/commercial-contracts", options.tenantId, {
       orderId: options.snapshot.order.id, orderRevision: options.snapshot.order.revision,
       templateId: template.id, templateUpdatedAt: template.updatedAt,
@@ -103,15 +103,17 @@ function GeneratorForm({ options, reload }: { options: Options; reload: () => vo
     if (result) router.push(`/vendas/pedidos/${options.snapshot.order.id}/contratos?contrato=${result.data.id}`)
   }}>
     <fieldset disabled={locked} className="space-y-5">
-      {template.generationProblem && <p role="alert">{template.generationProblem}</p>}
+      {template?.generationProblem && <p role="alert">{template.generationProblem}</p>}
       <section className="form-section space-y-4"><h2 className="flex items-center gap-2 font-semibold"><FileText />Modelo e pedido</h2>
-        <label className="block space-y-2">Modelo de contrato<select className={selectClass} value={selected} onChange={event => { setSelected(Number(event.target.value)); setFields({}); setRecipients({}) }}>{options.templates.map(value => <option key={value.id} value={value.id}>{value.name}</option>)}</select></label>
+        <label className="block space-y-2">Modelo de contrato<select className={selectClass} required value={template?.id ?? ""} onChange={event => { setSelected(Number(event.target.value)); setFields({}); setRecipients({}) }}><option value="" disabled>Selecione um modelo</option>{options.templates.map(value => <option key={value.id} value={value.id}>{value.name}</option>)}</select></label>
         <p><strong>{options.snapshot.company.legalName}</strong> · {options.snapshot.company.taxId}</p>
         <p>Cliente: {options.snapshot.customer.name} · {options.snapshot.customer.taxId}</p>
         <p>Total comercial: R$ {options.snapshot.order.amount.replace(".", ",")} · Vencimento: {options.snapshot.order.dueDate}</p>
         <p className="text-sm text-muted-foreground">Os dados serão preservados nesta geração. Mudanças posteriores no pedido não alteram o contrato.</p>
       </section>
+      {!template && <p role="status">A versão publicada do modelo padrão está indisponível. Selecione o modelo deste pedido para continuar.</p>}
       <ProposalTerms proposal={options.snapshot.proposal} />
+      {template && <>
       <section className="form-section space-y-4"><h2 className="font-semibold">Campos do documento</h2>
         <p className="text-sm text-muted-foreground">Os campos preenchidos pelo pedido ou pela proposta ficam protegidos. Complete os demais campos do modelo abaixo.</p>
         {missing.length > 0 && <p role="status">Faltam {missing.length} campos obrigatórios: {missing.map(field => fieldLabels[field.name] || field.name).join(", ")}.</p>}
@@ -123,11 +125,12 @@ function GeneratorForm({ options, reload }: { options: Options; reload: () => vo
           return <div key={role.uuid} className="grid gap-3 rounded-xl border p-4 sm:grid-cols-2"><h3 className="font-medium sm:col-span-2">{role.name}</h3><label className="space-y-2">Nome<Input required maxLength={200} value={value.name} onChange={event => setRecipients({ ...recipients, [role.name]: { ...value, name: event.target.value } })} /></label><label className="space-y-2">E-mail<Input type="email" required maxLength={254} value={value.email} onChange={event => setRecipients({ ...recipients, [role.name]: { ...value, email: event.target.value } })} /></label></div>
         })}
       </section>
+      </>}
     </fieldset>
     {command.error && <p role="alert"><RequestError message={command.error} status={command.status} /></p>}
     {command.uncertain && <p role="status">O resultado será conferido pela mesma referência. A geração não será disparada outra vez.</p>}
     {command.stale && <Button type="button" onClick={() => { command.reset(); reload() }}>Recarregar dados do pedido</Button>}
-    <Button type="submit" disabled={command.busy || command.stale || missing.length > 0 || Boolean(template.generationProblem)}>{command.busy ? "Gerando prévia…" : command.uncertain ? "Conferir geração" : "Gerar prévia para revisão"}</Button>
+    <Button type="submit" disabled={command.busy || command.stale || missing.length > 0 || !template || Boolean(template.generationProblem)}>{command.busy ? "Gerando prévia…" : command.uncertain ? "Conferir geração" : "Gerar prévia para revisão"}</Button>
   </form>
 }
 
