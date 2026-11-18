@@ -67,7 +67,7 @@ export function registerContractPackage(app: FastifyInstance, deps: AccessDepend
     if (preview.content) {
       const { source, contracts } = preview.content
       const mail = await packageFiles(source, contracts, render)
-      const hash = digest(mail.subject + "\n" + mail.text + "\n" + canonicalJson(mail.manifest))
+      const hash = digest(canonicalJson([mail.subject, mail.text, mail.html, mail.manifest]))
       const reserved = await authorizeRequest(request, deps, async context => {
         const current = await review(context)
         if (!current.ready) return null
@@ -86,7 +86,7 @@ export function registerContractPackage(app: FastifyInstance, deps: AccessDepend
       if (reserved) {
         const { context, attempts } = reserved
         const outcome = await io.send({ id: digest(canonicalJson([context.tenantId, id, attempts])), to: source.source.recipients,
-          subject: mail.subject, text: mail.text, attachments: mail.attachments }).catch(() => "unknown" as const)
+          subject: mail.subject, text: mail.text, html: mail.html, attachments: mail.attachments }).catch(() => "unknown" as const)
         const client = await deps.pool.connect()
         try {
           await client.query("BEGIN")

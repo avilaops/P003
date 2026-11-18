@@ -192,8 +192,13 @@ test("412 exige recarregar o snapshot e envia novo hash somente após conferênc
 
   await page.route("**/api/erp/financial-report/email", route => {
 
-    if (route.request().method() === "GET") { return route.fulfill({ headers: { ETag: '"1"' }, json: { ...status, snapshotHash: sends.length === 0 ? hash : "b".repeat(64) } }) }
+    if (route.request().method() === "GET") { return route.fulfill({ headers: { ETag: '"1"' }, json: { ...status,
+      suggestedSubject: sends.length ? "Outro assunto sugerido" : "Relatório financeiro mensal",
+      suggestedMessage: sends.length ? "Outro texto sugerido" : "Olá! Segue o relatório das contas a receber e a pagar.",
+      snapshotHash: sends.length === 0 ? hash : "b".repeat(64) } }) }
 
+    expect(route.request().postDataJSON().subject).toBe("Assunto editado")
+    expect(route.request().postDataJSON().message).toBe("Primeiro parágrafo.\n\nSegundo parágrafo.")
     sends.push({ hash: route.request().postDataJSON().snapshotHash, revision: route.request().headers()["if-match"] })
 
     return sends.length === 1 ? route.fulfill({ status: 412, json: { title: "Fontes alteradas" } }) : route.fulfill({ headers: { ETag: '"1"' }, json: { tenantId: tenant, revision: 1, delivery: { id: record, status: "sent", recipient: status.recipient, createdAt: "2026-11-15T12:00:00Z" } } })
@@ -205,10 +210,18 @@ test("412 exige recarregar o snapshot e envia novo hash somente após conferênc
   await page.getByRole("button", { name: "Enviar por e-mail", exact: true }).click()
 
   await page.getByRole("dialog").getByLabel("Destinatário", { exact: true }).fill(status.recipient)
+  const subject = page.getByRole("dialog").getByLabel("Assunto", { exact: true })
+  const message = page.getByRole("dialog").getByLabel("Mensagem", { exact: true })
+  await expect(subject).toHaveValue("Relatório financeiro mensal")
+  await expect(message).toHaveValue("Olá! Segue o relatório das contas a receber e a pagar.")
+  await subject.fill("Assunto editado")
+  await message.fill("Primeiro parágrafo.\n\nSegundo parágrafo.")
 
   await page.getByRole("button", { name: "Enviar e-mail com anexo", exact: true }).click()
 
   await page.getByRole("button", { name: "Recarregar documento para conferência", exact: true }).click()
+  await expect(subject).toHaveValue("Assunto editado")
+  await expect(message).toHaveValue("Primeiro parágrafo.\n\nSegundo parágrafo.")
 
   await page.getByRole("button", { name: "Enviar e-mail com anexo", exact: true }).click()
 

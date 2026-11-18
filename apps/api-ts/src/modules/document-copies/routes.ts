@@ -6,9 +6,10 @@ import { authorizeRequest, requirePermission, type AuthorizedContext, type Acces
 import { commandKey, record } from "../../platform/commands.js"
 import type { DatabasePool } from "../../platform/database.js"
 import { documentMailConfigured, sendDocumentMail } from "../../platform/document-mail.js"
+import { documentMailCompany, renderDocumentEmail } from "../../platform/document-mail-template.js"
 import { Problem } from "../../platform/problem.js"
 import { parseRevision, revisionValue } from "../../platform/revision.js"
-import { copySource, digest, type Kind } from "./source.js"
+import { copySource, digest, subjectWithCompany, type Kind } from "./source.js"
 
 const inputSchema = z.strictObject({
   recipient: z.string().min(1).max(8192), snapshotHash: z.string().regex(/^[0-9a-f]{64}$/),
@@ -64,6 +65,7 @@ export function registerDocumentCopies(app: FastifyInstance, deps: AccessDepende
         return {
           tenantId: context.tenantId, revision: revisionValue(source.revision), emailReady: io.configured(),
           canSend: source.allowed && source.recipients.length > 0 && writeRights(kind).every(code => context.permissions.includes(code)),
+          suggestedSubject: subjectWithCompany(source.suggestedSubject, source.company ?? await documentMailCompany(context)), suggestedMessage: source.suggestedMessage,
           recipient: source.recipients.join(", "), documentTitle: source.title, scope: source.scope, recordCount: source.count, snapshotHash: hash, deliveries
         }
       })
@@ -98,6 +100,9 @@ export function registerDocumentCopies(app: FastifyInstance, deps: AccessDepende
         const files = await source.files()
         const deliveryId = randomUUID()
         const manifest = files.map(f => ({ filename: f.filename, sha256: digest(f.content), sourceId: f.sourceId }))
+        const attachments = files.map(({ filename, content, contentType }) => ({ filename, content, contentType }))
+        const company = source.company ?? await documentMailCompany(context)
+        const message = renderDocumentEmail({ company, title: source.title, message: input.message, details: source.details, attachments })
         const delivery = (await context.client.query<Delivery>(`INSERT INTO document_copy_email_deliveries
           (id,tenant_id,${column(kind)},subject_id,command_key,source_revision,snapshot_hash,recipients,subject,message,manifest,payable_pdf)
           VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::jsonb,$12) RETURNING ${fields}`,
@@ -105,8 +110,7 @@ export function registerDocumentCopies(app: FastifyInstance, deps: AccessDepende
         await record(context, request.headers, kind, id, `${kind}.copy_email_requested`, { deliveryId })
         return {
           tenant, delivery, dispatch: {
-            id: deliveryId, to: source.recipients, subject: input.subject, text: input.message,
-            attachments: files.map(({ filename, content, contentType }) => ({ filename, content, contentType }))
+            id: deliveryId, to: source.recipients, subject: input.subject, ...message, attachments
           }
         }
       })

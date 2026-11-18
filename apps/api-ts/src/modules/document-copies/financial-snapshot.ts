@@ -12,6 +12,21 @@ export const financialScope = (id: string | null) => id ? "Um título a receber 
   "Primeiros 100 registros por fonte • contas a receber e a pagar • ordem de vencimento e ID • indicadores referentes exclusivamente a este recorte"
 export const financialTitle = (id: string | null) => id ? "Título a receber" : "Relatório financeiro"
 
+export function financialEmailContent(snapshot: FinancialSnapshot, id: string | null) {
+  if (!id) return {
+    suggestedSubject: "Relatório financeiro • contas a receber e a pagar",
+    suggestedMessage: "Olá!\n\nReunimos no PDF as contas a receber e a pagar, organizadas por vencimento. O relatório inclui até 100 títulos de cada grupo, com os valores registrados e os saldos correspondentes.",
+    details: [{ label: "Títulos a receber no relatório", value: String(snapshot.receivables.length) }, { label: "Títulos a pagar no relatório", value: String(snapshot.payables.length) }],
+  }
+  const row = snapshot.receivables[0]!
+  const due = row.dueDate.split("-").reverse().join("/")
+  return {
+    suggestedSubject: `Demonstrativo do título • vencimento em ${due}`,
+    suggestedMessage: "Olá!\n\nNo PDF em anexo, você encontra o valor original do título, os recebimentos que registramos e o saldo.\n\nSe tiver alguma dúvida sobre esses valores, fale conosco.",
+    details: [{ label: "Vencimento", value: due }, { label: "Valor do título", value: brl(BigInt(row.amountCents)) }],
+  }
+}
+
 export async function financialSnapshot(context: AuthorizedContext, id: string | null) {
   const row = (await context.client.query<{ snapshot: FinancialSnapshot }>(`
       SELECT jsonb_build_object('tenantId',t.id,
