@@ -87,11 +87,27 @@ export function registerStatementRoutes(app: FastifyInstance, deps: AppDependenc
       requirePermission(context, "finance.receivables.read")
       requirePermission(context, "finance.payables.read")
       const sums = await context.client.query(
-        `WITH recognized AS (
+        `WITH invoice_dates AS (
+          SELECT source_order_id,
+            min(left(issued_at,10)::date) FILTER (WHERE status='authorized') AS invoiced_on
+          FROM fiscal_nfe_documents
+          WHERE tenant_id=$1 AND source_order_id IS NOT NULL AND source_return_id IS NULL
+            AND environment='production' AND status IN ('authorized','cancelled')
+          GROUP BY source_order_id
+        ), completion_dates AS (
+          SELECT entity_id,(min(occurred_at) AT TIME ZONE 'America/Sao_Paulo')::date AS completed_on
+          FROM audit_log WHERE tenant_id=$1 AND entity_type='sales_order' AND action='order.completed'
+          GROUP BY entity_id
+        ), recognized AS (
         SELECT p.category_id,p.side AS kind,sum(p.amount_cents)::numeric AS value,NULL::text AS caption FROM finance_portfolio p
         LEFT JOIN sales_orders o ON o.tenant_id=p.tenant_id AND o.id=p.order_id
+        LEFT JOIN invoice_dates n ON n.source_order_id=o.id
+        LEFT JOIN completion_dates c ON c.entity_id=o.id::text
         WHERE p.tenant_id=$1 AND p.finance_operation_id IS NULL AND p.status<>'cancelled'
-          AND (p.side='payable' OR o.status='completed') AND p.competence_on BETWEEN $2::date AND $3::date
+          AND CASE WHEN p.side='payable' THEN p.competence_on
+            WHEN n.source_order_id IS NOT NULL AND o.status<>'cancelled' THEN n.invoiced_on
+            WHEN o.status='completed' THEN coalesce(c.completed_on,(o.updated_at AT TIME ZONE 'America/Sao_Paulo')::date)
+          END BETWEEN $2::date AND $3::date
           GROUP BY p.category_id,p.side
         UNION ALL
         SELECT NULL,side, sum(interest_cents),'Juros de renegociação' FROM finance_operations WHERE tenant_id=$1 AND kind='restructure'

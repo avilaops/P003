@@ -9,7 +9,7 @@ import { PostgresPool } from "../src/platform/database.js"
 test(
   "portfolio reconciles every title and partial receipt, including documents beyond the displayed page",
   { skip: !process.env.API_TS_TEST_ADMIN_URL },
-  async () => {
+  async (t) => {
     const url = new URL(process.env.API_TS_TEST_ADMIN_URL!)
     const database = "finance_report_" + randomUUID().replaceAll("-", "")
     const admin = new Pool({ connectionString: url.toString() })
@@ -285,6 +285,65 @@ test(
       assert.equal(purchaseBalance.available, "0.00")
       assert.equal((await get("partner?partyId=" + customer)).position.payable, "130.00")
       assert.equal((await get("balances")).data[0].balance, "450.00")
+
+      await t.test("income recognizes installments once in the invoiced month and uses completion for a legacy sale", async () => {
+        const invoiced = randomUUID(), legacy = randomUUID(), method = randomUUID()
+        await seed.query(
+          `INSERT INTO sales_orders(id,tenant_id,customer_id,customer_name,customer_tax_id,due_date,amount_cents,status,created_at,updated_at)
+           VALUES ($1,$3,$4,'Cliente piloto','04252011000110','2020-12-01',15000,'accepted','2020-10-01','2020-10-01'),
+                  ($2,$3,$4,'Cliente piloto','04252011000110','2020-12-01',8000,'completed','2020-10-01','2020-12-20')`,
+          [invoiced, legacy, tenant, customer],
+        )
+        await seed.query(
+          "INSERT INTO payment_methods(id,tenant_id,code,name,status,revision,modality,settlement_days) VALUES($1,$2,'PIX-DRE','Pix','active',1,'pix',0)",
+          [method, tenant],
+        )
+        await seed.query(
+          "INSERT INTO sales_order_checkouts(tenant_id,order_id,customer_snapshot,entry_amount_cents,delivery_notes,payment_notes,notes) VALUES($1,$2,'{}',0,'','','')",
+          [tenant, invoiced],
+        )
+        await seed.query(
+          `WITH terms AS (
+             INSERT INTO sales_order_installments(id,tenant_id,order_id,number,kind,payment_method_id,payment_method,due_on,amount_cents)
+             SELECT gen_random_uuid(),$1,$2,n,'balance',$3,'{}','2020-11-01'::date+30*n,7500 FROM generate_series(1,2) n
+             RETURNING *
+           ) INSERT INTO receivables(id,tenant_id,order_id,order_installment_id,customer_name,due_date,amount_cents,status,created_at)
+             SELECT gen_random_uuid(),tenant_id,order_id,id,'Cliente piloto',due_on,amount_cents,'open','2020-10-02' FROM terms`,
+          [tenant, invoiced, method],
+        )
+        await seed.query(
+          "INSERT INTO receivables(id,tenant_id,order_id,customer_name,due_date,amount_cents,status,created_at) VALUES(gen_random_uuid(),$1,$2,'Cliente piloto','2020-12-01',8000,'open','2020-10-03')",
+          [tenant, legacy],
+        )
+        await seed.query(
+          "INSERT INTO audit_log(tenant_id,entity_type,entity_id,action,occurred_at) VALUES($1,'sales_order',$2,'order.completed','2020-11-07T10:00:00-03:00')",
+          [tenant, legacy],
+        )
+        const income = async (from: string, to: string) => (await get("income-statement?from=" + from + "&to=" + to)).result
+        assert.equal(await income("2020-10-01", "2020-10-31"), "0.00")
+        for (const [environment, status, issued, number] of [
+          ["homologation", "authorized", "2020-10-04", 1],
+          ["production", "rejected", "2020-10-05", 2],
+          ["production", "authorized", "2020-11-03", 3],
+        ] as const) {
+          const invoice = randomUUID()
+          await seed.query(
+            "INSERT INTO fiscal_nfe_drafts(tenant_id,id,environment,model,profile_revision,company_revision,issuer_snapshot,details,products_total_cents) VALUES($1,$2,$3,55,1,1,'{}',$4,15000)",
+            [tenant, invoice, environment, { sourceOrderId: invoiced }],
+          )
+          await seed.query(
+            `INSERT INTO fiscal_nfe_documents(tenant_id,id,source_order_id,environment,status,series,number,issued_at,random_code,signed_xml,access_key,protocol,authorized_xml)
+             VALUES($1,$2,$3,$4,$5,1,$6,$7,'12345678','<xml/>',repeat($8,44),'protocol','<xml/>')`,
+            [tenant, invoice, invoiced, environment, status, number, issued + "T09:00:00-03:00", String(number)],
+          )
+        }
+        assert.equal(await income("2020-10-01", "2020-10-31"), "0.00")
+        assert.equal(await income("2020-11-03", "2020-11-03"), "150.00")
+        assert.equal(await income("2020-11-07", "2020-11-07"), "80.00")
+        await seed.query("UPDATE sales_orders SET status='completed',updated_at='2020-12-08' WHERE tenant_id=$1 AND id=$2", [tenant, invoiced])
+        assert.equal(await income("2020-11-01", "2020-11-30"), "230.00")
+        assert.equal(await income("2020-12-01", "2020-12-31"), "0.00")
+      })
 
       await seed.query("DELETE FROM role_permissions WHERE role_id=$1 AND permission_code='finance.receivables.read'", [role])
       const restricted = await app.inject({ method: "GET", url: "/api/v1/finance/portfolio", headers })
