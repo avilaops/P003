@@ -1,7 +1,7 @@
 import assert from "node:assert/strict"
 import test from "node:test"
 import { stockAnalysisChart } from "../src/features/reports/stock-analysis-charts.ts"
-import { changeAnalysisFilters, stockAnalysisQuery, tenantAnalysisParams } from "../src/features/reports/stock-analysis-filters.ts"
+import { changeAnalysisFilters, reconcileDefinitionFilters, stockAnalysisQuery, tenantAnalysisParams } from "../src/features/reports/stock-analysis-filters.ts"
 
 function chart(dataset: string, data: Record<string, string | number | null>[], fields = Object.keys(data[0] ?? {})) {
   return stockAnalysisChart({ dataset, columns: fields.map(key => ({key, label: key})), data })
@@ -76,4 +76,21 @@ test("alterações consecutivas de produto e direção se acumulam na URL e rein
   })
   assert.deepEqual(Object.fromEntries(changeAnalysisFilters(location.search, "A", {}, true)),
     { dataset: "stock_movement_activity", tenant: "A" })
+})
+
+test("a fonte atual da definição substitui a fonte do link e conserva apenas filtros compatíveis", () => {
+  const stale = new URLSearchParams("definitionId=DEF&dataset=stock_count_progress&countStatus=open&productId=SKU&startDate=2026-11-01&offset=25")
+  const resolved = reconcileDefinitionFilters(stale, "A", "stock_production_progress")
+  assert.deepEqual(Object.fromEntries(resolved), {
+    definitionId: "DEF", dataset: "stock_production_progress", productId: "SKU", startDate: "2026-11-01", tenant: "A",
+  })
+  const selected = changeAnalysisFilters(stale.toString(), "A", {productionStatus: "ready"}, false, "stock_production_progress")
+  assert.deepEqual(Object.fromEntries(stockAnalysisQuery(selected)), {
+    definitionId: "DEF", productId: "SKU", startDate: "2026-11-01", productionStatus: "ready",
+  })
+  const position = reconcileDefinitionFilters(selected, "A", "stock_position")
+  assert.deepEqual(Object.fromEntries(stockAnalysisQuery(position)), {definitionId: "DEF", productId: "SKU"})
+  const unhinted = new URLSearchParams("definitionId=DEF&countStatus=open&productionStatus=ready")
+  assert.deepEqual(Object.fromEntries(stockAnalysisQuery(unhinted)), {definitionId: "DEF"})
+  assert.equal(reconcileDefinitionFilters(unhinted, "A", "stock_production_progress").get("productionStatus"), "ready")
 })

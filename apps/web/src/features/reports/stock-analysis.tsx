@@ -13,7 +13,7 @@ import { useResource } from "@/hooks/use-operation"
 import { stockUrl,textLink,type StockList } from "@/features/inventory/stock-model"
 import { allStockRows,downloadStockCsv,type StockAnalysisResult } from "./stock-export"
 import { StockAnalysisChart } from "./stock-analysis-chart"
-import { changeAnalysisFilters, hasPeriod, specificFilter, statusLabel, stockAnalysisQuery, tenantAnalysisParams } from "./stock-analysis-filters"
+import { changeAnalysisFilters, hasPeriod, reconcileDefinitionFilters, specificFilter, statusLabel, stockAnalysisQuery, tenantAnalysisParams } from "./stock-analysis-filters"
 
 type Catalog={tenantId:string;sources:Record<string,{label:string}>;warehouses:{id:string;name:string}[]}
 const selectStyle="min-h-11 min-w-0 max-w-full rounded-lg border bg-background px-3 text-sm"
@@ -37,7 +37,9 @@ function cell(row:StockAnalysisResult["data"][number],key:string,dataset:string)
   return path&&typeof value==="string"?<GuardedLink className={textLink} href={path+encodeURIComponent(value)}>{value}</GuardedLink>:formatted(key,value,dataset)
 }
 
-function ReportOutput({tenant,report,query,selection}:{tenant:string;report:StockAnalysisResult;query:string;selection:string}){
+function AnalysisResults({tenant,report,query,selection,onOffsetChange}:{
+  tenant:string;report:StockAnalysisResult;query:string;selection:string;onOffsetChange:(value:number)=>void
+}){
   const [print,setPrint]=useState<StockAnalysisResult|null>(null),[busy,setBusy]=useState(false),[error,setError]=useState("")
   const controller=useRef<AbortController|null>(null)
   useEffect(()=>()=>controller.current?.abort(),[])
@@ -59,9 +61,18 @@ function ReportOutput({tenant,report,query,selection}:{tenant:string;report:Stoc
     finally{if(!request.signal.aborted)setBusy(false)}
   }
   return <>
-    <div className="flex flex-wrap items-center gap-2"><Button variant="outline" disabled={busy||!report.total} onClick={()=>loadAll(false)}>Exportar CSV completo</Button>
-      <ReportActions open={!!print} disabled={busy||!report.total} onToggle={()=>loadAll(true)}/>{busy&&<span role="status">Preparando todos os registros…</span>}</div>
-    {error&&<p role="alert">{error}</p>}
+    <section className="form-section min-w-0 space-y-4"><h2 className="text-lg font-semibold">{report.title}</h2>
+      <p className="text-sm text-muted-foreground">{report.method}</p>
+      {report.dataset==="stock_kardex"&&!report.product?<p>Selecione o produto para consultar o Kardex.</p>:<>
+        <StockAnalysisChart report={report}/>
+        <div className="flex flex-wrap items-center gap-2"><Button variant="outline" disabled={busy||!report.total} onClick={()=>loadAll(false)}>Exportar CSV completo</Button>
+          <ReportActions open={!!print} disabled={busy||!report.total} onToggle={()=>loadAll(true)}/>{busy&&<span role="status">Preparando todos os registros…</span>}</div>
+        {error&&<p role="alert">{error}</p>}
+        {report.data.length?<div className="max-w-full overflow-x-auto"><DataTable aria-label={report.title} className="w-full text-left text-sm"><thead><tr>{report.columns.map(c=><th scope="col" className="whitespace-nowrap border-b p-2" key={c.key}>{c.label}</th>)}</tr></thead>
+        <tbody>{report.data.map((r,i)=><tr key={i}>{report.columns.map(c=><td className="border-b p-2" key={c.key}>{cell(r,c.key,report.dataset)}</td>)}</tr>)}</tbody></DataTable></div>:<p>{report.total?"Nenhum registro nesta página.":"Nenhum registro para os filtros selecionados."}</p>}
+        <Pagination offset={report.offset} pageSize={report.limit} total={report.total} onOffsetChange={onOffsetChange}/>
+      </>}
+    </section>
     {print&&<ReportDocument tenantId={tenant} title={print.title} scope={[`Registros incluídos • ${print.total}`,selection].filter(Boolean).join(" • ")} period={print.dataset==="stock_position"?"Posição atual":hasPeriod(print.dataset)?"Período • "+formatted("date",print.startDate)+" a "+formatted("date",print.endDate):"Data-base • "+formatted("date",print.endDate)}
       note={print.method} metrics={[["Registros",String(print.total)]]} columns={print.columns.map(c=>c.label)} rows={print.data.map(r=>print.columns.map(c=>formatted(c.key,r[c.key]??null,print.dataset)))}/>}
   </>
@@ -69,7 +80,32 @@ function ReportOutput({tenant,report,query,selection}:{tenant:string;report:Stoc
 
 export function StockAnalysis({tenant}:{tenant:string}){
   const rawParams = useSearchParams().toString()
-  const params = useMemo(() => tenantAnalysisParams(rawParams, tenant), [rawParams, tenant])
+  const definition = tenantAnalysisParams(rawParams, tenant).get("definitionId")
+  return definition
+    ? <SavedStockAnalysis key={definition} tenant={tenant} rawParams={rawParams} definition={definition}/>
+    : <AnalysisWorkspace tenant={tenant} rawParams={rawParams}/>
+}
+
+type WorkspaceProps = { tenant: string; rawParams: string }
+
+function SavedStockAnalysis({tenant, rawParams, definition}: WorkspaceProps & {definition: string}) {
+  const metadata = useResource<{tenantId: string; data: {id: string; dataset: string}[]}>("/api/erp/system/custom-reports")
+  const saved = metadata.value?.tenantId === tenant ? metadata.value.data.find(item => item.id.toLowerCase() === definition.toLowerCase()) : null
+  if (metadata.loading) return <p role="status">Consultando a definição do relatório…</p>
+  if (!saved) return <div className="workspace-page-frame space-y-4">
+    <PageHeader title="Análises de estoque" back={{href:"/relatorios/estoque", label:"Relatório de estoque"}}/>
+    <div role="alert">{metadata.error || "Relatório personalizado indisponível nesta empresa."}</div>
+    <Button variant="outline" onClick={metadata.reload}>Tentar novamente</Button>
+    <GuardedLink className={textLink} href="/relatorios/estoque/analises">Consultar análises de estoque</GuardedLink>
+  </div>
+  return <AnalysisWorkspace tenant={tenant} rawParams={rawParams} savedDataset={saved.dataset} refreshDefinition={metadata.reload}/>
+}
+
+function AnalysisWorkspace({tenant, rawParams, savedDataset, refreshDefinition}: WorkspaceProps & {savedDataset?: string; refreshDefinition?: () => void}){
+  const params = useMemo(() => {
+    const scoped = tenantAnalysisParams(rawParams, tenant)
+    return savedDataset ? reconcileDefinitionFilters(scoped, tenant, savedDataset) : scoped
+  }, [rawParams, tenant, savedDataset])
   useEffect(() => {
     if (params.toString() !== rawParams && new URLSearchParams(window.location.search).toString() === rawParams)
       window.history.replaceState(null, "", window.location.pathname + "?" + params + window.location.hash)
@@ -86,7 +122,11 @@ export function StockAnalysis({tenant}:{tenant:string}){
   const options=catalog.value?.tenantId===tenant?catalog.value:null
   const items=products.value?.tenantId===tenant?products.value.data:[]
   const chosen=report?.product
-  const source=definition?(report?.dataset||dataset):dataset
+  const changedDefinition = Boolean(savedDataset && report && savedDataset !== report.dataset)
+  useEffect(() => {
+    if (changedDefinition) refreshDefinition?.()
+  }, [changedDefinition, refreshDefinition])
+  const source=dataset
   const filter = specificFilter(source)
   const specificValue = filter && params.get(filter.key)
   const selection = [
@@ -96,7 +136,9 @@ export function StockAnalysis({tenant}:{tenant:string}){
     source === "stock_idle" && "Dias sem saída • " + (params.get("idleDays") || "90"),
   ].filter(Boolean).join(" • ")
   function update(changes: Record<string, string>, clear = false) {
-    const url = changeAnalysisFilters(window.location.search, tenant, changes, clear, report?.dataset)
+    const latest = window.location.search
+    const resolved = new URLSearchParams(latest).get("definitionId") === definition ? savedDataset : undefined
+    const url = changeAnalysisFilters(latest, tenant, changes, clear, resolved)
     window.history.replaceState(null, "", window.location.pathname + "?" + url + window.location.hash)
   }
   const error = catalog.error || resource.error || (resource.value && !report ? "A análise retornou dados de outra empresa." : "")
@@ -120,18 +162,10 @@ export function StockAnalysis({tenant}:{tenant:string}){
       <Button variant="outline" className="self-end justify-self-start" onClick={()=>{setSearch("");update({},true)}}>Limpar filtros</Button>
     </section>
     {products.error&&<p role="alert">{products.error}</p>}
-    {error&&<div role="alert">{error} <Button variant="outline" onClick={()=>{catalog.reload();resource.reload()}}>Tentar novamente</Button></div>}
-    {resource.loading&&<p role="status">Consultando análise…</p>}
-    {report&&<section className="form-section min-w-0 space-y-4"><h2 className="text-lg font-semibold">{report.title}</h2>
-      <p className="text-sm text-muted-foreground">{report.method}</p>
-      {report.dataset==="stock_kardex"&&!productId?<p>Selecione o produto para consultar o Kardex.</p>:<>
-        <StockAnalysisChart report={report}/>
-        <ReportOutput key={query} tenant={tenant} report={report} query={query} selection={selection}/>
-        {report.data.length?<div className="max-w-full overflow-x-auto"><DataTable aria-label={report.title} className="w-full text-left text-sm"><thead><tr>{report.columns.map(c=><th scope="col" className="whitespace-nowrap border-b p-2" key={c.key}>{c.label}</th>)}</tr></thead>
-        <tbody>{report.data.map((r,i)=><tr key={i}>{report.columns.map(c=><td className="border-b p-2" key={c.key}>{cell(r,c.key,report.dataset)}</td>)}</tr>)}</tbody></DataTable></div>:<p>{report.total?"Nenhum registro nesta página.":"Nenhum registro para os filtros selecionados."}</p>}
-        <Pagination offset={offset} pageSize={report.limit} total={report.total} onOffsetChange={value=>update({offset:String(value)})}/>
-      </>}
-    </section>}
+    {error&&<div role="alert">{error} <Button variant="outline" onClick={()=>{catalog.reload();resource.reload();refreshDefinition?.()}}>Tentar novamente</Button></div>}
+    {(resource.loading||changedDefinition)&&<p role="status">Consultando análise…</p>}
+    {report&&!changedDefinition&&<AnalysisResults key={query} tenant={tenant} report={report} query={query} selection={selection}
+      onOffsetChange={value=>update({offset:String(value)})}/>}
     <GuardedLink className={textLink} href="/preferencias/sistema/relatorios-customizados">Relatórios personalizados</GuardedLink>
   </div>
 }

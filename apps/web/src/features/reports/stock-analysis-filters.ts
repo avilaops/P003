@@ -49,15 +49,11 @@ export function stockAnalysisQuery(params: Pick<URLSearchParams, "get">) {
   const dataset = params.get("dataset") || (definition ? "" : "stock_position")
   const query = new URLSearchParams(definition ? { definitionId: definition } : { dataset })
   const keys = ["productId", "warehouseId"]
-  // A direct link to a saved definition can omit its source. The API resolves it.
-  if (!dataset || hasPeriod(dataset)) keys.push("startDate")
-  if (dataset !== "stock_position") keys.push("endDate")
-  if (!dataset || dataset === "stock_idle") keys.push("idleDays")
-  if (!dataset) keys.push("movementDirection", "countStatus", "productionStatus")
-  else {
-    const filter = specificFilter(dataset)
-    if (filter) keys.push(filter.key)
-  }
+  if (hasPeriod(dataset)) keys.push("startDate")
+  if (dataset && dataset !== "stock_position") keys.push("endDate")
+  if (dataset === "stock_idle") keys.push("idleDays")
+  const filter = specificFilter(dataset)
+  if (filter) keys.push(filter.key)
   for (const key of keys) {
     const value = params.get(key)
     if (value) query.set(key, value)
@@ -67,8 +63,8 @@ export function stockAnalysisQuery(params: Pick<URLSearchParams, "get">) {
 
 export function changeAnalysisFilters(currentSearch: string, tenant: string, changes: Record<string, string>, clear = false, resolvedDataset?: string) {
   const current = tenantAnalysisParams(currentSearch, tenant)
-  const dataset = current.get("dataset") || resolvedDataset
   const definition = current.get("definitionId")
+  const dataset = definition && resolvedDataset ? resolvedDataset : current.get("dataset")
   const next = clear ? new URLSearchParams() : current
   if (dataset) next.set("dataset", dataset)
   if (definition) next.set("definitionId", definition)
@@ -82,4 +78,10 @@ export function changeAnalysisFilters(currentSearch: string, tenant: string, cha
   url.set("tenant", tenant)
   if (changes.offset && changes.offset !== "0") url.set("offset", changes.offset)
   return url
+}
+
+export function reconcileDefinitionFilters(params: URLSearchParams, tenant: string, dataset: string) {
+  const previous = params.get("dataset")
+  const offset = previous && previous !== dataset ? "" : params.get("offset") ?? ""
+  return changeAnalysisFilters(params.toString(), tenant, { offset }, false, dataset)
 }
