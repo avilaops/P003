@@ -117,4 +117,3 @@ export function StockAnalysis({tenant}:{tenant:string}){
     <GuardedLink className={textLink} href="/preferencias/sistema/relatorios-customizados">Relatórios personalizados</GuardedLink>
   </div>
 }
-

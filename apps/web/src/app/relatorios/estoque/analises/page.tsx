@@ -11,4 +11,3 @@ async function Content(){
   return <StockAnalysis key={access.session.tenantId} tenant={access.session.tenantId}/>
 }
 export default function Page(){return <Suspense fallback={<p role="status">Carregando análises de estoque…</p>}><Content/></Suspense>}
-

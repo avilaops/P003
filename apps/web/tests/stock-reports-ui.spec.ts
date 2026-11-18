@@ -28,4 +28,3 @@ test("estoque • análise valorizada, Kardex, CSV completo e impressão",async(
   await page.getByLabel("Análise",{exact:true}).selectOption("stock_kardex")
   await expect(page.getByRole("table",{name:"Kardex por produto"})).toContainText("Saldo sem movimentos")
 })
-

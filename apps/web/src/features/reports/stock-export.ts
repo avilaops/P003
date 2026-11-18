@@ -28,4 +28,3 @@ export async function allStockRows(query:URLSearchParams,tenant:string,signal?:A
 export function downloadStockCsv(report:StockAnalysisResult,columns=report.columns,filename=report.dataset+".csv"){
   downloadCsv(filename,[columns.map(c=>c.label),...report.data.map(row=>columns.map(c=>exportCell(c.key,row[c.key]??null)))])
 }
-

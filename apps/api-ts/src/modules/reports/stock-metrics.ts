@@ -6,7 +6,7 @@ import type { StockDataset } from "./stock-catalog.js"
 
 export type ReportRow=Record<string,string|number|null>
 type Filters={start:string;end:string;productId?:string|undefined;warehouseId?:string|undefined;idleDays:number}
-export type Product={id:string;sku:string;name:string;unit:string}
+export type Product={id:string;sku:string;name:string;unit:string;status:string}
 export function daysBetween(a:string,b:string){return (Date.parse(b)-Date.parse(a))/86_400_000}
 export function dayBefore(date:string,days=1){return new Date(Date.parse(date)-days*86_400_000).toISOString().slice(0,10)}
 function qty(n:bigint){return n<0n?"-"+decimal(-n,6):decimal(n,6)}
@@ -45,21 +45,33 @@ async function kardex(ctx:AuthorizedContext,p:Product,f:Filters):Promise<ReportR
       ELSE 'Manual' END kind,
       coalesce(m.reverses_id::text,m.transfer_id::text,m.inventory_count_id::text,origin.inventory_count_id,m.production_order_id::text,
         m.source_order_id::text,m.source_purchase_receipt_id::text,m.source_pos_sale_id::text,w.case_id::text,origin.return_source_id,m.id::text) document,
-      m.reason,m.direction,coalesce(loc.name,'Abertura') warehouse,m.quantity_micros::text quantity
+      m.reason,m.direction,coalesce(loc.name,'Sem depósito registrado') warehouse,m.quantity_micros::text quantity
     FROM stock_movements m JOIN stock_cost_inputs i ON (i.tenant_id,i.movement_id)=(m.tenant_id,m.id)
-    JOIN stock_location_settings s ON s.tenant_id=m.tenant_id
-    LEFT JOIN warehouses loc ON (loc.tenant_id,loc.id)=(m.tenant_id,coalesce(m.warehouse_id,s.opening_id))
+    LEFT JOIN warehouses loc ON (loc.tenant_id,loc.id)=(m.tenant_id,m.warehouse_id)
     ${movementOriginJoins} WHERE m.tenant_id=$1 AND m.product_id=$2 AND i.effective_on BETWEEN $3 AND $4
-      AND ($5::uuid IS NULL OR coalesce(m.warehouse_id,s.opening_id)=$5) ORDER BY i.effective_on,m.created_at,m.id`,
+      AND ($5::uuid IS NULL OR m.warehouse_id=$5) ORDER BY i.effective_on,m.created_at,m.id`,
     [ctx.tenantId,p.id,f.start,f.end,f.warehouseId])
+  // Legacy movements have no recorded warehouse. Under a local filter their physical
+  // effect belongs to the opening position, just as in the operational movement history.
+  let localOpening:bigint|null=null,localName:string|null=null
+  if(f.warehouseId){
+    const {rows:[boundary]}=await ctx.client.query<{opening:string;name:string}>(`SELECT (SELECT name FROM warehouses WHERE tenant_id=$1 AND id=$3) name,
+      (coalesce((SELECT quantity_micros FROM stock_positions WHERE tenant_id=$1 AND product_id=$2 AND warehouse_id=$3),0)-
+      coalesce((SELECT sum(CASE m.direction WHEN 'receipt' THEN m.quantity_micros ELSE -m.quantity_micros END)
+        FROM stock_movements m JOIN stock_cost_inputs i ON (i.tenant_id,i.movement_id)=(m.tenant_id,m.id)
+        WHERE m.tenant_id=$1 AND m.product_id=$2 AND m.warehouse_id=$3 AND i.effective_on >= $4),0))::text opening`,
+      [ctx.tenantId,p.id,f.warehouseId,f.start])
+    localOpening=BigInt(boundary!.opening);localName=boundary!.name
+  }
   if(!rows.length){
-    const closing=[...positions.values()].filter(v=>!f.warehouseId||v.warehouseId===f.warehouseId).reduce((a,b)=>a+b.quantity,0n)
-    return [{...description(p),date:f.end,kind:"Saldo sem movimentos",document:null,reason:null,warehouse:null,
+    const closing=localOpening??[...positions.values()].reduce((a,b)=>a+b.quantity,0n)
+    return [{...description(p),date:f.end,kind:"Saldo sem movimentos",document:null,reason:null,warehouse:localName,
       opening:qty(closing),receipts:qty(0n),issues:qty(0n),closing:qty(closing),cost:null,value:null}]
   }
   return rows.map(r=>{
     const valued=movements.get(r.id)!,n=BigInt(r.quantity),receipt=r.direction==="receipt"
-    const after=f.warehouseId?valued.quantityAfter:valued.totalAfter
+    if(localOpening!==null)localOpening+=receipt?n:-n
+    const after=localOpening??valued.totalAfter
     return {...description(p),date:valued.date,warehouse:r.warehouse,kind:r.kind,document:r.document,reason:r.reason,
       opening:qty(after+(receipt?-n:n)),receipts:qty(receipt?n:0n),issues:qty(receipt?0n:n),closing:qty(after),
       value:moneyFromMicros(valued.amount),cost:unitFromMicros(valued.unit)}
@@ -72,24 +84,24 @@ async function demand(ctx:AuthorizedContext,f:Filters) {
     WITH issues AS (
       SELECT m.product_id,m.quantity_micros,i.effective_on issued,rev.effective_on reversed FROM stock_movements m
       JOIN stock_cost_inputs i ON (i.tenant_id,i.movement_id)=(m.tenant_id,m.id)
-      JOIN stock_location_settings s ON s.tenant_id=m.tenant_id
+
       LEFT JOIN LATERAL (SELECT ri.effective_on FROM stock_movements r JOIN stock_cost_inputs ri ON
         (ri.tenant_id,ri.movement_id)=(r.tenant_id,r.id) WHERE r.tenant_id=m.tenant_id AND r.reverses_id=m.id) rev ON true
       ${movementOriginJoins}
       WHERE m.tenant_id=$1 AND m.direction='issue' AND m.transfer_id IS NULL AND m.reverses_id IS NULL
         AND m.inventory_count_id IS NULL AND origin.inventory_count_id IS NULL AND w.case_id IS NULL AND origin.return_source_id IS NULL
-        AND i.effective_on<=$3 AND ($4::uuid IS NULL OR m.product_id=$4) AND ($5::uuid IS NULL OR coalesce(m.warehouse_id,s.opening_id)=$5)
+        AND i.effective_on<=$3 AND ($4::uuid IS NULL OR m.product_id=$4) AND ($5::uuid IS NULL OR m.warehouse_id=$5)
     ) SELECT product_id,(coalesce(sum(quantity_micros) FILTER(WHERE issued BETWEEN $2 AND $3),0)
       - coalesce(sum(quantity_micros) FILTER(WHERE reversed BETWEEN $2 AND $3),0))::text consumed,
       max(issued) FILTER(WHERE reversed IS NULL OR reversed>$3)::text last_issue FROM issues GROUP BY product_id`,
     [ctx.tenantId,f.start,f.end,f.productId,f.warehouseId])
   return new Map(rows.map(r=>[r.product_id,r]))
 }
-async function reservations(ctx:AuthorizedContext,f:Filters){
+async function reservations(ctx:AuthorizedContext,f:Filters,ids:string[]){
   const {rows}=await ctx.client.query<{product_id:string;reserved:string}>(`SELECT product_id,sum(quantity_micros)::text reserved FROM (
-    SELECT product_id,quantity_micros FROM stock_location_reservations WHERE tenant_id=$1 AND ($2::uuid IS NULL OR warehouse_id=$2) AND ($3::uuid IS NULL OR product_id=$3)
-    UNION ALL SELECT product_id,quantity_micros FROM production_component_reservations WHERE tenant_id=$1 AND ($2::uuid IS NULL OR warehouse_id=$2) AND ($3::uuid IS NULL OR product_id=$3)
-    ) reserved GROUP BY product_id`,[ctx.tenantId,f.warehouseId,f.productId])
+    SELECT product_id,quantity_micros FROM stock_location_reservations WHERE tenant_id=$1 AND ($2::uuid IS NULL OR warehouse_id=$2) AND product_id=ANY($3::uuid[])
+    UNION ALL SELECT product_id,quantity_micros FROM production_component_reservations WHERE tenant_id=$1 AND ($2::uuid IS NULL OR warehouse_id=$2) AND product_id=ANY($3::uuid[])
+    ) reserved GROUP BY product_id`,[ctx.tenantId,f.warehouseId,ids])
   return new Map(rows.map(r=>[r.product_id,BigInt(r.reserved)]))
 }
 
@@ -97,8 +109,31 @@ export async function stockMetrics(ctx:AuthorizedContext,dataset:StockDataset,pr
   if(dataset==="stock_divergences" || dataset==="stock_accuracy")return countRows(ctx,dataset,f)
   if(dataset==="stock_kardex")return products.length?kardex(ctx,products[0]!,f):[]
   const ids=products.map(p=>p.id)
+  const positiveSince=new Map<string,string>(),opened=new Map<string,bigint>()
   async function values(until?:string){
-    const {positions}=await projectedCosts(ctx,ids,until)
+    const {positions,movements}=await projectedCosts(ctx,ids,until)
+    if(dataset==="stock_turnover"){
+      for(const v of positions.values())if(!f.warehouseId||v.warehouseId===f.warehouseId)
+        opened.set(v.productId,(opened.get(v.productId)??0n)+v.opening)
+      for(const m of movements.values()){
+        if(m.date>=f.start)break
+        if(!f.warehouseId||m.warehouseId===f.warehouseId)opened.set(m.productId,f.warehouseId?m.quantityAfter:m.totalAfter)
+      }
+    }
+    if(dataset==="stock_idle"){
+      const internal=f.warehouseId?[]:(await ctx.client.query<{id:string}>(
+        "SELECT id FROM stock_movements WHERE tenant_id=$1 AND product_id=ANY($2::uuid[]) AND transfer_id IS NOT NULL",[ctx.tenantId,ids])).rows
+      const transfers=new Set(internal.map(m=>m.id)),before=new Map<string,bigint>()
+      for(const v of positions.values())if(!f.warehouseId||v.warehouseId===f.warehouseId)
+        before.set(v.productId,(before.get(v.productId)??0n)+v.opening)
+      for(const m of movements.values()){
+        if(transfers.has(m.id)||f.warehouseId && m.warehouseId!==f.warehouseId)continue
+        const after=f.warehouseId?m.quantityAfter:m.totalAfter
+        if(after>0n && (before.get(m.productId)??0n)<=0n)positiveSince.set(m.productId,m.date)
+        if(after<=0n)positiveSince.delete(m.productId)
+        before.set(m.productId,after)
+      }
+    }
     const perProduct=new Map<string,{quantity:bigint;value:bigint|null}>()
     for(const v of positions.values()){
       if(f.warehouseId && v.warehouseId!==f.warehouseId)continue
@@ -110,9 +145,9 @@ export async function stockMetrics(ctx:AuthorizedContext,dataset:StockDataset,pr
     return perProduct
   }
   const closing=await values(dataset==="stock_position"?undefined:f.end)
-  const opened=dataset==="stock_turnover"?await values(dayBefore(f.start)):null
+
   const demandById=dataset==="stock_turnover"||dataset==="stock_idle"?await demand(ctx,f):null
-  const reservedById=dataset==="stock_position"?await reservations(ctx,f):null
+  const reservedById=dataset==="stock_position"?await reservations(ctx,f,ids):null
   const order=[...products]
   if(dataset==="stock_abc")order.sort((a,b)=>{
     const left=closing.get(a.id)?.value,right=closing.get(b.id)?.value
@@ -127,21 +162,23 @@ export async function stockMetrics(ctx:AuthorizedContext,dataset:StockDataset,pr
     const value=moneyFromMicros(pos.value)
     if(dataset==="stock_position"){
       const reserved=reservedById!.get(p.id)??0n
-      rows.push({...base,quantity,reserved:qty(reserved),available:qty(pos.quantity-reserved),cost:unitFromMicros(unitValue(pos)),value})
+      rows.push({...base,quantity,reserved:qty(reserved),available:qty(pos.quantity-reserved),cost:unitFromMicros(unitValue(pos)),value,status:p.status})
     }else if(dataset==="stock_abc"){
       const known=pos.value!==null && totalValue>0n
       const group=known?(accumulated*100n<totalValue*80n?"A":accumulated*100n<totalValue*95n?"B":"C"):null
       accumulated+=pos.value??0n
       rows.push({...base,quantity,value,share:known?ratio(100n*pos.value!,totalValue,2):null,cumulative:known?ratio(100n*accumulated,totalValue,2):null,class:group})
     }else if(dataset==="stock_idle"){
-      const last=demandById!.get(p.id)?.last_issue??null,days=last?daysBetween(last,f.end):null
-      if(pos.quantity>0n && (days===null||days>=f.idleDays))rows.push({...base,quantity,last_issue:last,idle_days:days,history:last?"Saída registrada":"Sem saída registrada"})
+      const last=demandById!.get(p.id)?.last_issue??null,since=positiveSince.get(p.id)??null
+      const reference=last&&since?(last>since?last:since):last??since
+      const days=reference?daysBetween(reference,f.end):null
+      if(pos.quantity>0n && (days===null||days>=f.idleDays))rows.push({...base,quantity,last_issue:last,positive_since:since,idle_days:days,
+        history:since?(last?"Saída registrada":"Sem saída registrada"):"Abertura sem data registrada"})
     }else{
-      const n=BigInt(demandById!.get(p.id)?.consumed??0),opening=opened!.get(p.id)?.quantity??0n,sum=opening+pos.quantity
+      const n=BigInt(demandById!.get(p.id)?.consumed??0),opening=opened.get(p.id)??0n,sum=opening+pos.quantity
       rows.push({...base,opening:qty(opening),closing:quantity,demand:qty(n),average:qty(roundedCost(sum,2n)),
         turnover:n<0n?null:ratio(2n*n,sum,4),coverage:ratio(pos.quantity*BigInt(daysBetween(f.start,f.end)+1),n,2)})
     }
   }
   return rows
 }
-
