@@ -97,13 +97,18 @@ test("purchase BFF rejects anonymous, foreign-origin, changed-company and unsupp
   expect(requests).toEqual(["GET /api/v1/purchase-orders?offset=25&limit=25"])
 })
 
-async function submitDraftAndOpenEditor(page: Page, label: string) {
-  const endpoint = "/api/erp/purchase-orders"
-  const [saved] = await Promise.all([
-    page.waitForResponse(r => new URL(r.url()).pathname === endpoint && r.request().method() === "POST", { timeout: 45_000 }),
+async function submitDraft(page: Page, label: string, expectedStatus: number) {
+  const [request] = await Promise.all([
+    page.waitForRequest(r => r.method() === "POST" && new URL(r.url()).pathname === "/api/erp/purchase-orders", { timeout: 45_000 }),
     page.getByRole("button", { name: label, exact: true }).click(),
   ])
-  expect(saved.status(), await saved.text()).toBe(201)
+  const response = await request.response()
+  if (!response) throw new Error("A gravação da compra terminou sem resposta HTTP")
+  expect(response.status(), await response.text()).toBe(expectedStatus)
+}
+
+async function submitDraftAndOpenEditor(page: Page, label: string) {
+  await submitDraft(page, label, 201)
   const detail = origin + "/compras/pedidos/" + orderId
   await expect(page).toHaveURL(detail, { timeout: 45_000 })
   const edit = page.getByRole("link", { name: "Editar rascunho", exact: true })
@@ -181,7 +186,8 @@ test("ambiguous purchase creation repeats the same key and stale edits preserve 
   await page.getByLabel("Custo unitário de Produto da compra", { exact: true }).filter({ visible: true }).fill("3.25")
   await page.getByLabel("Vencimento da compra", { exact: true }).filter({ visible: true }).fill("2026-11-20")
   plans.push({ method: "POST", path: "/api/v1/purchase-orders", status: 503, response: { title: "Confirmação indisponível" } })
-  await page.getByRole("button", { name: "Criar rascunho de compra", exact: true }).click()
+  await submitDraft(page, "Criar rascunho de compra", 503)
+  await expect(page.getByRole("button", { name: "Conferir gravação da compra", exact: true })).toBeEnabled()
   await expect(page.getByLabel("Custo unitário de Produto da compra", { exact: true }).filter({ visible: true })).toBeDisabled()
   const created = draft()
   plans.push({ method: "POST", path: "/api/v1/purchase-orders", status: 201, response: created, revision: 1, apply: () => { order = created } })
