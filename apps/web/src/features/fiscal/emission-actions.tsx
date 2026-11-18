@@ -95,10 +95,10 @@ export function EmissionActions({ id, tenantId, draftRevision, environment, mode
       {canIssue && document?.accessKey && <Button variant="outline" disabled={dirty || command.busy || command.stale || mismatched} onClick={() => void act("consult")}>Consultar situação na SEFAZ</Button>}
       {document?.accessKey && <Button variant="outline" onClick={() => void download()}>Baixar XML da emissão</Button>}
       {document?.status === "authorized" && document.accessKey && <Button variant="outline" disabled={danfeBusy} onClick={() => void generateDanfe()}>{danfeBusy ? "Gerando DANFE…" : `Gerar DANFE ${documentLabel}`}</Button>}
-      {canIssue && !mismatched && documentModel === 55 && document?.status === "authorized" && document.accessKey && <Button type="button" variant="outline" aria-expanded={emailOpen} aria-controls="nfe-email" onClick={() => setEmailOpen(true)}>Enviar por e-mail</Button>}
+      {canIssue && !mismatched && document?.status === "authorized" && document.accessKey && <Button type="button" variant="outline" aria-expanded={emailOpen} aria-controls={`fiscal-email-${id}`} onClick={() => setEmailOpen(true)}>Enviar por e-mail</Button>}
       <Button variant="outline" disabled={command.busy} onClick={() => { command.reset(); resource.reload() }}>Atualizar situação fiscal</Button>
     </div>}
-    {emailOpen && canIssue && !mismatched && documentModel === 55 && document?.status === "authorized" && <NfeEmailPanel key={`${tenantId}/${id}`} id={id} tenantId={tenantId} onClose={() => setEmailOpen(false)} />}
+    {emailOpen && canIssue && !mismatched && document?.status === "authorized" && <NfeEmailPanel key={`${tenantId}/${id}`} id={id} tenantId={tenantId} label={documentLabel} onClose={() => setEmailOpen(false)} />}
     {danfe && <div className="space-y-3 rounded-xl border p-4" role="status"><p>{danfe.filename} gerado a partir do XML autorizado.</p><a className="text-primary underline" href={danfe.url} download={danfe.filename}>Baixar DANFE em PDF</a><iframe title={`Visualização do ${documentLabel}`} src={danfe.url} className="h-[75vh] min-h-96 w-full rounded-xl border" /><dl className="break-all text-xs text-muted-foreground"><dt>SHA-256 do XML</dt><dd>{danfe.xmlHash}</dd><dt>SHA-256 do PDF</dt><dd>{danfe.pdfHash}</dd></dl></div>}
     {(canCancel || canCorrect) && document?.status === "authorized" && <form className="space-y-3 rounded-xl border p-4" onSubmit={e => { e.preventDefault(); void act(selectedEvent) }}>
       <fieldset className="space-y-3" disabled={command.busy || command.uncertain || dirty || mismatched}>

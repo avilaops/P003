@@ -38,15 +38,27 @@ class ScopeTests(unittest.TestCase):
             self.assertFalse(gate.native_api_required([path]))
 
     def test_native_and_shared_integration_changes_keep_rust_validation(self):
-        for path in ("apps/api/src/main.rs", "migrations/123.sql", "Cargo.lock", "queries/users.sql", "apps/api-ts/scripts/contract-tests.mjs", "apps/api-ts/src/platform/mcp-dispatch.ts", ".github/workflows/ci.yml", "new-service/main.py"):
+        for path in ("apps/api/src/main.rs", "Cargo.lock", "queries/users.sql", "apps/api-ts/scripts/contract-tests.mjs", "new-service/main.py"):
             self.assertTrue(gate.native_api_required([path]), path)
-        self.assertTrue(gate.native_api_required(["apps/api-ts/src/modules/proposals/commands.ts", "migrations/123.sql"]))
+        self.assertFalse(gate.native_api_required(["apps/api-ts/src/modules/proposals/commands.ts", "migrations/123.sql"]))
+        for path in ("apps/api-ts/src/platform/mcp-dispatch.ts", ".github/workflows/ci.yml",
+                     "deploy/web.Dockerfile", "apps/fiscal-engine/src/server.ts", "pnpm-lock.yaml"):
+            self.assertFalse(gate.native_api_required([path]), path)
         self.assertFalse(gate.native_api_required(["apps/web/src/page.tsx", "docs/design.md"]))
 
     def test_migrations_and_rust_select_api(self):
         for path in ("migrations/123.sql", "apps/api/src/main.rs", "Cargo.lock", "queries/users.sql"):
             with self.subTest(path=path):
                 self.assertEqual(gate.plan([path]), {"web": False, "api": True, "fiscal": False})
+
+    def test_contract_catalogue_and_scanners_keep_project_validation_without_native_build(self):
+        for path in ("verification/contracts.json", "verification/contracts.mjs", "verification/discovery.mjs",
+                     "verification/test/contracts.test.mjs", "scripts/verification/inspect-proposal-pdf.py"):
+            self.assertTrue(all(gate.plan([path]).values()), path)
+            self.assertFalse(gate.native_api_required([path]), path)
+        for path in ("verification/run.mjs", "verification/suites.mjs", "scripts/verification/order-pdf-harness.ps1",
+                     "verification/new-adapter.rs"):
+            self.assertTrue(gate.native_api_required([path]), path)
 
     def test_fiscal_and_shared_packages(self):
         self.assertEqual(gate.plan(["apps/fiscal-engine/src/main.ts", "packages/shared/test.ts"]),

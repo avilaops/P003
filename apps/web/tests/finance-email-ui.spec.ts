@@ -6,6 +6,57 @@ import { installFrontendFixture, tenant, record } from "./helpers/frontend-fixtu
 
 const hash = "a".repeat(64)
 
+for (const kind of ["payable","contract","order-list"] as const) test(`envio documental n8n • ${kind}`, async ({ page }) => {
+  const isContract = kind === "contract", isOrder = kind === "order-list"
+  const resource = isContract ? "commercial-contracts" : isOrder ? "orders" : "financial-payables"
+  const to = isContract ? "buyer@example.test, witness@example.test" : "buyer@example.test"
+  if (isContract) await page.route("**/api/erp/me", route => route.fulfill({ json: { tenant: { id: tenant }, permissions: ["sales.orders.read", "sales.orders.manage", "sales.contracts.send", "sales.contracts.package"] } }))
+  const recordData = { id: record, number: "4", revision: 3, status: "open", customerName: "Cliente", supplierName: "Fornecedor",
+    dueDate: "2026-12-01", amount: "123.45", paidAmount: "0.00", outstandingAmount: "123.45", receiptId: record }
+  const snapshot = { order: { id:record,revision:3,amount:"123.45",dueDate:"2026-12-01" }, company:{legalName:"Empresa",taxId:"1"},customer:{name:"Cliente",taxId:"1"},items:[] }
+  if (isOrder) await page.route("**/api/erp/orders?**", route => route.fulfill({json:{tenantId:tenant,canEdit:true,total:1,data:[{...recordData,status:"confirmed"}]}}))
+  else await page.route(`**/api/erp/${resource}/${record}`, route => route.fulfill({ headers:{etag:'"3"'}, json:isContract ? {
+    tenantId:tenant,canEdit:true,canSend:true,emailReady:true,files:[{id:record,kind:"preview",position:0,sha256:hash}],data:{
+      id:record,orderId:record,customerId:record,templateName:"Contrato de teste",status:"reviewed",revision:3,snapshot,
+      recipients:[{role:"Cliente",name:"Cliente",email:"buyer@example.test"}],progress:[],fields:{},
+    },
+  } : {tenantId:tenant,canEdit:true,data:recordData,payments:[]} }))
+  const posted: string[] = []
+  page.on("request", request => { if (request.method() === "POST" && request.url().includes("/api/erp/")) posted.push(new URL(request.url()).pathname) })
+  const endpoint = `/api/erp/${resource}/${record}/email`
+  await page.route(`**${endpoint}`, route => {
+    if (route.request().method() === "GET") return route.fulfill({headers:{etag:'"3"'},json:{...status,recipient:to,
+      documentTitle:isContract ? "Cópia do contrato" : "Título a pagar",scope: isContract ? "PDF revisado preservado no ERP" : "Pagamentos declarados"}})
+    expect(route.request().headers()["if-match"]).toBe('"3"')
+    expect(route.request().headers()["idempotency-key"]).toMatch(/^[\da-f-]{36}$/)
+    expect(route.request().postDataJSON().recipient).toBe(to)
+    return route.fulfill({ headers:{etag:'"3"'}, json:{tenantId:tenant,revision:3,delivery:{id:record,status:"sent",recipient:to,createdAt:"2026-11-17T00:00:00Z"}} })
+  })
+  await page.goto(isContract ? `/servicos/contratos/${record}` : isOrder ? "/vendas/pedidos" : `/financeiro/contas-pagar/${record}`)
+  await page.getByRole("button",{name:isContract ? "Enviar cópia do contrato por e-mail" : "Enviar por e-mail",exact:true}).click()
+  const dialog = page.getByRole("dialog")
+  if (isOrder) await expect(dialog.getByLabel("Destinatário",{exact:true})).toHaveValue(to)
+  else { await expect(dialog).toContainText(to); await expect(dialog.getByRole("textbox",{name:"Destinatário"})).toHaveCount(0) }
+  await dialog.getByRole("button",{name:"Enviar e-mail com anexo",exact:true}).click()
+  await expect(dialog).toContainText("Aceito pelo servidor de e-mail")
+  expect(posted).toEqual([endpoint])
+  if (isContract) {
+    await page.keyboard.press("Escape")
+    const packagePath = `/api/erp/commercial-contracts/${record}/send-package`
+    await page.route(`**${packagePath}`, route => {
+      expect(route.request().postDataJSON()).toEqual({ recipients: ["buyer@example.test"] })
+      expect(route.request().headers()["if-match"]).toBe('"3"')
+      expect(route.request().headers()["idempotency-key"]).toMatch(/^[a-f0-9-]{36}$/)
+      return route.fulfill({ headers: { etag: '"3"' }, json: { tenantId: tenant, data: { id: record }, packageStatus: "sent" } })
+    })
+    await page.getByRole("button", { name: "Enviar pacote de documentos" }).click()
+    await expect(page.getByText("Confirme o envio do pacote para buyer@example.test.")).toBeVisible()
+    expect(posted).toEqual([endpoint])
+    await page.getByRole("button", { name: "Confirmar envio do pacote" }).click()
+    await expect.poll(() => posted).toEqual([endpoint, packagePath])
+  }
+})
+
 const account = { id: record, orderId: record, customerName: "Cliente financeiro", amount: "200.00", receivedAmount: "50.00", outstandingAmount: "150.00", status: "open", dueDate: "2026-12-01", revision: 3 }
 
 const status = { tenantId: tenant, canSend: true, emailReady: true, recipient: "financeiro@example.test", documentTitle: "Título financeiro", scope: "Título registrado • recebido declarado não representa conciliação bancária", recordCount: 1, snapshotHash: hash, deliveries: [] }

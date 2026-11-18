@@ -11,6 +11,9 @@ name: Validate project
       publish:
         type: boolean
         default: false
+      typescript_only:
+        type: boolean
+        default: false
       check_database:
         type: boolean
         default: false
@@ -421,7 +424,7 @@ jobs:
         path: artifacts/timings/*.jsonl
         retention-days: 7
         if-no-files-found: warn
-    if: inputs.full
+    if: inputs.full && !inputs.typescript_only
     outputs:
       contract_artifact_name: erp-openapi-captured-${{ inputs.source_sha }}-${{ github.run_attempt }}
   contracts:
@@ -532,7 +535,7 @@ jobs:
         path: artifacts/timings/*.jsonl
         retention-days: 7
         if-no-files-found: warn
-    if: inputs.full
+    if: inputs.full && !inputs.typescript_only
     needs:
     - baseline
   schema:

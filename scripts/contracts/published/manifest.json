@@ -1,0 +1,14 @@
+{
+  "source": "83275325cd50459ef70f8f06897d06360dc3b6d5",
+  "contractRun": 44206508488,
+  "contractProducerSha": "ca0a847af4fa4c50ebe88accdcdc7bd214e7419a",
+  "artifactId": 14384532112,
+  "files": {
+    "candidate.json": "8150742d6d3ef145a05a3113529d003413b1a1accb7606ee4d1e26768c3199fc",
+    "company.json": "3945d5cc0b9313ece90483841a959bb3a5d5eddd1641fe2883df38d474b505fa"
+  },
+  "images": {
+    "api": "sha256:06148d03f6c600f657ac564d745f6a0298293c11fb783c76f514918ddc26c878",
+    "fiscal-mcp": "sha256:6d469b7164e4dc91fae0b89a34f9a9d221abf0100aee38b742066a453fd86618"
+  }
+}

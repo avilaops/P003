@@ -7,6 +7,7 @@ import { resolve } from "node:path";
 const directory = resolve(process.argv[2] || "artifacts/api-ts");
 const entry = resolve(directory, "dist/server.js");
 assert.ok(existsSync(entry), "Production server entry must exist");
+assert.ok(existsSync(resolve(directory, "dist/migrate.js")), "Production migration entry must exist");
 assert.equal(existsSync(resolve(directory, "node_modules/tsx")), false, "Production package must not depend on the development TS runner");
 const lease = createServer();
 await new Promise(resolve => lease.listen(0, "127.0.0.1", resolve));

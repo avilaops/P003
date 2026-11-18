@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Apply the candidate web image's migrations with its TypeScript runner."""
+"""Apply the candidate web image's migrations to the SQLx ledger before activation."""
 import hashlib
 import json
 import os
@@ -79,7 +79,7 @@ def migrate_release(sha, release, *, root=ROOT, run=subprocess.run):
     command = ["docker", "run", "--rm", "--name", "erp-next-migration-" + sha, "--network", "none", "--read-only",
                "--security-opt", "no-new-privileges:true", "--cap-drop", "ALL", "--pids-limit", "64", "--memory", "256m",
                "--user", pg_uid, "--volume", "/var/run/postgresql:/var/run/postgresql:ro", "--env", "DATABASE_URL",
-               image, "node", "/app/apps/api-ts/dist/migrate.js", "/app/migrations"]
+               image, "node", "apps/api-ts/dist/migrate.js", "/app/migrations"]
     environment = {**os.environ, "DATABASE_URL": "postgresql://postgres@localhost/erp_next?host=/var/run/postgresql"}
     output = execute(command, "migration", env=environment)
     private_file(private / "migration.log", output + "\n")

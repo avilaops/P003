@@ -13,6 +13,7 @@ import { registerCommercialTables } from "./modules/commercial/tables.js"
 import { registerOpportunityRoutes } from "./modules/opportunities/routes.js"
 import { registerCommercialMetrics } from "./modules/commercial/metrics.js"
 import { registerOrderRoutes } from "./modules/orders/routes.js"
+import { registerSalesMail } from "./modules/sales/mail-routes.js"
 import { registerPreferenceRoutes } from "./modules/preferences/routes.js"
 import { registerProductRoutes } from "./modules/products/routes.js"
 import { registerProposalRoutes } from "./modules/proposals/routes.js"
@@ -24,8 +25,11 @@ import { authenticateRequest, type AccessDependencies } from "./platform/access.
 import { Problem } from "./platform/problem.js"
 import { parseJson, stringifyJson } from "./platform/json.js"
 import { registerMcpDispatch } from "./platform/mcp-dispatch.js"
+import { registerDocumentCopies, type DocumentCopyIO } from "./modules/document-copies/routes.js"
+import { registerFinancialEmails } from "./modules/document-copies/financial-routes.js"
+import { registerContractPackage } from "./modules/document-copies/contract-package-routes.js"
 
-export type AppDependencies = AccessDependencies & { outgoingNfse?: OutgoingNfseDependencies; nfeEmail?: NfeEmailIO }
+export type AppDependencies = AccessDependencies & { outgoingNfse?: OutgoingNfseDependencies; nfeEmail?: NfeEmailIO; documentCopies?: DocumentCopyIO }
 
 export function buildApp(_dependencies: AppDependencies): FastifyInstance {
   const app = Fastify({ logger: false, bodyLimit: 65_536 })
@@ -85,6 +89,7 @@ export function buildApp(_dependencies: AppDependencies): FastifyInstance {
   registerOpportunityRoutes(app, _dependencies)
   registerCommercialMetrics(app, _dependencies)
   registerOrderRoutes(app, _dependencies)
+  registerSalesMail(app, _dependencies, _dependencies.documentCopies)
   registerPreferenceRoutes(app, _dependencies)
   registerProductRoutes(app, _dependencies)
   registerProposalRoutes(app, _dependencies)
@@ -93,5 +98,8 @@ export function buildApp(_dependencies: AppDependencies): FastifyInstance {
   registerOutgoingNfseRoutes(app, _dependencies)
   registerNfeEmail(app, _dependencies, _dependencies.nfeEmail)
   registerMcpDispatch(app, _dependencies)
+  registerDocumentCopies(app, _dependencies, _dependencies.documentCopies)
+  registerFinancialEmails(app, _dependencies, _dependencies.documentCopies)
+  registerContractPackage(app, _dependencies, _dependencies.documentCopies, _dependencies.nfeEmail?.render)
   return app
 }
