@@ -12,6 +12,8 @@ const configSchema = z.object({
   ERP_FISCAL_ENGINE_TOKEN: z.string().min(24).optional(),
   FISCAL_A1_KEYRING: z.string().optional(),
   NFSE_ISSUANCE_ENABLED: z.enum(["true", "false"]).default("false"),
+  // Blank means not configured: the Browser Use route then answers 503.
+  BROWSER_USE_API_KEY: z.preprocess(value => typeof value === "string" && value.trim() === "" ? undefined : value, z.string().trim().min(1).optional()),
 })
 
 export type Configuration = {
@@ -22,6 +24,7 @@ export type Configuration = {
   maximumConnections: number
   mcpResource: string
   fiscalEngine?: { url: string; token: string; keyring: string; automaticEnabled: boolean }
+  browserUseApiKey?: string
 }
 
 export function loadConfiguration(environment: NodeJS.ProcessEnv = process.env): Configuration {
@@ -44,5 +47,6 @@ export function loadConfiguration(environment: NodeJS.ProcessEnv = process.env):
     maximumConnections: value.DATABASE_MAX_CONNECTIONS,
     mcpResource: `${mcpOrigin.origin}/mcp`,
     ...(fiscalUrl && value.ERP_FISCAL_ENGINE_TOKEN && value.FISCAL_A1_KEYRING ? { fiscalEngine: { url: fiscalUrl.origin, token: value.ERP_FISCAL_ENGINE_TOKEN, keyring: value.FISCAL_A1_KEYRING, automaticEnabled: value.NFSE_ISSUANCE_ENABLED === "true" } } : {}),
+    ...(value.BROWSER_USE_API_KEY ? { browserUseApiKey: value.BROWSER_USE_API_KEY } : {}),
   }
 }

@@ -62,8 +62,19 @@ async fn call_as(
     )
 }
 
+/// Business day in America/Sao_Paulo (fixed UTC-3, no daylight saving time).
+/// A completed sale ships on the day it is posted, and a stock reversal can never
+/// predate its original movement, so reversals are dated on this day.
+pub(super) fn business_today() -> String {
+    let offset = time::UtcOffset::from_hms(-3, 0, 0).expect("valid Sao Paulo offset");
+    time::OffsetDateTime::now_utc()
+        .to_offset(offset)
+        .date()
+        .to_string()
+}
+
 pub(super) fn reversal() -> Value {
-    json!({"reason":"Devolução integral conferida", "occurredOn":"2026-10-31"})
+    json!({"reason":"Devolução integral conferida", "occurredOn": business_today()})
 }
 fn payment(amount: &str) -> Value {
     json!({"amount":amount,"method":"bank_transfer","reference":"Declaração teste","occurredOn":"2026-10-30"})

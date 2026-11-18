@@ -48,7 +48,7 @@ class TypeScriptComposeTests(unittest.TestCase):
             with self.subTest(modules=modules), tempfile.TemporaryDirectory() as directory:
                 path = Path(directory) / 'compose.json'
                 config = {'services': {
-                    'api': {'image': 'rust', 'environment': {'DATABASE_URL': 'postgresql://app:fixture@db/test', 'AUTH_USERINFO_URL': 'https://auth.test/oauth/userinfo', 'SMTP_PASSWORD': 'MAIL', 'ERP_CERT_KEY': 'CERT', 'ERP_FISCAL_ENGINE_URL': 'http://127.0.0.1:8091', 'ERP_FISCAL_ENGINE_TOKEN': 'fixture-token-with-at-least-24-characters', 'FISCAL_A1_KEYRING': '{"active":"primary","keys":{"primary":"fixture"}}', 'NFSE_ISSUANCE_ENABLED': 'true'}},
+                    'api': {'image': 'rust', 'environment': {'DATABASE_URL': 'postgresql://app:fixture@db/test', 'AUTH_USERINFO_URL': 'https://auth.test/oauth/userinfo', 'SMTP_PASSWORD': 'MAIL', 'ERP_CERT_KEY': 'CERT', 'ERP_FISCAL_ENGINE_URL': 'http://127.0.0.1:8091', 'ERP_FISCAL_ENGINE_TOKEN': 'fixture-token-with-at-least-24-characters', 'FISCAL_A1_KEYRING': '{"active":"primary","keys":{"primary":"fixture"}}', 'NFSE_ISSUANCE_ENABLED': 'true', 'BROWSER_USE_API_KEY': 'bu_fixture'}},
                     'web': {'image': 'web', 'environment': {'AUTH_ISSUER': 'https://auth.test', 'ERP_SESSION_SECRET': 'SESSION', 'ERP_TYPESCRIPT_MODULES': modules}},
                     'fiscal-engine': {'image': 'fiscal', 'environment': {}, 'healthcheck': {}},
                 }}
@@ -69,6 +69,8 @@ class TypeScriptComposeTests(unittest.TestCase):
                 self.assertEqual(api['environment']['ERP_FISCAL_ENGINE_TOKEN'], 'fixture-token-with-at-least-24-characters')
                 self.assertEqual(api['environment']['FISCAL_A1_KEYRING'], '{"active":"primary","keys":{"primary":"fixture"}}')
                 self.assertEqual(api['environment']['NFSE_ISSUANCE_ENABLED'], 'true')
+                self.assertEqual(api['environment']['BROWSER_USE_API_KEY'], 'bu_fixture')
+                self.assertNotIn('BROWSER_USE_API_KEY', services['web']['environment'])
                 for key in ('SMTP_PASSWORD', 'ERP_CERT_KEY', 'ERP_SESSION_SECRET'):
                     self.assertNotIn(key, api['environment'])
                 self.assertEqual(services['web']['environment']['ERP_TYPESCRIPT_API_URL'], 'http://127.0.0.1:8081')
@@ -79,6 +81,7 @@ class TypeScriptComposeTests(unittest.TestCase):
                 restored = json.loads(path.read_text())['services']
                 self.assertNotIn('ERP_TYPESCRIPT_MODULES', restored['web']['environment'])
                 self.assertIn('api-ts', restored, 'Retired traffic flags cannot disable a required business backend')
+                self.assertEqual(restored['api-ts']['environment']['BROWSER_USE_API_KEY'], 'bu_fixture', 'The Browser Use key survives a redeploy')
                 self.assertEqual(restored['api']['environment']['ERP_TYPESCRIPT_API_URL'], 'http://127.0.0.1:8081')
 
 
