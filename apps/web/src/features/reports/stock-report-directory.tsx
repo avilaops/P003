@@ -8,7 +8,7 @@ import { useResource } from "@/hooks/use-operation"
 type Catalog = { tenantId: string; sources: Record<string, { label: string }> }
 
 const groups = [
-  { name: "Movimentação e depósitos", datasets: ["stock_movement_activity", "stock_kardex", "stock_position"] },
+  { name: "Movimentação e depósitos", datasets: ["stock_movement_ledger", "stock_movement_activity", "stock_kardex", "stock_position"] },
   { name: "Conferência e produção", datasets: ["stock_count_progress", "stock_divergences", "stock_accuracy", "stock_production_progress"] },
   { name: "Planejamento de estoque", datasets: ["stock_turnover", "stock_idle", "stock_abc"] },
 ]

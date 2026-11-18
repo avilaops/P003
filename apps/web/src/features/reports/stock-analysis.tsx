@@ -10,7 +10,7 @@ import { DataTable } from "@/components/workspace/data-table"
 import { GuardedLink } from "@/components/shell/navigation-guard"
 import { ReportActions,ReportDocument } from "@/components/documents/report-document"
 import { useResource } from "@/hooks/use-operation"
-import { stockUrl,textLink,type StockList } from "@/features/inventory/stock-model"
+import { historyPath, manualPath, stockUrl,textLink,type StockList } from "@/features/inventory/stock-model"
 import { allStockRows,downloadStockCsv,type StockAnalysisResult } from "./stock-export"
 import { StockAnalysisChart } from "./stock-analysis-chart"
 import { changeAnalysisFilters, hasPeriod, reconcileDefinitionFilters, specificFilter, statusLabel, stockAnalysisQuery, tenantAnalysisParams } from "./stock-analysis-filters"
@@ -20,6 +20,7 @@ const selectStyle="min-h-11 min-w-0 max-w-full rounded-lg border bg-background p
 const fieldStyle="grid min-w-0 gap-1 text-sm font-medium"
 
 function formatted(key:string,value:string|number|null,dataset=""){
+  if (key === "document" && value === null && dataset === "stock_movement_ledger") return "Sem documento vinculado"
   if(value===null)return key==="last_issue"?"Sem saída registrada":key==="positive_since"?"Sem data registrada":key==="warehouse"?"Consolidado":"A apurar"
   if(key==="date"||key==="last_issue"||key==="positive_since")return String(value).split("-").reverse().join("/")
   if(key==="status")return statusLabel(dataset,String(value))
@@ -33,7 +34,7 @@ const documentRoutes:Record<string,string>={
 }
 function cell(row:StockAnalysisResult["data"][number],key:string,dataset:string){
   const value=row[key]??null
-  const path=key==="document"&&typeof row.kind==="string"?documentRoutes[row.kind]:null
+  const path=key==="document"&&typeof row.kind==="string"&&Object.hasOwn(documentRoutes,row.kind)?documentRoutes[row.kind]:null
   return path&&typeof value==="string"?<GuardedLink className={textLink} href={path+encodeURIComponent(value)}>{value}</GuardedLink>:formatted(key,value,dataset)
 }
 
@@ -70,7 +71,7 @@ function AnalysisResults({tenant,report,query,selection,onOffsetChange}:{
         {error&&<p role="alert">{error}</p>}
         {report.data.length?<div className="max-w-full overflow-x-auto"><DataTable aria-label={report.title} className="w-full text-left text-sm"><thead><tr>{report.columns.map(c=><th scope="col" className="whitespace-nowrap border-b p-2" key={c.key}>{c.label}</th>)}</tr></thead>
         <tbody>{report.data.map((r,i)=><tr key={i}>{report.columns.map(c=><td className="border-b p-2" key={c.key}>{cell(r,c.key,report.dataset)}</td>)}</tr>)}</tbody></DataTable></div>:<p>{report.total?"Nenhum registro nesta página.":"Nenhum registro para os filtros selecionados."}</p>}
-        <Pagination offset={report.offset} pageSize={report.limit} total={report.total} onOffsetChange={onOffsetChange}/>
+        {(report.offset > 0 || report.total > report.limit) && <Pagination offset={report.offset} pageSize={report.limit} total={report.total} onOffsetChange={onOffsetChange}/>}
       </>}
     </section>
     {print&&<ReportDocument tenantId={tenant} title={print.title} scope={[`Registros incluídos • ${print.total}`,selection].filter(Boolean).join(" • ")} period={print.dataset==="stock_position"?"Posição atual":hasPeriod(print.dataset)?"Período • "+formatted("date",print.startDate)+" a "+formatted("date",print.endDate):"Data-base • "+formatted("date",print.endDate)}
@@ -78,8 +79,9 @@ function AnalysisResults({tenant,report,query,selection,onOffsetChange}:{
   </>
 }
 
-export function StockAnalysis({tenant}:{tenant:string}){
+export function StockAnalysis({tenant, movementLedger = false}:{tenant:string; movementLedger?:boolean}){
   const rawParams = useSearchParams().toString()
+  if (movementLedger) return <AnalysisWorkspace tenant={tenant} rawParams={rawParams} movementLedger/>
   const definition = tenantAnalysisParams(rawParams, tenant).get("definitionId")
   return definition
     ? <SavedStockAnalysis key={definition} tenant={tenant} rawParams={rawParams} definition={definition}/>
@@ -101,15 +103,19 @@ function SavedStockAnalysis({tenant, rawParams, definition}: WorkspaceProps & {d
   return <AnalysisWorkspace tenant={tenant} rawParams={rawParams} savedDataset={saved.dataset} refreshDefinition={metadata.reload}/>
 }
 
-function AnalysisWorkspace({tenant, rawParams, savedDataset, refreshDefinition}: WorkspaceProps & {savedDataset?: string; refreshDefinition?: () => void}){
+function AnalysisWorkspace({tenant, rawParams, savedDataset, refreshDefinition, movementLedger = false}: WorkspaceProps & {savedDataset?: string; refreshDefinition?: () => void; movementLedger?: boolean}){
   const params = useMemo(() => {
     const scoped = tenantAnalysisParams(rawParams, tenant)
+    if (movementLedger) {
+      scoped.delete("definitionId")
+      scoped.set("dataset", "stock_movement_ledger")
+    }
     return savedDataset ? reconcileDefinitionFilters(scoped, tenant, savedDataset) : scoped
-  }, [rawParams, tenant, savedDataset])
+  }, [rawParams, tenant, savedDataset, movementLedger])
   useEffect(() => {
-    if (params.toString() !== rawParams && new URLSearchParams(window.location.search).toString() === rawParams)
+    if (!movementLedger && params.toString() !== rawParams && new URLSearchParams(window.location.search).toString() === rawParams)
       window.history.replaceState(null, "", window.location.pathname + "?" + params + window.location.hash)
-  }, [params, rawParams])
+  }, [params, rawParams, movementLedger])
   const dataset = params.get("dataset") || "stock_position", definition = params.get("definitionId") || ""
   const productId = params.get("productId") || "", warehouse = params.get("warehouseId") || ""
   const requestedOffset = Number(params.get("offset")), offset = Number.isSafeInteger(requestedOffset) && requestedOffset > 0 ? requestedOffset : 0
@@ -138,15 +144,32 @@ function AnalysisWorkspace({tenant, rawParams, savedDataset, refreshDefinition}:
   function update(changes: Record<string, string>, clear = false) {
     const latest = window.location.search
     const resolved = new URLSearchParams(latest).get("definitionId") === definition ? savedDataset : undefined
-    const url = changeAnalysisFilters(latest, tenant, changes, clear, resolved)
+    const url = changeAnalysisFilters(latest, tenant, movementLedger ? {...changes, dataset: "stock_movement_ledger", definitionId: ""} : changes, clear, resolved)
     window.history.replaceState(null, "", window.location.pathname + "?" + url + window.location.hash)
   }
   const error = catalog.error || resource.error || (resource.value && !report ? "A análise retornou dados de outra empresa." : "")
+  const context = {tenant, warehouseId: warehouse, productId, startDate: params.get("startDate"), endDate: params.get("endDate"), direction: params.get("movementDirection")}
+  const returnQuery = stockAnalysisQuery(params)
+  returnQuery.set("tenant", tenant)
+  if (offset) returnQuery.set("offset", String(offset))
+  const detailContext = {
+    ...context, startDate: context.startDate || report?.startDate || null, endDate: context.endDate || report?.endDate || null,
+    from: historyPath, returnQuery: returnQuery.toString(),
+  }
   return <div data-report-workspace className="workspace-page-frame min-w-0 space-y-5">
-    <PageHeader title="Análises de estoque" back={{href:"/relatorios/estoque",label:"Relatório de estoque"}}/>
+    {movementLedger ? <PageHeader title="Lançamentos de estoque" actions={<>
+      {!resource.loading && products.value?.tenantId === tenant && products.value.canEdit && <GuardedLink className={textLink} href={stockUrl(manualPath, detailContext)}>Novo lançamento</GuardedLink>}
+      {!resource.loading && <GuardedLink className={textLink} href={stockUrl(historyPath, productId ? detailContext : {...detailContext, view:"products"})}>
+        {productId ? "Consultar Kardex do produto" : "Selecionar produto para consultar o Kardex"}
+      </GuardedLink>}
+      {options?.sources.stock_movement_activity && <GuardedLink className={textLink} href={stockUrl("/relatorios/estoque/analises", {
+        dataset:"stock_movement_activity", productId, warehouseId: warehouse, tenant: productId || warehouse ? tenant : null,
+        startDate: context.startDate, endDate: context.endDate, movementDirection: context.direction,
+      })}>Consultar atividade de movimentação</GuardedLink>}
+    </>}/> : <PageHeader title="Análises de estoque" back={{href:"/relatorios/estoque",label:"Relatório de estoque"}}/>}
     <section aria-label="Filtros da análise" className="form-section grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-      <label className={fieldStyle}>Análise<select className={selectStyle} value={source} onChange={e=>update({definitionId:"",dataset:e.target.value})}>
-        {Object.entries(options?.sources||{}).map(([id,s])=><option key={id} value={id}>{s.label}</option>)}</select></label>
+      {!movementLedger && <label className={fieldStyle}>Análise<select className={selectStyle} value={source} onChange={e=>update({definitionId:"",dataset:e.target.value})}>
+        {Object.entries(options?.sources||{}).map(([id,s])=><option key={id} value={id}>{s.label}</option>)}</select></label>}
       <label className={fieldStyle}>Buscar produto ou SKU<Input type="search" value={search} onChange={e=>setSearch(e.target.value)}/></label>
       <label className={fieldStyle}>Produto<select className={selectStyle} value={productId} onChange={e=>update({productId:e.target.value})}>
         <option value="">{source==="stock_kardex"?"Selecione um produto":"Todos os produtos"}</option>
@@ -166,6 +189,6 @@ function AnalysisWorkspace({tenant, rawParams, savedDataset, refreshDefinition}:
     {(resource.loading||changedDefinition)&&<p role="status">Consultando análise…</p>}
     {report&&!changedDefinition&&<AnalysisResults key={query} tenant={tenant} report={report} query={query} selection={selection}
       onOffsetChange={value=>update({offset:String(value)})}/>}
-    <GuardedLink className={textLink} href="/preferencias/sistema/relatorios-customizados">Relatórios personalizados</GuardedLink>
+    {!movementLedger && <GuardedLink className={textLink} href="/preferencias/sistema/relatorios-customizados">Relatórios personalizados</GuardedLink>}
   </div>
 }

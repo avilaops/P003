@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button"
 import { Pagination } from "@/components/workspace/pagination"
 import { useResource } from "@/hooks/use-operation"
 import { commercialQuantity } from "@/features/sales/order-presentation"
-import { historyPath, manualPath, pageOffset, pageSize, stockUrl, textLink, type History, type Movement } from "./stock-model"
+import { historyPath, manualPath, movementLedgerReturn, pageOffset, pageSize, stockUrl, textLink, type History, type Movement } from "./stock-model"
 import { StockMovementForm } from "./stock-movement-form"
 import { StockAnalysisLink } from "./stock-analysis-link"
 import { stockMoney } from "./stock-model"
@@ -36,8 +36,9 @@ export function StockHistory({ productId, tenant, manual }: { productId: string;
   const [reversal, setReversal] = useState<Movement | null>(null), [locked, setLocked] = useState(false)
   const [notice, setNotice] = useState("")
   const confirmNavigation = useConfirmNavigation()
-  const details = { ...listQuery, productId, sku: history?.product.sku || "", from: listPath, warehouseId, fromWarehouseId: params.get("fromWarehouseId"), startDate, endDate, movementOffset: offset, direction, orderOffset }
-  const back = stockUrl(listPath, { ...listQuery, focus: productId })
+  const returnQuery = movementLedgerReturn(params.get("returnQuery"), tenant)
+  const details = { ...listQuery, productId, sku: history?.product.sku || "", from: listPath, warehouseId, fromWarehouseId: params.get("fromWarehouseId"), startDate, endDate, movementOffset: offset, direction, orderOffset, returnQuery }
+  const back = returnQuery ? historyPath + "?" + returnQuery : stockUrl(listPath, { ...listQuery, focus: productId })
   function filter(startDate: string, endDate: string, movementOffset: number, type = direction, warehouse = warehouseId) {
     if (locked || !confirmNavigation()) return
     setReversal(null); setNotice("")

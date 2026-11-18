@@ -19,6 +19,10 @@ export type History = Page<Movement> & { product: StockProduct; summary: { openi
 
 export const historyPath = "/estoque/lancamentos"
 export const manualPath = "/estoque/lancamentos/novo"
+export function movementLedgerReturn(query: string | null, tenant: string) {
+  const params = new URLSearchParams(query || "")
+  return params.get("tenant") === tenant && params.get("dataset") === "stock_movement_ledger" ? params.toString() : null
+}
 export const pageSize = 25
 export const textLink = "inline-flex min-h-11 items-center rounded-sm font-medium text-primary underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-ring"
 export function pageOffset(value: string | null) {
