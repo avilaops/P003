@@ -64,14 +64,14 @@ with tarfile.open(fileobj=sys.stdin.buffer, mode="r|gz") as archive:
         while name.startswith("./"): name = name[2:]
         if name in ("", ".") and member.isdir(): continue
         size += member.size
-        if name not in allowed or name in seen or not member.isfile() or member.size < 1 or size > 524288:
+        if name not in allowed | {"configure-api.py"} or name in seen or not member.isfile() or member.size < 1 or size > 524288:
             raise SystemExit("Invalid release bundle member")
         seen.add(name)
         with (destination / name).open("xb") as output:
             os.chmod(output.name, 0o600)
             source = archive.extractfile(member)
             output.write(source.read())
-if seen != allowed: raise SystemExit("Incomplete release bundle")
+if not allowed.issubset(seen): raise SystemExit("Incomplete release bundle")
 ' "$staging"
 
 for file in release.json compose.yaml fiscal-compose.yaml migrate-release.py release-retention.py grant-fiscal-monitor.sql grant-cte-distribution.sql; do
@@ -165,6 +165,10 @@ for service in config["services"].values():
     service["logging"] = {"driver": "json-file", "options": {"max-size": "10m", "max-file": "3"}}
 target.write_text(json.dumps(config, indent=2))
 PY
+  if [[ -d "/etc/erp-next/contract-signatures/releases/$source_sha/public" ]] || grep -q '"ERP_CONTRACT_VALIDATOR_ROOTS_FILE"' "$previous_release/compose.json"; then
+    [[ -s "$staging/configure-api.py" ]] || fail 'missing contract signature configuration helper'
+    python3 "$staging/configure-api.py" "$release/compose.json" "$source_sha" --previous "$previous_release/compose.json"
+  fi
   # The generated JSON carries the public release marker in the web
   # environment; update it together with the immutable image references.
   sed -i "s|\"ERP_RELEASE_SHA\": \"[0-9a-f]*\"|\"ERP_RELEASE_SHA\": \"$source_sha\"|g" "$release/compose.json"
