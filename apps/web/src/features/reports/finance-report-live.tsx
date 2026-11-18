@@ -10,6 +10,7 @@ import { EmptyState, ErrorState, LoadingState } from "@/components/workspace/res
 import { FinancialDocumentEmail } from "@/features/finance/financial-document-email"
 import { FinanceStatements } from "@/features/finance/finance-statements"
 import {
+  overdueShare,
   bucketLabels,
   dateLabel,
   fieldStyle,
@@ -24,6 +25,14 @@ import { erpFetch } from "@/lib/api/client"
 import { downloadCsv } from "@/lib/csv-export"
 
 const columns = ["Carteira", "Contraparte", "Vencimento", "Original", "Liquidado", "Saldo", "Situação"]
+function metrics(data: Portfolio) {
+  return [
+    ["A receber", reais(data.totals.receivable)],
+    ["A pagar", reais(data.totals.payable)],
+    ["Recebíveis vencidos", reais(data.totals.overdueReceivable)],
+    ["Pagamentos vencidos", reais(data.totals.overduePayable)],
+  ]
+}
 function cells(row: PortfolioRow) {
   const status =
     row.status === "cancelled"
@@ -58,10 +67,11 @@ function PortfolioReport() {
   const [status, setStatus] = useState(search.get("status") ?? "")
   const [from, setFrom] = useState(search.get("from") ?? "")
   const [to, setTo] = useState(search.get("to") ?? "")
-  const [q, setQ] = useState("")
+  const [q, setQ] = useState(search.get("q") ?? "")
   const [offset, setOffset] = useState(0)
   const [exporting, setExporting] = useState(false)
   const [exportError, setExportError] = useState("")
+  const [emailLocked, setEmailLocked] = useState(false)
   const filters = new URLSearchParams()
   for (const [key, value] of Object.entries({ side, bucket, status, from, to, q })) if (value) filters.set(key, value)
   const query = filters.toString()
@@ -70,14 +80,16 @@ function PortfolioReport() {
   const data = result.value
   const preview = useReportPreview()
   const print = useResource<Portfolio>(preview.open && tab === "portfolio" ? url + "/export?" + query : "")
-  const totals = data
-    ? [
-        ["A receber", reais(data.totals.receivable)],
-        ["A pagar", reais(data.totals.payable)],
-        ["Recebíveis vencidos", reais(data.totals.overdueReceivable)],
-        ["Pagamentos vencidos", reais(data.totals.overduePayable)],
-      ]
-    : []
+  const totals = data ? metrics(data) : []
+  const period = [
+    "Data de vencimento", from && "desde " + dateLabel(from), to && "até " + dateLabel(to),
+    !from && !to && "todos os períodos",
+  ].filter(Boolean).join(" • ")
+  const scope = [
+    side === "receivable" ? "A receber" : side === "payable" ? "A pagar" : "A receber e a pagar",
+    q && "Contraparte contém “" + q + "”", bucket && bucketLabels[bucket],
+    status === "open" ? "Em aberto" : status === "paid" ? "Liquidadas" : status === "cancelled" ? "Canceladas" : "",
+  ].filter(Boolean).join(" • ")
   async function exportCsv() {
     setExporting(true)
     setExportError("")
@@ -105,7 +117,7 @@ function PortfolioReport() {
           ["cashflow", "Fluxo de caixa"],
           ["income", "DRE gerencial"],
         ].map(([id, name]) => (
-          <Button key={id} variant={tab === id ? "default" : "outline"} aria-pressed={tab === id} onClick={() => setTab(id!)}>
+          <Button key={id} disabled={emailLocked} variant={tab === id ? "default" : "outline"} aria-pressed={tab === id} onClick={() => setTab(id!)}>
             {name}
           </Button>
         ))}
@@ -114,7 +126,7 @@ function PortfolioReport() {
         <FinanceStatements type={tab === "income" ? "income" : "cashflow"} />
       ) : (
         <>
-          <div className="flex flex-wrap items-end gap-3">
+          <fieldset disabled={emailLocked} aria-label="Filtros da carteira" className="flex flex-wrap items-end gap-3">
             {[
               [
                 "Carteira",
@@ -192,7 +204,7 @@ function PortfolioReport() {
                 }}
               />
             </label>
-          </div>
+          </fieldset>
           {result.loading ? (
             <LoadingState>Consultando a carteira…</LoadingState>
           ) : result.error ? (
@@ -210,10 +222,12 @@ function PortfolioReport() {
                 </div>
                 <section>
                   <h2 className="font-semibold">Saldo por faixa de vencimento</h2>
+                  {data.allowed.includes("receivable")&&<p>Inadimplência sobre o saldo a receber do filtro • {overdueShare(data.totals.overdueReceivable,data.totals.receivable)}</p>}
                   <div className="flex flex-wrap gap-2">
                     {data.buckets.map((item) => (
                       <Button
                         key={item.bucket}
+                        disabled={emailLocked}
                         variant="outline"
                         className="h-auto whitespace-normal text-left"
                         onClick={() => {
@@ -229,13 +243,13 @@ function PortfolioReport() {
                 </section>
                 <div className="flex flex-wrap items-center gap-2">
                   <p className="mr-auto">
-                    {data.total} títulos • posição em {dateLabel(data.asOf)}
+                    {data.companyName} • {data.total} títulos • posição em {dateLabel(data.asOf)} • {period}
                   </p>
                   <Button disabled={exporting || !data.total} variant="outline" onClick={exportCsv}>
                     Exportar CSV
                   </Button>
                   <ReportActions disabled={!data.total} open={preview.open} onToggle={preview.toggle} />
-                  <FinancialDocumentEmail tenantId={data.tenantId} />
+                  <FinancialDocumentEmail key={data.tenantId + query} tenantId={data.tenantId} reportQuery={query} onLockChange={setEmailLocked} />
                 </div>
                 {exportError && <p role="alert">{exportError}</p>}
                 {!data.rows.length ? (
@@ -274,10 +288,10 @@ function PortfolioReport() {
                   </div>
                 )}
                 <div className="flex gap-2">
-                  <Button variant="outline" disabled={!offset} onClick={() => setOffset(Math.max(0, offset - 30))}>
+                  <Button variant="outline" disabled={emailLocked || !offset} onClick={() => setOffset(Math.max(0, offset - 30))}>
                     Anterior
                   </Button>
-                  <Button variant="outline" disabled={offset + 30 >= data.total} onClick={() => setOffset(offset + 30)}>
+                  <Button variant="outline" disabled={emailLocked || offset + 30 >= data.total} onClick={() => setOffset(offset + 30)}>
                     Próxima
                   </Button>
                 </div>
@@ -286,8 +300,9 @@ function PortfolioReport() {
                     <ReportDocument
                       tenantId={data.tenantId}
                       title="Carteira financeira"
-                      scope={"Títulos do filtro • posição em " + dateLabel(data.asOf)}
-                      metrics={totals}
+                      period={period}
+                      scope={scope + " • " + print.value.total + " títulos • posição em " + dateLabel(print.value.asOf)}
+                      metrics={metrics(print.value)}
                       columns={columns}
                       rows={print.value.rows.map(cells)}
                     />

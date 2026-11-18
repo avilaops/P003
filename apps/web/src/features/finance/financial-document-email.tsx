@@ -6,11 +6,13 @@ import { Input } from "@/components/ui/input"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { RequestError } from "@/components/feedback/session-recovery"
 import { useCommand, useResource } from "@/hooks/use-operation"
+import { dateLabel, reais } from "./finance-insights-model"
 
 type Delivery = { id: string; status: "sent" | "failed" | "uncertain"; recipient: string; createdAt: string }
-type EmailSnapshot = { tenantId: string; canSend: boolean; emailReady: boolean; recipient: string | null; documentTitle: string; scope: string; recordCount: number; snapshotHash: string; deliveries: Delivery[] }
+type ReportSummary = { companyName: string; asOf: string; totals: { receivable: string; payable: string; overdueReceivable: string; overduePayable: string } }
+type EmailSnapshot = { tenantId: string; canSend: boolean; emailReady: boolean; recipient: string | null; documentTitle: string; scope: string; recordCount: number; summary?: ReportSummary; snapshotHash: string; deliveries: Delivery[] }
 type Receipt = { tenantId: string; revision: number; delivery: Delivery }
-type Props = { tenantId: string; receivableId?: string; payableId?: string; contractId?: string; disabled?: boolean; onLockChange?: (locked: boolean) => void }
+type Props = { tenantId: string; receivableId?: string; payableId?: string; contractId?: string; reportQuery?: string; disabled?: boolean; onLockChange?: (locked: boolean) => void }
 const labels = { sent: "Aceito pelo servidor de e-mail", failed: "Recusado pelo servidor de e-mail", uncertain: "Confirmação pendente • não criar outro envio" }
 
 export function FinancialDocumentEmail(props: Props) {
@@ -19,11 +21,11 @@ export function FinancialDocumentEmail(props: Props) {
   return activated ? <FinancialEmailComposer {...props} /> : <Button variant="outline" disabled={props.disabled} onClick={() => setActivated(true)}>{props.contractId ? "Enviar cópia do contrato por e-mail" : "Enviar por e-mail"}</Button>
 }
 
-function FinancialEmailComposer({ tenantId, receivableId, payableId, contractId, disabled = false, onLockChange }: Props) {
+function FinancialEmailComposer({ tenantId, receivableId, payableId, contractId, reportQuery, disabled = false, onLockChange }: Props) {
   const [open, setOpen] = useState(true)
   const endpoint = contractId ? `/api/erp/commercial-contracts/${contractId}/email` : payableId ? `/api/erp/financial-payables/${payableId}/email` : receivableId ? `/api/erp/receivables/${receivableId}/email` : "/api/erp/financial-report/email"
   const registeredRecipient = Boolean(contractId || payableId)
-  const resource = useResource<EmailSnapshot>(endpoint)
+  const resource = useResource<EmailSnapshot>(reportQuery ? endpoint + "?" + reportQuery : endpoint)
   const me = useResource<{ tenant: { id: string } }>("/api/erp/me")
   const command = useCommand()
   const messageId = useId()
@@ -39,7 +41,8 @@ function FinancialEmailComposer({ tenantId, receivableId, payableId, contractId,
   const subject = subjectOverride ?? value?.documentTitle ?? "Documento financeiro"
   const validSnapshot = !!value && /^[a-f0-9]{64}$/.test(value.snapshotHash) && /^"\d+"$/.test(resource.etag)
   const ready = !disabled && !resource.loading && !me.loading && !resource.error && !me.error && validSnapshot && value?.canSend && value.emailReady
-  useEffect(() => { onLockChange?.(locked) }, [locked, onLockChange])
+  const lockParent = reportQuery === undefined ? locked : command.busy || command.uncertain
+  useEffect(() => { onLockChange?.(lockParent) }, [lockParent, onLockChange])
   useEffect(() => () => onLockChange?.(false), [onLockChange])
   function refresh() { if (command.busy || command.uncertain) return; command.reset(); setReceipt(null); resource.reload(); me.reload() }
   return <>
@@ -48,7 +51,8 @@ function FinancialEmailComposer({ tenantId, receivableId, payableId, contractId,
       {(resource.loading || me.loading) && !command.uncertain ? <p role="status">Consultando documento e configuração de envio…</p> : <form className="space-y-4" onSubmit={async event => {
         event.preventDefault()
         if (command.busy || command.stale || (!command.uncertain && (!ready || frozen))) return
-        const result = await command.send<Receipt>(endpoint, tenantId, { recipient, subject, message, snapshotHash: value?.snapshotHash }, resource.etag, "POST", reply => {
+        const filters = reportQuery ? Object.fromEntries(new URLSearchParams(reportQuery)) : undefined
+        const result = await command.send<Receipt>(endpoint, tenantId, { recipient, subject, message, snapshotHash: value?.snapshotHash, filters }, resource.etag, "POST", reply => {
           if (reply.tenantId !== tenantId || !reply.delivery || !["sent", "failed", "uncertain"].includes(reply.delivery.status)) return false
           setReceipt(reply.delivery)
           return reply.delivery.status !== "uncertain"
@@ -57,6 +61,9 @@ function FinancialEmailComposer({ tenantId, receivableId, payableId, contractId,
       }}>
         {(resource.error || me.error || !value || !validSnapshot) && <div role="alert"><RequestError message={resource.error || me.error || "Não foi possível conferir o documento e a revisão da empresa ativa."} status={resource.error ? resource.status : me.status} /></div>}
         {value && <div className="rounded-lg border bg-muted/30 p-3 text-sm"><p className="font-medium">{value.documentTitle}</p><p>{value.scope}</p>{contractId ? <p>{value.recordCount} arquivo(s) PDF</p> : <><p>{value.recordCount} registro(s) • PDF A4 do servidor</p><p>O envio não altera saldos ou recebimentos e não comprova conciliação bancária.</p></>}</div>}
+        {value?.summary && <div className="space-y-1 text-sm"><p className="font-medium">{value.summary.companyName} • posição em {dateLabel(value.summary.asOf)}</p>
+          <p>A receber • {reais(value.summary.totals.receivable)} • A pagar • {reais(value.summary.totals.payable)}</p>
+          <p>Recebíveis vencidos • {reais(value.summary.totals.overdueReceivable)} • Pagamentos vencidos • {reais(value.summary.totals.overduePayable)}</p></div>}
         {value && !value.emailReady && <p role="status">O envio de e-mail ainda não está configurado no servidor.</p>}
         {value && !value.canSend && <p role="status">{registeredRecipient && !recipient ? "Confira os e-mails no cadastro dos destinatários." : contractId ? "Confira a revisão do contrato, a disponibilidade do PDF e a permissão de envio." : "Envio indisponível • confira sua permissão de gestão financeira e a situação do título."}</p>}
         <fieldset disabled={!ready || frozen} className="space-y-3">

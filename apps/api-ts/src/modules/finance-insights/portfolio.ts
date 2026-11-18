@@ -50,13 +50,28 @@ export const bucketSql = `CASE WHEN open_cents=0 THEN NULL WHEN due_date>${today
   WHEN due_date>=${today}-90 THEN '61_90' ELSE 'over90' END`
 
 type PortfolioFilter = z.output<typeof portfolioFilters>
+type PortfolioResult = {
+  total: number
+  companyName: string
+  asOf: string
+  totals: {
+    receivable: string; payable: string; overdueReceivable: string; overduePayable: string
+    weekReceivable: string; weekPayable: string; openReceivables: number; openPayables: number
+  }
+  buckets: { bucket: string; count: number; receivable: string; payable: string }[]
+  rows: {
+    id: string; side: "receivable" | "payable"; party: string; partyId: string | null; orderId: string | null
+    operationId: string | null; categoryId: string | null; competenceOn: string; dueDate: string
+    amount: string; settled: string; outstanding: string; status: string; bucket: string | null; revision: string
+  }[]
+}
 export async function portfolio(context: AuthorizedContext, filters: PortfolioFilter, allRows = false) {
   if (filters.from && filters.to && filters.from > filters.to) throw new Problem(422, "invalid_input", "Início posterior ao fim")
   const allowed = sides(context)
   if (filters.side && !allowed.includes(filters.side)) throw new Problem(403, "forbidden", "Carteira sem permissão de consulta")
   const amounts = `${decimal("coalesce(sum(open_cents) FILTER(WHERE side='receivable'),0)")} AS receivable,
                    ${decimal("coalesce(sum(open_cents) FILTER(WHERE side='payable'),0)")} AS payable`
-  const result = await context.client.query(
+  const result = await context.client.query<PortfolioResult>(
     `WITH scoped AS (
     SELECT p.*, ${bucketSql} AS bucket
     FROM finance_portfolio p WHERE tenant_id=$1 AND side=ANY($2::text[])
@@ -77,7 +92,7 @@ export async function portfolio(context: AuthorizedContext, filters: PortfolioFi
       category_id AS "categoryId", competence_on::text AS "competenceOn",due_date::text AS "dueDate",
       ${decimal("amount_cents")} AS amount,${decimal("settled_cents")} AS settled,${decimal("open_cents")} AS outstanding,
       status,bucket,revision::text AS revision FROM filtered ORDER BY due_date,side,id LIMIT $10 OFFSET $11)
-  SELECT total,to_jsonb(totals)-'total' AS totals,${today}::text AS "asOf",
+  SELECT (SELECT legal_name FROM tenants WHERE id=$1) AS "companyName",total,to_jsonb(totals)-'total' AS totals,${today}::text AS "asOf",
     coalesce((SELECT jsonb_agg(to_jsonb(page) ORDER BY "dueDate",side,id) FROM page),'[]') AS rows,
     coalesce((SELECT jsonb_agg(to_jsonb(buckets) ORDER BY bucket) FROM buckets),'[]') AS buckets FROM totals`,
     [
@@ -94,5 +109,5 @@ export async function portfolio(context: AuthorizedContext, filters: PortfolioFi
       allRows ? 0 : (filters.offset ?? 0),
     ],
   )
-  return { tenantId: context.tenantId, allowed, ...result.rows[0] }
+  return { tenantId: context.tenantId, allowed, ...result.rows[0]! }
 }

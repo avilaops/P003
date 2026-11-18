@@ -25,7 +25,11 @@ async function run() {
   const webhookKey = "local-acceptance-hmac-secret",
     merchantToken = "local-merchant-access-token",
     paymentId = "8830391"
-  const browserOrigin = "http://127.0.0.1:33247",
+  const documentToken = "local-document-transport-secret-for-browser-test"
+  const reportMail: { id: string; to: string; attachments: { content: string; filename: string }[] }[] = []
+  const browserPort = Number(process.env.ERP_TREASURY_BROWSER_PORT ?? 33247)
+  const providerOrigin = "http://127.0.0.1:" + (browserPort + 3)
+  const browserOrigin = "http://127.0.0.1:" + browserPort,
     nativeFetch = globalThis.fetch
   let charged = 0,
     approved = false,
@@ -52,6 +56,14 @@ async function run() {
       if (req.headers.authorization === "Bearer " + access)
         reply(200, { sub: subject, email: "tesouraria@example.test" })
       else reply(401, {})
+      return
+    }
+    if (req.url === "/document-mail" && req.method === "POST" && req.headers.authorization === "Bearer " + documentToken) {
+      const parts: Buffer[] = []
+      for await (const chunk of req) parts.push(Buffer.from(chunk))
+      const mail = JSON.parse(Buffer.concat(parts).toString("utf8"))
+      reportMail.push(mail)
+      reply(200, { id: mail.id, status: "sent" })
       return
     }
     if (req.headers.authorization !== "Bearer " + merchantToken) {
@@ -102,7 +114,7 @@ async function run() {
         return new PgClientAdapter(client)
       },
     },
-    userinfoUrl: "http://127.0.0.1:33250/userinfo",
+    userinfoUrl: providerOrigin + "/userinfo",
   })
   let stopping = false
   const stop = async () => {
@@ -176,6 +188,8 @@ async function run() {
       )
     for (const key of ["FINANCE_MP_CONNECTIONS", "FINANCE_MP_ENABLE_PRODUCTION"]) delete process.env[key]
     Object.assign(process.env, {
+      ERP_DOCUMENT_MAIL_N8N_URL: "https://n8n.example.test/document-mail",
+      ERP_DOCUMENT_MAIL_N8N_TOKEN: documentToken,
       FINANCE_MP_SANDBOX_TENANT_ID: tenant,
       FINANCE_MP_SANDBOX_ACCOUNT_ID: account,
       FINANCE_MP_SANDBOX_COLLECTOR_ID: "77",
@@ -185,19 +199,30 @@ async function run() {
     })
     await new Promise<void>((resolve, reject) => {
       provider.once("error", reject)
-      provider.listen(33250, "127.0.0.1", resolve)
+      provider.listen(browserPort + 3, "127.0.0.1", resolve)
     })
     globalThis.fetch = (input, init) => {
       const uri = new URL(String(input))
+      if (uri.origin === "https://n8n.example.test" && uri.pathname === "/document-mail")
+        return nativeFetch(providerOrigin + "/document-mail", init)
       if (["api.mercadopago.com", "api.mercadolibre.com"].includes(uri.hostname))
-        return nativeFetch("http://127.0.0.1:33250" + uri.pathname + uri.search, init)
+        return nativeFetch(providerOrigin + uri.pathname + uri.search, init)
       if (uri.hostname !== "127.0.0.1") throw Error("External network is disabled for the treasury browser test")
       return nativeFetch(input, init)
     }
-    await app.listen({ host: "127.0.0.1", port: 33249 })
+    await app.listen({ host: "127.0.0.1", port: browserPort + 2 })
     process.on("message", async (msg: { command: string }) => {
       try {
-        if (msg.command === "approve") {
+        if (msg.command === "seedReport") {
+          const titles = await seed.query(`WITH orders AS (INSERT INTO sales_orders(id,tenant_id,customer_id,customer_name,customer_tax_id,due_date,amount_cents,status)
+              SELECT gen_random_uuid(),$1,$2,'Cliente selecionado','52998224725','2028-03-01',12345,'completed' FROM generate_series(1,105) RETURNING id)
+            INSERT INTO receivables(id,tenant_id,order_id,customer_name,due_date,amount_cents,status)
+            SELECT gen_random_uuid(),$1,id,'Cliente selecionado','2028-03-01',12345,'open' FROM orders RETURNING id`, [tenant, party])
+          process.send?.({ ids: titles.rows.map(r => r.id) })
+        } else if (msg.command === "reportMail") {
+          const deliveries = await seed.query("SELECT id,snapshot,encode(pdf_content,'base64') AS pdf FROM finance_document_email_deliveries WHERE tenant_id=$1", [tenant])
+          process.send?.({ deliveries: deliveries.rows, messages: reportMail })
+        } else if (msg.command === "approve") {
           approved = true
           const reqId = randomUUID(),
             ts = Math.floor(Date.now() / 1000),

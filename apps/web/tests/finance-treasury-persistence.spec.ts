@@ -2,6 +2,8 @@ import { expect, test } from "@playwright/test"
 import { fork, type ChildProcess } from "node:child_process"
 import path from "node:path"
 import { installFrontendFixture } from "./helpers/frontend-fixture"
+import { createRequire } from "node:module"
+import { pathToFileURL } from "node:url"
 
 type Ready = { ready: boolean; tenant: string; account: string; party: string; access: string }
 type Snapshot = {
@@ -136,6 +138,72 @@ test("Chromium • agrupamento, cobrança Pix, webhook, retorno e conciliação 
       matches: 3,
       matched: 1,
     })
+  } finally {
+    if (backend.connected) {
+      const ended = new Promise((resolve) => backend.once("exit", resolve))
+      backend.send({ command: "stop" })
+      await ended
+    }
+  }
+})
+
+test("Chromium • comando de envio preserva no PDF todos os 105 títulos filtrados da carteira", async ({ context, page, baseURL }) => {
+  test.setTimeout(240_000)
+  test.skip(!process.env.API_TS_TEST_ADMIN_URL, "Requer PostgreSQL de testes descartável")
+  const api = path.resolve(process.cwd(), "../api-ts")
+  const backend = fork(path.join(api, "test/treasury-browser-backend.ts"), [], {
+    cwd: api, execArgv: ["--import", "tsx"], stdio: ["ignore", "inherit", "inherit", "ipc"],
+  })
+  try {
+    const ready = await message<Ready>(backend)
+    const { ids } = await message<{ ids: string[] }>(backend, "seedReport")
+    await installFrontendFixture(context, baseURL, ready.tenant, ready.access)
+    await context.unroute("**/api/erp/**")
+    await page.goto("/relatorios/financeiro?side=receivable")
+    await page.getByLabel("Contraparte", { exact: true }).fill("selecionado")
+    await expect(page.getByText(/105 títulos • posição em/)).toBeVisible({ timeout: 40000 })
+    await expect(page.getByRole("table", { name: "Títulos do filtro" }).getByRole("row")).toHaveCount(31)
+    await page.getByRole("button", { name: "Próxima" }).click()
+    await page.getByRole("button", { name: "Enviar por e-mail", exact: true }).click()
+    const dialog = page.getByRole("dialog")
+    await expect(dialog).toContainText("105 registro(s)", { timeout: 40000 })
+    await expect(dialog).toContainText("Empresa piloto • posição em")
+    await expect(dialog).toContainText("A receber • R$ 12.962,25")
+    await dialog.getByLabel("Destinatário").fill("financeiro@example.test")
+    const sent = page.waitForResponse(r => r.request().method() === "POST" && r.url().endsWith("/financial-report/email"))
+    await dialog.getByRole("button", { name: "Enviar e-mail com anexo" }).click()
+    const response = await sent
+    expect(response.ok(), await response.text()).toBeTruthy()
+    expect(response.request().postDataJSON().filters).toEqual({ side: "receivable", q: "selecionado" })
+    await expect(dialog).toContainText("Aceito pelo servidor de e-mail")
+    type Mail = { id: string; to: string; attachments: { content: string; filename: string }[] }
+    type Delivery = { id: string; pdf: string; snapshot: { rows: { id: string }[]; totals: { receivable: string }; asOf: string } }
+    const evidence = await message<{ deliveries: Delivery[]; messages: Mail[] }>(backend, "reportMail")
+    expect(evidence.deliveries).toHaveLength(1)
+    expect(evidence.messages).toHaveLength(1)
+    const delivery = evidence.deliveries[0]!, mail = evidence.messages[0]!
+    expect(mail.id).toBe(delivery.id)
+    expect(mail.to).toBe("financeiro@example.test")
+    expect(delivery.snapshot.totals.receivable).toBe("12962.25")
+    expect(delivery.snapshot.rows.map(r => r.id).sort()).toEqual(ids.sort())
+    expect(mail.attachments[0]!.content).toBe(delivery.pdf.replace(/\s+/g, ""))
+    const require = createRequire(path.join(process.cwd(), "package.json"))
+    const pdfModule = pathToFileURL(require.resolve("pdfjs-dist/legacy/build/pdf.mjs")).href
+    const { getDocument } = await import(pdfModule) as typeof import("pdfjs-dist")
+    const task = getDocument({ data: new Uint8Array(Buffer.from(mail.attachments[0]!.content, "base64")), useSystemFonts: true })
+    const pdf = await task.promise
+    const pages: string[] = []
+    for (let n = 1; n <= pdf.numPages; n++) {
+      const text = await (await pdf.getPage(n)).getTextContent()
+      pages.push(text.items.map(item => "str" in item ? item.str : "").join(" "))
+    }
+    const contents = pages.join(" ")
+    expect(contents).toContain("Empresa piloto")
+    expect(contents).toContain(delivery.snapshot.asOf.split("-").reverse().join("/"))
+    expect(contents).toContain("12.962,25")
+    expect(contents).not.toContain("Cliente de teste")
+    for (const id of ids) expect(contents).toContain(id)
+    await task.destroy()
   } finally {
     if (backend.connected) {
       const ended = new Promise((resolve) => backend.once("exit", resolve))

@@ -76,8 +76,14 @@ export async function verifyDocumentCopies(seed: Pool, pool: DatabasePool, other
       assert.equal((await post(payload.snapshotHash)).json().delivery.id, sent.json().delivery.id)
       const stored = (await seed.query("SELECT pdf_content,pdf_sha256,snapshot,filename FROM finance_document_email_deliveries WHERE id=$1", [sent.json().delivery.id])).rows[0]
       assert.equal(stored.pdf_sha256, digest(stored.pdf_content))
-      assert.equal(stored.snapshot.receivables[0].amountCents, 12345)
-      assert.equal(stored.snapshot.payables.length, isReport ? 1 : 0)
+      if (isReport) {
+        assert.equal(stored.snapshot.rows.length, 2)
+        assert.equal(stored.snapshot.totals.receivable, "123.45")
+        assert.equal(stored.snapshot.totals.payable, "123.45")
+      } else {
+        assert.equal(stored.snapshot.receivables[0].amountCents, 12345)
+        assert.equal(stored.snapshot.payables.length, 0)
+      }
       assert.equal(stored.filename, mails.at(-1)!.attachments[0]!.filename)
       assert.deepEqual(stored.pdf_content, mails.at(-1)!.attachments[0]!.content)
     }
@@ -124,6 +130,49 @@ export async function verifyDocumentCopies(seed: Pool, pool: DatabasePool, other
     assert.deepEqual(saved.rows[0], { status: "completed", revision: "1", send_requested_at: null })
     await seed.query("DELETE FROM role_permissions WHERE role_id=$1 AND permission_code='sales.contracts.package'", [role])
     assert.equal((await app.inject({ method: "GET", url: `/api/v1/commercial-contracts/${contract}/email`, headers })).json().canSend, false)
+    const reportUrl = "/api/v1/financial-report/email"
+    await seed.query(`WITH orders AS (INSERT INTO sales_orders(id,tenant_id,customer_id,customer_name,customer_tax_id,due_date,amount_cents,status)
+        SELECT gen_random_uuid(),$1,$1,'Cliente selecionado','52998224725','2028-03-01',12345,'completed'
+        FROM generate_series(1,105) RETURNING id)
+      INSERT INTO receivables(id,tenant_id,order_id,customer_name,due_date,amount_cents,status)
+      SELECT gen_random_uuid(),$1,id,'Cliente selecionado','2028-03-01',12345,'open' FROM orders`, [tenant])
+    const filters = { side: "receivable", q: "selecionado", from: "2028-03-01", to: "2028-03-01", status: "open", partyId: tenant }
+    const query = new URLSearchParams(filters).toString()
+    const getPreview = () => app.inject({ method: "GET", url: reportUrl + "?" + query, headers })
+    const preview = await getPreview(), exported = await app.inject({ method: "GET", url: "/api/v1/finance/portfolio/export?" + query, headers })
+    assert.equal(preview.statusCode, 200, preview.body)
+    const result = preview.json(), source = exported.json()
+    assert.equal(result.recordCount, 105); assert.deepEqual(result.summary.totals, source.totals)
+    assert.equal(result.summary.companyName, "Empresa de documentos"); assert.equal(result.summary.asOf, source.asOf)
+    assert.equal(result.summary.totals.receivable, "12962.25"); assert.equal(result.summary.totals.payable, "0.00")
+    assert.equal((await app.inject({ method: "GET", url: reportUrl + "?limit=30", headers })).statusCode, 422)
+    assert.equal((await app.inject({ method: "GET", url: reportUrl, headers: { ...headers, "x-tenant-id": other } })).statusCode, 403)
+    const sendKey = randomUUID()
+    const sendReport = (scope: object, snapshotHash: string) => app.inject({
+      method: "POST", url: reportUrl, headers: { ...headers, "if-match": String(preview.headers.etag), "idempotency-key": sendKey },
+      payload: { filters: scope, snapshotHash, recipient: "financial@example.test", subject: "Carteira filtrada", message: "Confira." }
+    })
+    // Same rows with a different filter still require review of the scope.
+    assert.equal((await sendReport({ ...filters, q: "cliente selecionado" }, result.snapshotHash)).statusCode, 412)
+    await seed.query("UPDATE receivables SET amount_cents=10000,revision=revision+1 WHERE id=$1", [source.rows[104].id])
+    assert.equal((await sendReport(filters, result.snapshotHash)).statusCode, 412)
+    const fresh = (await getPreview()).json()
+    const sent = await sendReport(filters, fresh.snapshotHash)
+    assert.equal(sent.statusCode, 200, sent.body)
+    assert.equal((await sendReport(filters, fresh.snapshotHash)).json().delivery.id, sent.json().delivery.id)
+    assert.equal((await sendReport({ ...filters, status: "paid" }, fresh.snapshotHash)).statusCode, 409)
+    const evidence = (await seed.query("SELECT snapshot,snapshot_hash,pdf_content FROM finance_document_email_deliveries WHERE id=$1", [sent.json().delivery.id])).rows[0]
+    assert.deepEqual(evidence.snapshot.filters, filters)
+    assert.equal(evidence.snapshot.total, 105)
+    assert.equal(evidence.snapshot_hash, fresh.snapshotHash)
+    assert.equal(evidence.snapshot.totals.receivable, "12938.80")
+    assert.deepEqual(evidence.snapshot.rows.map((r: { id: string }) => r.id), source.rows.map((r: { id: string }) => r.id))
+    assert.deepEqual(evidence.pdf_content, mails.at(-1)!.attachments[0]!.content)
+    await seed.query("DELETE FROM role_permissions WHERE role_id=$1 AND permission_code='finance.payables.manage'", [role])
+    assert.equal((await getPreview()).json().canSend, false)
+    assert.equal((await sendReport(filters, fresh.snapshotHash)).statusCode, 403)
+    await seed.query("DELETE FROM role_permissions WHERE role_id=$1 AND permission_code='finance.payables.read'", [role])
+    assert.equal((await getPreview()).statusCode, 403)
   } finally {
     await app.close()
     await seed.query("DELETE FROM role_permissions WHERE role_id=$1 AND permission_code=ANY($2::text[])", [role, permissions])
