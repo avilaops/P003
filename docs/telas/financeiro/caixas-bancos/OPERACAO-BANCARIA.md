@@ -29,6 +29,10 @@ Registre o evento **Payments** no painel do Mercado Pago. A URL pública é `htt
 
 ## Homologar cobrança
 
+A empresa ainda não possui conta de homologação do provedor. O aceite local usa PostgreSQL descartável, API TypeScript, BFF e Chromium com uma instituição HTTP de teste. A emissão e a notificação no ambiente oficial dependem da conta de teste do vendedor e de suas credenciais.
+
+Para reproduzir o aceite local, informe a URL administrativa de um PostgreSQL de teste em `API_TS_TEST_ADMIN_URL` e execute `pnpm --dir apps/web exec playwright test --config playwright.finance-treasury.config.ts finance-treasury-persistence.spec.ts`. O teste cria um banco descartável, roda as migrações, usa um papel sujeito a RLS e compara os valores da tela com os lançamentos no PostgreSQL. A web, a API e a instituição de teste escutam nas portas locais 33247, 33249 e 33250.
+
 1. Cadastre um pagador de teste e um título em reais com vencimento válido. Para boleto, preencha o endereço. Use o e-mail do comprador de teste do Mercado Pago.
 2. Em **Financeiro • Remessas e retornos**, escolha a conta marcada como homologação, selecione o título e emita Pix ou boleto. Confira o identificador do pagamento e o código retornado. O ERP reserva os títulos antes da emissão e mantém a chave ao recuperar uma tentativa. [Mercado Pago • Pix](https://www.mercadopago.com.br/developers/pt/docs/checkout-bricks/payment-brick/payment-submission/pix) • [Mercado Pago • boleto](https://www.mercadopago.com.br/developers/pt/docs/checkout-bricks/payment-brick/payment-submission/other-payment-methods)
 3. Confira os eventos de teste disponíveis para o meio de pagamento. A confirmação de um pagamento aprovado identifica o vendedor, a conta, a moeda, o valor, a data e o líquido. A baixa grava o principal em cada título e registra eventual tarifa como saída na conta. Estornos externos, chargebacks e divergências exigem conferência.

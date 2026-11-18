@@ -1,6 +1,7 @@
 import { createHmac, timingSafeEqual } from "node:crypto"
 import { z } from "zod"
 import { Problem } from "../../platform/problem.js"
+import { parseJson } from "../../platform/json.js"
 import { conflict, invalid } from "./ledger.js"
 
 const merchantSchema = z.object({
@@ -89,7 +90,11 @@ async function remote(transport: typeof fetch, url: string, config: Merchant, bo
       "bank_request_failed",
       "Mercado Pago recusou a operação • HTTP " + response.status,
     )
-  return response.json() as Promise<unknown>
+  try {
+    return parseJson(await response.text()) as unknown
+  } catch {
+    throw new Problem(503, "bank_unavailable", "O provedor retornou uma resposta inválida. Confira a mesma operação")
+  }
 }
 export const paymentSchema = z.object({
   id: z.coerce.string().regex(/^\d+$/),

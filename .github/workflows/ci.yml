@@ -14,7 +14,7 @@ jobs:
     outputs:
       web: ${{ steps.scope.outputs.web }}
       api: ${{ steps.scope.outputs.api }}
-      native_api: ${{ steps.scope.outputs.native_api }}
+      native_api: ${{ steps.scope.outputs.native_api == 'true' || (steps.scope.outputs.api == 'true' && steps.components.outputs.typescript_only != 'true') }}
       fiscal: ${{ steps.scope.outputs.fiscal }}
     steps:
     - uses: actions/checkout@v4
@@ -22,7 +22,7 @@ jobs:
         fetch-depth: 0
     - id: scope
       env:
-        BASE_SHA: ${{ github.event.pull_request.base.sha || format('{0}^', github.sha) }}
+        BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
       run: 'script_file=$(mktemp)
 
         trap ''rm -f -- "$script_file"'' EXIT
@@ -37,6 +37,10 @@ jobs:
         -- bash --noprofile --norc -e -o pipefail "$script_file"
 
         '
+    - name: Check the published native inputs for a scoped TypeScript validation
+      id: components
+      if: steps.scope.outputs.native_api == 'false' && steps.scope.outputs.api == 'true'
+      run: python3 scripts/ci/published-components.py select --native-only
     - name: Preserve measured script durations
       if: always()
       uses: actions/upload-artifact@v4
@@ -81,6 +85,7 @@ jobs:
       source_sha: ${{ github.sha }}
       full: false
       check_database: ${{ needs.changes.outputs.api == 'true' }}
+      typescript_only: ${{ needs.changes.outputs.native_api == 'false' }}
   gate:
     needs:
     - changes

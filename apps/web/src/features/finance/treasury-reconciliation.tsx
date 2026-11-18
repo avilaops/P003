@@ -141,7 +141,7 @@ export function TreasuryReconciliation({
                   onChange={(e) => setFile(e.target.files?.[0] ?? null)}
                 />
               </label>
-              <Button disabled={!file || disabled}>Importar extrato</Button>
+              <Button type="submit" disabled={!file || disabled}>Importar extrato</Button>
             </form>
           )}
           <div className="grid gap-4 md:grid-cols-2">

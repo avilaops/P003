@@ -4,6 +4,7 @@ import { timingSafeEqual } from "node:crypto";
 import { pathToFileURL } from "node:url";
 import { dispatch, EngineInputError } from "./engine.ts";
 import { handleDanfeMcp } from "./danfe-mcp.ts";
+import { renderAuthorizedDanfe } from "./danfe-render.ts";
 
 const MAX_BODY = 2_097_152;
 function reply(response: ServerResponse, status: number, body: unknown) {
@@ -20,7 +21,8 @@ export function createHandler(token: string, danfeUpstream?: string) {
     if (request.method === "GET" && request.url === "/healthz") { reply(response, 200, { status: "ok", environments: ["homologation", "production"] }); return; }
     const match = /^\/v1\/(prepare|authorize|consult|event|void|distribute|distribute-cte|inspect-cte|inspect-nfse|prepare-nfse|issue-nfse|consult-nfse|cancel-nfse|manifest)$/.exec(request.url ?? "");
     const danfeMcp = request.url === "/mcp/danfe" && ["GET", "POST", "DELETE"].includes(request.method ?? "");
-    if (!danfeMcp && (request.method !== "POST" || !match)) { reply(response, 404, { code: "not_found" }); return; }
+    const danfeRender = request.url === "/v1/danfe" && request.method === "POST";
+    if (!danfeMcp && !danfeRender && (request.method !== "POST" || !match)) { reply(response, 404, { code: "not_found" }); return; }
     if (request.method === "POST" && !request.headers["content-type"]?.startsWith("application/json")) { reply(response, 415, { code: "json_required" }); return; }
     if (active >= 4) { reply(response, 503, { code: "busy" }); return; }
     active++;
@@ -41,11 +43,12 @@ export function createHandler(token: string, danfeUpstream?: string) {
       let input: unknown;
       try { input = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(Buffer.concat(chunks))); }
       catch { reply(response, 400, { code: "invalid_json" }); return; }
-      if (danfeMcp) await handleDanfeMcp(request, response, input, danfeUpstream);
+      if (danfeRender) await renderAuthorizedDanfe(input,response,token,danfeUpstream);
+      else if (danfeMcp) await handleDanfeMcp(request, response, input, danfeUpstream);
       else reply(response, 200, await dispatch(match![1], input));
     } catch (error) {
       if (response.headersSent) { response.destroy(); return; }
-      if (danfeMcp) { reply(response, 502, { code: "fiscal_mcp_unavailable" }); return; }
+      if (danfeMcp || danfeRender) { reply(response, 502, { code: "fiscal_mcp_unavailable" }); return; }
       // Neither third-party exception messages nor stack traces may reflect A1 material.
       reply(response, error instanceof EngineInputError ? 200 : 502, error instanceof EngineInputError
         ? { status: "blocked", blockers: [error.code], title: error.message }

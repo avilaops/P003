@@ -5,6 +5,9 @@ COPY --chown=node:node apps/web/.next/standalone/ ./
 COPY --chown=node:node apps/web/.next/static/ ./apps/web/.next/static/
 COPY --chown=node:node apps/web/public/ ./apps/web/public/
 COPY --chown=node:node artifacts/api-ts/ ./apps/api-ts/
+COPY --chown=node:node apps/api/assets/documents/commercial-document.css ./apps/api/assets/documents/
+COPY --chown=node:node apps/api/assets/fonts/ ./apps/api/assets/fonts/
+COPY --chown=node:node migrations/ ./migrations/
 USER node
 EXPOSE 3000
 HEALTHCHECK --interval=15s --timeout=5s --start-period=30s CMD node -e "fetch('http://127.0.0.1:3000/entrar').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"

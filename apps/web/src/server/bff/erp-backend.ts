@@ -7,6 +7,12 @@ export type MigratedModule = "preferences" | "registrations" | "sales" | "report
 export type BackendEnvironment = { ERP_TYPESCRIPT_API_URL?: string | undefined; ERP_TYPESCRIPT_MODULES?: string | undefined }
 const uuid = "[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}"
 const routes: { module: MigratedModule; methods: readonly string[]; path: RegExp }[] = [
+  { module: "reports", methods: ["GET", "POST"], path: /^\/financial-report\/email$/ },
+  { module: "reports", methods: ["GET", "POST"], path: new RegExp(`^/receivables/${uuid}/email$`, "i") },
+  { module: "reports", methods: ["GET", "POST"], path: new RegExp(`^/financial-payables/${uuid}/email$`, "i") },
+  { module: "sales", methods: ["GET", "POST"], path: new RegExp(`^/commercial-contracts/${uuid}/email$`, "i") },
+  { module: "sales", methods: ["POST"], path: new RegExp(`^/commercial-contracts/${uuid}/send-package$`, "i") },
+  { module: "sales", methods: ["GET", "POST"], path: new RegExp(`^/(?:orders|proposals)/${uuid}/email$`, "i") },
   { module: "preferences", methods: ["GET", "PUT"], path: /^\/preferences$/ },
   { module: "registrations", methods: ["GET"], path: /^\/products\/finishes$/ },
   { module: "registrations", methods: ["GET", "POST"], path: /^\/(?:parties|products|product-categories|product-groups|tag-groups|tags)$/ },

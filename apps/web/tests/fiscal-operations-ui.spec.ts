@@ -143,6 +143,33 @@ test("NFC-e autorizada gera DANFE e valida XML e PDF pelo BFF", async ({ page })
   await expect(page.getByText(digest(nfceXml), { exact: true })).toBeVisible()
   await expect(page.getByText(digest(nfcePdf), { exact: true })).toBeVisible()
   expect(danfeRequests).toEqual([nfceXml])
+  await page.route(`**/api/erp/fiscal/nfe/${record}/email`, route => route.fulfill({ headers: { ETag: '"4"' }, json: {
+    tenantId: tenant, recipientEmail: "fiscal@example.test", status: "ready", smtpConfigured: true, attachments: ["XML autorizado da NFC-e"],
+  } }))
+  await page.getByRole("button", { name: "Enviar por e-mail" }).click()
+  await expect(page.getByRole("region", { name: "Envio da NFC-e por e-mail" })).toContainText("Anexos • XML autorizado da NFC-e")
+})
+
+test("NFS-e emitida oferece o XML autorizado e confirma o destinatário", async ({ page }) => {
+  let sent = false
+  await page.route("**/api/erp/me", route => route.fulfill({ json: { tenant: { id: tenant } } }))
+  await page.route("**/api/erp/fiscal/outgoing-nfses?offset=0", route => route.fulfill({ json: {
+    tenantId: tenant, canSend: true, hasMore: false, data: [{ id: record, number: "12", environment: "homologation", accessKey: "1".repeat(50) }],
+  } }))
+  await page.route(`**/api/erp/fiscal/outgoing-nfses/${record}/email`, route => {
+    if (route.request().method() === "POST") {
+      expect(route.request().postDataJSON()).toEqual({ recipientEmail: "tomador@example.test" })
+      sent = true
+    }
+    return route.fulfill({ headers: { ETag: '"1"' }, json: { tenantId: tenant, recipientEmail: "tomador@example.test",
+      status: sent ? "sent" : "ready", smtpConfigured: true, attachments: ["XML autorizado da NFS-e"] } })
+  })
+  await page.goto("/fiscal/nfses/emitidas")
+  await page.getByRole("button", { name: "Enviar por e-mail" }).click()
+  const panel = page.getByRole("region", { name: "Envio da NFS-e por e-mail" })
+  await expect(panel).toContainText("Anexos • XML autorizado da NFS-e")
+  await panel.getByRole("button", { name: "Confirmar envio" }).click()
+  await expect(panel.getByRole("status")).toHaveText("O serviço de e-mail aceitou a mensagem com o XML.")
 })
 
 test("envio da NF-e exibe o destinatário e exige confirmação para enviar os anexos", async ({ page }) => {

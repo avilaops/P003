@@ -12,8 +12,8 @@ test('every production API operation and BFF has a contract without claiming ver
   const inventory = await discover(fileURLToPath(root));
   const assessment = assessContracts(catalogue, inventory);
   assert.deepEqual(assessment.findings, []);
-  assert.equal(assessment.apiOperations, 389);
-  assert.equal(assessment.bffOperations, 346);
+  assert.equal(assessment.apiOperations, 400);
+  assert.equal(assessment.bffOperations, 356);
   assert.equal(assessment.pendingFlows, 34);
   assert.equal(assessment.p0Ready, false);
   assert.equal(assessment.runtimeVerdict, 'not_verified_by_catalog');
@@ -21,7 +21,15 @@ test('every production API operation and BFF has a contract without claiming ver
     for (const file of action.sources) await readFile(new URL(file, root));
     if (action.input.body) {
       const { source, type } = action.input.body;
-      assert.match(await readFile(new URL(source, root), 'utf8'), new RegExp(`\\b(?:struct|enum)\\s+${type}\\b`));
+      assert.match(type, /^[A-Za-z_][\w]*$/);
+      const definition = await readFile(new URL(source, root), 'utf8');
+      if (source.endsWith('.ts')) {
+        assert.match(definition, new RegExp(`^\\s*(?:export\\s+)?const\\s+${type}\\s*=\\s*z\\.(?:object|strictObject)\\(`, 'm'), source);
+        assert.match(definition, new RegExp(`\\b${type}\\.(?:safeParse|parse)\\(request\\.body\\)`), source);
+      } else {
+        assert.match(source, /\.rs$/);
+        assert.match(definition, new RegExp(`\\b(?:struct|enum)\\s+${type}\\b`), source);
+      }
     }
   }
 });

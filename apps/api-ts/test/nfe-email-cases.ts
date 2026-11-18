@@ -5,6 +5,7 @@ import type { Pool } from "pg"
 import { buildApp } from "../src/app.js"
 import type { Envelope } from "../src/modules/nfe-email/smtp.js"
 import type { DatabasePool } from "../src/platform/database.js"
+import { sha256 } from "../src/modules/nfe-email/danfe.js"
 
 export async function verifyNfeEmail(seed: Pool, pool: DatabasePool, tenant: string, other: string, role: string) {
   const id = randomUUID(), key = randomUUID()
@@ -21,8 +22,8 @@ export async function verifyNfeEmail(seed: Pool, pool: DatabasePool, tenant: str
   const app = buildApp({ pool, userinfoUrl: "http://auth.test/userinfo",
     fetchAuth: async () => Response.json({ sub: "reader", email: "reader@example.test" }),
     nfeEmail: {
-      render: async ({ xml: actual, tenantId, authorization }) => {
-        assert.equal(actual, xml); assert.equal(tenantId, tenant); assert.equal(authorization, "Bearer reader")
+      render: async ({ xml: actual, issuerTaxId }) => {
+        assert.equal(actual, xml); assert.equal(issuerTaxId, "04252011000110")
         return pdf
       },
       sender: async () => async envelope => { intercepted.push(envelope); return "sent" },
@@ -67,6 +68,44 @@ export async function verifyNfeEmail(seed: Pool, pool: DatabasePool, tenant: str
     assert.equal((await post(tag, "another@example.test")).statusCode, 409)
     await seed.query("UPDATE fiscal_nfe_documents SET status='cancelled' WHERE tenant_id=$1 AND id=$2", [tenant, id])
     assert.equal((await get()).statusCode, 409)
+
+    const consumer = randomUUID()
+    const consumerKey = accessKey.slice(0,20) + "65" + accessKey.slice(22)
+    const consumerXml = xml.replaceAll(accessKey,consumerKey).replace("<mod>55</mod>", "<mod>65</mod>")
+    await seed.query(`INSERT INTO fiscal_nfe_drafts(tenant_id,id,environment,model,profile_revision,company_revision,issuer_snapshot,details,products_total_cents)
+      VALUES($1,$2,'homologation',65,1,1,'{}','{}',1)`, [tenant, consumer])
+    await seed.query(`INSERT INTO fiscal_nfe_documents(tenant_id,id,model,status,series,number,issued_at,random_code,access_key,signed_xml,authorized_xml,protocol)
+      VALUES($1,$2,65,'authorized',1,4,now(),'00000001',$3,'signed-only',$4,'135260000000000')`, [tenant, consumer, consumerKey, consumerXml])
+    const received = randomUUID(), outgoing = randomUUID()
+    const fixture = JSON.parse(await readFile(new URL("../../api/src/http/fixtures/nfse-national-inspection.json", import.meta.url), "utf8"))
+    const { xml: receivedXml, ...metadata } = fixture
+    await seed.query(`INSERT INTO fiscal_received_nfses(tenant_id,id,source,environment,access_key,company_tax_id,xml,xml_sha256,metadata,auth_subject)
+      VALUES($1,$2,'nfse_nacional','homologation',$3,$4,$5,$6,$7,'reader')`,
+      [tenant,received,metadata.accessKey,metadata.recipient.value,receivedXml,sha256(receivedXml),metadata])
+    const outgoingXml = receivedXml.replaceAll(metadata.provider.value,metadata.recipient.value)
+    await seed.query(`INSERT INTO fiscal_outgoing_nfse_issuances(tenant_id,id,external_id,status,environment,access_key,xml,xml_sha256,request_snapshot,request_hash,dps_id,created_by_subject)
+      VALUES($1,$2,'mail-test','authorized','homologation',$3,$4,$5,$6,$5,$7,'reader')`,
+      [tenant,outgoing,metadata.accessKey.replace(metadata.provider.value, metadata.recipient.value),outgoingXml,sha256(outgoingXml),{ externalId: "mail-test", environment: "homologation", customer: { taxId: metadata.recipient.value, email } }, "DPS" + "1".repeat(42)])
+    for (const permission of ["fiscal.nfse.read", "fiscal.nfse.import", "fiscal.outgoing_nfse.read", "fiscal.outgoing_nfse.issue"]) {
+      await seed.query("INSERT INTO role_permissions(role_id,permission_code) VALUES($1,$2) ON CONFLICT DO NOTHING",[role,permission])
+    }
+    for (const [resource, expectedXml] of [
+      ["nfe/" + consumer, consumerXml], ["received-nfses/" + received, receivedXml], ["outgoing-nfses/" + outgoing, outgoingXml],
+    ]) {
+      const url = "/api/v1/fiscal/" + resource + "/email"
+      const result = await app.inject({ method: "GET", url, headers })
+      assert.equal(result.statusCode,200,result.body)
+      assert.equal(result.json().attachments.length,1)
+      assert.equal(result.json().recipientEmail,email)
+      const commandHeaders = { ...headers, "if-match": String(result.headers.etag), "idempotency-key": randomUUID() }
+      const send = () => app.inject({ method: "POST", url, headers: commandHeaders, payload: { recipientEmail: email } })
+      const before: number = intercepted.length
+      assert.equal((await send()).json().status,"sent")
+      assert.equal((await send()).headers["idempotency-replayed"],"true")
+      assert.equal(intercepted.length,before + 1)
+      assert.deepEqual(intercepted.at(-1)?.xml,Buffer.from(expectedXml))
+      assert.equal(intercepted.at(-1)?.pdf,null)
+    }
   } finally {
     await app.close()
     await seed.query("DELETE FROM platform_mail_settings")

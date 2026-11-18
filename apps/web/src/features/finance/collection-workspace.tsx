@@ -41,7 +41,13 @@ const stateNames: Record<string, string> = {
   unknown_charge: "Cobrança desconhecida",
   divergent: "Divergência com o provedor",
 }
-type Group = { id: string; kind: string; dueOn: string; items: { id: string; side: string; amount: string }[] }
+type Group = {
+  id: string
+  kind: string
+  dueOn: string
+  reversedOn?: string | null
+  items: { id: string; side: string; amount: string }[]
+}
 export function CollectionWorkspace({ groupId = "", partyId = "" }: { groupId?: string; partyId?: string }) {
   return groupId ? <GroupedCollection groupId={groupId} partyId={partyId} /> : <Collections />
 }
@@ -51,7 +57,7 @@ function GroupedCollection({ groupId, partyId }: { groupId: string; partyId: str
   )
   if (history.loading) return <p role="status">Consultando agrupamento…</p>
   if (history.error) return <RequestError message={history.error} status={history.status} />
-  const group = history.value?.data.find((g) => g.id === groupId && g.kind === "billing_group")
+  const group = history.value?.data.find((g) => g.id === groupId && g.kind === "billing_group" && !g.reversedOn)
   if (!group || !history.value) return <p role="alert">Agrupamento não encontrado para este cliente.</p>
   return <Collections group={group} groupTenant={history.value.tenantId} />
 }
@@ -193,7 +199,7 @@ function Collections({ group, groupTenant }: { group?: Group; groupTenant?: stri
                       onChange={(e) => setFile(e.target.files?.[0] ?? null)}
                     />
                   </label>
-                  <Button variant="outline" disabled={!file || disabled}>
+                  <Button type="submit" variant="outline" disabled={!file || disabled}>
                     Conferir retorno
                   </Button>
                 </form>

@@ -1,0 +1,314 @@
+{
+  "name": "ERP • Envio de documentos por e-mail",
+  "nodes": [
+    {
+      "id": "26573353-581a-4153-89cf-de9259020018",
+      "name": "Receber documentos",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.2,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "erp-document-mail-v1",
+        "authentication": "headerAuth",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "webhookId": "b790f752-0527-4dfc-8c71-d804790e5ae4",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "ErpDocMailHdr01",
+          "name": "ERP Document Mail • Header Auth"
+        }
+      }
+    },
+    {
+      "id": "bcc38f24-8d20-4b33-b283-4cd817225378",
+      "name": "Validar documento",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        220,
+        0
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const request = $input.first().json;\nconst body = request.body;\nconst ownObject = value => value !== null && typeof value === 'object' && !Array.isArray(value);\nconst id = ownObject(body) && typeof body.id === 'string' && /^(?:[a-f0-9]{64}|[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12})$/i.test(body.id) ? body.id : '';\nconst failed = () => [{json:{id,status:'failed',httpCode:422}}];\nif (request.executionMode !== 'production' || request.webhookUrl !== 'https://n8n.avilaops.com/webhook/erp-document-mail-v1' || !id || !/^application\\/json(?:\\s*;|$)/i.test(request.headers?.['content-type'] || '') || Object.keys(body).some(k => !['id','to','subject','text','html','attachments'].includes(k))) return failed();\nconst recipients = Array.isArray(body.to) ? body.to : [body.to];\nconst address = /^[A-Za-z0-9!#$%&'*+/=?^_\\x60{|}~-]+(?:\\.[A-Za-z0-9!#$%&'*+/=?^_\\x60{|}~-]+)*@(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?\\.)+[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?$/;\nif (recipients.length < 1 || recipients.length > 20 || recipients.some(v => typeof v !== 'string' || v.length > 254 || /[\\s\\x00-\\x1f\\x7f]/.test(v) || !address.test(v)) || new Set(recipients.map(v => v.toLowerCase())).size !== recipients.length) return failed();\nif (typeof body.subject !== 'string' || !body.subject.trim() || body.subject.length > 256 || /[\\x00-\\x1f\\x7f]/.test(body.subject)) return failed();\nconst safeBody = (v,limit) => typeof v === 'string' && Buffer.byteLength(v,'utf8') <= limit && !/[\\x00-\\x08\\x0b\\x0c\\x0e-\\x1f\\x7f]/.test(v);\nif (!safeBody(body.text, 128 * 1024) || !body.text.trim() || (body.html !== undefined && !safeBody(body.html, 512 * 1024))) return failed();\nif (!Array.isArray(body.attachments) || body.attachments.length > 40) return failed();\nconst binary = {};\nconst names = new Set();\nconst maxBytes = 10 * 1024 * 1024;\nlet total = 0;\nfor (const [i, file] of body.attachments.entries()) {\n  if (!ownObject(file) || Object.keys(file).some(k => !['filename','contentType','content'].includes(k))) return failed();\n  const {filename,contentType,content} = file;\n  if (typeof filename !== 'string' || filename.length > 180 || !filename.trim() || /[\\/\\\\\\x00-\\x1f\\x7f<>:\"|?*]/.test(filename) || names.has(filename.toLowerCase())) return failed();\n  if (typeof contentType !== 'string' || !/^(application\\/pdf|application\\/xml|text\\/xml|text\\/html)(?:\\s*;\\s*charset\\s*=\\s*utf-8)?$/i.test(contentType)) return failed();\n  const mimeType = contentType.split(';')[0].trim().toLowerCase();\n  const ext = mimeType === 'application/pdf' ? /\\.pdf$/i : mimeType === 'text/html' ? /\\.html?$/i : /\\.xml$/i;\n  if (!ext.test(filename) || typeof content !== 'string' || !content.length || content.length % 4 !== 0 || content.length > 4 * Math.ceil((maxBytes-total)/3) || !/^[A-Za-z0-9+/]+={0,2}$/.test(content)) return failed();\n  const bytes = Buffer.from(content,'base64');\n  total += bytes.length;\n  if (total > maxBytes || bytes.toString('base64') !== content) return failed();\n  names.add(filename.toLowerCase());\n  binary['file'+i] = {data:content,mimeType,fileName:filename};\n}\nreturn [{json:{id,ready:true,to:recipients.join(', '),recipients,subject:body.subject,text:body.text,html:body.html || '',files:Object.keys(binary).join(',')},binary}];"
+      }
+    },
+    {
+      "id": "e0b0e0db-25c4-4d0a-99b9-d0b62cefc44e",
+      "name": "Dados válidos",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        440,
+        0
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.ready === true }}",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              },
+              "rightValue": ""
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "054d44ec-7106-4e1d-bbb6-3559781dc27a",
+      "name": "Verificar repetição",
+      "type": "n8n-nodes-base.removeDuplicates",
+      "typeVersion": 2,
+      "position": [
+        680,
+        -100
+      ],
+      "parameters": {
+        "operation": "removeItemsSeenInPreviousExecutions",
+        "logic": "removeItemsWithAlreadySeenKeyValues",
+        "dedupeValue": "={{ $json.id.toLowerCase() }}",
+        "options": {
+          "scope": "node",
+          "historySize": 1000000
+        }
+      },
+      "alwaysOutputData": true,
+      "onError": "continueErrorOutput"
+    },
+    {
+      "id": "d3f6534a-d2a7-46e1-9089-61e68a77baa9",
+      "name": "Responder ao ERP",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        1540,
+        50
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({status:$json.status || 'unknown',id:$('Validar documento').first().json.id}) }}",
+        "options": {
+          "responseCode": "={{ $json.httpCode || 200 }}",
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Cache-Control",
+                "value": "no-store"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": "3d44b60e-1e01-40e2-b854-d5e8a7e76626",
+      "name": "Identificador novo",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        880,
+        -100
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.ready === true }}",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              },
+              "rightValue": ""
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "ffc7081a-d23a-45ed-a367-7b536b6315ae",
+      "name": "Enviar documentos",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        1100,
+        -150
+      ],
+      "parameters": {
+        "resource": "email",
+        "operation": "send",
+        "fromEmail": "Ávila ERP <n8n@avilaops.com>",
+        "toEmail": "={{ $json.to }}",
+        "subject": "={{ $json.subject }}",
+        "emailFormat": "both",
+        "text": "={{ $json.text }}",
+        "html": "={{ $json.html }}",
+        "options": {
+          "appendAttribution": false,
+          "fileAttachments": "={{ $json.files }}",
+          "allowUnauthorizedCerts": false
+        }
+      },
+      "onError": "continueRegularOutput",
+      "webhookId": "1c259f76-a7e2-4372-b60f-f0212486d191",
+      "retryOnFail": false,
+      "credentials": {
+        "smtp": {
+          "id": "tSZlEjwt75qo2MwC",
+          "name": "SMTP mail.avilaops.com (n8n@avilaops.com)"
+        }
+      }
+    },
+    {
+      "id": "1d684b34-3063-45a3-90a7-5235d4d1fc4b",
+      "name": "Conferir aceite SMTP",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1320,
+        -150
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const message = $('Validar documento').first().json;\nconst result = $input.first().json;\nconst addresses = v => Array.isArray(v) && v.every(a => typeof a === 'string') ? v.map(a => a.toLowerCase()) : [];\nconst accepted = addresses(result.accepted);\nconst expected = message.recipients.map(a => a.toLowerCase());\nconst complete = Array.isArray(result.rejected) && result.rejected.length === 0 && accepted.length === expected.length && expected.every(a => accepted.includes(a)) && /^250(?:\\s|-|$)/.test(String(result.response || ''));\nconst explicitlyRefused = (typeof result.error === 'string' && /^Can['’]t send mail - all recipients were rejected(?:[.: ]|$)/i.test(result.error)) || (Array.isArray(result.accepted) && !result.accepted.length && Array.isArray(result.rejected) && result.rejected.length === expected.length && expected.every(a=>addresses(result.rejected).includes(a)));\nreturn [{json:{id:message.id,status:complete ? 'sent' : explicitlyRefused ? 'failed' : 'unknown',httpCode:200}}];"
+      }
+    }
+  ],
+  "connections": {
+    "Receber documentos": {
+      "main": [
+        [
+          {
+            "node": "Validar documento",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validar documento": {
+      "main": [
+        [
+          {
+            "node": "Dados válidos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Dados válidos": {
+      "main": [
+        [
+          {
+            "node": "Verificar repetição",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Responder ao ERP",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verificar repetição": {
+      "main": [
+        [
+          {
+            "node": "Identificador novo",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Responder ao ERP",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Identificador novo": {
+      "main": [
+        [
+          {
+            "node": "Enviar documentos",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Responder ao ERP",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enviar documentos": {
+      "main": [
+        [
+          {
+            "node": "Conferir aceite SMTP",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Conferir aceite SMTP": {
+      "main": [
+        [
+          {
+            "node": "Responder ao ERP",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveExecutionProgress": false,
+    "saveManualExecutions": false,
+    "saveDataErrorExecution": "none",
+    "saveDataSuccessExecution": "none",
+    "executionTimeout": 60,
+    "callerPolicy": "none",
+    "availableInMCP": true
+  },
+  "active": false
+}

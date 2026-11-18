@@ -63,6 +63,8 @@ export async function collections(ctx: AuthorizedContext, groupId?: string) {
     await ctx.client.query(
       `SELECT p.id,p.party_name AS name,p.party_id AS "partyId",p.open_cents::text cents,p.due_date::text AS "dueOn" FROM finance_portfolio p
     WHERE p.tenant_id=$1 AND side='receivable' AND open_cents>0 AND NOT EXISTS(SELECT 1 FROM finance_collection_items i WHERE i.tenant_id=p.tenant_id AND i.receivable_id=p.id)
+      AND NOT EXISTS(SELECT 1 FROM finance_operation_items i JOIN finance_active_operations g ON (g.tenant_id,g.id)=(i.tenant_id,i.operation_id)
+        WHERE i.tenant_id=p.tenant_id AND i.receivable_id=p.id AND g.kind='billing_group')
     ORDER BY p.due_date,p.id LIMIT 100`,
       [ctx.tenantId],
     )
@@ -95,6 +97,13 @@ export async function reserveCharge(
       [ctx.tenantId, input.groupId],
     )
     if (!active.rows.length) throw conflict("Agrupamento inexistente ou estornado")
+  } else {
+    const grouped = await ctx.client.query(
+      `SELECT 1 FROM finance_operation_items i JOIN finance_active_operations g ON (g.tenant_id,g.id)=(i.tenant_id,i.operation_id)
+      WHERE i.tenant_id=$1 AND i.receivable_id=ANY($2::uuid[]) AND g.kind='billing_group' LIMIT 1`,
+      [ctx.tenantId, input.receivableIds],
+    )
+    if (grouped.rows.length) throw conflict("Abra o agrupamento ativo para emitir a cobrança destas parcelas")
   }
   const existing = (
     await ctx.client.query<{ charge_id: string }>(

@@ -1,0 +1,25 @@
+{
+  "payable": {
+    "GET": "/api/v1/financial-payables/:id/email",
+    "POST": "/api/v1/financial-payables/:id/email"
+  },
+  "contract": {
+    "GET": "/api/v1/commercial-contracts/:id/email",
+    "POST": "/api/v1/commercial-contracts/:id/email"
+  },
+  "nfe": {
+    "GET": "/api/v1/fiscal/nfe/:id/email",
+    "POST": "/api/v1/fiscal/nfe/:id/email"
+  },
+  "received-nfses": {
+    "GET": "/api/v1/fiscal/received-nfses/:id/email",
+    "POST": "/api/v1/fiscal/received-nfses/:id/email"
+  },
+  "outgoing-nfses": {
+    "GET": "/api/v1/fiscal/outgoing-nfses/:id/email",
+    "POST": "/api/v1/fiscal/outgoing-nfses/:id/email"
+  },
+  "outgoing-nfse-list": {
+    "GET": "/api/v1/fiscal/outgoing-nfses"
+  }
+}

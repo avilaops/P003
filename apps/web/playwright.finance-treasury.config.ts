@@ -5,7 +5,7 @@ const origin = "http://127.0.0.1:33247"
 const server = Array.isArray(base.webServer) ? base.webServer[0] : base.webServer
 export default defineConfig({
   ...base,
-  testMatch: ["finance-treasury-ui.spec.ts"],
+  testMatch: ["finance-treasury-ui.spec.ts", "finance-treasury-persistence.spec.ts"],
   workers: 1,
   timeout: 180_000,
   use: { ...base.use, baseURL: origin },
@@ -14,6 +14,12 @@ export default defineConfig({
     command: "pnpm exec next dev --webpack --hostname 127.0.0.1 --port 33247",
     url: origin + "/banks/asaas-ip-s-a.svg",
     timeout: 240_000,
-    env: { ...server?.env, ERP_WEB_ORIGIN: origin, ERP_NEXT_DIST_DIR: ".next-treasury-tests" },
+    env: {
+      ...server?.env,
+      ERP_WEB_ORIGIN: origin,
+      ERP_NEXT_DIST_DIR: ".next-treasury-tests",
+      ERP_API_URL: "http://127.0.0.1:33249",
+      ERP_TYPESCRIPT_API_URL: "http://127.0.0.1:33249",
+    },
   },
 })
