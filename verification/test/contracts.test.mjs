@@ -13,8 +13,8 @@ test('every production API operation and BFF has a contract without claiming ver
   const inventory = await discover(fileURLToPath(root));
   const assessment = assessContracts(catalogue, inventory);
   assert.deepEqual(assessment.findings, []);
-  assert.equal(assessment.apiOperations, 435);
-  assert.equal(assessment.bffOperations, 383);
+  assert.equal(assessment.apiOperations, 508);
+  assert.equal(assessment.bffOperations, 395);
   assert.equal(assessment.pendingFlows, 34);
   assert.equal(assessment.p0Ready, false);
   assert.equal(assessment.runtimeVerdict, 'not_verified_by_catalog');
@@ -23,10 +23,11 @@ test('every production API operation and BFF has a contract without claiming ver
   const app = buildApp({ pool: { connect() { throw Error('Registration cannot query the database'); } }, userinfoUrl: 'https://auth.example.invalid/userinfo' });
   try {
     await app.ready();
-    const stockRoutes = inventory.api.filter(route => route.typescript);
+    const registered = inventory.api.filter(route => route.typescript);
+    const stockRoutes = registered.filter(route => route.path.startsWith('/api/v1/stock') || route.path.startsWith('/api/v1/production'));
     assert.ok(stockRoutes.some(route => route.path === '/api/v1/stock/periods/basis' && route.typescript.POST && route.typescript.GET));
     assert.ok(stockRoutes.some(route => route.path.endsWith('/postings') && route.typescript.POST));
-    for (const route of stockRoutes) {
+    for (const route of registered) {
       for (const [method, origin] of Object.entries(route.typescript)) {
         assert.match(origin.file, /^apps\/api-ts\/src\/modules\//);
         assert.ok(app.findRoute({method, url:route.path.replace(/\{[^}]+\}/g,'test-id')}), method + ' ' + route.path);
@@ -55,6 +56,35 @@ test('every production API operation and BFF has a contract without claiming ver
         assert.match(definition, new RegExp(`\\b(?:struct|enum)\\s+${type}\\b`), source);
       }
     }
+  }
+});
+
+test('finance contracts cover every registered command and its financial BFF route', async () => {
+  const { tsImport } = createRequire(new URL('../../apps/api-ts/package.json', import.meta.url))('tsx/esm/api');
+  const { financeRoute } = await import('../../apps/web/tests/helpers/erp-backend-module.mjs');
+  const declared = new Map([...catalogue.actions, ...catalogue.actionsAppendix].map(action => [
+    action.operation.method + ' ' + action.operation.path.replace(/\{[^}]+\}/g, '{}'), action,
+  ]));
+  // Collect the routes produced by the four real registration functions without starting workers or executing handlers.
+  const registered = new Set();
+  function add(method, path) {
+    const key = method.toUpperCase() + ' ' + path.replace(/:\w+/g, '{}');
+    assert.ok(declared.has(key), 'Missing financial action contract for ' + key);
+    registered.add(key);
+  }
+  const router = { get: url => add('GET', url), put: url => add('PUT', url), post: url => add('POST', url),
+    route: ({method, url}) => add(method, url), addHook() {} };
+  for (const [module, name] of [['wallets','Wallet'], ['treasury','Treasury'], ['management','Management'], ['insights','Insight']]) {
+    const source = new URL('../../apps/api-ts/src/modules/finance-' + module + '/routes.ts', import.meta.url);
+    const registrar = await tsImport(source.href, import.meta.url);
+    registrar['registerFinance' + name + 'Routes'](router, { pool: {} });
+  }
+  const manifest = JSON.parse(await readFile(new URL('../../apps/api-ts/src/modules/finance-endpoints.json', import.meta.url), 'utf8'));
+  const fixtureId = '11111111-1111-4111-8111-111111111111';
+  for (const endpoint of Object.values(manifest).flat()) {
+    const [method, path] = endpoint.split(' ');
+    assert.ok(registered.has(endpoint.replace(/\{[^}]+\}/g, '{}')), 'Missing Fastify registration for ' + endpoint);
+    if (path.startsWith('/api/v1/')) assert.ok(financeRoute(method, path.slice('/api/v1'.length).replace(/\{[^}]+\}/g, fixtureId)), 'Missing BFF route for ' + endpoint);
   }
 });
 

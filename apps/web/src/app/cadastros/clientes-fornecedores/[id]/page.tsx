@@ -6,7 +6,7 @@ export default function Page({ params }: { params: Promise<{ id: string }> }) {
 }
 async function Resolved({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
-  return <><PartyAccess editor id={id} view /><div className="mx-auto max-w-[1600px] px-6 pb-12"><Link className="font-medium text-primary underline underline-offset-4" href={`/cadastros/clientes-fornecedores/${id}/contratos`}>Contratos deste cliente</Link></div></>
+  return <><PartyAccess editor id={id} view /><div className="mx-auto max-w-[1600px] px-6 pb-12"><Link className="font-medium text-primary underline underline-offset-4" href={`/cadastros/clientes-fornecedores/${id}/contratos`}>Contratos deste cliente</Link><Link className="ml-4 text-primary underline" href={`/financeiro/ficha-financeira?partyId=${id}`}>Ficha financeira</Link></div></>
 }
 
 export const metadata = { title: "Detalhes de cliente ou fornecedor" }

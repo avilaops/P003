@@ -3,11 +3,12 @@ import type { FastifyInstance } from "fastify"
 import { z } from "zod"
 import { authorizeRequest, requirePermission, type AccessDependencies, type AuthorizedContext } from "../../platform/access.js"
 import { commandKey, record, remember, replay } from "../../platform/commands.js"
-import { sendDocumentMail, documentMailConfigured } from "../../platform/document-mail.js"
+import { sendDocumentMail, documentMailConfigured, documentMailLimit } from "../../platform/document-mail.js"
 import { documentMailCompany, renderDocumentEmail } from "../../platform/document-mail-template.js"
 import { parseRevision } from "../../platform/revision.js"
 import { Problem } from "../../platform/problem.js"
-import { accountPdf, financialEmailContent, financialScope, financialSnapshot, financialTitle } from "./financial-snapshot.js"
+import { financialSnapshot, reportFilters } from "./financial-snapshot.js"
+import { validate } from "../finance-insights/portfolio.js"
 import { digest, subjectWithCompany } from "./source.js"
 import type { DocumentCopyIO } from "./routes.js"
 
@@ -17,6 +18,8 @@ const input = z.strictObject({
   message: z.string().min(1).max(10000).refine(v => v.trim().length > 0 && !/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/u.test(v)),
   snapshotHash: z.string().regex(/^[a-f0-9]{64}$/),
 })
+const reportInput = input.extend({ filters: reportFilters.optional() })
+const noFilters = z.strictObject({})
 type Delivery = { id: string; status: "uncertain" | "failed" | "sent"; recipient: string; createdAt: string }
 const fields = 'id,status,recipient,created_at::text AS "createdAt"'
 function authorize(context: AuthorizedContext, report: boolean, write: boolean) {
@@ -42,16 +45,16 @@ export function registerFinancialEmails(app: FastifyInstance, deps: AccessDepend
       const id = sourceId(request.params)
       const result = await authorizeRequest(request, deps, async context => {
         const manage = authorize(context, report, false)
-        const { snapshot, revision, hash } = await financialSnapshot(context, id)
-        const { suggestedSubject, suggestedMessage } = financialEmailContent(snapshot, id)
+        const filters = validate(report ? reportFilters : noFilters, request.query)
+        const doc = await financialSnapshot(context, id, filters)
         const history = await context.client.query<Delivery>(`SELECT ${fields} FROM finance_document_email_deliveries
           WHERE tenant_id=$1 AND context=$2 AND receivable_id IS NOT DISTINCT FROM $3 ORDER BY created_at DESC,id DESC LIMIT 50`, [context.tenantId, kind, id])
         return {
-          revision, body: {
-            tenantId: context.tenantId, canSend: manage && (report || snapshot.receivables[0]!.status !== "cancelled"),
-            emailReady: io.configured(), recipient: snapshot.recipient, documentTitle: financialTitle(id), scope: financialScope(id),
-            suggestedSubject: subjectWithCompany(suggestedSubject, await documentMailCompany(context)), suggestedMessage,
-            recordCount: snapshot.receivables.length + snapshot.payables.length, snapshotHash: hash, deliveries: history.rows,
+          revision: doc.revision, body: {
+            tenantId: context.tenantId, canSend: manage && doc.allowed,
+            emailReady: io.configured(), recipient: doc.recipient, documentTitle: doc.title, scope: doc.scope,
+            suggestedSubject: subjectWithCompany(doc.suggestedSubject, await documentMailCompany(context)), suggestedMessage: doc.suggestedMessage,
+            recordCount: doc.count, summary: doc.summary, snapshotHash: doc.hash, deliveries: history.rows,
           }
         }
       })
@@ -59,7 +62,8 @@ export function registerFinancialEmails(app: FastifyInstance, deps: AccessDepend
     })
     app.post<{ Params: { id?: string } }>(path, async (request, reply) => {
       const id = sourceId(request.params), key = commandKey(request.headers["idempotency-key"]), revision = parseRevision(request.headers["if-match"])
-      const parsed = input.safeParse(request.body)
+      validate(noFilters, request.query)
+      const parsed = (report ? reportInput : input).safeParse(request.body)
       if (!parsed.success) throw new Problem(422, "invalid_input", "Confira o destinatário, o assunto e a mensagem")
       const command = parsed.data
       const prepared = await authorizeRequest(request, deps, async context => {
@@ -73,17 +77,20 @@ export function registerFinancialEmails(app: FastifyInstance, deps: AccessDepend
           if (!saved) throw new Problem(503, "receipt_unavailable", "Confirmação de envio indisponível")
           return { context, delivery: saved, dispatch: null }
         }
-        const { snapshot, revision: current, hash } = await financialSnapshot(context, id)
+        const filters = "filters" in command ? validate(reportFilters, command.filters ?? {}) : {}
+        const doc = await financialSnapshot(context, id, filters)
+        const { snapshot, revision: current, hash } = doc
         if (String(current) !== String(revision) || hash !== command.snapshotHash) throw new Problem(412, "stale_revision", "Os dados financeiros mudaram. Confira o documento novamente")
-        if (id && snapshot.receivables[0]!.status === "cancelled") throw new Problem(409, "cancelled_title", "O título está cancelado")
+        if (!doc.allowed) throw new Problem(409, "cancelled_title", "O título está cancelado")
         const pending = await context.client.query("SELECT id FROM finance_document_email_deliveries WHERE tenant_id=$1 AND context=$2 AND receivable_id IS NOT DISTINCT FROM $3 AND status='uncertain' LIMIT 1", [tenant, kind, id])
         if (pending.rows.length) throw new Problem(409, "delivery_pending", "Há um envio com confirmação pendente")
         if (!io.configured()) throw new Problem(503, "document_mail_unavailable", "O serviço de envio de documentos está indisponível")
-        const pdf = await accountPdf(snapshot, id)
+        const pdf = await doc.pdf()
+        if (pdf.length > documentMailLimit) throw new Problem(413, "attachment_limit", "O PDF excede o limite de 10 MB do e-mail. Refine os filtros da carteira.")
         const filename = id ? `titulo-${id}.pdf` : "relatorio-financeiro.pdf", deliveryId = randomUUID()
         const attachments = [{ filename, contentType: "application/pdf", content: pdf }]
         const company = await documentMailCompany(context)
-        const message = renderDocumentEmail({ company, title: financialTitle(id), message: command.message, details: financialEmailContent(snapshot, id).details, attachments })
+        const message = renderDocumentEmail({ company, title: doc.title, message: command.message, details: doc.emailDetails, attachments })
         const delivery = (await context.client.query<Delivery>(`INSERT INTO finance_document_email_deliveries
           (id,tenant_id,context,receivable_id,source_revision,subject_id,command_key,recipient,subject,message,snapshot,snapshot_hash,pdf_content,pdf_sha256,filename,status)
           VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,'uncertain') RETURNING ${fields}`,

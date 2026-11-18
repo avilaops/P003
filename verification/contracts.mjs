@@ -1,4 +1,4 @@
-import { normalizedRoute } from './discovery.mjs';
+import { catchAllSegment, normalizedRoute } from './discovery.mjs';
 import { validateProductFlows } from './product-context.mjs';
 import mcpProtocolActions from './mcp/protocol-actions.json' with { type: 'json' };
 
@@ -77,7 +77,8 @@ export function assessContracts(catalogue, inventory) {
         fail('contract_without_bff', target, 'Método/caminho BFF ausente.'); continue;
       }
       coveredBff.add(key(proxy));
-      let expected = proxy.path.replace('/api/erp/', '/api/v1/').replace('[id]', '{id}');
+      const callback = '/api/integrations/finance/mercadopago/[tenantId]/[accountId]';
+      let expected = proxy.path === callback ? proxy.path.slice('/api'.length) : proxy.path.replace('/api/erp/', '/api/v1/');
       if (proxy.path === participantPortal) expected = participantTargets.get(`${proxy.method} ${proxy.action}`) || '';
       const dispatchParameter = proxy.path.includes('[format]') ? 'format' : 'action';
       if (proxy.path.includes(`[${dispatchParameter}]`)) {
@@ -86,10 +87,10 @@ export function assessContracts(catalogue, inventory) {
         if (!text(proxy[dispatchParameter]) || !Array.isArray(values) || !values.includes(proxy[dispatchParameter])) fail('undefined_dispatch_action', target, 'Destino dinâmico não especificado no catálogo.');
         expected = expected.replace(`[${dispatchParameter}]`, proxy[dispatchParameter] || '');
       }
-      if (proxy.path.includes('[...resource]')) {
+      if (proxy.path !== participantPortal && catchAllSegment.test(proxy.path)) {
         const dispatch = catalogue.dispatches.find(item => item?.path === proxy.path && item.method === proxy.method);
         if (!text(proxy.resource) || !Array.isArray(dispatch?.resources) || !dispatch.resources.includes(proxy.resource)) fail('undefined_dispatch_resource', target, 'Recurso de rota abrangente não especificado no catálogo.');
-        expected = expected.replace('[...resource]', proxy.resource || '');
+        expected = expected.replace(catchAllSegment, proxy.resource || '');
       }
       if (operation.method !== proxy.method || normalizedRoute(expected) !== normalizedRoute(operation.path)) fail('wrong_bff_target', target, 'O BFF declarado não corresponde à operação desta ficha.');
     }
@@ -97,7 +98,7 @@ export function assessContracts(catalogue, inventory) {
   const dispatchKeys = new Set();
   for (const dispatch of catalogue.dispatches) {
     const target = `${dispatch?.method} ${dispatch?.path}`;
-    const catchAll = dispatch?.path?.includes('[...resource]');
+    const catchAll = catchAllSegment.test(dispatch?.path);
     const format = dispatch?.path?.includes('[format]');
     const values = catchAll ? dispatch.resources : format ? dispatch.formats : dispatch?.actions;
     if (dispatchKeys.has(target) || !methods.has(dispatch?.method) || !text(dispatch?.path)

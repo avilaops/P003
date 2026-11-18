@@ -114,7 +114,7 @@ function BulkSalaries() {
 }
 function BulkSalaryForm(){
  const [offset,setOffset]=useState(0)
- const rows=useResource<{tenantId:string;data:{id:string;name:string}[];total:number}>(`/api/erp/staff?role=employee&status=active&offset=${offset}&limit=25`)
+ const rows=useResource<{tenantId:string;data:{id:string;name:string}[];total:number}>(`/api/erp/staff-payroll/employees?offset=${offset}&limit=25`)
  const [changes,setChanges]=useState<Record<string,{staffId:string;baseRevision:number;salary:string}>>({})
  const [message,setMessage]=useState("")
  const [batchVersion,setBatchVersion]=useState(0)

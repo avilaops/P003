@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto"
 import { requirePermission, type AuthorizedContext } from "../../platform/access.js"
 import { record } from "../../platform/commands.js"
 import { nextRevision, revisionValue, type Revision } from "../../platform/revision.js"
+import { reverseOrderInvoices } from "../finance-management/accrual.js"
 import { decimal } from "../sales/fixed.js"
 import { conflict } from "./acceptance.js"
 import type { CommandHeaders } from "./receivables.js"
@@ -11,6 +12,11 @@ function inventoryPermission(context: AuthorizedContext) {
   requirePermission(context, "inventory.stock.read"); requirePermission(context, "inventory.stock.manage")
 }
 export async function requireCancellationPermissions(context: AuthorizedContext, order: string) {
+  const commissions = await context.client.query("SELECT EXISTS(SELECT 1 FROM order_commission_terms WHERE tenant_id=$1 AND order_id=$2) OR EXISTS(SELECT 1 FROM commission_entries WHERE tenant_id=$1 AND order_id=$2) AS present", [context.tenantId, order])
+  if (commissions.rows[0]?.present) {
+    requirePermission(context, "finance.commissions.read")
+    requirePermission(context, "finance.commissions.manage")
+  }
   const exists = await context.client.query("SELECT EXISTS(SELECT 1 FROM production_orders WHERE tenant_id=$1 AND order_id=$2) AS present", [context.tenantId, order])
   if (!exists.rows[0]?.present) return
   requirePermission(context, "production.read"); requirePermission(context, "production.manage")
@@ -56,8 +62,8 @@ export async function fiscalCancellation(context: AuthorizedContext, order: stri
 
 export async function commissionReconciliation(context: AuthorizedContext, order: string) {
   const { client, tenantId } = context
-  const commissions = (await client.query("SELECT count(*) AS count,count(*) FILTER (WHERE NOT EXISTS(SELECT 1 FROM commission_entries reversed WHERE reversed.tenant_id=e.tenant_id AND reversed.reverses_entry_id=e.id)) AS unreversed FROM commission_entries e WHERE e.tenant_id=$1 AND e.order_id=$2 AND e.kind='receipt'", [tenantId, order])).rows[0]!
-  if (BigInt(String(commissions.unreversed)) > 0n) conflict("Há comissões de recebimentos sem estorno; concilie antes de cancelar")
+  const commissions = (await client.query("SELECT count(*) AS count,count(*) FILTER (WHERE NOT EXISTS(SELECT 1 FROM commission_entries reversed WHERE reversed.tenant_id=e.tenant_id AND reversed.reverses_entry_id=e.id)) AS unreversed FROM commission_entries e WHERE e.tenant_id=$1 AND e.order_id=$2 AND e.kind IN ('receipt','invoice')", [tenantId, order])).rows[0]!
+  if (BigInt(String(commissions.unreversed)) > 0n) conflict("Há comissões sem estorno. Concilie antes de cancelar")
   const count = revisionValue(commissions.count), applied = BigInt(count) > 0n
   return { status: applied ? "applied" : "not_required", applied, reversedEntries: count, paymentsPreserved: true }
 }
@@ -76,6 +82,7 @@ export async function reconcileUnshipped(context: AuthorizedContext, headers: Co
   const id = randomUUID(), reason = "Cancelamento do pedido antes da expedição", occurred = new Date().toISOString().slice(0, 10)
   await client.query("SELECT set_config('app.stock_effective_on',$1,true)", [occurred])
   const production = await cancelProduction(context, headers, order, id, reason)
+  await reverseOrderInvoices(context, headers, order, id, occurred, reason)
   const commission = await commissionReconciliation(context, order)
   const summary = { id, kind: "sale_cancellation", sourceId: order, orderId: order, cancellationId: id, revision: next, reason, occurredOn: occurred, receivableId: null, stockMovementIds: [], paymentReversalIds: [], beforeShipment: true, fiscalCancellation: fiscal, reconciliation: { commission, production } }
   await client.query("INSERT INTO sales_order_cancellations(id,tenant_id,order_id,reason,occurred_on,order_revision,summary) VALUES($1,$2,$3,$4,$5,$6,$7)", [id, tenantId, order, reason, occurred, next, summary])

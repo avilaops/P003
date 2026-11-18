@@ -1,5 +1,5 @@
-import Content from "@/content/reports/financeiro.mdx"
+import { FinanceReportLive } from "@/features/reports/finance-report-live"
 
-export default function Page() { return <Content /> }
+export default function Page() { return <FinanceReportLive /> }
 
 export const metadata = { title: "Relatório de financeiro" }

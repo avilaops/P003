@@ -1,0 +1,101 @@
+{
+  "apps/api-ts/src/modules/finance-wallets/payroll.ts": [
+    "GET /api/v1/staff-payroll/employees"
+  ],
+  "apps/api-ts/src/modules/finance-wallets/documents.ts": [
+    "GET /api/v1/wallet-payment-files/receivables/{id}/{paymentId}",
+    "GET /api/v1/wallet-payment-files/payables/{id}/{paymentId}",
+    "GET /api/v1/wallet-payment-files/financial-payables/{id}/{paymentId}"
+  ],
+  "apps/api-ts/src/modules/finance-wallets/settings.ts": [
+    "GET /api/v1/financial-wallet-settings",
+    "PUT /api/v1/financial-wallet-settings",
+    "GET /api/v1/financial-cost-centers",
+    "GET /api/v1/financial-cost-centers/{id}",
+    "POST /api/v1/financial-cost-centers",
+    "PUT /api/v1/financial-cost-centers/{id}"
+  ],
+  "apps/api-ts/src/modules/finance-wallets/routes.ts": [
+    "POST /api/v1/receivables/payment-batches",
+    "PUT /api/v1/receivables/{id}/classification",
+    "GET /api/v1/receivables/{id}/approvals",
+    "POST /api/v1/receivables/{id}/approvals",
+    "POST /api/v1/receivables/{id}/approvals/{approvalId}/decision",
+    "POST /api/v1/payables/payment-batches",
+    "PUT /api/v1/payables/{id}/classification",
+    "GET /api/v1/payables/{id}/approvals",
+    "POST /api/v1/payables/{id}/approvals",
+    "POST /api/v1/payables/{id}/approvals/{approvalId}/decision",
+    "POST /api/v1/financial-payables/payment-batches",
+    "PUT /api/v1/financial-payables/{id}/classification",
+    "GET /api/v1/financial-payables/{id}/approvals",
+    "POST /api/v1/financial-payables/{id}/approvals",
+    "POST /api/v1/financial-payables/{id}/approvals/{approvalId}/decision"
+  ],
+  "apps/api-ts/src/modules/finance-management/commissions.ts": [
+    "POST /api/v1/commissions/{id}/policies",
+    "POST /api/v1/commissions/{id}/closings"
+  ],
+  "apps/api-ts/src/modules/finance-management/accounting.ts": [
+    "GET /api/v1/accounting",
+    "GET /api/v1/accounting/reports/journal",
+    "GET /api/v1/accounting/reports/ledger",
+    "GET /api/v1/accounting/reports/trial-balance",
+    "POST /api/v1/accounting/accounts",
+    "POST /api/v1/accounting/rules",
+    "POST /api/v1/accounting/sync",
+    "POST /api/v1/accounting/close",
+    "POST /api/v1/accounting/reopen",
+    "POST /api/v1/accounting/entries/{id}/reverse"
+  ],
+  "apps/api-ts/src/modules/finance-insights/company-periods.ts": [
+    "GET /api/v1/finance/company-periods",
+    "POST /api/v1/finance/company-periods"
+  ],
+  "apps/api-ts/src/modules/finance-insights/statements.ts": [
+    "GET /api/v1/finance/cashflow",
+    "GET /api/v1/finance/income-statement"
+  ],
+  "apps/api-ts/src/modules/finance-insights/partners.ts": [
+    "GET /api/v1/finance/partners",
+    "GET /api/v1/finance/partner",
+    "PUT /api/v1/finance/partner/credit"
+  ],
+  "apps/api-ts/src/modules/finance-insights/reversals.ts": [
+    "POST /api/v1/finance/operation-reversals"
+  ],
+  "apps/api-ts/src/modules/finance-insights/operations.ts": [
+    "POST /api/v1/finance/operations",
+    "POST /api/v1/finance/operation-decisions",
+    "GET /api/v1/finance/operations"
+  ],
+  "apps/api-ts/src/modules/finance-insights/routes.ts": [
+    "GET /api/v1/finance/balances",
+    "GET /api/v1/finance/portfolio",
+    "GET /api/v1/finance/portfolio/export"
+  ],
+  "apps/api-ts/src/modules/finance-treasury/routes.ts": [
+    "GET /api/v1/finance-treasury/reconciliation",
+    "POST /api/v1/finance-treasury/import-ofx",
+    "POST /api/v1/finance-treasury/import-cnab",
+    "POST /api/v1/finance-treasury/match",
+    "POST /api/v1/finance-treasury/classify-movement",
+    "POST /api/v1/finance-treasury/exception",
+    "POST /api/v1/finance-treasury/close-period",
+    "POST /api/v1/finance-treasury/reopen-period",
+    "GET /api/v1/finance-treasury/batches",
+    "GET /api/v1/finance-treasury/cnab-profile",
+    "POST /api/v1/finance-treasury/cnab-profile",
+    "GET /api/v1/finance-treasury/cnab-remittance",
+    "POST /api/v1/finance-treasury/cnab-remittance",
+    "POST /api/v1/finance-treasury/cnab-return",
+    "POST /api/v1/finance-treasury/cnab-review",
+    "POST /api/v1/finance-treasury/prepare-batch",
+    "POST /api/v1/finance-treasury/cancel-batch",
+    "GET /api/v1/finance-treasury/collections",
+    "POST /api/v1/finance-treasury/issue-charge",
+    "GET /api/v1/finance-treasury/provider-reports",
+    "POST /api/v1/finance-treasury/import-return",
+    "POST /integrations/finance/mercadopago/{tenantId}/{accountId}"
+  ]
+}

@@ -15,8 +15,11 @@ Acompanhar os títulos e registrar os recebimentos autorizados.
 ## O que você pode fazer
 
 - Pesquisar e abrir um título
-- Registrar recebimento
-- Estornar pelo fluxo disponível
+- Conferir a natureza, a competência e o centro de custo ou rateio antes de baixar
+- Registrar o principal recebido e os encargos, descontos, data, conta e comprovante
+- Acompanhar a aprovação quando a operação superar a alçada da empresa
+- Estornar uma baixa pela referência original e conferir a contrapartida no extrato
+- Abrir a ficha do parceiro para conferir o saldo de adiantamentos e as renegociações
 
 ## Regras e limites
 
@@ -24,8 +27,8 @@ Gerar um título não confirma pagamento. Receber e estornar exigem permissão f
 
 ## Referências para manutenção
 
-Guia conferido no código de 12/11/2026. As ações dependem das permissões e da configuração da empresa. Relatos técnicos antigos descrevem a etapa em que foram escritos.
+As ações disponíveis dependem das permissões do operador e da configuração da empresa.
 
-- [Levantamento: recebimentos do pedido e comprovantes](../../vendas/pedidos/referencias/RECEBIMENTOS-E-DOCUMENTOS.md) — reutilização do Financeiro e integrações pendentes.
+- [Levantamento histórico de recebimentos do pedido e comprovantes](../../vendas/pedidos/referencias/RECEBIMENTOS-E-DOCUMENTOS.md)
 
 - [receivables-access](../../../../apps/web/src/features/finance/receivables-access.tsx)

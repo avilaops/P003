@@ -4,7 +4,9 @@
 
 Referência Protheus: Financeiro (SIGAFIN) • contas a receber (FINA040) e baixas (FINA070), contas a pagar (FINA050) e baixas (FINA080), naturezas financeiras, borderô e CNAB, conciliação bancária, fluxo de caixa, adiantamentos, compensação, liquidação/renegociação e data limite de movimentação. Contabilização (SIGACTB) fica no roteiro de 180–365 dias.
 
-## O que já existe (conferido nos guias)
+## Situação anterior à implementação local
+
+O diagnóstico abaixo descreve a revisão anterior ao desenvolvimento de FI1 a FI13. A cobertura dos itens na branch financeira e as dependências bancárias estão no [roteiro de aceite](../../superpowers/plans/2026-11-17-financeiro-integral.md).
 
 - **Contas a receber:** títulos gerados no aceite do pedido; registrar recebimento; estorno; envio do título por e-mail (endpoint existente).
 - **Contas a pagar:** obrigações de compras e de funcionários; registrar pagamento; estorno.

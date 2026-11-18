@@ -2,12 +2,13 @@ import { expect as baseExpect, test } from "@playwright/test"
 import { createCipheriv, createHash, randomBytes, randomUUID } from "node:crypto"
 import { createServer } from "node:http"
 
-const origin = "http://127.0.0.1:33118"
+const origin = process.env.ERP_TEST_WEB_ORIGIN || "http://127.0.0.1:33118"
 const expect = baseExpect.configure({ timeout: 30_000 })
 const tenant = "11111111-1111-4111-8111-111111111111"
 const order = "22222222-2222-4222-8222-222222222222"
 const titleIds = ["33333333-3333-4333-8333-333333333333", "44444444-4444-4444-8444-444444444444"]
 const contract = "55555555-5555-4555-8555-555555555555"
+const accountId = "99999999-2222-4222-8222-222222222222"
 const methodId = "66666666-6666-4666-8666-666666666666"
 // Above the old 64 KiB BFF ceiling, still tiny compared with the 10 MiB limit.
 const proof = Buffer.concat([Buffer.from("%PDF-1.4\nsynthetic supporting evidence\n"), Buffer.alloc(80_000, 32), Buffer.from("\n%%EOF")])
@@ -19,6 +20,8 @@ let salesOnly = false
 let calls = 0
 let loseReceiptResponse = false
 let loseDocumentResponse = false
+const walletCalls: {path:string;method:string;body:Record<string,unknown>}[]=[]
+let walletScenario=false
 let orderEditable = false
 let contractRevision = 1
 let syncCalls = 0
@@ -72,8 +75,16 @@ const upstream = createServer(async (req, res) => {
       const received = payments.flat().reduce((sum, p) => sum + Number(p.amount), 0)
       return reply({ tenantId: tenant, orderId: order, orderStatus, orderAmount: "100000.00", titleAmount: "100000.00", receivedAmount: received.toFixed(2), outstandingAmount: (100000 - received).toFixed(2), state: received === 100000 ? "paid" : received ? "partial" : "open", canEdit: !readonly, receivables: titleIds.map((_, i) => title(i)) })
     }
+    if (walletScenario && path==="/api/v1/receivables") return reply({tenantId:tenant,canEdit:true,total:2,data:titleIds.map((_,i)=>title(i).data)})
+    if (walletScenario && (path.endsWith("/payment-batches") || path.includes("/approvals") || path.endsWith("/classification") || path.startsWith("/api/v1/financial-cost-centers"))) {
+      let data=""; for await(const chunk of req) data+=chunk
+      walletCalls.push({path,method:req.method!,body:data?JSON.parse(data):{}})
+      res.setHeader("etag",'"1"')
+      return reply({tenantId:tenant,data:[]})
+    }
     if (path === "/api/v1/payment-methods") return reply({ data: [{ id: methodId, code: "PIX", name: "Pix configurado", modality: "pix", status: "active" }] })
-    if (path === "/api/v1/financial-accounts") return reply({ data: [] })
+    if (path === "/api/v1/financial-accounts") return reply({ data: [{id:accountId,code:"BANCO",name:"Banco de teste"}] })
+    if (path === "/api/v1/financial-wallet-settings") return reply({tenantId:tenant,categories:walletScenario?[{id:methodId,name:"Vendas",code:"VEN",direction:"income"}]:[],costCenters:walletScenario?[{id:accountId,name:"Produção",code:"PRD"},{id:methodId,name:"Administração",code:"ADM"}]:[],data:{graceDays:0,interestMonthlyBps:0,penaltyBps:0,discountLimitBps:10000,paymentApprovalLimit:null}})
     const match = path.match(/\/receivables\/([^/]+)(\/payments)?$/)
     if (match) {
       const index = titleIds.indexOf(match[1])
@@ -87,6 +98,7 @@ const upstream = createServer(async (req, res) => {
         let body = ""; for await (const part of req) body += part
         const input = JSON.parse(body)
         expect(input.paymentMethodId).toBe(methodId)
+        expect(input.financialAccountId).toBe(accountId)
         const payment = { id: randomUUID(), kind: "receipt", amount: input.amount, reference: input.reference, occurredOn: input.occurredOn, method: "bank_transfer", reversesId: null }
         payments[index].push(payment); calls++
         if (input.supportingDocument) addDocument(input.supportingDocument, payment.id)
@@ -125,10 +137,51 @@ function cookie() {
   const encrypted = Buffer.concat([cipher.update(JSON.stringify({ accessToken: "receipts-fixture-token", tenantId: tenant, expiresAt: Date.now() + 3600_000 })), cipher.final()])
   return { name: "erp_session", value: Buffer.concat([iv, cipher.getAuthTag(), encrypted]).toString("base64url"), url: origin, httpOnly: true, sameSite: "Lax" as const }
 }
-test.beforeAll(async () => { await new Promise<void>(resolve => upstream.listen(33119, "127.0.0.1", resolve)) })
+test.beforeAll(async () => { await new Promise<void>(resolve => upstream.listen(Number(process.env.WALLET_TEST_API_PORT || 33119), "127.0.0.1", resolve)) })
 test.afterAll(async () => { await new Promise<void>(resolve => upstream.close(() => resolve())) })
-test.beforeEach(async ({ context }) => { payments = [[], []]; documents = []; readonly = false; salesOnly = false; calls = 0; loseReceiptResponse = false; loseDocumentResponse = false; orderEditable = false; contractRevision = 1; syncCalls = 0; orderReads = 0; failOrderReload = false; orderStatus = "confirmed"; orderRevision = 1; orderCheckout = false; loseAcceptanceResponse = false; acceptanceKey = null; acceptanceCommands.length = 0; documentCommands.length = 0; documentsByKey.clear(); receiptsByKey.clear(); failures.length = 0; await context.addCookies([cookie()]) })
+test.beforeEach(async ({ context }) => { walletScenario=false;walletCalls.length=0;payments = [[], []]; documents = []; readonly = false; salesOnly = false; calls = 0; loseReceiptResponse = false; loseDocumentResponse = false; orderEditable = false; contractRevision = 1; syncCalls = 0; orderReads = 0; failOrderReload = false; orderStatus = "confirmed"; orderRevision = 1; orderCheckout = false; loseAcceptanceResponse = false; acceptanceKey = null; acceptanceCommands.length = 0; documentCommands.length = 0; documentsByKey.clear(); receiptsByKey.clear(); failures.length = 0; await context.addCookies([cookie()]) })
 test.afterEach(() => expect(failures).toEqual([]))
+
+test("carteira confirma lote e encaminha classificação, aprovação e centros pela sessão",async({page,context})=>{
+  walletScenario=true
+  await page.goto("/financeiro/contas-receber")
+  await page.getByText("Baixa em lote",{exact:true}).click()
+  const form=page.locator("form").filter({has:page.getByRole("button",{name:"Confirmar baixas selecionadas"})})
+  for(const box of await form.getByRole("checkbox").all())await box.check()
+  await form.getByLabel("Conta financeira").selectOption(accountId)
+  await form.getByLabel("Data da baixa").fill("2027-01-02")
+  await form.getByLabel("Referência").fill("Conferência do lote")
+  await form.getByRole("button",{name:"Confirmar baixas selecionadas"}).click()
+  await expect.poll(()=>walletCalls.find(c=>c.path.endsWith("/payment-batches"))?.body.items).toHaveLength(2)
+  const headers={Origin:origin,"X-Tenant-Id":tenant,"If-Match":'"1"',"Idempotency-Key":randomUUID()}
+  for(const wallet of ["receivables","payables","financial-payables"]) {
+    const base=origin+"/api/erp/"+wallet+"/"+titleIds[0]
+    expect((await context.request.put(base+"/classification",{headers,data:{}})).status()).toBe(200)
+    expect((await context.request.get(base+"/approvals")).status()).toBe(200)
+    expect((await context.request.post(base+"/approvals",{headers,data:{}})).status()).toBe(200)
+    expect((await context.request.post(base+"/approvals/"+methodId+"/decision",{headers,data:{}})).status()).toBe(200)
+  }
+  const centers=origin+"/api/erp/financial-cost-centers"
+  expect((await context.request.post(centers,{headers,data:{}})).status()).toBe(200)
+  expect((await context.request.put(centers+"/"+methodId,{headers,data:{}})).status()).toBe(200)
+  expect((await context.request.get(origin+"/api/erp/financial-wallet-settings")).status()).toBe(200)
+})
+
+test("título permite distribuir percentuais exatos entre centros de custo",async({page})=>{
+  walletScenario=true
+  await page.goto("/financeiro/contas-receber/"+titleIds[0])
+  await page.getByText("Classificação do título",{exact:true}).click()
+  const form=page.locator("form").filter({has:page.getByRole("button",{name:"Salvar classificação"})})
+  await form.getByLabel("Natureza financeira").selectOption(methodId)
+  await form.getByLabel("Ratear entre centros de custo").check()
+  await form.getByLabel("Percentual de Produção").fill("33,33")
+  await form.getByLabel("Percentual de Administração").fill("66,66")
+  await form.getByRole("button",{name:"Salvar classificação"}).click()
+  await expect(form.getByRole("alert")).toContainText("100%")
+  await form.getByLabel("Percentual de Administração").fill("66,67")
+  await form.getByRole("button",{name:"Salvar classificação"}).click()
+  await expect.poll(()=>walletCalls.find(c=>c.path.endsWith("/classification"))?.body).toMatchObject({costCenterId:null,costCenterAllocations:[{costCenterId:accountId,basisPoints:3333},{costCenterId:methodId,basisPoints:6667}]})
+})
 
 test("encomenda: BFF permite somente POST autenticado com origem, revisão e chave", async ({ context }) => {
   orderStatus = "draft"; orderEditable = true; orderCheckout = true
@@ -178,7 +231,8 @@ test("pedido soma recebimentos de todas as parcelas e permite mais provas sem no
   await expect(panel.getByTestId("order-outstanding")).toContainText("100.000,00")
   for (const [index, amount, balance] of [[0, "50000", "50.000,00"], [1, "10000", "40.000,00"], [1, "40000", "0,00"]] as const) {
     await panel.getByLabel("Parcela para recebimento").selectOption(titleIds[index])
-    await panel.getByLabel("Valor recebido").fill(amount)
+    await panel.getByLabel("Principal recebido").fill(amount)
+    await panel.getByLabel("Conta de entrada").selectOption(accountId)
     await panel.getByLabel("Data do recebimento", { exact: true }).fill("2026-11-13")
     await panel.getByRole("combobox", { name: "Forma de pagamento", exact: true }).selectOption(methodId)
     await panel.getByLabel("Referência do recebimento").fill(`Recebimento ${amount}`)
@@ -226,7 +280,8 @@ test("somente consulta não oferece comandos e vendas não exibe dados financeir
 test("resposta incerta preserva título e chave para repetir sem duplicar recebimento", async ({ page }) => {
   loseReceiptResponse = true
   await page.goto(`/vendas/pedidos/${order}`)
-  await page.getByLabel("Valor recebido").fill("10000")
+  await page.getByLabel("Principal recebido").fill("10000")
+  await page.getByLabel("Conta de entrada").selectOption(accountId)
   await page.getByLabel("Data do recebimento", { exact: true }).fill("2026-11-13")
   await page.getByRole("combobox", { name: "Forma de pagamento", exact: true }).selectOption(methodId)
   await page.getByLabel("Referência do recebimento").fill("Resposta incerta")

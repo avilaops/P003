@@ -282,6 +282,7 @@ for (const resource of ["payables", "receivables"] as const) {
   test(resource + ": vírgula é aceita e enviada como decimal canônico", async ({ page }) => {
     const body = { tenantId: tenant, canEdit: true, data: { id: record, receiptId: record, orderId: record, supplierName: "Fornecedor fixture", customerName: "Cliente fixture", dueDate: "2026-11-20", amount: "100.00", paidAmount: "0.00", receivedAmount: "0.00", outstandingAmount: "100.00", status: "open", revision: 1, paymentId: null }, payments: [] }
     let sent: { amount: string } | undefined
+    await page.route("**/api/erp/financial-accounts?*",route=>route.fulfill({json:{data:[{id:record,name:"Banco",code:"BANCO"}]}}))
     await page.route("**/api/erp/" + (resource === "payables" ? "financial-payables" : resource) + "/" + record, route => route.fulfill({ headers: { ETag: '"1"' }, json: body }))
     await page.route("**/api/erp/" + (resource === "payables" ? "financial-payables" : resource) + "/" + record + "/payments", route => {
       sent = route.request().postDataJSON()
@@ -289,8 +290,9 @@ for (const resource of ["payables", "receivables"] as const) {
     })
     page.on("dialog", dialog => dialog.accept())
     await page.goto("/financeiro/contas-" + (resource === "payables" ? "pagar" : "receber") + "/" + record)
-    const amount = page.getByLabel(resource === "payables" ? "Valor do pagamento" : /^Valor declarado/)
+    const amount = page.getByLabel(resource === "payables" ? "Principal pago" : "Principal recebido")
     await amount.fill("12,50")
+    await page.getByLabel(resource==="payables" ? "Conta de saída" : "Conta de entrada").selectOption(record)
     expect(await amount.evaluate((input: HTMLInputElement) => input.checkValidity())).toBe(true)
     await page.getByLabel(resource === "payables" ? "Data do pagamento" : "Data do recebimento", { exact: true }).fill("2026-10-30")
     await page.getByLabel(resource === "payables" ? "Referência do pagamento" : "Referência do recebimento", { exact: true }).fill("Teste decimal")

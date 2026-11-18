@@ -6,6 +6,7 @@ import { authorizeRequest, requirePermission, type AuthorizedContext } from "../
 import { commandKey, record, remember, replay } from "../../platform/commands.js"
 import { Problem } from "../../platform/problem.js"
 import { nextRevision, parseRevision, revisionValue } from "../../platform/revision.js"
+import { reverseOrderInvoices } from "../finance-management/accrual.js"
 import { decimal, validateDate } from "../sales/fixed.js"
 import { conflict } from "./acceptance.js"
 import { cancelProduction, commissionReconciliation, fiscalCancellation, requestContractWithdrawals, requireCancellationPermissions } from "./cancellation.js"
@@ -89,6 +90,7 @@ export function registerCompletedOrderCancellation(app: FastifyInstance, depende
       const stockMovementIds = await reverseShippedGoods(context, request.headers, id, reason)
       const titles = await cancelCompletedReceivables(context, request.headers, id, reason, occurredOn)
       const cancellationId = randomUUID(), revision = nextRevision(expected)
+      await reverseOrderInvoices(context, request.headers, id, cancellationId, occurredOn, reason)
       const commission = await commissionReconciliation(context, id)
       const production = await cancelProduction(context, request.headers, id, cancellationId, reason)
       const summary = { id: cancellationId, kind: "sale_cancellation", sourceId: id, orderId: id, cancellationId, revision, reason, occurredOn,

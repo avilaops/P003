@@ -1,4 +1,4 @@
-import { FinanceCapabilityUnavailable } from "@/features/finance/finance-capability-unavailable"
-export default function Page() { return <FinanceCapabilityUnavailable title="Faturamento agrupado" description="Agrupamento e emissão de cobranças financeiras." /> }
+import { PartnerWorkspace } from "@/features/finance/partner-workspace"
 
 export const metadata = { title: "Faturamento agrupado" }
+export default function Page() { return <PartnerWorkspace group /> }
