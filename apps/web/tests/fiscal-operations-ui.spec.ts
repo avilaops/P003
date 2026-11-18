@@ -145,6 +145,37 @@ test("NFC-e autorizada gera DANFE e valida XML e PDF pelo BFF", async ({ page })
   expect(danfeRequests).toEqual([nfceXml])
 })
 
+test("envio da NF-e exibe o destinatário e exige confirmação para enviar os anexos", async ({ page }) => {
+  const recipientEmail = "fiscal@example.test"
+  const url = `**/api/erp/fiscal/nfe/${record}`
+  let sent = 0
+  await page.route("**/api/erp/me", route => route.fulfill({ json: { tenant: { id: tenant }, permissions: ["fiscal.nfe.read", "fiscal.nfe.issue"] } }))
+  await page.route("**/api/erp/fiscal/readiness", route => route.fulfill({ json: { tenantId: tenant, environment: "homologation", blockers: [] } }))
+  await page.route(url, route => route.fulfill({ headers: { ETag: '"1"' }, json: { tenantId: tenant, canEdit: false, data: { id: record, revision: 1, input: draft, issuer: { legalName: "Empresa teste" } } } }))
+  await page.route(`${url}/emission`, route => route.fulfill({ headers: { ETag: '"3"' }, json: {
+    tenantId: tenant, id: record, status: "authorized", environment: "homologation", model: 55,
+    revision: 3, number: 4, series: 1, accessKey: "35261012345678000195550010000001231482917364", result: {},
+  } }))
+  await page.route(`${url}/email`, route => {
+    if (route.request().method() === "POST") {
+      expect(route.request().postDataJSON()).toEqual({ recipientEmail })
+      expect(route.request().headers()["idempotency-key"]).toBeTruthy()
+      expect(route.request().headers()["if-match"]).toBe('"3"')
+      sent++
+    }
+    return route.fulfill({ headers: { ETag: '"3"' }, json: { tenantId: tenant, recipientEmail, smtpConfigured: true, status: sent ? "sent" : "ready" } })
+  })
+  await page.goto(`/fiscal/notas-saida/${record}`)
+  await page.getByRole("button", { name: "Enviar por e-mail" }).click()
+  const panel = page.getByRole("region", { name: "Envio da NF-e por e-mail" })
+  await expect(panel.getByText(recipientEmail, { exact: true })).toBeVisible()
+  expect(sent).toBe(0)
+  await panel.getByRole("button", { name: "Confirmar envio" }).click()
+  await expect(panel.getByRole("status")).toHaveText("O serviço de e-mail aceitou a mensagem com os dois anexos.")
+  await expect(panel.getByRole("button", { name: "Confirmar envio" })).toHaveCount(0)
+  expect(sent).toBe(1)
+})
+
 test("lista de NF-e distingue emissão em homologação da produção indisponível", async ({ page }) => {
   await page.route("**/api/erp/fiscal/certificate", route => route.fulfill({ json: { tenantId: tenant, status: "active" } }))
   await page.route("**/api/erp/fiscal/issued-nfes?*", route => route.fulfill({ json: { tenantId: tenant, data: [], nextCursor: null } }))

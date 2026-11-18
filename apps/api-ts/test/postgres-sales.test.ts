@@ -23,6 +23,7 @@ import { authContractProfile } from "./auth-contract-fixture.js"
 import { verifyAuthContract } from "./auth-contract-cases.js"
 import { verifyMcpDispatch } from "./mcp-dispatch-cases.js"
 import { verifyCommercialProposals } from "./commercial-proposal-cases.js"
+import { verifyNfeEmail } from "./nfe-email-cases.js"
 
 // Opt in with a disposable PostgreSQL administrator URL. The generated database
 // and NOLOGIN role belong exclusively to this test and are removed afterwards.
@@ -105,6 +106,7 @@ for (const backend of backends) test(`${backend}: PostgreSQL migrations and RLS 
     }
     assert.equal((await app.inject({ method: "GET", url: `/api/v1/proposals/${proposal}?version=1.0`, headers })).statusCode, 422)
     await seed.query(`GRANT INSERT,UPDATE ON ALL TABLES IN SCHEMA public TO ${role}`)
+    if (backend === "typescript") await verifyNfeEmail(seed, pool, tenant, other, readerRole)
     await seed.query("INSERT INTO role_permissions(role_id,permission_code) VALUES($1,'catalog.parties.read'),($1,'catalog.parties.manage')", [readerRole])
     const partyInput = { personType: "juridica", legalName: "Cliente novo", tradeName: null, taxId: "04252011000110", email: "client@example.test", phone: null, isCustomer: true, isSupplier: false, status: "active", addresses: [], contacts: [] }
     const key = randomUUID()

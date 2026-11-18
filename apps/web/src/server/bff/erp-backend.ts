@@ -26,7 +26,7 @@ const routes: { module: MigratedModule; methods: readonly string[]; path: RegExp
   { module: "reports", methods: ["GET", "POST"], path: /^\/system\/custom-reports$/ },
   { module: "reports", methods: ["PUT"], path: new RegExp(`^/system/custom-reports/${uuid}$`, "i") },
 ]
-function typescriptOrigin(environment: BackendEnvironment) {
+export function typescriptOrigin(environment: BackendEnvironment) {
   if (!environment.ERP_TYPESCRIPT_API_URL) throw Error("API TypeScript não configurada para o módulo ativo")
   const url = new URL(environment.ERP_TYPESCRIPT_API_URL)
   if (url.username || url.password || url.pathname !== "/" || url.search || url.hash || url.protocol !== "https:" && !(url.protocol === "http:" && ["localhost", "127.0.0.1", "[::1]"].includes(url.hostname))) throw Error("Origem da API TypeScript inválida")
