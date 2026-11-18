@@ -105,7 +105,7 @@ test("stock and Kardex HTTP contracts on PostgreSQL", { skip: !adminUrl }, async
     for (const [date, direction, quantity, after] of [
       ["2026-11-17T02:59:59.999Z", "receipt", 1000000, 8000000],
       ["2026-11-17T03:00:00Z", "receipt", 3, 8000003],
-      ["2026-11-18T02:59:59.999Z", "issue", 1000000, 7000003],
+      ["2026-11-18T02:59:59.999999Z", "issue", 1000000, 7000003],
       ["2026-11-18T03:00:00Z", "receipt", 1, 7000004],
     ]) await seed.query("INSERT INTO stock_movements(tenant_id,id,product_id,direction,quantity_micros,balance_after_micros,reason,created_at) VALUES($1,$2,$3,$4,$5,$6,'Movimento datado',$7)", [tenant, randomUUID(), dated, direction, quantity, after, date])
     for (const offset of [0,1,2]) {
@@ -113,6 +113,7 @@ test("stock and Kardex HTTP contracts on PostgreSQL", { skip: !adminUrl }, async
       assert.equal(reply.statusCode, 200, reply.body)
       assert.equal(reply.json().total, 2)
       assert.equal(reply.json().data.length, offset === 2 ? 0 : 1)
+      if (offset === 0) assert.equal(reply.json().data[0].occurredAt, "2026-11-18T02:59:59.999999Z")
       assert.deepEqual(reply.json().summary, { opening: "8.000000", receipts: "0.000003", issues: "1.000000", closing: "7.000003" })
     }
     assert.equal((await kardex(dated, "&endDate=2020-01-01")).json().summary.closing, "7.000000")

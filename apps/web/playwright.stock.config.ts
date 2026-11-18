@@ -9,6 +9,7 @@ export default defineConfig({
   workers: 1,
   retries: 0,
   timeout: 120_000,
+  expect: { timeout: 15_000 },
   outputDir: "../../artifacts/stock-browser",
   reporter: "list",
   use: { baseURL: origin, browserName: "chromium", channel: process.env.ERP_BROWSER_CHANNEL, screenshot: "only-on-failure" },

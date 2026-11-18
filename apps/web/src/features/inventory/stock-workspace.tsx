@@ -38,11 +38,19 @@ function StockGrid({ tenant, path }: { tenant: string; path: string }) {
   const focus = search.get("focus")
   const list = useResource<StockList>(stockUrl("/api/erp/stock", { q, offset, limit: pageSize }))
   const stocks = list.value?.tenantId === tenant ? list.value : null
+  const focusKey = "stock-focus:" + stockUrl(path, { tenant, q, offset })
   useEffect(() => {
-    if (stocks && focus) document.getElementById("stock-" + focus)?.focus()
-  }, [stocks, focus])
-  function setQuery(q: string, offset: number) {
-    window.history.replaceState(null, "", stockUrl(path, { tenant, q, offset }))
+    if (!stocks) return
+    let productId = focus
+    try {
+      productId ||= sessionStorage.getItem(focusKey)
+      sessionStorage.removeItem(focusKey)
+    } catch { /* The return link also carries the selected product. */ }
+    if (productId) document.getElementById("stock-" + productId)?.focus()
+  }, [stocks, focus, focusKey])
+  function setQuery(q: string | null, offset: number) {
+    const latestQuery = q ?? new URLSearchParams(window.location.search).get("q")
+    window.history.replaceState(null, "", stockUrl(path, { tenant, q: latestQuery, offset }))
   }
   const manual = path === manualPath
   const title = manual ? "Novo lançamento de estoque" : path === historyPath ? "Lançamentos de estoque" : "Saldos de estoque"
@@ -53,7 +61,7 @@ function StockGrid({ tenant, path }: { tenant: string; path: string }) {
         event.preventDefault()
         setQuery(String(new FormData(event.currentTarget).get("q") || "").trim(), 0)
       }}>
-        <label className="min-w-0 flex-1">Buscar produto ou SKU<SearchInput name="q" maxLength={160} defaultValue={q} onSearch={value => setQuery(value.trim(), 0)} /></label>
+        <label className="min-w-0 flex-1">Buscar produto ou SKU<SearchInput key={offset + ":" + (focus || "")} name="q" maxLength={160} defaultValue={q} onSearch={value => setQuery(value.trim(), 0)} /></label>
         <Button type="submit" variant="outline">Buscar</Button>
       </form>
       {list.loading ? <p role="status">Carregando saldos…</p> : !stocks ?
@@ -76,11 +84,13 @@ function StockGrid({ tenant, path }: { tenant: string; path: string }) {
                   <div key={label} className="flex flex-wrap justify-between gap-x-1"><dt>{label}</dt><dd>{commercialQuantity(amount)}</dd></div>)}
               </dl><Link id={"stock-" + stock.productId} className={textLink} href={href}
                 aria-label={`${manual && stocks.canEdit ? "Lançar movimento" : "Ver movimentos"} de ${stock.name} • SKU ${stock.sku}`}
-                onNavigate={() => window.history.replaceState(null, "", stockUrl(path, { tenant, q, offset, focus: stock.productId }))}>
+                onNavigate={() => {
+                  try { sessionStorage.setItem(focusKey, stock.productId) } catch { /* Focus can still be restored by the return link. */ }
+                }}>
                 {manual && stocks.canEdit ? "Lançar movimento" : "Ver movimentos"}</Link></td></tr>
           })}</tbody>
         </DataTable> : <p>{stocks.total ? "Nenhum produto nesta página." : "Nenhum produto encontrado."}</p>}
-        <Pagination offset={offset} total={stocks.total} pageSize={pageSize} maxOffset={100000} onOffsetChange={value => setQuery(q, value)} />
+        <Pagination offset={offset} total={stocks.total} pageSize={pageSize} maxOffset={100000} onOffsetChange={value => setQuery(null, value)} />
       </>}
       <Link className={textLink} href="/cadastros/produtos/novo" target="_blank" rel="noopener noreferrer">Cadastrar produto</Link>
     </section>

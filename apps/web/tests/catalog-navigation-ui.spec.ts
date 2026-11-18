@@ -583,7 +583,7 @@ test("estoque mantém busca, página e foco no SKU com barra e invalida a seleç
   await page.route("**/api/erp/stock?*", route => {
     const url = new URL(route.request().url())
     if (unavailable) return route.fulfill({ status: 503, json: { title: "Consulta de estoque indisponível" } })
-    const matches = selectedTenant === other ? [] : [...Array.from({ length: 25 }, (_, i) => ({ ...target, productId: productId.slice(0,-2) + String(i).padStart(2,"0"), sku: "LD/" + i })), target]
+    const matches = selectedTenant === other ? [] : [...Array.from({ length: 25 }, (_, i) => ({ ...target, productId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa" + String(i).padStart(2,"0"), sku: "LD/" + i })), target]
     const offset = Number(url.searchParams.get("offset") || 0)
     const filtered = matches.filter(row => row.name.toLowerCase().includes((url.searchParams.get("q") || "").toLowerCase()))
     return route.fulfill({ json: { tenantId: selectedTenant, canEdit: false, total: filtered.length, offset, limit: 25, data: filtered.slice(offset,offset + 25) } })
@@ -604,6 +604,7 @@ test("estoque mantém busca, página e foco no SKU com barra e invalida a seleç
   await page.getByRole("textbox", { name: "Buscar produto ou SKU" }).fill("Banco")
   await expect(page).toHaveURL(/q=Banco/)
   await page.getByRole("button", { name: "Próxima", exact: true }).click()
+  await expect(page).toHaveURL(/q=Banco&offset=25/)
   const link = table.getByRole("link", { name: "Ver movimentos de Banco Flex • SKU LD/B-02" })
   for (const [width,height] of [[360,800],[1366,768],[1920,1080]]) {
     await page.setViewportSize({ width, height })
@@ -619,9 +620,15 @@ test("estoque mantém busca, página e foco no SKU com barra e invalida a seleç
   await expect(page.getByText("SKU LD/B-02 • Unidade UN")).toBeVisible()
   await expect(page.getByRole("link", { name: "Novo lançamento", exact: true })).toHaveCount(0)
   const saved = page.url()
+  expect(new URL(saved).searchParams.get("q")).toBe("Banco")
+  await page.goBack()
+  await expect(link).toBeFocused()
+  await link.click()
+  await expect(page).toHaveURL(saved)
   await page.reload()
   await expect(page.getByText("SKU LD/B-02 • Unidade UN")).toBeVisible()
   await page.getByRole("link", { name: "Voltar à consulta" }).click()
+  await expect(page).toHaveURL(/q=Banco&offset=25&focus=/)
   await expect(link).toBeFocused()
   await expect(page.getByRole("textbox", { name: "Buscar produto ou SKU" })).toHaveValue("Banco")
   await expect(page.getByText("Página 2", { exact: true })).toBeVisible()
