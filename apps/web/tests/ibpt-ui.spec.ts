@@ -32,8 +32,8 @@ async function setup(page: Page, options: { existing?: boolean; readOnly?: boole
 
 async function showIbpt(page: Page) {
   await page.getByRole("button", { name: "4. Tributação", exact: true }).click()
-  const section = page.locator("details").filter({ has: page.locator("summary", { hasText: "Estimativa IBPT" }) })
-  if (await section.getAttribute("open") === null) await section.locator("summary").click()
+  // The IBPT group is always expanded inside the tax step; there is no collapsible section to open.
+  await expect(page.getByRole("region", { name: "Seleção da estimativa IBPT", exact: true })).toBeVisible()
 }
 
 async function saveDraft(page: Page) {
