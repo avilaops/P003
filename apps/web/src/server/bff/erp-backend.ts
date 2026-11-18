@@ -3,10 +3,11 @@ import { financeRoute } from "./finance-resources"
 
 // Permanent ownership after the four-module transition. The previous release,
 // rather than traffic flags, is the operational return path.
-export type MigratedModule = "preferences" | "registrations" | "sales" | "reports" | "finance"
+export type MigratedModule = "access" | "preferences" | "registrations" | "sales" | "reports" | "finance"
 export type BackendEnvironment = { ERP_TYPESCRIPT_API_URL?: string | undefined; ERP_TYPESCRIPT_MODULES?: string | undefined }
 const uuid = "[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}"
 const routes: { module: MigratedModule; methods: readonly string[]; path: RegExp }[] = [
+  { module: "access", methods: ["GET"], path: /^\/me$/ },
   { module: "reports", methods: ["GET", "POST"], path: /^\/financial-report\/email$/ },
   { module: "reports", methods: ["GET", "POST"], path: new RegExp(`^/receivables/${uuid}/email$`, "i") },
   { module: "reports", methods: ["GET", "POST"], path: new RegExp(`^/financial-payables/${uuid}/email$`, "i") },

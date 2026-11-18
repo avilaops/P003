@@ -89,6 +89,34 @@ test(
           [profile],
         )
       }
+      await t.test("perfil ativo respeita identidade, empresa, vínculo e administrador da plataforma", async () => {
+        const me = (company: string) => app.inject({
+          method: "GET", url: "/api/v1/me", headers: { authorization: "Bearer batch", "x-tenant-id": company },
+        })
+        assert.equal((await app.inject({ method: "GET", url: "/api/v1/me" })).statusCode, 401)
+        await seed.query("UPDATE tenants SET trade_name='Fantasia' WHERE id=$1", [tenant])
+        const response = await me(tenant)
+        assert.equal(response.statusCode, 200, response.body)
+        assert.equal(response.headers["x-erp-backend"], "typescript")
+        const profile = response.json()
+        assert.deepEqual(profile.identity, { subject, email: "usuario@example.test", name: "usuario@example.test" })
+        assert.deepEqual(profile.tenant, { id: tenant, legalName: "Empresa", tradeName: "Fantasia" })
+        assert.deepEqual(profile.roles, ["financeiro"])
+        assert.ok(profile.permissions.includes("finance.collections.read"))
+        assert.ok(!profile.permissions.includes("catalog.parties.read"))
+        await seed.query("UPDATE tenant_memberships SET status='disabled' WHERE tenant_id=$1", [other])
+        assert.equal((await me(other)).statusCode, 403)
+        await seed.query("INSERT INTO platform_administrators(auth_subject,active,granted_by,reason) VALUES($1,true,'test','Teste do perfil')", [subject])
+        const operator = await me(other)
+        assert.equal(operator.statusCode, 200, operator.body)
+        assert.deepEqual(operator.json().roles, ["platform_administrator"])
+        assert.deepEqual(operator.json().tenant, { id: other, legalName: "Empresa", tradeName: null })
+        assert.ok(operator.json().permissions.includes("catalog.parties.read"))
+        assert.ok(!operator.json().permissions.includes("fiscal.cte.read"))
+        await seed.query("UPDATE platform_administrators SET active=false WHERE auth_subject=$1", [subject])
+        assert.equal((await me(other)).statusCode, 403)
+        await seed.query("UPDATE tenant_memberships SET status='active' WHERE tenant_id=$1", [other])
+      })
       await seed.query(
         "INSERT INTO financial_accounts(id,tenant_id,code,name,status,account_type,revision) VALUES($1,$2,'B','Banco','active','bank',1)",
         [bank, tenant],

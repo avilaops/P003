@@ -24,7 +24,8 @@ import { registerReferenceRoutes } from "./modules/reference-data/routes.js"
 import { registerRegistrationSettingsRoutes } from "./modules/registration-settings/routes.js"
 import { registerOutgoingNfseRoutes, type OutgoingNfseDependencies } from "./modules/outgoing-nfse/routes.js"
 import { registerNfeEmail, type NfeEmailIO } from "./modules/nfe-email/routes.js"
-import { authenticateRequest, type AccessDependencies } from "./platform/access.js"
+import { authenticateRequest, authorizeRequest, type AccessDependencies } from "./platform/access.js"
+import { readAccessProfile } from "./platform/database.js"
 import { Problem } from "./platform/problem.js"
 import { parseJson, stringifyJson } from "./platform/json.js"
 import { registerMcpDispatch } from "./platform/mcp-dispatch.js"
@@ -79,6 +80,13 @@ export function buildApp(_dependencies: AppDependencies): FastifyInstance {
       .header("content-type", "application/problem+json")
       .header("cache-control", "no-store")
       .send(problem.toJSON())
+  })
+  app.get("/api/v1/me", async (request, reply) => {
+    reply.header("cache-control", "no-store")
+    return authorizeRequest(request, _dependencies, async context => {
+      const { subject, email, name } = context.identity
+      return { identity: { subject, email, name }, ...await readAccessProfile(context) }
+    })
   })
   registerPartyRoutes(app, _dependencies)
   registerDashboardRoutes(app, _dependencies)

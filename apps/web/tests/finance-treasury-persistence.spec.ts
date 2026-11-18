@@ -196,7 +196,24 @@ test("Chromium • comando de envio preserva no PDF todos os 105 títulos filtra
     await expect(page.getByText(/105 títulos • posição em/)).toBeVisible({ timeout: 40000 })
     await expect(page.getByRole("table", { name: "Títulos do filtro" }).getByRole("row")).toHaveCount(31)
     await page.getByRole("button", { name: "Próxima" }).click()
-    await page.getByRole("button", { name: "Enviar por e-mail", exact: true }).click()
+    const [preview, identity] = await Promise.all([
+      page.waitForResponse(r => r.request().method() === "GET" && new URL(r.url()).pathname === "/api/erp/financial-report/email"),
+      page.waitForResponse(r => r.request().method() === "GET" && new URL(r.url()).pathname === "/api/erp/me"),
+      page.getByRole("button", { name: "Enviar por e-mail", exact: true }).click(),
+    ])
+    for (const res of [preview, identity]) {
+      const url = new URL(res.url())
+      const wire = { path: url.pathname + url.search, status: res.status(), etag: res.headers()["etag"],
+        backend: res.headers()["x-erp-backend"], contentType: res.headers()["content-type"], body: await res.text() }
+      await test.info().attach(url.pathname.split("/").pop()! + ".json", {
+        body: JSON.stringify(wire), contentType: "application/json",
+      })
+      expect(res.ok(), JSON.stringify(wire)).toBeTruthy()
+      expect(wire.backend).toBe("typescript")
+    }
+    expect(Object.fromEntries(new URL(preview.url()).searchParams)).toEqual({ side: "receivable", q: "selecionado" })
+    expect((await preview.json()).tenantId).toBe(ready.tenant)
+    expect((await identity.json()).tenant.id).toBe(ready.tenant)
     const dialog = page.getByRole("dialog")
     await expect(dialog).toContainText("105 registro(s)", { timeout: 40000 })
     await expect(dialog).toContainText("Empresa piloto • posição em")

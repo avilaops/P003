@@ -20,7 +20,8 @@ export default defineConfig({
       ...server?.env,
       ERP_WEB_ORIGIN: origin,
       ERP_NEXT_DIST_DIR: production ? ".next" : port === 33247 ? ".next-treasury-tests" : ".next-treasury-tests-" + port,
-      ERP_API_URL: "http://127.0.0.1:" + (port + 2),
+      // No legacy server runs at this origin. Treasury and its session check must use the TypeScript API.
+      ERP_API_URL: "http://127.0.0.1:" + (port + 1),
       ERP_TYPESCRIPT_API_URL: "http://127.0.0.1:" + (port + 2),
     },
   },
