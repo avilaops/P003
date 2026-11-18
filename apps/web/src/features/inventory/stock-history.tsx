@@ -11,6 +11,7 @@ import { useResource } from "@/hooks/use-operation"
 import { commercialQuantity } from "@/features/sales/order-presentation"
 import { historyPath, manualPath, pageOffset, pageSize, stockUrl, textLink, type History, type Movement } from "./stock-model"
 import { StockMovementForm } from "./stock-movement-form"
+import { StockAnalysisLink } from "./stock-analysis-link"
 import { stockMoney } from "./stock-model"
 
 const origins = [
@@ -24,7 +25,8 @@ export function StockHistory({ productId, tenant, manual }: { productId: string;
   const from = params.get("from") || ""
   const listPath = ["/estoque", "/estoque/saldos", historyPath, manualPath].includes(from) ? from : "/estoque/saldos"
   const warehouseId = params.get("warehouseId")
-  const listQuery = { tenant, q: params.get("q"), offset: pageOffset(params.get("offset")), warehouseId, inStock:params.get("inStock") }
+  const originalWarehouse = params.get("fromWarehouseId") || warehouseId
+  const listQuery = { tenant, q: params.get("q"), offset: pageOffset(params.get("offset")), warehouseId: originalWarehouse === "all" ? null : originalWarehouse, inStock:params.get("inStock") }
   const startDate = params.get("startDate") || "", endDate = params.get("endDate") || ""
   const offset = pageOffset(params.get("movementOffset"))
   const direction = params.get("direction") || "", orderOffset = pageOffset(params.get("orderOffset"))
@@ -34,22 +36,27 @@ export function StockHistory({ productId, tenant, manual }: { productId: string;
   const [reversal, setReversal] = useState<Movement | null>(null), [locked, setLocked] = useState(false)
   const [notice, setNotice] = useState("")
   const confirmNavigation = useConfirmNavigation()
-  const details = { ...listQuery, productId, sku: history?.product.sku || "", from: listPath, startDate, endDate, movementOffset: offset, direction, orderOffset }
+  const details = { ...listQuery, productId, sku: history?.product.sku || "", from: listPath, warehouseId, fromWarehouseId: params.get("fromWarehouseId"), startDate, endDate, movementOffset: offset, direction, orderOffset }
   const back = stockUrl(listPath, { ...listQuery, focus: productId })
-  function filter(startDate: string, endDate: string, movementOffset: number, type = direction) {
+  function filter(startDate: string, endDate: string, movementOffset: number, type = direction, warehouse = warehouseId) {
     if (locked || !confirmNavigation()) return
     setReversal(null); setNotice("")
-    window.history.pushState(null, "", stockUrl(path, { ...details, startDate, endDate, movementOffset, direction:type }))
+    window.history.pushState(null, "", stockUrl(path, { ...details, startDate, endDate, movementOffset, direction: type,
+      warehouseId: warehouse, fromWarehouseId: warehouse === listQuery.warehouseId ? null : listQuery.warehouseId || "all", orderOffset: warehouse === warehouseId ? orderOffset : 0 }))
   }
+  const clearFilters = (startDate || endDate || direction || (!manual && warehouseId)) && <Button type="button" variant="outline" disabled={locked}
+    onClick={() => filter("", "", 0, "", manual ? warehouseId : null)}>Limpar filtros</Button>
   return <div className="workspace-page-frame">
-    <PageHeader title={manual ? "Novo lançamento de estoque" : "Lançamentos de estoque"} back={{ href: back, label: "Voltar à consulta" }} />
+    <PageHeader title={manual ? "Novo lançamento de estoque" : "Lançamentos de estoque"} back={{ href: back, label: "Voltar à consulta" }}
+      actions={!manual && history && <StockAnalysisLink dataset="stock_movement_activity" tenant={tenant} productId={productId}
+        warehouseId={warehouseId} direction={direction} startDate={startDate} endDate={endDate}>Atividade de movimentação do produto</StockAnalysisLink>} />
     {!history ? resource.loading ? <p role="status">Carregando movimentos…</p> : <div role="alert">
       <p>{resource.error || "O histórico retornou dados diferentes do produto ou da empresa ativa."}</p><Button variant="outline" onClick={resource.reload}>Recarregar histórico</Button>
-      {(startDate || endDate) && <GuardedLink className={textLink} href={stockUrl(path, { ...details, startDate: "", endDate: "", movementOffset: 0 })}>Limpar período</GuardedLink>}</div> :
+      {clearFilters}</div> :
       <section aria-label="Movimentos do produto" className="form-section min-w-0 space-y-4">
         <h2 className="break-words font-semibold">{history.product.name}</h2>
         <p className="break-words">SKU {history.product.sku} • Unidade {history.product.unit}</p>
-        <GuardedLink className={textLink} href={stockUrl("/relatorios/estoque/analises",{dataset:"stock_kardex",productId,warehouseId,startDate,endDate})}>Exportar Kardex do produto</GuardedLink>
+        <GuardedLink className={textLink} href={stockUrl("/relatorios/estoque/analises",{dataset:"stock_kardex",productId,tenant,warehouseId,startDate,endDate})}>Exportar Kardex do produto</GuardedLink>
         <GuardedLink className={textLink} href={"/compras/sugestoes/"+productId}>Consultar reposição</GuardedLink>
         <GuardedLink className={textLink} href={stockUrl("/estoque/series",{productId,tenant})}>Rastrear séries do produto</GuardedLink>
         {warehouseId && <p>Depósito • {history.warehouses?.find(w=>w.id===warehouseId)?.name || warehouseId}</p>}
@@ -62,13 +69,21 @@ export function StockHistory({ productId, tenant, manual }: { productId: string;
         <form className="flex flex-wrap items-end gap-3" onSubmit={event => {
           event.preventDefault()
           const data = new FormData(event.currentTarget)
-          filter(String(data.get("startDate")), String(data.get("endDate")), 0,String(data.get("direction")||""))
-        }} key={startDate + endDate + direction}>
+          filter(String(data.get("startDate")), String(data.get("endDate")), 0, String(data.get("direction") || ""),
+            data.has("warehouse") ? String(data.get("warehouse") || "") || null : warehouseId)
+        }} key={startDate + endDate + direction + warehouseId}>
+          {!manual && Boolean(history.warehouses?.length || warehouseId) && <label>Depósito do movimento
+            <select className="block min-h-9 rounded border px-2" name="warehouse" defaultValue={warehouseId || ""} disabled={locked}>
+              <option value="">Todos os depósitos</option>
+              {warehouseId && !history.warehouses?.some(warehouse => warehouse.id === warehouseId) && <option value={warehouseId}>{warehouseId}</option>}
+              {history.warehouses?.map(warehouse => <option key={warehouse.id} value={warehouse.id}>{warehouse.code} • {warehouse.name}</option>)}
+            </select></label>}
           <label>Tipo de movimento<select className="block min-h-9 rounded border px-2" name="direction" defaultValue={direction} disabled={locked}>
             <option value="">Todos</option><option value="receipt">Entrada</option><option value="issue">Saída</option></select></label>
           <label>Data inicial<Input type="date" defaultValue={startDate} name="startDate" disabled={locked} /></label>
           <label>Data final<Input type="date" defaultValue={endDate} name="endDate" disabled={locked} /></label>
-          <Button type="submit" variant="outline" disabled={locked}>Aplicar período</Button>
+          <Button type="submit" variant="outline" disabled={locked}>Aplicar filtros</Button>
+          {clearFilters}
         </form>
         {direction && <p>Os totais incluem todas as entradas e saídas do período.</p>}
         <dl className="grid grid-cols-2 gap-2 lg:grid-cols-4">
@@ -85,24 +100,24 @@ export function StockHistory({ productId, tenant, manual }: { productId: string;
         <h3 className="font-medium">Histórico registrado</h3>
         {history.canEdit && <GuardedLink className={textLink} href={stockUrl("/estoque/fechamento",{productId,tenant})}>Informar valor do saldo de abertura</GuardedLink>}
         {history.data.length ? <ol className="divide-y border-y">{history.data.map(movement => <li key={movement.id} className="min-w-0 space-y-1 py-3 [overflow-wrap:anywhere]">
+          <p>Data efetiva • {movement.effectiveDate?.split("-").reverse().join("/") || "Anterior ao controle"}</p>
           <strong>{movement.direction === "receipt" ? "Entrada" : "Saída"} de {commercialQuantity(movement.quantity)} {history.product.unit}</strong>
+          {origins.map(([key,label,base]) => movement[key] && <p key={key}>
+            <GuardedLink className={textLink} href={base+encodeURIComponent(movement[key])}>{label} • {movement[key]}</GuardedLink></p>)}
+          {movement.transferId && <GuardedLink className={textLink} href={"/estoque/transferencias?documento="+movement.transferId}>Transferência • {movement.transferId}</GuardedLink>}
           <p>{movement.reason}</p><p>Saldo após o movimento • {commercialQuantity(warehouseId && movement.localBalanceAfter ? movement.localBalanceAfter : movement.balanceAfter)} {history.product.unit}</p>
           {movement.warehouseId && Boolean(history.warehouses?.length) && <p>Depósito • {history.warehouses?.find(w=>w.id===movement.warehouseId)?.name||movement.warehouseId}</p>}
-          {movement.transferId && <GuardedLink className={textLink} href={"/estoque/transferencias?documento="+movement.transferId}>Transferência • {movement.transferId}</GuardedLink>}
-          <p>Data efetiva • {movement.effectiveDate?.split("-").reverse().join("/") || "Anterior ao controle"}</p>
           <p>Custo unitário • {stockMoney(movement.unitCost)} • Valor do movimento • {stockMoney(movement.movementValue)}</p>
           {history.canEdit && movement.direction==="receipt" && !movement.transferId && !movement.reversesId && <GuardedLink className={textLink}
             href={stockUrl("/estoque/fechamento",{tenant,productId,movementId:movement.id})}>Conferir composição do custo</GuardedLink>}
           <p>Registrado em <time dateTime={movement.occurredAt}>{new Date(movement.occurredAt).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" })}</time></p>
           <p className="text-xs text-muted-foreground">ID • {movement.id}</p>
-          {origins.map(([key,label,base]) => movement[key] && <p key={key}>
-            <GuardedLink className={textLink} href={base+encodeURIComponent(movement[key])}>{label} • {movement[key]}</GuardedLink></p>)}
           {movement.returnSourceId && <p>Origem da devolução • {movement.returnSourceId}</p>}
           {movement.reversesId && <p>Estorno do movimento • {movement.reversesId}</p>}
           {manual && history.canEdit && movement.canReverse && <Button variant="outline" disabled={locked || history.product.status !== "active"}
             onClick={() => { if (confirmNavigation()) { setReversal(movement); setNotice("") } }}>Preparar estorno de {commercialQuantity(movement.quantity)}</Button>}
-        </li>)}</ol> : <p>{history.total ? "Nenhum movimento nesta página." : startDate || endDate ? "Nenhum movimento registrado neste período." : "Nenhum movimento registrado para este produto."}</p>}
-        <Pagination offset={offset} total={history.total} loading={locked} pageSize={pageSize} maxOffset={100000} onOffsetChange={value => filter(startDate, endDate, value)} />
+        </li>)}</ol> : <p>{history.total ? "Nenhum movimento nesta página." : startDate || endDate || direction || warehouseId ? "Nenhum movimento encontrado para os filtros selecionados." : "Nenhum movimento registrado para este produto."}</p>}
+        {(history.total > pageSize || offset > 0) && <Pagination offset={offset} total={history.total} loading={locked} pageSize={pageSize} maxOffset={100000} onOffsetChange={value => filter(startDate, endDate, value)} />}
       </section>}
   </div>
 }

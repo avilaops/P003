@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react"
 import Link from "next/link"
+import { useSearchParams } from "next/navigation"
 import { PageHeader } from "@/components/page-header"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -10,15 +11,18 @@ import { decimalPattern, normalizeDecimal } from "@/lib/decimal-input"
 import { commercialQuantity } from "@/features/sales/order-presentation"
 import { countEndpoint, countLabels, countPath, type CountDetail, type CountLine } from "./count-model"
 import { useCountCommand } from "./use-count-command"
-import { textLink } from "./stock-model"
+import { pageOffset, stockUrl, textLink } from "./stock-model"
 
 export function InventoryCountDetail({ id, tenant }: { id: string; tenant: string }) {
   const url = countEndpoint + "/" + id
   const resource = useResource<CountDetail>(url)
+  const params = useSearchParams()
+  const offset = params.get("tenant") === tenant ? pageOffset(params.get("offset")) : 0
+  const listHref = offset ? stockUrl(countPath, { tenant, offset }) : countPath
   const detail = resource.value?.tenantId === tenant && resource.value.count.id === id ? resource.value : null
   return (
     <div className="workspace-page-frame">
-      <PageHeader title={detail?.count.reference || "Conferência de estoque"} back={{ href: countPath, label: "Inventários" }} />
+      <PageHeader title={detail?.count.reference || "Conferência de estoque"} back={{ href: listHref, label: "Inventários" }} />
       {!detail ? (
         resource.loading ? (
           <p role="status">Carregando inventário…</p>
@@ -202,6 +206,7 @@ function CountSession({ detail, reload, loading }: { detail: CountDetail; reload
           Repetir confirmação
         </Button>
       )}
+      {command.busy && <p role="status">{action === "line" ? "Registrando contagem…" : action === "approve" ? "Aprovando inventário…" : "Cancelando inventário…"}</p>}
       {notice && <p role="status">{notice}</p>}
       <section className="form-section space-y-2" aria-label="Produtos da sessão">
         <h2 className="font-semibold">Produtos da sessão</h2>

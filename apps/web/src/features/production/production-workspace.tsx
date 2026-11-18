@@ -4,7 +4,9 @@ import { Pagination } from "@/components/workspace/pagination"
 import { useEffect, useRef, useState } from "react"
 import Link from "next/link"
 import { PageHeader } from "@/components/page-header"
-import { ProductionBoard,type Job,type Stage } from "./production-board"
+import { useNavigationGuard } from "@/components/shell/navigation-guard"
+import { StockAnalysisLink } from "@/features/inventory/stock-analysis-link"
+import { ProductionBoard, type Job, type Stage, type ProductionView } from "./production-board"
 import { Structures } from "./structures"
 import { PostingPanel,type ProductionExtension } from "./posting"
 import { Button } from "@/components/ui/button"
@@ -34,6 +36,7 @@ export function ProductionWorkspace({ id }: { id?: string }) {
   const [list, setList] = useState<List | null>(null)
   const [stages, setStages] = useState<Stage[]>([])
   const [offset, setOffset] = useState(0)
+  const [view, setView] = useState<ProductionView>("list")
   const [selected, setSelected] = useState(id || "")
   const [detail, setDetail] = useState<Detail | null>(null)
   const [loading, setLoading] = useState(true)
@@ -62,6 +65,7 @@ export function ProductionWorkspace({ id }: { id?: string }) {
   const writing = useRef(false)
   const dirty = Boolean(draft.productId || draft.quantity || draft.unitCost || draft.reason || reversal.movement || stageDraft.name)
   const locked = saving || uncertain
+  const eligibleSales = sales?.data.filter(sale => ["accepted", "confirmed", "completed"].includes(sale.status)) || []
 
   useEffect(() => {
     const controller = new AbortController()
@@ -104,11 +108,12 @@ export function ProductionWorkspace({ id }: { id?: string }) {
     return () => controller.abort()
   }, [detail, stockQuery])
 
-  useEffect(() => {
-    const prevent = (event: BeforeUnloadEvent) => { if (dirty || uncertain) event.preventDefault() }
-    window.addEventListener("beforeunload", prevent)
-    return () => window.removeEventListener("beforeunload", prevent)
-  }, [dirty, uncertain])
+  useNavigationGuard(dirty || uncertain ? "Sair da ordem de produção com dados ainda não confirmados?" : null)
+
+  function reload() {
+    setLoading(true)
+    setRefresh(value => value + 1)
+  }
 
   function choose(job: Job) {
     if (locked || (dirty && !window.confirm("Descartar os dados ainda não confirmados?"))) return
@@ -156,10 +161,46 @@ export function ProductionWorkspace({ id }: { id?: string }) {
     void send({ url: `/api/erp/production/orders/${detail.data.id}/consumptions`, method: "POST", tenant: detail.tenantId, revision: detail.data.revision, body: { ...draft, quantity, unitCost } })
   }
 
-  return <div className="mx-auto w-full min-w-0 max-w-[1600px] space-y-5 px-4 pb-24 pt-6 sm:px-6">
+  return <div className="workspace-page-frame space-y-4">
+    <PageHeader title="Ordens de produção" description="Acompanhe a fabricação dos pedidos por etapa e prazo." actions={<>
+      {list?.canEdit && <Button disabled={locked} aria-expanded={showCreate} onClick={() => setShowCreate(!showCreate)}>Enviar pedido à produção</Button>}
+      <Button variant="outline" disabled={loading || locked} onClick={reload}>Recarregar</Button>
+      {list && <StockAnalysisLink dataset="stock_production_progress" tenant={list.tenantId}>Andamento da produção</StockAnalysisLink>}
+    </>} />
+    {notice && <p role="status" className="rounded-xl border p-4">{notice}</p>}
+    {writeError && <p role="alert" className="rounded-xl border p-4">{writeError}</p>}
+    {uncertain && <div role="alert" className="space-y-3 rounded-xl border p-4"><p>A resposta não confirmou o resultado. Repita o mesmo comando para conferir sem duplicar a operação.</p><Button disabled={saving} onClick={() => void send()}>Repetir confirmação</Button></div>}
+    {showCreate && list?.canEdit && <section className="form-section min-w-0 space-y-4" aria-label="Enviar pedido à produção">
+      <h2 className="font-semibold">Fabricar os produtos de um pedido</h2>
+      {saleError ? <div role="alert">{saleError} <Button variant="outline" onClick={reload}>Tentar consultar pedidos novamente</Button></div> : !sales ? <p role="status">Carregando pedidos…</p> : <form onSubmit={event => {
+        event.preventDefault()
+        const sale = eligibleSales.find(item => item.id === saleId)
+        if (sale) void send({ url: "/api/erp/production/orders", method: "POST", tenant: sales.tenantId, revision: sale.revision, body: { orderId: sale.id } })
+      }} className="space-y-4">
+        {eligibleSales.length ? <fieldset disabled={locked} className="space-y-4">
+          <label className="block space-y-2">Pedido aceito, reservado ou concluído
+            <select required className={selectClass} value={saleId} onChange={event => setSaleId(event.target.value)}>
+              <option value="">Selecione o pedido</option>
+              {eligibleSales.map(sale => <option key={sale.id} value={sale.id}>{sale.customerName} • {sale.id}</option>)}
+            </select>
+          </label>
+          <Button type="submit" disabled={!saleId}>Criar ordens por produto</Button>
+        </fieldset> : <p role="status">{sales.total > 25 || saleOffset ? "Nenhum pedido aceito, reservado ou concluído nesta página." : "Nenhum pedido aceito, reservado ou concluído para enviar à produção."}</p>}
+        {(saleOffset > 0 || sales.total > 25) && <div className="flex flex-wrap justify-between gap-3"><Button type="button" variant="outline" disabled={locked || !saleOffset} onClick={() => { setSales(null); setSaleId(""); setSaleOffset(value => value - 25) }}>Pedidos anteriores</Button><Button type="button" variant="outline" disabled={locked || saleOffset + 25 >= sales.total} onClick={() => { setSales(null); setSaleId(""); setSaleOffset(value => value + 25) }}>Próximos pedidos</Button></div>}
+      </form>}
+    </section>}
 
-    <PageHeader title="Ordens de produção" description="Acompanhe a fabricação dos pedidos por etapa e prazo." actions={list?.canEdit&&<Button disabled={locked} onClick={()=>setShowCreate(!showCreate)}>Enviar pedido à produção</Button>}/>
-    {list?.canEdit && <details className="form-section min-w-0 space-y-4"><summary className="cursor-pointer font-semibold">Mais ações • Configurar etapas</summary>
+    <section className="form-section min-w-0 space-y-4" aria-label="Ordens registradas">
+      <h2 className="font-semibold">Ordens registradas</h2>
+      {loading ? <p role="status">Carregando produção…</p> : error ? <div role="alert"><p>{error}</p><Button variant="outline" onClick={reload}>Tentar novamente</Button></div> : list && <>
+        {list.data.length ? <ProductionBoard jobs={list.data} stages={stages} locked={locked} choose={choose} view={view} setView={setView}
+          move={list.canEdit?(j,s)=>void send({url:"/api/erp/production/orders/"+j.id+"/stage",method:"POST",tenant:list.tenantId,revision:j.revision,body:{stageId:s}}):undefined}/>
+          : <p role="status">{offset ? "Nenhuma ordem nesta página." : "Nenhuma ordem de produção registrada nesta empresa."}</p>}
+        {(list.total > 25 || offset > 0) && <Pagination offset={offset} pageSize={25} total={list.total} loading={locked} onOffsetChange={offset => { setLoading(true); setOffset(offset) }} />}
+      </>}
+    </section>
+
+    {list?.canEdit && <details className="form-section min-w-0 space-y-4"><summary className="cursor-pointer font-semibold">Configurar etapas</summary>
       <p className="text-sm text-muted-foreground">As etapas iniciais são A produzir, Corte, Solda, Pintura, Montagem e Pronto. O nome anterior permanece no histórico quando uma etapa é renomeada.</p>
       <form className="space-y-4" onSubmit={event => { event.preventDefault(); const stage = stages.find(item => item.id === stageId); void send({ url: `/api/erp/production/stages${stage ? `/${stage.id}` : ""}`, method: stage ? "PUT" : "POST", tenant: list.tenantId, revision: stage?.revision, body: { name: stageDraft.name, kind: stageDraft.kind, position: Number(stageDraft.position) } }) }}><fieldset disabled={locked} className="grid min-w-0 gap-4 sm:grid-cols-2">
         <label className="space-y-2 sm:col-span-2">Etapa para configurar<select className={selectClass} value={stageId} onChange={event => { const stage = stages.find(item => item.id === event.target.value); setStageId(event.target.value); setStageDraft(stage ? { name: stage.name, kind: stage.kind, position: String(stage.position) } : { name: "", kind: "andamento", position: "1" }) }}><option value="">Nova etapa em andamento</option>{stages.map(stage => <option key={stage.id} value={stage.id}>{stage.name}</option>)}</select></label>
@@ -168,33 +209,12 @@ export function ProductionWorkspace({ id }: { id?: string }) {
         <Button className="w-fit" type="submit">Salvar etapa</Button>
       </fieldset></form>
     </details>}
-    {notice && <p role="status" className="rounded-xl border p-4">{notice}</p>}
-    {writeError && <p role="alert" className="rounded-xl border p-4">{writeError}</p>}
-    {uncertain && <div role="alert" className="space-y-3 rounded-xl border p-4"><p>A resposta não confirmou o resultado. Repita o mesmo comando para conferir sem duplicar a operação.</p><Button disabled={saving} onClick={() => void send()}>Repetir confirmação</Button></div>}
-    <section className="form-section min-w-0 space-y-4" aria-label="Ordens registradas">
-      <h2 className="font-semibold">Ordens registradas</h2>
-      {loading ? <p role="status">Carregando produção…</p> : error ? <div role="alert"><p>{error}</p><Button variant="outline" onClick={() => { setLoading(true); setRefresh(value => value + 1) }}>Tentar novamente</Button></div> : list && <>
-        {list.data.length ? <ProductionBoard jobs={list.data} stages={stages} locked={locked} choose={choose}
-          move={list.canEdit?(j,s)=>void send({url:"/api/erp/production/orders/"+j.id+"/stage",method:"POST",tenant:list.tenantId,revision:j.revision,body:{stageId:s}}):undefined}/>
-          : <p>Nenhuma ordem em produção. Envie um pedido aceito ou reservado para começar.</p>}
-        {list.total>25&&<Pagination offset={offset} pageSize={25} total={list.total} loading={locked} onOffsetChange={offset => { setLoading(true); setOffset(offset) }} />}
-      </>}
-    </section>
-
-    {showCreate && list?.canEdit && <section className="form-section min-w-0 space-y-4" aria-label="Enviar pedido à produção">
-      <h2 className="font-semibold">Fabricar os produtos de um pedido</h2>
-      {saleError ? <p role="alert">{saleError}</p> : !sales ? <p role="status">Carregando pedidos…</p> : <form onSubmit={event => { event.preventDefault(); const sale = sales.data.find(item => item.id === saleId); if (sale) void send({ url: "/api/erp/production/orders", method: "POST", tenant: sales.tenantId, revision: sale.revision, body: { orderId: sale.id } }) }} className="space-y-4">
-        <fieldset disabled={locked} className="space-y-4"><label className="block space-y-2">Pedido aceito, reservado ou concluído<select required className={selectClass} value={saleId} onChange={event => setSaleId(event.target.value)}><option value="">Selecione o pedido</option>{sales.data.filter(sale => ["accepted", "confirmed", "completed"].includes(sale.status)).map(sale => <option key={sale.id} value={sale.id}>{sale.customerName} · {sale.id}</option>)}</select></label><Button type="submit" disabled={!saleId}>Criar ordens por produto</Button></fieldset>
-        <div className="flex flex-wrap justify-between gap-3"><Button type="button" variant="outline" disabled={locked || !saleOffset} onClick={() => { setSales(null); setSaleId(""); setSaleOffset(value => value - 25) }}>Pedidos anteriores</Button><Button type="button" variant="outline" disabled={locked || saleOffset + 25 >= sales.total} onClick={() => { setSales(null); setSaleId(""); setSaleOffset(value => value + 25) }}>Próximos pedidos</Button></div>
-      </form>}
-    </section>}
-
     {list?.canEdit&&<Structures tenant={list.tenantId}/>}
     {selected && <section className="form-section min-w-0 space-y-5" aria-label="Ordem selecionada">
       {detailLoading ? <p role="status">Carregando ordem…</p> : detailError ? <p role="alert">{detailError}</p> : detail && <>
         <h2 className="break-words text-xl font-semibold">{detail.data.name}</h2>
-        <p className="break-words">{detail.data.quantity} {detail.data.unit} · {detail.data.sku}</p><p>{detail.data.stageName} · {statusLabel(detail.data.status)}</p>
-        <p className="break-all text-sm">Pedido {detail.data.orderId} · Revisão {detail.data.revision}</p>
+        <p className="break-words">{detail.data.quantity} {detail.data.unit} • {detail.data.sku}</p><p>{detail.data.stageName} • {statusLabel(detail.data.status)}</p>
+        <p className="break-all text-sm">Pedido {detail.data.orderId} • Revisão {detail.data.revision}</p>
         {detail.data.status === "cancelled" ? <p>Ordem cancelada. O histórico e os consumos permanecem disponíveis para consulta.</p> : detail.canEdit && <form className="grid min-w-0 gap-3 sm:grid-cols-[1fr_auto]" onSubmit={event => { event.preventDefault(); void send({ url: `/api/erp/production/orders/${selected}/stage`, method: "POST", tenant: detail.tenantId, revision: detail.data.revision, body: { stageId: nextStage } }) }}>
           <label className="space-y-2">Próxima etapa<select required disabled={locked} className={selectClass} value={nextStage} onChange={event => setNextStage(event.target.value)}><option value="">Selecione a etapa</option>{stages.filter(stage => stage.id !== detail.data.stageId && (!detail.data.bomVersion || stage.kind!=="pronta")).map(stage => <option value={stage.id} key={stage.id}>{stage.name}{stage.kind === "pronta" ? " • Pronta" : ""}</option>)}</select></label><Button className="self-end" type="submit" disabled={locked || !nextStage}>Mover ordem</Button>
         </form>}
@@ -207,7 +227,7 @@ export function ProductionWorkspace({ id }: { id?: string }) {
           <div className="space-y-2"><form className="flex flex-wrap items-end gap-3" onSubmit={event => { event.preventDefault(); setStockQuery(String(new FormData(event.currentTarget).get("componentQuery") || "")) }}><label className="min-w-0 flex-1 space-y-2">Buscar componente no estoque<Input name="componentQuery" maxLength={160} disabled={locked} /></label><Button variant="outline" disabled={locked} type="submit">Buscar componente</Button></form><Link className="inline-flex min-h-11 items-center font-medium text-primary underline underline-offset-4" href="/cadastros/produtos/novo" target="_blank" rel="noopener noreferrer">Cadastrar componente</Link></div>
           {stockError && <p role="alert">{stockError}</p>}
           <form className="space-y-4" onSubmit={consume}><fieldset disabled={locked} className="grid min-w-0 gap-4 sm:grid-cols-2">
-            <label className="min-w-0 space-y-2 sm:col-span-2">Componente do estoque<select className={selectClass} required value={draft.productId} onChange={event => setDraft({ ...draft, productId: event.target.value })}><option value="">Selecione o componente</option>{stocks.map(stock => <option key={stock.productId} value={stock.productId}>{stock.name} · {stock.sku} · disponível {stock.available} {stock.unit}</option>)}</select></label>
+            <label className="min-w-0 space-y-2 sm:col-span-2">Componente do estoque<select className={selectClass} required value={draft.productId} onChange={event => setDraft({ ...draft, productId: event.target.value })}><option value="">Selecione o componente</option>{stocks.map(stock => <option key={stock.productId} value={stock.productId}>{stock.name} • {stock.sku} • disponível {stock.available} {stock.unit}</option>)}</select></label>
             <label className="min-w-0 space-y-2">Quantidade consumida<Input required inputMode="decimal" pattern={decimalPattern(6)} maxLength={19} value={draft.quantity} onChange={event => setDraft({ ...draft, quantity: event.target.value })} /></label>
             <label className="min-w-0 space-y-2">Custo unitário declarado<Input required inputMode="decimal" pattern={decimalPattern(2)} maxLength={15} value={draft.unitCost} onChange={event => setDraft({ ...draft, unitCost: event.target.value })} /></label>
             <label className="min-w-0 space-y-2 sm:col-span-2">Motivo do consumo<Input required minLength={3} maxLength={500} value={draft.reason} onChange={event => setDraft({ ...draft, reason: event.target.value })} /></label>
@@ -216,10 +236,10 @@ export function ProductionWorkspace({ id }: { id?: string }) {
         </div>}
         {!detail.canConsume && detail.canEdit && detail.data.status !== "cancelled" && <p>Registrar ou devolver componentes exige permissões de consulta e movimentação de estoque.</p>}
         <h3 className="font-semibold">Consumos registrados</h3>
-        {detail.consumptions.length ? <ul className="space-y-3">{detail.consumptions.map(consumption => <li className="min-w-0 space-y-2 rounded-xl border p-4" key={consumption.id}><p className="break-words font-medium">{consumption.name} · {consumption.sku}</p><p>{consumption.quantity} {consumption.unit} · custo unitário R$ {consumption.unitCost} · total R$ {consumption.amount}</p><p>{consumption.reversed ? "Estornado" : "Consumo ativo"}</p>{!consumption.reversed && detail.canConsume && detail.data.status !== "cancelled" && <Button variant="outline" disabled={locked} onClick={() => setReversal({ movement: consumption.id, reason: "" })}>Estornar consumo de {consumption.name}</Button>}</li>)}</ul> : <p>Nenhum consumo registrado nesta ordem.</p>}
+        {detail.consumptions.length ? <ul className="space-y-3">{detail.consumptions.map(consumption => <li className="min-w-0 space-y-2 rounded-xl border p-4" key={consumption.id}><p className="break-words font-medium">{consumption.name} • {consumption.sku}</p><p>{consumption.quantity} {consumption.unit} • custo unitário R$ {consumption.unitCost} • total R$ {consumption.amount}</p><p>{consumption.reversed ? "Estornado" : "Consumo ativo"}</p>{!consumption.reversed && detail.canConsume && detail.data.status !== "cancelled" && <Button variant="outline" disabled={locked} onClick={() => setReversal({ movement: consumption.id, reason: "" })}>Estornar consumo de {consumption.name}</Button>}</li>)}</ul> : <p>Nenhum consumo registrado nesta ordem.</p>}
         {reversal.movement && <form className="space-y-3" onSubmit={event => { event.preventDefault(); void send({ url: `/api/erp/production/orders/${selected}/consumptions/${reversal.movement}/reverse`, method: "POST", tenant: detail.tenantId, revision: detail.data.revision, body: { reason: reversal.reason } }) }}><label className="block space-y-2">Motivo do estorno do consumo<Input required minLength={3} maxLength={500} disabled={locked} value={reversal.reason} onChange={event => setReversal({ ...reversal, reason: event.target.value })} /></label><Button type="submit" disabled={locked}>Confirmar estorno do consumo</Button></form>}
         <h3 className="font-semibold">Histórico da ordem</h3>
-        {detail.history.length ? <ol className="space-y-3">{detail.history.map(item => <li className="min-w-0 rounded-xl border p-4" key={item.id}><p>{actionLabel(item.action)} · {item.stageName}</p><p className="break-words text-sm text-muted-foreground">{new Date(item.createdAt).toLocaleString("pt-BR")} · {item.actor}</p></li>)}</ol> : <p>Nenhum evento disponível.</p>}
+        {detail.history.length ? <ol className="space-y-3">{detail.history.map(item => <li className="min-w-0 rounded-xl border p-4" key={item.id}><p>{actionLabel(item.action)} • {item.stageName}</p><p className="break-words text-sm text-muted-foreground">{new Date(item.createdAt).toLocaleString("pt-BR")} • {item.actor}</p></li>)}</ol> : <p>Nenhum evento disponível.</p>}
       </>}
       {detailError&&<Button variant="outline" disabled={locked} onClick={()=>{setDetailLoading(true);setRefresh(v=>v+1)}}>Tentar consultar novamente</Button>}
     </section>}

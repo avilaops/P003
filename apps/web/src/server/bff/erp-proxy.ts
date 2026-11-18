@@ -210,7 +210,10 @@ export async function forwardErp(request: Request, resource: string) {
     if (stockLocationPath(resource,request.method)) {
       const params = new URL(request.url).searchParams
       const allowed = resource === "/stock/periods/basis" ? ["productId","movementId"] : resource === "/stock/serials/document" ? ["documentId","offset"] : resource === "/stock/serials/events" ? ["productId","serial","offset"] : resource === "/stock/serials" ? ["offset","limit","productId","documentId","kind","q"] : resource === "/stock/replenishment" ? ["offset","limit","mode","q"] : resource === "/stock/transfers" ? ["offset","limit","id"] : []
-      if (resource === "/stock/reports") allowed.push("dataset","definitionId","productId","warehouseId","startDate","endDate","idleDays","offset","limit","all","catalog")
+      if (resource === "/stock/reports") allowed.push(
+        "dataset", "definitionId", "productId", "warehouseId", "startDate", "endDate",
+        "idleDays", "movementDirection", "countStatus", "productionStatus", "offset", "limit", "all", "catalog",
+      )
       for (const [key,value] of params) {
         if (request.method !== "GET" || !allowed.includes(key) || params.getAll(key).length !== 1) return Response.json({title: "Filtro inválido"}, {status: 400})
         upstream.searchParams.set(key,value)
