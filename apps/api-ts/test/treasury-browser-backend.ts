@@ -242,7 +242,13 @@ async function run() {
     await app.listen({ host: "127.0.0.1", port: browserPort + 2 })
     process.on("message", async (msg: { command: string }) => {
       try {
-        if (msg.command === "seedBatch") {
+        if (msg.command === "seedCnab") {
+          delete process.env.FINANCE_MP_SANDBOX_ACCESS_TOKEN
+          await seed.query("UPDATE financial_accounts SET bank='033',branch='4321-0',account_number='23456-1' WHERE tenant_id=$1 AND id=$2", [tenant, account])
+          const address = { primary: true, street: "Rua Exemplo", number: "42", postalCode: "01310-100", city: "São Paulo", state: "SP", district: "Centro" }
+          await seed.query("UPDATE parties SET addresses=$3 WHERE tenant_id=$1 AND id=$2", [tenant, party, JSON.stringify([address])])
+          process.send?.({ ready: true })
+        } else if (msg.command === "seedBatch") {
           delete process.env.FINANCE_MP_SANDBOX_ACCESS_TOKEN
           const buyer = randomUUID(),
             order = randomUUID(),

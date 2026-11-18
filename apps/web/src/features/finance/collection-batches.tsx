@@ -6,7 +6,9 @@ import { Input } from "@/components/ui/input"
 import { RequestError } from "@/components/feedback/session-recovery"
 import { useCommand, useResource } from "@/hooks/use-operation"
 import { downloadCsv } from "@/lib/csv-export"
-import { dateLabel, reais } from "./finance-insights-model"
+import { dateLabel, reaisFromCents as brl } from "./finance-insights-model"
+import { CnabCollection, cnabStateNames } from "./cnab-collection"
+import cnabStyles from "./cnab-collection.module.css"
 
 type Title = { id: string; name: string; partyId: string; cents: string; dueOn: string }
 type Batch = {
@@ -25,9 +27,13 @@ type Item = Title & {
   state: string
   method: string | null
   chargeId: string | null
+  cnabOurNumber?: string | null
   providerId: string | null
   settledAt: string | null
   paymentId: string | null
+  reversedByPaymentId?: string | null
+  reversedAt?: string | null
+  reversalReason?: string | null
   reviewReason: string | null
   events: Event[]
 }
@@ -43,6 +49,7 @@ type Details = { batch: Batch; items: Item[]; canIssue: boolean }
 type Connection = { id: string; live: boolean }
 const root = "/api/erp/finance-treasury/"
 const label: Record<string, string> = {
+  ...cnabStateNames,
   selected: "Preparado",
   prepared: "Emissão reservada",
   issued: "Emitido",
@@ -51,17 +58,14 @@ const label: Record<string, string> = {
   cancelled: "Cancelado",
   report: "Arquivo de retorno",
   report_divergence: "Arquivo de retorno",
+  cnab: "Retorno CNAB",
+  cnab_reversal: "Estorno da baixa CNAB",
   divergent: "Divergência com o provedor",
   webhook: "Notificação bancária",
   issuance: "Emissão",
 }
 const time = (day: string) => new Date(day).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" })
 const csvCell = (s: string) => (/^\s*[=+@-]|^[\t\r\n]/.test(s) ? "'" + s : s)
-function brl(cents: string) {
-  const amount = BigInt(cents)
-  const unit = BigInt(100)
-  return reais((amount / unit).toString() + "." + (amount % unit).toString().padStart(2, "0"))
-}
 
 function BatchDetail({
   id,
@@ -77,6 +81,7 @@ function BatchDetail({
   const resource = useResource<Result<Details>>(root + "batches?batchId=" + id)
   const command = useCommand(),
     [method, setMethod] = useState("PIX"),
+    [cnabOpen, setCnabOpen] = useState(false),
     [reason, setReason] = useState("")
   const result = resource.value?.tenantId === tenant ? resource.value : null
   const frozen = command.busy || command.uncertain || command.stale
@@ -94,7 +99,23 @@ function BatchDetail({
   if (resource.error) return <RequestError message={resource.error} status={resource.status} />
   if (!result) return <p role="status">Carregando borderô…</p>
   const { batch, items, canIssue } = result.data,
-    provider = connections.find((a) => a.id === batch.accountId)
+    provider = connections.find((a) => a.id === batch.accountId),
+    remitted = items.some((i) => i.cnabOurNumber)
+  if (cnabOpen)
+    return (
+      <CnabCollection
+        tenant={tenant}
+        accountId={batch.accountId}
+        batchId={id}
+        reference={batch.reference}
+        remitted={remitted}
+        canGenerate={
+          !batch.cancelledAt && items.length > 0 && items.every((i) => i.state === "selected" && !i.chargeId)
+        }
+        back={() => setCnabOpen(false)}
+        onChanged={resource.reload}
+      />
+    )
   const exportFile = () =>
     downloadCsv("bordero-" + id + ".csv", [
       [
@@ -110,6 +131,7 @@ function BatchDetail({
         "ID no provedor",
         "Baixa",
         "Ocorrências",
+        ...(remitted ? ["Nosso número CNAB"] : []),
       ],
       ...items.map((i) =>
         [
@@ -125,8 +147,16 @@ function BatchDetail({
           i.providerId ?? "",
           i.paymentId ?? "",
           i.events
-            .map((e) => [time(e.at), label[e.source] ?? e.source, label[e.outcome] ?? e.outcome].join(" • "))
+            .map((e) =>
+              [
+                time(e.at),
+                label[e.source] ?? e.source,
+                ...(e.source === "cnab" ? [e.key] : []),
+                label[e.outcome] ?? e.outcome,
+              ].join(" • "),
+            )
             .join("\n"),
+          ...(remitted ? [i.cnabOurNumber ?? ""] : []),
         ].map(csvCell),
       ),
     ])
@@ -148,6 +178,15 @@ function BatchDetail({
         </p>
       )}
       <div className="flex flex-wrap gap-2">
+        <Button
+          type="button"
+          variant="outline"
+          className={cnabStyles.entry}
+          disabled={frozen}
+          onClick={() => setCnabOpen(true)}
+        >
+          Remessa e retorno CNAB 240 • Santander
+        </Button>
         <Button type="button" variant="outline" onClick={exportFile}>
           Exportar conferência CSV
         </Button>
@@ -155,7 +194,7 @@ function BatchDetail({
           Atualizar ocorrências
         </Button>
       </div>
-      {!batch.cancelledAt && provider && canIssue && (
+      {!batch.cancelledAt && !remitted && provider && canIssue && (
         <label className="block">
           Meio de cobrança
           <select
@@ -169,7 +208,9 @@ function BatchDetail({
           </select>
         </label>
       )}
-      {!batch.cancelledAt && !provider && <p>Para emitir, vincule esta conta a um provedor de cobrança.</p>}
+      {!batch.cancelledAt && !remitted && !provider && (
+        <p>Para emitir pelo Mercado Pago, vincule esta conta ao provedor de cobrança.</p>
+      )}
       <ul className="space-y-2">
         {items.map((i) => (
           <li key={i.id} className="rounded border p-3">
@@ -177,6 +218,14 @@ function BatchDetail({
               <strong>{i.name}</strong> • {dateLabel(i.dueOn)} • {brl(i.cents)} • {label[i.state] ?? i.state}
             </p>
             <p className="text-sm">Título {i.id}</p>
+            {i.cnabOurNumber && <p className="text-sm">Nosso número CNAB • {i.cnabOurNumber}</p>}
+            {i.reversedByPaymentId && (
+              <p className="text-sm">
+                Estorno no ERP • {i.reversedByPaymentId}
+                {i.reversedAt && " • " + time(i.reversedAt)}
+                {i.reversalReason && " • " + i.reversalReason}
+              </p>
+            )}
             {i.chargeId && (
               <p className="text-sm">
                 Cobrança {i.chargeId} • {i.method}
@@ -189,14 +238,16 @@ function BatchDetail({
               </p>
             )}
             {i.reviewReason && <p>{i.reviewReason}</p>}
-            {i.events.map((e) => (
-              <p key={e.source + ":" + e.key}>
-                {time(e.at)} • {label[e.source] ?? e.source} • {label[e.outcome] ?? e.outcome}
+            {i.events.map((e, index) => (
+              <p key={e.source + ":" + e.key + ":" + index}>
+                {time(e.at)} • {label[e.source] ?? e.source} • {e.source === "cnab" && e.key + " • "}
+                {label[e.outcome] ?? e.outcome}
               </p>
             ))}
             {result.canEdit &&
               canIssue &&
               provider &&
+              !remitted &&
               !batch.cancelledAt &&
               ["selected", "prepared"].includes(i.state) && (
                 <Button
@@ -221,7 +272,7 @@ function BatchDetail({
           </li>
         ))}
       </ul>
-      {result.canEdit && !batch.cancelledAt && !items.some((i) => i.chargeId) && (
+      {result.canEdit && !batch.cancelledAt && !remitted && !items.some((i) => i.chargeId) && (
         <form
           className="space-y-2"
           onSubmit={(e) => {

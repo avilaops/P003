@@ -84,7 +84,10 @@ async function reverse(context: AuthorizedContext, headers: Headers, input: Inpu
       AND (p.open_cents<>p.amount_cents OR p.status<>'open' OR EXISTS (
         SELECT FROM finance_operation_items i JOIN finance_active_operations a ON (a.tenant_id,a.id)=(i.tenant_id,i.operation_id)
         WHERE i.tenant_id=p.tenant_id AND coalesce(i.receivable_id,i.payable_id)=p.id
-      ) OR EXISTS (SELECT FROM finance_collection_items c WHERE c.tenant_id=p.tenant_id AND c.receivable_id=p.id)) LIMIT 1`,
+      ) OR (p.side='receivable' AND (
+        EXISTS (SELECT FROM finance_collection_items c WHERE c.tenant_id=p.tenant_id AND c.receivable_id=p.id)
+        OR EXISTS (SELECT FROM finance_collection_batch_items b WHERE b.tenant_id=p.tenant_id AND b.receivable_id=p.id AND b.released_at IS NULL)
+      ))) LIMIT 1`,
       [tenantId, input.id],
     )
     if (blocked.rows.length) conflict("Uma parcela substituta já foi movimentada ou vinculada a uma cobrança")

@@ -73,7 +73,8 @@ function availableFrom(title: WalletSnapshot, day: string, outstanding: bigint) 
     changes.set(p.occurredOn, (changes.get(p.occurredOn) ?? 0n) + (p.kind === "reversal" ? -principal : principal))
   }
   // Work back from all bookings to the effective date, undoing each day's net settlement.
-  let available = outstanding, minimum = outstanding
+  let available = outstanding,
+    minimum = outstanding
   for (const date of Array.from(changes.keys()).sort().reverse()) {
     available += changes.get(date)!
     if (available < minimum) minimum = available
@@ -312,6 +313,14 @@ export async function applyWalletPayment(
   expected: Revision,
   input: unknown,
   internalNonCash = false,
+  bankOrigin?: {
+    source: "santander_cnab"
+    returnId: string
+    ourNumber: string
+    occurredOn: string
+    creditOn: string
+    combinedChargesCents: string
+  },
 ) {
   const d = walletDefinition(wallet),
     s = parsePayment(input),
@@ -416,7 +425,7 @@ export async function applyWalletPayment(
     outstandingAmount: decimal(remaining, 2),
     previousRevision: expected,
     revision,
-    source: internalNonCash ? "compensation" : "manual_declaration",
+    ...(bankOrigin ?? { source: internalNonCash ? "compensation" : "manual_declaration" }),
     approvalId: s.approvalId ?? null,
   })
   return loadWallet(ctx, wallet, id)
@@ -440,6 +449,20 @@ export async function reverseWalletPayment(
   if (validateDate(s.occurredOn) < original.occurredOn) invalid("Estorno não pode anteceder a baixa original")
   if (original.financialEffect === "non_cash" && fixed(original.netAmount, 2) > 0n && !internalNonCash)
     conflict("Estorne a compensação pela operação de origem")
+  const bankItem = d.receipt
+    ? (
+        await ctx.client.query<{ batch_id: string; our_number: string; today: string }>(
+          `SELECT batch_id,our_number,(current_timestamp AT TIME ZONE 'America/Sao_Paulo')::date::text AS today FROM finance_collection_remittance_items
+      WHERE tenant_id=$1 AND receivable_id=$2 AND payment_id=$3 AND state='paid' FOR UPDATE`,
+          [ctx.tenantId, id, original.id],
+        )
+      ).rows[0]
+    : undefined
+  if (bankItem) {
+    requirePermission(ctx, "finance.collections.manage")
+    if (s.occurredOn > bankItem.today)
+      conflict("Registre o estorno CNAB quando a correção entrar em vigor para liberar o título")
+  }
   const account = original.financialAccountId
   const ledger = account
     ? await accountEntry(
@@ -482,6 +505,33 @@ export async function reverseWalletPayment(
   )
   if (original.costCenterDistributionId) await reverseAllocations(ctx, wallet, payment, original.id)
   await onSettlement(ctx, headers, d.receipt ? "receivable" : "payable", payment)
+  if (bankItem) {
+    await ctx.client.query(
+      `UPDATE finance_collection_remittance_items SET state='reversed',reversal_id=$4,review_reason=NULL
+      WHERE tenant_id=$1 AND receivable_id=$2 AND payment_id=$3`,
+      [ctx.tenantId, id, original.id, payment],
+    )
+    await ctx.client.query(
+      `UPDATE finance_collection_batch_items SET released_at=now()
+      WHERE tenant_id=$1 AND batch_id=$2 AND receivable_id=$3 AND released_at IS NULL`,
+      [ctx.tenantId, bankItem.batch_id, id],
+    )
+    await record(
+      ctx,
+      headers,
+      "finance_collection_batch",
+      bankItem.batch_id,
+      "finance_collection.local_receipt_reversed",
+      {
+        receivableId: id,
+        paymentId: original.id,
+        reversalId: payment,
+        ourNumber: bankItem.our_number,
+        reason: s.reason,
+        occurredOn: s.occurredOn,
+      },
+    )
+  }
   await record(ctx, headers, d.entity, id, d.entity + ".payment_reversed", {
     paymentId: payment,
     reversesId: original.id,
@@ -489,6 +539,7 @@ export async function reverseWalletPayment(
     accountEntryId: ledger,
     previousRevision: expected,
     revision,
+    ...(bankItem ? { source: "santander_cnab", ourNumber: bankItem.our_number } : {}),
   })
   return loadWallet(ctx, wallet, id)
 }

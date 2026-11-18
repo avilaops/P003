@@ -1,3 +1,4 @@
+import "server-only"
 import { posSessionRoute } from "./pos-resources"
 
 // Only resources implemented by the finance API may be forwarded through the session BFF.
@@ -32,6 +33,9 @@ const routes: FinanceRoute[] = [
   {path:/^\/finance-treasury\/(?:reconciliation|collections)$/,methods:["GET"],query:["groupId","accountId","from","to","status","offset","entryOffset","throughDate","limit"]},
   {path:/^\/finance-treasury\/batches$/,methods:["GET"],query:["batchId","q","offset","historyOffset"]},
   {path:/^\/finance-treasury\/provider-reports$/,methods:["GET"],query:["accountId"]},
+  {path:/^\/finance-treasury\/cnab-profile$/,methods:["GET","POST"],query:["accountId","batchId","offset"]},
+  {path:/^\/finance-treasury\/cnab-remittance$/,methods:["GET","POST"],query:["accountId","batchId"]},
+  {path:/^\/finance-treasury\/(?:cnab-return|cnab-review)$/,methods:["POST"]},
   {path:/^\/finance-treasury\/(?:prepare-batch|cancel-batch)$/,methods:["POST"]},
   {path:/^\/finance-treasury\/(?:import-ofx|import-cnab|match|classify-movement|exception|close-period|reopen-period|issue-charge|import-return)$/,methods:["POST"]},
   {path:/^\/accounting$/,methods:["GET"],query:["from","to"]},

@@ -132,6 +132,10 @@ export function registerStatementRoutes(app: FastifyInstance, deps: AppDependenc
         SELECT e.category_id,'payable',sum(e.amount_cents),'Tarifas de cobrança'
           FROM finance_collection_charges ch JOIN financial_account_entries e ON (e.tenant_id,e.id)=(ch.tenant_id,ch.fee_entry_id)
           WHERE ch.tenant_id=$1 AND e.occurred_on BETWEEN $2::date AND $3::date GROUP BY e.category_id
+        UNION ALL
+        SELECT e.category_id,'payable',sum(e.amount_cents),'Tarifas de cobrança'
+          FROM finance_collection_remittance_items i JOIN financial_account_entries e ON (e.tenant_id,e.id)=(i.tenant_id,i.fee_entry_id)
+          WHERE i.tenant_id=$1 AND e.occurred_on BETWEEN $2::date AND $3::date GROUP BY e.category_id
       ), categories AS (
         SELECT r.category_id,coalesce(c.name,r.caption) AS name,r.kind,sum(value) AS value FROM recognized r
         LEFT JOIN financial_categories c ON c.tenant_id=$1 AND c.id=r.category_id WHERE $4::uuid IS NULL OR r.category_id=$4

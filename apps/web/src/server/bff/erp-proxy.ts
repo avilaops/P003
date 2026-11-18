@@ -111,7 +111,7 @@ export async function forwardErp(request: Request, resource: string) {
       const reader = request.body?.getReader()
       const chunks: Uint8Array[] = []
       let size = 0
-      const bodyLimit = /^\/finance-treasury\/import-(?:ofx|cnab|return)$/.test(resource) ? 2_800_000 : supportingDocumentsResource || /^\/(?:receivables|payables|financial-payables)\/(?:[a-f0-9-]{36}\/(?:payments|approvals)|payment-batches)$/i.test(resource) || /^\/products\/[a-f0-9-]{36}\/catalog$/i.test(resource) ? 14_100_000 : /^\/products\/import$/i.test(resource) ? 2_800_000 : /^\/(?:staff|products|company)(?:\/[a-f0-9-]{36})?$/i.test(resource) ? 400_000 : 65_536
+      const bodyLimit = /^\/finance-treasury\/(?:import-(?:ofx|cnab|return)|cnab-return)$/.test(resource) ? 2_800_000 : supportingDocumentsResource || /^\/(?:receivables|payables|financial-payables)\/(?:[a-f0-9-]{36}\/(?:payments|approvals)|payment-batches)$/i.test(resource) || /^\/products\/[a-f0-9-]{36}\/catalog$/i.test(resource) ? 14_100_000 : /^\/products\/import$/i.test(resource) ? 2_800_000 : /^\/(?:staff|products|company)(?:\/[a-f0-9-]{36})?$/i.test(resource) ? 400_000 : 65_536
       if (reader) for (;;) {
         const { done, value } = await reader.read()
         if (done) break
@@ -242,7 +242,7 @@ export async function forwardErp(request: Request, resource: string) {
         upstream.searchParams.set(key, value)
       }
     }
-    const importBankReturn = resource === "/finance-treasury/import-return"
+    const importBankReturn = resource === "/finance-treasury/import-return" || resource === "/finance-treasury/cnab-return"
     const listBankReports = resource === "/finance-treasury/provider-reports"
     const timeout = AbortSignal.timeout(packageEmailResource || importBankReturn ? 105000 : documentEmailResource || orderDocumentResource || listBankReports ? 25000 : invitationResource || accountResource ? 20000 : 10000)
     const signal = productExportResource || productFinishesResource ? AbortSignal.any([request.signal, timeout]) : timeout

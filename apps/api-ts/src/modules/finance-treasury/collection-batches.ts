@@ -50,13 +50,22 @@ export async function readBatches(ctx: AuthorizedContext, query: z.output<typeof
       await ctx.client.query(
         `SELECT bi.receivable_id AS id,bi.party_id AS "partyId",bi.party_name AS name,
         bi.due_on::text AS "dueOn",bi.amount_cents::text AS cents,c.id AS "chargeId",c.method,c.provider_id AS "providerId",
-        c.settled_at::text AS "settledAt", CASE WHEN c.id IS NOT NULL THEN ci.payment_id END AS "paymentId",c.review_reason AS "reviewReason",
-        CASE WHEN bi.released_at IS NOT NULL THEN 'cancelled' ELSE coalesce(c.state,'selected') END AS state,
+        coalesce(c.settled_at,fi.settled_at)::text AS "settledAt", coalesce(CASE WHEN c.id IS NOT NULL THEN ci.payment_id END,fi.payment_id) AS "paymentId",
+        coalesce(c.review_reason,fi.review_reason) AS "reviewReason",fi.our_number AS "cnabOurNumber",
+        fi.reversal_id AS "reversedByPaymentId",rev.created_at::text AS "reversedAt",rev.reference AS "reversalReason",
+        coalesce(fi.state,CASE WHEN bi.released_at IS NOT NULL THEN 'cancelled' ELSE coalesce(c.state,'selected') END) AS state,
         coalesce((SELECT jsonb_agg(jsonb_build_object('source',e.source,'key',e.event_key,'outcome',e.outcome,'at',e.created_at) ORDER BY e.created_at,e.source,e.event_key)
-          FROM finance_collection_events e WHERE (e.tenant_id,e.charge_id)=(c.tenant_id,c.id)),'[]') AS events
+          FROM finance_collection_events e WHERE (e.tenant_id,e.charge_id)=(c.tenant_id,c.id)),'[]'::jsonb) ||
+        coalesce((SELECT jsonb_agg(jsonb_build_object('source','cnab','key',e.occurrence,'outcome',e.outcome,'at',r.created_at)
+          ORDER BY r.created_at,r.id,e.ordinal) FROM finance_collection_return_events e JOIN finance_collection_returns r ON (r.tenant_id,r.id)=(e.tenant_id,e.return_id)
+          WHERE (e.tenant_id,e.profile_id,e.our_number,e.receivable_id)=(fi.tenant_id,fi.profile_id,fi.our_number,fi.receivable_id)),'[]'::jsonb)
+        || CASE WHEN rev.id IS NULL THEN '[]'::jsonb ELSE jsonb_build_array(jsonb_build_object(
+          'source','cnab_reversal','key',rev.id,'outcome','reversed','at',rev.created_at)) END AS events
       FROM finance_collection_batch_items bi
       LEFT JOIN finance_collection_items ci ON (ci.tenant_id,ci.receivable_id)=(bi.tenant_id,bi.receivable_id)
       LEFT JOIN finance_collection_charges c ON (c.tenant_id,c.id,c.batch_id)=(bi.tenant_id,ci.charge_id,bi.batch_id)
+      LEFT JOIN finance_collection_remittance_items fi ON (fi.tenant_id,fi.batch_id,fi.receivable_id)=(bi.tenant_id,bi.batch_id,bi.receivable_id)
+      LEFT JOIN receivable_payments rev ON (rev.tenant_id,rev.receivable_id,rev.id)=(fi.tenant_id,fi.receivable_id,fi.reversal_id)
       WHERE bi.tenant_id=$1 AND bi.batch_id=$2 ORDER BY bi.due_on,bi.party_name,bi.receivable_id`,
         [tenant, query.batchId],
       )
@@ -130,7 +139,7 @@ export async function prepareBatch(ctx: AuthorizedContext, input: z.infer<typeof
 export async function cancelBatch(ctx: AuthorizedContext, input: z.infer<typeof cancelBatchSchema>) {
   requirePermission(ctx, "finance.receivables.read")
   const batch = (
-    await ctx.client.query("SELECT cancelled_at FROM finance_collection_batches WHERE tenant_id=$1 AND id=$2", [
+    await ctx.client.query("SELECT cancelled_at FROM finance_collection_batches WHERE tenant_id=$1 AND id=$2 FOR UPDATE", [
       ctx.tenantId,
       input.batchId,
     ])
@@ -138,7 +147,8 @@ export async function cancelBatch(ctx: AuthorizedContext, input: z.infer<typeof 
   if (!batch) throw missing()
   if (batch.cancelled_at) throw conflict("O borderô já foi cancelado")
   const started = await ctx.client.query(
-    "SELECT FROM finance_collection_charges WHERE tenant_id=$1 AND batch_id=$2 LIMIT 1",
+    `SELECT FROM finance_collection_charges WHERE tenant_id=$1 AND batch_id=$2
+     UNION ALL SELECT FROM finance_collection_remittances WHERE tenant_id=$1 AND batch_id=$2 LIMIT 1`,
     [ctx.tenantId, input.batchId],
   )
   if (started.rows.length) throw conflict("A emissão de uma cobrança já começou neste borderô")

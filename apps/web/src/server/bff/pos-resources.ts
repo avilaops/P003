@@ -1,3 +1,5 @@
+import "server-only"
+
 const session = /^\/pos\/sessions\/[a-f\d]{8}-[a-f\d]{4}-[a-f\d]{4}-[a-f\d]{4}-[a-f\d]{12}(?:\/(movements|close))?$/i
 
 export function posSessionRoute(method: string, resource: string): { query: string[] } | undefined {

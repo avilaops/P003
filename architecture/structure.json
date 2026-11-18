@@ -46,8 +46,8 @@
     "pos": "Operação do PDV, sessões de caixa, fechamento e histórico, com autorização no backend."
   },
   "routeSurface": {
-    "count": 526,
-    "sha256": "c398538ded9fb556c963e6d24781476b2f969712027df08dd22653b9d9b8cec4"
+    "count": 532,
+    "sha256": "0623143b80cba195bed150a028b3755cd6d8544fe0f0be25e11a1fe2c0847402"
   },
   "retiredPaths": [
     "apps/web/src/lib/erp-session.ts",
@@ -91,8 +91,8 @@
     "apps/api/src/platform/financial_settings.rs"
   ],
   "routeSurfaceReview": {
-    "previousPolicyCommit": "58b741c8503ca3ab84de3acd65025da068d7ef1f",
-    "reviewedMainCommit": "a341683e455addf4a17759918ce5bbc063e1faf3",
-    "changes": "Estoque operacional em TypeScript • consultas e comandos de depósitos, transferências, séries, custos, fechamento, reposição, análises e produção com acesso por empresa."
+    "previousPolicyCommit": "5f853bcd226a7776573603ae134955699ac82779",
+    "reviewedMainCommit": "655ecfa44103399e5734b80a30775f5a55facc94",
+    "changes": "Financeiro em TypeScript • BFF autenticado, baixas em lote nas três carteiras, consulta de folha e notificações de cobrança do Mercado Pago."
   }
 }

@@ -99,6 +99,11 @@ export async function reserveCharge(
   if (selected.status !== "active" || selected.accountType !== "bank")
     throw conflict("Selecione uma conta bancária ativa")
   const cfg = requirePilot(ctx.tenantId, input.accountId)
+  if (input.batchId) {
+    await ctx.client.query("SELECT id FROM finance_collection_batches WHERE tenant_id=$1 AND id=$2 FOR UPDATE", [ctx.tenantId,input.batchId])
+    const remitted = await ctx.client.query("SELECT FROM finance_collection_remittances WHERE tenant_id=$1 AND batch_id=$2", [ctx.tenantId,input.batchId])
+    if (remitted.rows.length) throw conflict("Este borderô já possui uma remessa bancária")
+  }
   const batchItems = (await ctx.client.query<{ batch_id:string; account_id:string; party_id:string; due:string; cents:string }>(
     `SELECT b.id AS batch_id,b.account_id,i.party_id,i.due_on::text AS due,i.amount_cents::text AS cents
      FROM finance_collection_batch_items i JOIN finance_collection_batches b ON (b.tenant_id,b.id)=(i.tenant_id,i.batch_id)

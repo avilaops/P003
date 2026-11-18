@@ -1,0 +1,144 @@
+.panel {
+  display: grid;
+  gap: 16px;
+  margin-block: 12px 24px;
+  max-width: 64rem;
+  min-width: 0;
+}
+
+.panel > section,
+.panel > form {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  padding: 16px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.panel h4,
+.panel legend {
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.panel h5 {
+  margin-top: 4px;
+  font-weight: 600;
+}
+
+.panel fieldset {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr));
+  gap: 12px;
+  min-width: 0;
+}
+
+.panel legend {
+  padding-block: 12px 8px;
+}
+
+.panel label {
+  display: grid;
+  align-content: start;
+  gap: 4px;
+  min-width: 0;
+}
+
+.panel input {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  max-width: 32rem;
+  padding: 6px 10px;
+  border: 1px solid var(--input);
+  border-radius: 8px;
+  background: var(--background);
+}
+
+.panel button,
+.entry {
+  justify-self: start;
+  max-width: 100%;
+  padding: 6px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--background);
+  color: var(--foreground);
+  cursor: pointer;
+  white-space: normal;
+}
+
+.panel button[type="submit"],
+.panel .primary {
+  border-color: var(--primary);
+  background: var(--primary);
+  color: var(--primary-foreground);
+}
+
+.panel button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.panel :focus-visible,
+.entry:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+.actions {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.panel details,
+.receipt {
+  padding: 10px 12px;
+  overflow-wrap: anywhere;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.panel summary {
+  cursor: pointer;
+}
+
+.panel details p,
+.receipt p {
+  margin-block: 4px;
+}
+
+.panel [role="alert"] {
+  color: var(--destructive);
+}
+
+.outcomes > li {
+  margin-top: 12px;
+  border-top: 1px solid var(--border);
+  padding-top: 12px;
+}
+
+.values {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 8rem), 1fr));
+  gap: 8px 16px;
+  margin-block: 8px;
+  font-variant-numeric: tabular-nums;
+}
+
+.values dt {
+  color: var(--muted-foreground);
+  font-size: 12px;
+}
+
+.attempt {
+  display: grid;
+  gap: 4px;
+  padding: 8px 12px;
+  margin-block: 8px;
+  border-inline-start: 2px solid var(--border);
+}

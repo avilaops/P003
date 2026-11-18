@@ -52,6 +52,10 @@ export function reais(amount: string) {
   const absolute = BigInt(integer!.replace("-", ""))
   return (amount.startsWith("-") ? "−" : "") + "R$ " + absolute.toLocaleString("pt-BR") + "," + decimal.padEnd(2, "0")
 }
+export function reaisFromCents(cents: string) {
+  const digits = cents.replace(/^-/, "").padStart(3, "0")
+  return reais((cents.startsWith("-") ? "-" : "") + digits.slice(0, -2) + "." + digits.slice(-2))
+}
 export function overdueShare(overdue: string, outstanding: string) {
   const balance = BigInt(outstanding.replace(".", ""))
   if (!balance) return "Sem saldo em aberto"

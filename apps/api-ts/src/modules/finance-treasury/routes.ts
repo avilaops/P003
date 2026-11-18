@@ -7,6 +7,11 @@ import { withTenantTransaction } from "../../platform/database.js"
 import { commandKey, record, remember, replay } from "../../platform/commands.js"
 import { chargeSchema, collections, getCharge, observePayment, reserveCharge } from "./collections.js"
 import { batchQuery, cancelBatch, cancelBatchSchema, prepareBatch, prepareBatchSchema, readBatches } from "./collection-batches.js"
+import { reviewCollectionEvent, reviewCollectionEventSchema } from "./collection-file-review.js"
+import {
+  collectionFileQuery, collectionProfileSchema, downloadCollectionFile, generateCollectionFile, generateCollectionFileSchema,
+  importCollectionFile, importCollectionFileSchema, readCollectionFiles, saveCollectionProfile,
+} from "./collection-files.js"
 import { listProviderReports, prepareProviderImport, remoteReportId, reportMerchant } from "./provider-reports.js"
 import { checkSignature, getPayment, issue, providerCents, requirePilot, settlementReport } from "./mercadopago.js"
 import {
@@ -44,11 +49,14 @@ export function registerFinanceTreasuryRoutes(app: FastifyInstance, deps: AppDep
     readPerm: string,
     managePerm: string,
     fn: (ctx: AuthorizedContext, request: FastifyRequest) => Promise<T>,
+    receivables = false,
   ) {
     app.get(url, async (request, reply) => {
       const result = await authorizeRequest(request, deps, async (ctx) => {
         requirePermission(ctx, readPerm)
-        return { tenantId: ctx.tenantId, canEdit: ctx.permissions.includes(managePerm), data: await fn(ctx, request) }
+        if (receivables) requirePermission(ctx, "finance.receivables.read")
+        const canEdit = ctx.permissions.includes(managePerm) && (!receivables || ctx.permissions.includes("finance.receivables.manage"))
+        return { tenantId: ctx.tenantId, canEdit, data: await fn(ctx, request) }
       })
       return reply.header("cache-control", "no-store").send(result)
     })
@@ -62,19 +70,25 @@ export function registerFinanceTreasuryRoutes(app: FastifyInstance, deps: AppDep
     fn: (
       ctx: AuthorizedContext,
       input: T,
+      headers: FastifyRequest["headers"],
     ) => Promise<{ id: string; result: Record<string, unknown>; details: unknown }>,
-    file = false,
+    options: { file?: boolean; receivables?: boolean } = {},
   ) {
-    app.post(url, { bodyLimit: file ? 2_200_000 : 65_536 }, async (request, reply) => {
+    app.post(url, { bodyLimit: options.file ? 2_200_000 : 65_536 }, async (request, reply) => {
       const key = commandKey(request.headers["idempotency-key"])
       const output = await authorizeRequest(request, deps, async (ctx) => {
         requirePermission(ctx, readPerm)
         requirePermission(ctx, writePerm)
+        if (options.receivables) {
+          requirePermission(ctx, "finance.receivables.read")
+          requirePermission(ctx, "finance.receivables.manage")
+        }
         const input = parse(schema, request.body)
-        const commandInput = file
+        const commandInput = options.file
           ? {
               input: {
                 accountId: (input as { accountId: string }).accountId,
+                ...((input as { fileName?: string }).fileName ? { fileName: (input as { fileName: string }).fileName } : {}),
                 ...((input as {autoMatch?:boolean}).autoMatch ? {autoMatch:true} : {}),
                 digest: createHash("sha256")
                   .update((input as { content: string }).content)
@@ -84,7 +98,7 @@ export function registerFinanceTreasuryRoutes(app: FastifyInstance, deps: AppDep
           : { input }
         const saved = await replay(ctx, key, scope, commandInput)
         if (saved) return { value: saved, replayed: true }
-        const mutation = await fn(ctx, input)
+        const mutation = await fn(ctx, input, request.headers)
         await record(
           ctx,
           request.headers,
@@ -130,8 +144,8 @@ export function registerFinanceTreasuryRoutes(app: FastifyInstance, deps: AppDep
     readEntries,
     writeEntries,
     "finance_statement.imported",
-    importStatement,
-    true,
+    (ctx, input) => importStatement(ctx, input),
+    { file: true },
   )
   command(
     treasury + "import-cnab",
@@ -140,7 +154,7 @@ export function registerFinanceTreasuryRoutes(app: FastifyInstance, deps: AppDep
     writeEntries,
     "finance_statement.efi_imported",
     (ctx, input) => importStatement(ctx, input, "efi"),
-    true,
+    { file: true },
   )
   command(treasury + "match", matchSchema, readEntries, writeEntries, "finance_reconciliation.matched", match)
   command(treasury + "classify-movement", classifySchema, readEntries, writeEntries, "finance_reconciliation.movement_classified", classifyAndMatch)
@@ -170,6 +184,18 @@ export function registerFinanceTreasuryRoutes(app: FastifyInstance, deps: AppDep
   )
   const readCharges = "finance.collections.read",
     writeCharges = "finance.collections.manage"
+  read(treasury + "cnab-profile", readCharges, writeCharges,
+    (ctx, req) => readCollectionFiles(ctx, parse(collectionFileQuery, req.query)), true)
+  read(treasury + "cnab-remittance", readCharges, writeCharges,
+    (ctx, req) => downloadCollectionFile(ctx, parse(generateCollectionFileSchema, req.query)), true)
+  command(treasury + "cnab-profile", collectionProfileSchema, readCharges, writeCharges,
+    "finance_collection_profile.saved", saveCollectionProfile, { receivables: true })
+  command(treasury + "cnab-remittance", generateCollectionFileSchema, readCharges, writeCharges,
+    "finance_collection_file.generated", generateCollectionFile, { receivables: true })
+  command(treasury + "cnab-return", importCollectionFileSchema, readCharges, writeCharges,
+    "finance_collection_return.imported", importCollectionFile, { file: true, receivables: true })
+  command(treasury + "cnab-review", reviewCollectionEventSchema, readCharges, writeCharges,
+    "finance_collection_return.reviewed", reviewCollectionEvent, { receivables: true })
   read(treasury + "batches", readCharges, writeCharges, (ctx, req) => readBatches(ctx, parse(batchQuery, req.query)))
   command(treasury + "prepare-batch", prepareBatchSchema, readCharges, writeCharges, "finance_collection_batch.prepared", prepareBatch)
   command(treasury + "cancel-batch", cancelBatchSchema, readCharges, writeCharges, "finance_collection_batch.cancelled", cancelBatch)

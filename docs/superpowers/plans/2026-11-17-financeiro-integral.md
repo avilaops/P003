@@ -26,6 +26,8 @@ O aceite integrado de tesouraria inicia o navegador, o BFF, a API TypeScript e o
 
 • [Borderô por conta](../../../apps/api-ts/test/finance-collection-batches.test.ts) • títulos de clientes diferentes, valor e vencimento conferidos antes da emissão, cancelamento, concorrência e rastreio das liquidações.
 
+• [Cobrança por arquivo Santander 240](../../../apps/api-ts/test/treasury-collection-file-cases.ts) • o teste gera a remessa, importa confirmações, rejeições e pagamentos, reabre o período e verifica reavaliações concorrentes, estornos e isolamento por empresa. No [cenário em Chromium](../../../apps/web/tests/finance-treasury-persistence.spec.ts), o usuário baixa a remessa de R$ 40,00 e importa o retorno. A API registra uma baixa, R$ 2,00 de tarifa e R$ 38,00 líquidos mesmo após repetir a importação.
+
 • [Boleto no simulador HTTP](../../../apps/api-ts/test/treasury-boleto-cases.ts) • endereço do pagador, vencimento, recuperação de uma emissão após perda da resposta e confirmação repetida. Um boleto de R$ 60,20 gera uma baixa e um crédito de R$ 60,20.
 
 • [Aceite bancário completo em Chromium](../../../apps/web/tests/finance-treasury-persistence.spec.ts) • navegador, BFF e API reais, PostgreSQL descartável e instituição HTTP local. Duas parcelas somam R$ 100. A tarifa é R$ 2 e o crédito líquido é R$ 98. A conciliação vincula uma linha de extrato a três lançamentos. O teste confere os IDs das parcelas e os centavos no banco.
@@ -52,10 +54,14 @@ Com o [fluxo n8n de extrato Efí](../../integrations/n8n-financeiro-extrato-efi.
 
 Na conciliação por documento (FI4), passaram os 117 testes da API e os nove cenários de tesouraria e gestão no Chromium. Entre 13 movimentos com a mesma data e valor, a referência exata apareceu primeiro e a linha continuou pendente até a revisão. Quando as duas fontes informaram documentos divergentes, a importação preservou a pendência mesmo com um único candidato.
 
+Com a cobrança Santander por arquivo, o Chromium passou nos 54 cenários de Financeiro • 11 de tesouraria e gestão, 28 de carteiras, compras e folha e 15 de documentos e envio. Os relatórios ficam em `artifacts/danfe-browser/financeiro-cnab-final-{tesouraria,carteiras,documentos}/report.json`. O cenário isolado de remessa e retorno também gravou um arquivo `.REM` e dois arquivos `.RET` em `artifacts/danfe-browser/financeiro-cnab240-validado/test-results/`. Os três arquivos são fictícios.
+
+A suíte final passou nos 125 testes da API com PostgreSQL, sem testes pulados. A regressão do retorno `06` cobre crédito futuro em conferência e reavaliação na data efetiva. O catálogo passou nas 29 verificações de contratos, descoberta e contexto. As 15 verificações de arquitetura passaram, e o verificador da estrutura confirmou as 532 rotas de páginas, layouts e BFF.
+
 ## Pendências externas
 
 A empresa confirmou em 18 de novembro de 2026 que ainda não configurou uma conta de teste do Mercado Pago ou da Efí. O piloto usa a API do Mercado Pago. O aceite externo deve registrar a emissão de Pix e boleto, a consulta de cada identificador e a recepção de uma notificação de teste. Os relatórios oficiais de teste do Mercado Pago vêm sem movimentações. O exemplo com tarifa e líquido pode ser repetido com a instituição local, e a conferência de um extrato real depende de habilitação posterior. [Configuração e homologação](../../telas/financeiro/caixas-bancos/OPERACAO-BANCARIA.md) • [Relatórios de teste do Mercado Pago](https://www.mercadopago.com.br/developers/pt/docs/reports/account-money/introduction)
 
-A Efí disponibiliza a API para baixar o extrato CNAB 240 aceito na conciliação do ERP. Para transmitir remessa e retorno de cobrança por arquivo, a empresa ainda precisa identificar o banco e seu convênio. O [roteiro de integração por arquivo](../../telas/financeiro/caixas-bancos/OPERACAO-BANCARIA.md#integrar-cobrança-por-remessa-e-retorno-cnab) identifica os dados bancários necessários, a implementação do adaptador e os testes de registro, rejeição e liquidação.
+A Efí disponibiliza a API de extratos usada na conciliação. O borderô também gera remessa de cobrança e recebe retorno Santander CNAB 240, com base no manual público H7815 v8.5. O [roteiro por arquivo](../../telas/financeiro/caixas-bancos/OPERACAO-BANCARIA.md#integrar-cobrança-por-remessa-e-retorno-cnab) explica como testar com uma conta fictícia no ERP. Para a transmissão oficial, a empresa deverá selecionar a instituição e homologar o convênio e o canal de troca.
 
 O responsável financeiro deve conferir o mapeamento das naturezas e o contador deve aprovar as regras de débito e crédito da empresa antes do fechamento oficial. A revisão da implementação foi solicitada em branch local.

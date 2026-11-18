@@ -4,6 +4,8 @@ import path from "node:path"
 import { installFrontendFixture } from "./helpers/frontend-fixture"
 import { createRequire } from "node:module"
 import { pathToFileURL } from "node:url"
+import { readFile, writeFile } from "node:fs/promises"
+import { bankReturn, testAgreement } from "../../api-ts/test/fixtures/santander-return"
 
 type Ready = { ready: boolean; tenant: string; account: string; party: string; access: string }
 type Snapshot = {
@@ -273,6 +275,66 @@ test("Chromium • comando de envio preserva no PDF todos os 105 títulos filtra
   }
 })
 
+test("Chromium • remessa e retorno CNAB sem credenciais bancárias", async ({ context, page, baseURL }, info) => {
+  test.setTimeout(240_000)
+  test.skip(!process.env.API_TS_TEST_ADMIN_URL, "Requer PostgreSQL descartável")
+  const api = path.resolve(process.cwd(), "../api-ts")
+  const backend = fork(path.join(api, "test/treasury-browser-backend.ts"), [], {
+    cwd: api, execArgv: ["--import", "tsx"], stdio: ["ignore", "inherit", "inherit", "ipc"],
+  })
+  try {
+    const ready = await message<Ready>(backend)
+    await message(backend, "seedCnab")
+    await installFrontendFixture(context, baseURL, ready.tenant, ready.access)
+    await context.unroute("**/api/erp/**")
+    await page.goto("/financeiro/remessas-retornos")
+    await page.getByRole("button", { name: "Preparar ou consultar borderô" }).click()
+    await page.getByLabel("Conta do borderô").selectOption(ready.account)
+    await page.getByLabel("Referência do borderô").fill("Exemplo fictício CNAB")
+    await page.getByRole("checkbox", { name: /Cliente de teste.*40,00/ }).check()
+    await page.getByRole("button", { name: "Preparar borderô", exact: true }).click()
+    await page.getByRole("button", { name: /Remessa e retorno CNAB 240/ }).click()
+    await page.getByRole("button", { name: "Configurar convênio Santander" }).click()
+    await page.getByLabel("Nome do beneficiário").fill(testAgreement.name)
+    await page.getByLabel("CPF ou CNPJ do beneficiário").fill(testAgreement.taxId)
+    await page.getByLabel(/^Código de transmissão/).fill(testAgreement.transmissionCode)
+    await page.getByLabel(/^Código do beneficiário/).fill(testAgreement.beneficiaryCode)
+    await page.getByLabel(/^Agência •/).fill(testAgreement.agency)
+    await page.getByLabel(/^Dígito da agência/).fill(testAgreement.agencyDigit)
+    await page.getByRole("textbox", { name: "Conta • 9 dígitos" }).fill(testAgreement.account)
+    await page.getByLabel(/^Dígito da conta/).fill(testAgreement.accountDigit)
+    await page.getByRole("button", { name: "Salvar convênio" }).click()
+    await expect(page.getByText("Convênio de cobrança salvo.")).toBeVisible()
+    await page.getByRole("button", { name: "Gerar remessa CNAB" }).click()
+    const download = page.waitForEvent("download")
+    await page.getByRole("button", { name: "Baixar remessa original" }).click()
+    const file = info.outputPath("exemplo-ficticio.REM")
+    await (await download).saveAs(file)
+    const remittance = await readFile(file, "ascii")
+    expect(remittance.split("\r\n").filter(Boolean)).toHaveLength(6)
+    const upload = page.getByLabel(/^Arquivo de retorno CNAB 240/)
+    const confirm = page.getByRole("button", { name: "Importar retorno CNAB" })
+    for (const [sequence, code] of [[1, "02"], [2, "06"], [2, "06"]] as const) {
+      const filename = "retorno-ficticio-" + code + ".RET"
+      const bytes = bankReturn(remittance, sequence, [{ index: 0, code, fee: code === "06" ? 200 : 0 }])
+      await writeFile(info.outputPath(filename), bytes, "ascii")
+      await upload.setInputFiles({ name: filename, mimeType: "text/plain", buffer: Buffer.from(bytes, "ascii") })
+      const posted = page.waitForResponse(r => r.url().endsWith("/api/erp/finance-treasury/cnab-return") && r.request().method() === "POST")
+      await confirm.click()
+      const result = await posted
+      expect(result.status(), await result.text()).toBe(201)
+      if (code === "02") expect((await message<Snapshot>(backend, "snapshot")).receipts).toBe(0)
+    }
+    expect(await message<Snapshot>(backend, "snapshot")).toMatchObject({ receipts: 1, paid: 1, net: "3800", charged: 0 })
+  } finally {
+    if (backend.connected) {
+      const stopped = new Promise((resolve) => backend.once("exit", resolve))
+      backend.send({ command: "stop" })
+      await stopped
+    }
+  }
+})
+
 test("Chromium • borderô sem provedor preserva dois clientes, exporta conferência e cancela sem cobrança", async ({
   context,
   page,
@@ -298,7 +360,7 @@ test("Chromium • borderô sem provedor preserva dois clientes, exporta confer�
     await page.getByRole("checkbox", { name: /Cliente de teste.*40,00/ }).check()
     await page.getByRole("checkbox", { name: /Cliente do borderô.*90,50/ }).check()
     await page.getByRole("button", { name: "Preparar borderô", exact: true }).click()
-    await expect(page.getByText("Para emitir, vincule esta conta a um provedor de cobrança.")).toBeVisible({
+    await expect(page.getByText("Para emitir pelo Mercado Pago, vincule esta conta ao provedor de cobrança.")).toBeVisible({
       timeout: 40000,
     })
     const promise = page.waitForEvent("download")

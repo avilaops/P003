@@ -7,6 +7,7 @@ import { buildApp } from "../src/app.js"
 import { PgClientAdapter, withTenantTransaction } from "../src/platform/database.js"
 import { getCharge, observePayment, reserveCharge } from "../src/modules/finance-treasury/collections.js"
 import { verifyBoleto } from "./treasury-boleto-cases.js"
+import { verifyCollectionFiles } from "./treasury-collection-file-cases.js"
 
 test(
   "borderô multiempresa preserva valores de clientes distintos, reserva, histórico e retorno",
@@ -62,6 +63,8 @@ test(
       await seed.query("CREATE ROLE " + role + " NOLOGIN NOSUPERUSER NOBYPASSRLS")
       await seed.query("GRANT USAGE ON SCHEMA public TO " + role)
       await seed.query("GRANT SELECT,INSERT,UPDATE ON ALL TABLES IN SCHEMA public TO " + role)
+      // The application's banking evidence is append-only. Test using the same grants as the migrations.
+      await seed.query("REVOKE UPDATE ON finance_collection_remittances,finance_collection_returns,finance_collection_return_events,finance_collection_return_reviews FROM " + role)
       await seed.query("GRANT USAGE,SELECT ON ALL SEQUENCES IN SCHEMA public TO " + role)
       await seed.query(
         "INSERT INTO identities(id,auth_subject,email,display_name) VALUES($1,$2,'usuario@example.test','Tesouraria')",
@@ -322,6 +325,9 @@ test(
       }
       await t.test("emissão, reconsulta e liquidação idempotente de boleto pela API", async () => {
         await verifyBoleto(app, seed, { tenant, bank, batchId: active, receivable: items[1]!.id })
+      })
+      await t.test("CNAB 240 sem conta externa • remessa, confirmação, rejeição e liquidação", async () => {
+        await verifyCollectionFiles(app, seed, tenant, other)
       })
     } finally {
       for (const [k, v] of Object.entries(previous))
