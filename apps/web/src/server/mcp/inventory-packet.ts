@@ -1,4 +1,5 @@
 const existingStockTools = new Set([
+  "erp_get_orders__id__cancellations","erp_post_orders__id__cancel_completed",
   "erp_get_production_orders","erp_get_production_orders__id","erp_get_production_stages",
   "erp_post_production_orders","erp_post_production_orders__id__stage","erp_post_production_orders__id__consumptions",
   "erp_post_production_orders__id__consumptions__movement__reverse","erp_post_production_stages","erp_put_production_stages__id",

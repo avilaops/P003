@@ -10,6 +10,7 @@ import { loadOrder, summary } from "./snapshot.js"
 import { registerOrderCommands } from "./commands.js"
 import { registerOrderTransitions } from "./transitions.js"
 import { registerOrderPricing } from "./pricing.js"
+import { registerCompletedOrderCancellation } from "./completed-cancellation.js"
 
 
 
@@ -17,6 +18,7 @@ export function registerOrderRoutes(app: FastifyInstance, dependencies: AppDepen
   registerOrderCommands(app, dependencies)
   registerOrderTransitions(app, dependencies)
   registerOrderPricing(app, dependencies)
+  registerCompletedOrderCancellation(app, dependencies)
   app.get<{ Params: { id: string } }>("/api/v1/orders/:id", async (request, reply) => {
     const body = await authorizeRequest(request, dependencies, async context => {
       requirePermission(context, "sales.orders.read")

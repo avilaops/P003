@@ -22,6 +22,8 @@ const argumentsSchema = z.strictObject({
 })
 type ToolRoute = {method:"GET"|"POST"|"PUT";resource:string;query?:boolean;key?:boolean;revision?:true|"optional";body?:boolean}
 const routes = new Map<string, ToolRoute>([
+  ["erp_get_orders__id__cancellations",{method:"GET",resource:"/api/v1/orders/:id/cancellations"}],
+  ["erp_post_orders__id__cancel_completed",{method:"POST",resource:"/api/v1/orders/:id/cancel-completed",key:true,revision:true,body:true}],
   ["erp_get_production_orders",{method:"GET",resource:"/api/v1/production/orders",query:true}],
   ["erp_get_production_orders__id",{method:"GET",resource:"/api/v1/production/orders/:id"}],
   ["erp_get_production_stages",{method:"GET",resource:"/api/v1/production/stages"}],
