@@ -180,7 +180,7 @@ test("export modes expose the correct recipient and preserve declared unit conve
   await expect(page.getByLabel("Alíquota do ICMS (%)", { exact: true })).toHaveCount(0)
   await expect(page.getByLabel("Alíquota do PIS (%)", { exact: true })).toHaveCount(0)
   await page.getByRole("button", { name: "3. Produtos", exact: true }).click()
-  await page.getByText("Frete, seguro, desconto e informações do item 1", { exact: true }).click()
+  await page.getByRole("button", { name: "Ajustar valores por item", exact: true }).click()
   await fill(page, [["Unidade tributável de exportação", "KG"], ["Quantidade tributável", "4,0"], ["Preço unitário tributável", "2,5"]])
   await page.getByRole("button", { name: "Adicionar origem ou drawback", exact: true }).click()
   await fill(page, [["Chave da NF-e de origem", key], ["Quantidade comercial exportada", "0,5"]])

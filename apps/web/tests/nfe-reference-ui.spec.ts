@@ -38,7 +38,7 @@ test("formulário de referência grava identificação, transporte, parcelas e d
  await page.getByLabel("UF do destinatário", { exact: true }).selectOption("SP")
  await page.getByRole("button", { name: "3. Produtos", exact: true }).click()
  for (const [label, value] of [["Descrição do produto", "Produto teste"], ["Código do produto", "P1"], ["Unidade", "UN"], ["Quantidade", "1"], ["Preço unitário", "100"]]) await page.getByLabel(label, { exact: true }).fill(value)
- await page.getByText("Frete, seguro, desconto e informações do item 1", { exact: true }).click()
+ await page.getByRole("button", { name: "Ajustar valores por item", exact: true }).click()
  for (const [label, value] of [["Frete", "10"], ["Seguro", "5"], ["Outras despesas", "2"], ["Desconto incondicional", "3"]]) await page.getByLabel(`${label} do item 1 (R$)`, { exact: true }).fill(value)
  await page.getByLabel("Transporte", { exact: true }).selectOption("manual")
  await page.getByLabel("Nome", { exact: true }).fill("Transportadora teste")

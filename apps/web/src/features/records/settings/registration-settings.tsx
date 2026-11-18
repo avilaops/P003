@@ -46,6 +46,7 @@ export function RegistrationSettings({ section }: { section: Section }) {
     [saving, setSaving] = useState(false),
     [blocked, setBlocked] = useState(false),
     [reload, setReload] = useState(0)
+  const [editingProfile, setEditingProfile] = useState<number | null>(null)
   const pending = useRef(false),
     dirty = !!snapshot && JSON.stringify(data) !== baseline
   useEffect(() => {
@@ -57,6 +58,7 @@ export function RegistrationSettings({ section }: { section: Section }) {
         const tag = response.headers.get("etag")
         if (!tag) throw Error("Resposta sem revisão")
         if (!controller.signal.aborted) {
+          setEditingProfile(null)
           setSnapshot(value)
           setData(value.data)
           setBaseline(JSON.stringify(value.data))
@@ -77,8 +79,16 @@ export function RegistrationSettings({ section }: { section: Section }) {
     window.addEventListener("beforeunload", warn)
     return () => window.removeEventListener("beforeunload", warn)
   }, [dirty])
-  async function save(event: React.FormEvent) {
+  async function save(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
+    const invalid = Array.from(event.currentTarget.elements).find((element): element is HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement => (element instanceof HTMLInputElement || element instanceof HTMLSelectElement || element instanceof HTMLTextAreaElement) && element.willValidate && !element.validity.valid)
+    if (invalid) {
+      const profile = invalid.closest<HTMLElement>("[data-profile-index]")
+      if (profile) setEditingProfile(Number(profile.dataset.profileIndex))
+      requestAnimationFrame(() => { invalid.focus(); invalid.reportValidity() })
+      setError("Confira o campo indicado antes de salvar as configurações.")
+      return
+    }
     if (!snapshot?.canEdit || pending.current || blocked) return
     pending.current = true
     setSaving(true)
@@ -135,7 +145,9 @@ export function RegistrationSettings({ section }: { section: Section }) {
       {notice && <p role="status">{notice}</p>}
       {!snapshot && !error && <p role="status">Carregando configurações…</p>}
       {snapshot && (
-        <form onSubmit={save} className="space-y-5">
+        <form noValidate onSubmit={save} className="space-y-5">
+          {section === "tax-profiles" && !!data.profiles?.length && <div className="overflow-x-auto rounded-lg border"><table className="w-full text-left text-sm"><caption className="sr-only">Perfis tributários cadastrados</caption><thead className="bg-muted/50"><tr>{["Perfil", "Linha comercial", "Situação", "Ações"].map(label => <th key={label} className="p-2">{label}</th>)}</tr></thead><tbody>{data.profiles.map((value, index) => <tr key={index} className="border-t"><td className="p-2">{value.name || `Novo perfil ${index + 1}`}</td><td className="p-2">{value.productLine === "imported" ? "Importada" : value.productLine === "national" ? "Nacional" : "Todas"}</td><td className="p-2">{value.active ? "Ativo" : "Inativo"}</td><td className="p-2"><Button type="button" size="sm" variant="outline" aria-label={`Editar perfil ${index + 1}`} disabled={saving} onClick={() => setEditingProfile(index)}>{snapshot.canEdit ? "Editar" : "Consultar"}</Button></td></tr>)}</tbody></table></div>}
+          {section === "tax-profiles" && editingProfile !== null && <div className="flex items-center justify-between gap-2"><p className="text-sm">Editando perfil {editingProfile + 1} • alterações preservadas ao trocar de perfil</p><Button type="button" variant="outline" size="sm" onClick={() => setEditingProfile(null)}>Concluir edição do perfil</Button></div>}
           <fieldset disabled={!snapshot.canEdit || saving || blocked} className="space-y-5">
             {(section === "products" || section === "parties") && (
               <>
@@ -203,9 +215,9 @@ export function RegistrationSettings({ section }: { section: Section }) {
                 </p>
                 {!data.profiles?.length && <p>Nenhum perfil tributário cadastrado nesta empresa.</p>}
                 {data.profiles?.map((value, index) => (
-                  <fieldset className="min-w-0 rounded-xl border border-border bg-card" key={index}>
+                  <fieldset hidden={editingProfile !== index} data-profile-index={index} className="min-w-0 rounded-xl border border-border bg-card" key={index}>
                     <legend className="sr-only">Perfil {index + 1}</legend>
-                    <div className="flex flex-wrap items-center justify-between gap-2 rounded-t-xl border-b bg-muted/45 px-4 py-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2 rounded-t-xl border-b bg-muted/45 px-3 py-2">
                       <div className="flex min-w-0 flex-wrap items-center gap-2">
                         <h2 className="min-w-0 max-w-full break-words text-sm font-semibold">{value.name || `Perfil ${index + 1}`}</h2>
                         <span className="rounded-md border bg-background px-2 py-0.5 text-xs text-muted-foreground">{value.productLine === "imported" ? "Importada" : value.productLine === "national" ? "Nacional" : "Todas as linhas"}</span>
@@ -215,32 +227,35 @@ export function RegistrationSettings({ section }: { section: Section }) {
                         Perfil ativo
                       </label>
                     </div>
-                    <div className="grid min-w-0 grid-cols-2 gap-3 p-4 lg:grid-cols-4">
-                      <label className="grid min-w-0 content-start gap-1.5 text-xs font-medium col-span-2">Nome do perfil
-                        <Input className="h-9 text-sm" required aria-label={`Perfil ${index + 1}: Nome do perfil`} maxLength={80} value={value.name} onChange={(event) => profile(index, { name: event.target.value })} />
+                    <div className="grid min-w-0 grid-cols-2 gap-2 p-3 lg:grid-cols-6">
+                      <label className="grid min-w-0 content-start gap-1 text-xs font-medium col-span-2">Nome do perfil
+                        <Input className="h-8 text-xs" required aria-label={`Perfil ${index + 1}: Nome do perfil`} maxLength={80} value={value.name} onChange={(event) => profile(index, { name: event.target.value })} />
                       </label>
-                      <label className="grid min-w-0 content-start gap-1.5 text-xs font-medium col-span-2">Linha comercial deste perfil
-                        <select aria-label={`Perfil ${index + 1}: linha comercial`} className="h-9 w-full min-w-0 rounded-lg border border-input bg-background px-3 text-sm font-normal" value={value.productLine || ""} onChange={event => profile(index, { productLine: event.target.value as TaxProfile["productLine"] || undefined })}>
+                      <label className="grid min-w-0 content-start gap-1 text-xs font-medium col-span-2">Linha comercial deste perfil
+                        <select aria-label={`Perfil ${index + 1}: linha comercial`} className="h-8 w-full min-w-0 rounded-lg border border-input bg-background px-2 text-xs font-normal" value={value.productLine || ""} onChange={event => profile(index, { productLine: event.target.value as TaxProfile["productLine"] || undefined })}>
                           <option value="">Todas as linhas</option><option value="imported">Importada</option><option value="national">Nacional</option>
                         </select>
                       </label>
+                      <label className="col-span-2 grid min-w-0 gap-1 text-xs font-medium">Natureza da operação
+                        <Input className="h-8 text-xs" required aria-label={`Perfil ${index + 1}: Natureza da operação`} maxLength={60} value={value.operationNature} onChange={event => profile(index, { operationNature: event.target.value })} />
+                      </label>
+                      <h3 className="col-span-full border-t pt-2 text-xs font-semibold">Alíquotas e classificação</h3>
                       {(
                         [
-                          ["operationNature", "Natureza da operação", 60],
                           ["pisRate", "PIS (%)", 7],
                           ["cofinsRate", "COFINS (%)", 7],
                           ["ibsCbsCst", "CST IBS/CBS", 3],
                           ["classCode", "cClassTrib", 6]
                         ] as const
                       ).map(([key, label, max]) => (
-                        <label className={`grid min-w-0 content-start gap-1.5 text-xs font-medium ${key === "operationNature" ? "col-span-2" : ""}`} key={key}>
+                        <label className="grid min-w-0 content-start gap-1 text-xs font-medium" key={key}>
                           {label}
                           <Input
-                            className="h-9 text-sm"
+                            className="h-8 text-xs"
                             required
                             aria-label={`Perfil ${index + 1}: ${label}`}
                             maxLength={max}
-                            inputMode={key === "operationNature" ? "text" : "decimal"}
+                            inputMode={key.endsWith("Rate") ? "decimal" : "numeric"}
                             pattern={
                               key === "ibsCbsCst"
                                 ? "[0-9]{3}"
@@ -269,7 +284,7 @@ export function RegistrationSettings({ section }: { section: Section }) {
                           variant="outline"
                           size="sm"
                           onClick={() =>
-                            setData({ ...data, profiles: data.profiles?.filter((_, i) => i !== index) })
+                            { setEditingProfile(null); setData({ ...data, profiles: data.profiles?.filter((_, i) => i !== index) }) }
                           }
                         >
                           Remover perfil
@@ -283,7 +298,7 @@ export function RegistrationSettings({ section }: { section: Section }) {
                   variant="outline"
                   size="sm"
                   disabled={(data.profiles?.length || 0) >= 30}
-                  onClick={() =>
+                  onClick={() => { setEditingProfile(data.profiles?.length || 0);
                     setData({
                       ...data,
                       profiles: [
@@ -299,7 +314,7 @@ export function RegistrationSettings({ section }: { section: Section }) {
                         }
                       ]
                     })
-                  }
+                  }}
                 >
                   Adicionar perfil tributário
                 </Button>

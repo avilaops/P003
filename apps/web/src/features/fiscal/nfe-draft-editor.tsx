@@ -15,11 +15,16 @@ import { TaxProfilePicker } from "./settings/tax-profile-picker"
 import { OperationNaturePicker } from "./settings/operation-nature-picker"
 import { NfeProductPicker, type NfePickerProduct } from "./nfe-product-picker"
 import { certificateMessage } from "./outgoing-nfe-model"
+import { NfeTaxItemsTable } from "./nfe-tax-items-table"
+import { amountFields, reallocateAmounts, type AllocationRules } from "./nfe-amount-allocation"
+import { NfeFooterTotals } from "./nfe-footer-totals"
+import { NfeReview } from "./nfe-review"
+import { NfeGlobalAmounts } from "./nfe-global-amounts"
 import { NfeItemsTable } from "./nfe-items-table"
 import { NfeTransportFields, NfeRetentionsFields, NfeInstallmentsFields, NfeAdditionalFields, NfeAmountsSummary } from "./nfe-extras-fields"
 import { NfeIdentificationFields } from "./nfe-identification-fields"
 import { NfeExportFields, NfeForeignRecipientFields } from "./nfe-export-fields"
-import { NfeFinancialFields, NfeItemFiscalReference, hasHeaderFiscalReference } from "./nfe-financial-fields"
+import { NfeFinancialFields, hasHeaderFiscalReference } from "./nfe-financial-fields"
 import { NfeRecipientPicker, NfeMunicipalityLookup } from "./nfe-recipient-picker"
 import { applyMunicipalityCode } from "@/lib/municipality-code"
 import { EmissionActions } from "./emission-actions"
@@ -36,7 +41,7 @@ export function NfeDraftEditor({ id, sourceOrderId, initialModel = 55 }: { id?: 
   const router = useRouter()
   const [issuerProfile, setIssuerProfile] = useState<Schema<"ProfileInput"> | null>(null)
   const [emissionHeader, setEmissionHeader] = useState<{ number: number; series: number } | null>(null)
-  const [recipientType, setRecipientType] = useState("juridica")
+
   const [step, setStep] = useState(id ? editorSteps.length - 1 : 0)
   const [draft, setDraft] = useState<DraftInput>(blankDraft)
   const [baseline, setBaseline] = useState("")
@@ -53,6 +58,10 @@ export function NfeDraftEditor({ id, sourceOrderId, initialModel = 55 }: { id?: 
   const [fiscalLocked, setFiscalLocked] = useState(false)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [pendingAmounts, setPendingAmounts] = useState(false)
+  const [recipientExpanded, setRecipientExpanded] = useState(false)
+  const [allocationRules, setAllocationRules] = useState<AllocationRules>({})
+  const [allocationError, setAllocationError] = useState("")
   const [uncertain, setUncertain] = useState(false)
   const [blocked, setBlocked] = useState(false)
   const [error, setError] = useState("")
@@ -63,7 +72,7 @@ export function NfeDraftEditor({ id, sourceOrderId, initialModel = 55 }: { id?: 
   const command = useRef<{ key: string; body: string } | null>(null)
   const writing = useRef(false)
   const request = useRef<AbortController | null>(null)
-  const dirty = baseline !== "" && baseline !== JSON.stringify(draft)
+  const dirty = pendingAmounts || baseline !== "" && baseline !== JSON.stringify(draft)
 
   useEffect(() => {
     const controller = new AbortController()
@@ -80,8 +89,8 @@ export function NfeDraftEditor({ id, sourceOrderId, initialModel = 55 }: { id?: 
         if (ready.tenantId !== me.tenant?.id || origin && origin.tenantId !== me.tenant.id) throw new Error("A empresa da sessão mudou. Reabra o rascunho")
         const input: DraftInput = current ? current.data.input : proposed ? { ...blankDraft(), model: initialModel, sourceOrderId: proposed.orderId, recipient: proposed.recipient, items: proposed.items.map(item => ({ ...blankItem(), code: item.code, description: item.description, additionalInfo: item.additionalInfo || null, unit: item.unit, ncm: item.ncm || "", quantity: item.quantity, unitPrice: item.unitPrice, grossTotal: item.grossTotal })), productsTotal: proposed.productsTotal } : { ...blankDraft(), model: initialModel }
         if (!current) { input.environment = ready.environment; input.issuedAt = new Date().toISOString(); if (initialModel === 55) input.departureAt = input.issuedAt; input.presenceIndicator = initialModel === 65 ? 1 : 9 }
-        setDraft(input); setBaseline(JSON.stringify(input)); setSnapshot(current || null)
-        setRecipientType(input.recipient.taxId.length === 11 ? "fisica" : "juridica")
+        setAllocationRules({}); setAllocationError(""); setRecipientExpanded(!input.recipient.taxId || !input.recipient.legalName || !input.recipient.street); setPendingAmounts(false); setDraft(input); setBaseline(JSON.stringify(input)); setSnapshot(current || null)
+
         setEmissionHeader(null)
         setPreparation(proposed || null)
         setTenant(me.tenant.id); setReadiness(ready); setCanEdit(me.permissions.includes("fiscal.nfe.manage") && (!current || current.canEdit))
@@ -128,7 +137,19 @@ export function NfeDraftEditor({ id, sourceOrderId, initialModel = 55 }: { id?: 
   }, [dirty, uncertain, saving])
   useEffect(() => () => { request.current?.abort() }, [])
 
+  useEffect(() => {
+    try {
+      const items = reallocateAmounts(draft.items, allocationRules)
+      setAllocationError("")
+      if (JSON.stringify(items) !== JSON.stringify(draft.items)) setDraft(previous => ({ ...previous, items }))
+    } catch (reason) { setAllocationError(reason instanceof Error ? reason.message : "Confira o rateio dos valores.") }
+  }, [draft.items, allocationRules])
   function changeItem(index: number, patch: Partial<DraftItem>) {
+    setAllocationRules(previous => {
+      const next = { ...previous }
+      for (const [key] of amountFields) if (patch[key] !== undefined && next[key]) next[key] = { ...next[key]!, locked: [...new Set([...next[key]!.locked, index])] }
+      return next
+    })
     setDraft(previous => ({ ...previous, items: previous.items.map((item, position) => position === index ? { ...item, ...patch } : item) }))
   }
   function changeTaxes(patch: Partial<TaxDeclaration>) {
@@ -149,10 +170,12 @@ export function NfeDraftEditor({ id, sourceOrderId, initialModel = 55 }: { id?: 
   }
   async function save(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
+    if (allocationError) { setStep(2); setError(allocationError); return }
+    if (pendingAmounts) { setStep(2); setError("Aplique ou descarte os totais digitados antes de salvar."); return }
     const invalid = Array.from(event.currentTarget.elements).find((element): element is HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement => (element instanceof HTMLInputElement || element instanceof HTMLSelectElement || element instanceof HTMLTextAreaElement) && element.willValidate && !element.validity.valid)
     if (invalid) {
       const panel = invalid.closest<HTMLElement>("[data-editor-step]")
-      if (panel) setStep(Number(panel.dataset.editorStep))
+      if (panel) { setStep(Number(panel.dataset.editorStep)); if (panel.dataset.editorStep === "1") setRecipientExpanded(true) }
       let parent = invalid.parentElement
       while (parent) { if (parent instanceof HTMLDetailsElement) parent.open = true; parent = parent.parentElement }
       requestAnimationFrame(() => { invalid.focus(); invalid.reportValidity() })
@@ -231,59 +254,60 @@ export function NfeDraftEditor({ id, sourceOrderId, initialModel = 55 }: { id?: 
           {draft.purpose === 4 && <section className="form-section space-y-4" aria-label="Origem da devolução fiscal"><h2 className="text-lg font-semibold">Origem da devolução fiscal</h2><p className="text-sm text-muted-foreground">A origem comercial deve existir antes da emissão. O ERP não infere o tratamento tributário; informe a direção, a origem persistida e as chaves fiscais autorizadas.</p><div className="grid gap-4 sm:grid-cols-2"><Field label="Tipo da origem"><select aria-label="Tipo da origem" className="h-10 w-full rounded-lg border bg-background px-3 text-sm" value={draft.sourceReturnKind || ""} onChange={event => setDraft({ ...draft, sourceReturnKind: event.target.value as DraftInput["sourceReturnKind"] })}><option value="">Selecione</option><option value="sale_cancellation">Cancelamento de venda · entrada</option><option value="purchase_reversal">Reversão de compra · saída</option></select></Field><Field label="Direção da devolução"><select aria-label="Direção da devolução" className="h-10 w-full rounded-lg border bg-background px-3 text-sm" value={draft.returnDirection || ""} onChange={event => setDraft({ ...draft, returnDirection: event.target.value as DraftInput["returnDirection"] })}><option value="">Selecione</option><option value="incoming">Entrada</option><option value="outgoing">Saída</option></select></Field><Field label="ID da origem comercial"><Input aria-label="ID da origem comercial" required maxLength={36} value={draft.sourceReturnId || ""} onChange={event => setDraft({ ...draft, sourceReturnId: event.target.value || undefined })} /></Field><Field label="Chaves NF-e referenciadas"><Input aria-label="Chaves NF-e referenciadas" required maxLength={44 * 99 + 98} value={(draft.referencedAccessKeys || []).join(",")} onChange={event => setDraft({ ...draft, referencedAccessKeys: event.target.value.split(",").map(value => value.trim()).filter(Boolean) })} /></Field></div><p className="text-xs text-muted-foreground">Informe uma ou mais chaves de 44 dígitos separadas por vírgula. A combinação origem/direção é validada no backend.</p></section>}
           </div>
           <div hidden={step !== 1} data-editor-step="1" className="space-y-4">
-          <section className="form-section space-y-4" aria-label="Destinatário"><h2 className="text-lg font-semibold">Destinatário</h2><div className="grid gap-3 sm:grid-cols-2">{draft.recipient.state !== "EX" && <Field label="Tipo de pessoa"><select aria-label="Tipo de pessoa" className="h-10 w-full rounded-lg border bg-background px-3" value={recipientType} onChange={e => setRecipientType(e.target.value)}><option value="juridica">Jurídica</option><option value="fisica">Física</option></select></Field>}<Field label="Vendedor"><Input maxLength={200} value={draft.salesperson || ""} onChange={e => setDraft({ ...draft, salesperson: e.target.value || null })} /></Field></div><label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={draft.finalConsumer ?? draft.taxDeclaration?.finalConsumer ?? true} disabled={draft.model === 65 || draft.printType === 6} onChange={e => setDraft({ ...draft, finalConsumer: e.target.checked, ...(draft.taxDeclaration ? { taxDeclaration: { ...draft.taxDeclaration, finalConsumer: e.target.checked } } : {}) })} />Consumidor final</label>{canSearchParties && !draft.sourceOrderId && draft.recipient.state !== "EX" && <NfeRecipientPicker tenant={tenant} onApply={(recipient, fiscal) => { setRecipientType(recipient.taxId.length === 11 ? "fisica" : "juridica"); setDraft(previous => applyRecipientFiscal({ ...previous, recipient }, fiscal, issuerProfile?.crt || readiness?.crt || null)) }} />}{canSearchParties && draft.recipient.state !== "EX" && <NfeMunicipalityLookup tenant={tenant} recipient={draft.recipient} onResolveMunicipality={(expected, code) => setDraft(previous => { const recipient = applyMunicipalityCode(previous.recipient, expected, code); return recipient === previous.recipient ? previous : { ...previous, recipient } })} />}{draft.recipient.state === "EX" ? <NfeForeignRecipientFields draft={draft} change={patch => setDraft(previous => ({ ...previous, ...patch }))} /> : <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {([['taxId', 'CPF/CNPJ', 14], ['legalName', 'Nome ou razão social', 60], ['municipalityCode', 'Código IBGE do município', 7], ['postalCode', 'CEP', 8], ['street', 'Logradouro', 60], ['number', 'Número', 60], ['district', 'Bairro', 60], ['cityName', 'Município', 60], ['complement', 'Complemento', 60], ['phone', 'Telefone', 14], ['email', 'E-mail', 60]] as const).map(([key, label, maximum]) => <Field key={key} label={label}><Input required={!(["complement", "phone", "email", "cityName"] as string[]).includes(key)} type={key === "email" ? "email" : "text"} readOnly={!!draft.sourceOrderId && key === "taxId"} maxLength={key === "taxId" && recipientType === "fisica" ? 11 : maximum} value={draft.recipient[key] || ""} onChange={event => setDraft({ ...draft, recipient: { ...draft.recipient, [key]: event.target.value || (["complement", "phone", "email", "cityName"].includes(key) ? null : "") } })} /></Field>)}
+          <section className="form-section space-y-4" aria-label="Destinatário"><h2 className="text-lg font-semibold">Destinatário</h2><div className="grid gap-3 sm:grid-cols-2"><Field label="Vendedor"><Input maxLength={200} value={draft.salesperson || ""} onChange={e => setDraft({ ...draft, salesperson: e.target.value || null })} /></Field></div><label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={draft.finalConsumer ?? draft.taxDeclaration?.finalConsumer ?? true} disabled={draft.model === 65 || draft.printType === 6} onChange={e => setDraft({ ...draft, finalConsumer: e.target.checked, ...(draft.taxDeclaration ? { taxDeclaration: { ...draft.taxDeclaration, finalConsumer: e.target.checked } } : {}) })} />Consumidor final</label>{canSearchParties && !draft.sourceOrderId && draft.recipient.state !== "EX" && <NfeRecipientPicker tenant={tenant} onApply={(recipient, fiscal) => { setRecipientExpanded(false); setDraft(previous => applyRecipientFiscal({ ...previous, recipient }, fiscal, issuerProfile?.crt || readiness?.crt || null)) }} />}{canSearchParties && draft.recipient.state !== "EX" && <NfeMunicipalityLookup tenant={tenant} recipient={draft.recipient} onResolveMunicipality={(expected, code) => setDraft(previous => { const recipient = applyMunicipalityCode(previous.recipient, expected, code); return recipient === previous.recipient ? previous : { ...previous, recipient } })} />}{draft.recipient.state === "EX" ? <NfeForeignRecipientFields draft={draft} change={patch => setDraft(previous => ({ ...previous, ...patch }))} /> : <><div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border p-3"><div className="text-sm"><strong>{draft.recipient.legalName || "Destinatário não selecionado"}</strong><p>{draft.recipient.taxId}</p><p className="text-xs text-muted-foreground">{[draft.recipient.street, draft.recipient.number, draft.recipient.cityName, draft.recipient.state].filter(Boolean).join(" • ")}</p></div><Button type="button" variant="outline" onClick={() => setRecipientExpanded(value => !value)}>{recipientExpanded ? "Concluir edição do destinatário" : "Editar dados desta nota"}</Button></div><div hidden={editable && !recipientExpanded && !!draft.recipient.taxId && !!draft.recipient.legalName && !!draft.recipient.street && !!draft.recipient.postalCode && !!draft.recipient.municipalityCode && !!draft.recipient.state} className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {([['taxId', 'CPF/CNPJ', 14], ['legalName', 'Nome ou razão social', 60], ['municipalityCode', 'Código IBGE do município', 7], ['postalCode', 'CEP', 8], ['street', 'Logradouro', 60], ['number', 'Número', 60], ['district', 'Bairro', 60], ['cityName', 'Município', 60], ['complement', 'Complemento', 60], ['phone', 'Telefone', 14], ['email', 'E-mail', 60]] as const).map(([key, label, maximum]) => <Field key={key} label={label}><Input required={!(["complement", "phone", "email", "cityName"] as string[]).includes(key)} type={key === "email" ? "email" : "text"} readOnly={!!draft.sourceOrderId && key === "taxId"} maxLength={maximum} value={draft.recipient[key] || ""} onChange={event => setDraft({ ...draft, recipient: { ...draft.recipient, [key]: event.target.value || (["complement", "phone", "email", "cityName"].includes(key) ? null : "") } })} /></Field>)}
             <Field label="UF do destinatário"><select required className="h-9 w-full rounded-lg border bg-background px-3 text-sm" value={draft.recipient.state} onChange={event => setDraft({ ...draft, recipient: { ...draft.recipient, state: event.target.value } })}><option value="">Selecione</option>{states.map(state => <option key={state}>{state}</option>)}</select></Field>
-          </div>}{draft.recipient.state !== "EX" && <p className="text-xs text-muted-foreground">Informe CPF/CNPJ, CEP e código IBGE somente com dígitos. O código IBGE deve corresponder à UF.</p>}</section>
+          </div></>}{draft.recipient.state !== "EX" && <p className="text-xs text-muted-foreground">Informe CPF/CNPJ, CEP e código IBGE somente com dígitos. O código IBGE deve corresponder à UF.</p>}</section>
           </div>
           <div hidden={step !== 2} data-editor-step="2" className="space-y-4">
           <section className="form-section space-y-4" aria-label="Itens do rascunho"><h2 className="text-lg font-semibold">Itens</h2>
             {canSearch && !draft.sourceOrderId && <NfeProductPicker key={`${tenant}:${reload}`} tenant={tenant} disabled={draft.items.length >= 990} onSelect={addProduct} />}
-            <NfeItemsTable draft={draft} changeItem={changeItem} remove={index => setDraft({ ...draft, items: draft.items.filter((_, position) => position !== index), ...(draft.ibpt ? { ibpt: { ...draft.ibpt, items: draft.ibpt.items.filter((_, position) => position !== index) } } : {}) })} />
+            <NfeGlobalAmounts onPendingChange={setPendingAmounts} draft={draft} change={(items, totals) => { setAllocationRules(previous => { const next = { ...previous }; for (const [key] of amountFields) if (totals[key] !== undefined) next[key] = { total: totals[key] || "0", locked: [] }; return next }); setDraft(previous => ({ ...previous, items })) }} />
+            {allocationError && <p role="alert" className="text-sm text-destructive">{allocationError}</p>}
+            <NfeItemsTable editable={editable} draft={draft} changeItem={changeItem} remove={index => { setAllocationRules(previous => Object.fromEntries(Object.entries(previous).map(([key, rule]) => [key, { ...rule, locked: rule.locked.filter(position => position !== index).map(position => position > index ? position - 1 : position) }]))); setDraft({ ...draft, items: draft.items.filter((_, position) => position !== index), ...(draft.ibpt ? { ibpt: { ...draft.ibpt, items: draft.ibpt.items.filter((_, position) => position !== index) } } : {}) }) }} />
             <Button type="button" variant="outline" disabled={!!draft.sourceOrderId || draft.items.length >= 990} onClick={() => setDraft({ ...draft, items: [...draft.items, blankItem()], ...(draft.ibpt ? { ibpt: { ...draft.ibpt, items: [...draft.ibpt.items, blankIbptItem()] } } : {}) })}>Adicionar item manualmente</Button>
           </section>
           <NfeAmountsSummary draft={draft} />
           <NfeTransportFields draft={draft} change={patch => setDraft(previous => ({ ...previous, ...patch }))} />
           </div>
-          <div hidden={step !== 3} data-editor-step="3" className="space-y-4">
-          <details className="rounded-xl border p-4" open={!draft.taxDeclaration}><summary className="cursor-pointer text-sm font-medium">Aplicar um perfil tributário cadastrado</summary><div className="mt-4">{tenant && <TaxProfilePicker key={tenant} tenant={tenant} onApply={(profile,revision,scenario)=>setDraft(previous=>{ const applied = applyTaxProfile(previous,profile,revision,scenario); return { ...applied, finalConsumer: applied.taxDeclaration?.finalConsumer ?? null } })} />}</div></details>
-          <section className="form-section space-y-4" aria-label="Tributação dos itens"><h2 className="text-lg font-semibold">Tributação dos itens</h2><p className="text-sm text-muted-foreground">Confira NCM, CFOP, origem e CST de cada produto. Informe CST do ICMS ou CSOSN conforme o regime.</p>
-            {draft.items.map((item, index) => <details key={index} open={draft.items.length === 1} className="rounded-lg border p-4"><summary className="cursor-pointer text-sm font-medium">Item {index + 1} · {item.description || "Produto não informado"}</summary><div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {([["ncm", "NCM", 8], ["cfop", "CFOP", 4], ["pisCst", "CST do PIS", 2], ["cofinsCst", "CST da COFINS", 2]] as const).map(([key, label, maximum]) => <Field key={key} label={label}><Input required maxLength={maximum} value={item[key]} onChange={event => changeItem(index, { [key]: event.target.value })} /></Field>)}
-                <Field label="Origem da mercadoria"><select required className="h-9 w-full rounded-lg border bg-background px-3 text-sm" value={item.origin < 0 ? "" : item.origin} onChange={event => changeItem(index, { origin: event.target.value === "" ? -1 : Number(event.target.value) })}><option value="">Selecione conforme a instrução fiscal</option>{[0,1,2,3,4,5,6,7,8].map(origin => <option key={origin} value={origin}>{origin}</option>)}</select></Field>
-                <Field label="CST do ICMS"><Input maxLength={2} value={item.icmsCst || ""} onChange={event => changeItem(index, { icmsCst: event.target.value || null })} /></Field>
-                <Field label="CSOSN"><Input maxLength={3} value={item.csosn || ""} onChange={event => changeItem(index, { csosn: event.target.value || null })} /></Field>
-            </div><NfeItemFiscalReference draft={draft} item={item} index={index} change={patch => changeItem(index, patch)} /></details>)}
+          <div hidden={step !== 3} data-editor-step="3" className="space-y-3 [&_input]:h-8 [&_select]:text-xs [&_label]:text-xs [&_label]:gap-1 [&_.form-section]:p-3">
+          {tenant && <TaxProfilePicker key={tenant} tenant={tenant} onApply={(profile,revision,scenario)=>setDraft(previous=>{ const applied = applyTaxProfile(previous,profile,revision,scenario); return { ...applied, finalConsumer: applied.taxDeclaration?.finalConsumer ?? null } })} />}
+          <section className="form-section space-y-3" aria-label="Tributação dos itens"><h2 className="text-sm font-semibold">Tributação dos itens</h2><p className="text-sm text-muted-foreground">Confira NCM, CFOP, origem e CST de cada produto. Informe CST do ICMS ou CSOSN conforme o regime.</p>
+            <NfeTaxItemsTable draft={draft} changeItem={changeItem} />
           </section>
-          <section className="form-section space-y-4" aria-label="Declaração tributária CRT 3"><h2 className="text-lg font-semibold">Declaração tributária: regime normal (CRT 3)</h2>
+          <section className="form-section space-y-3" aria-label="Declaração tributária CRT 3"><h2 className="text-sm font-semibold">Declaração tributária: regime normal (CRT 3)</h2>
             <p className="text-sm text-muted-foreground">Preencha conforme a referência da instrução fiscal. Disponível para emitente de São Paulo em operações internas e interestaduais, com a mesma classificação e alíquota em todos os itens. Venda interestadual a não contribuinte exige ICMS CST 00, consumidor final e alíquotas do destino. Frete cobrado e desconto incondicional compõem as bases por item. NCM, regime e recebimentos não determinam alíquotas automaticamente.</p>
             {draft.taxDeclaration ? <>
-              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                {([["finalConsumer", "Operação para consumidor final"], ["ipiInIcmsBase", "Incluir IPI na base do ICMS para consumidor final"], ["icmsOutOfContributions", "Excluir ICMS da base de PIS e COFINS"]] as const).map(([key, label]) => <Field key={key} label={label}><select required disabled={draft.printType === 6 && key === "finalConsumer"} className="min-h-10 w-full min-w-0 rounded-lg border bg-background px-3" value={draft.taxDeclaration![key] === null ? "" : String(draft.taxDeclaration![key])} onChange={event => changeTaxes({ [key]: event.target.value === "" ? null : event.target.value === "true" })}><option value="">Declare conforme a instrução fiscal</option><option value="true">Sim</option><option value="false">Não</option></select></Field>)}
-                <Field label="Classificação ICMS do destinatário"><select required className="min-h-10 w-full min-w-0 rounded-lg border bg-background px-3" value={draft.taxDeclaration.recipientTaxpayerIndicator || (draft.taxDeclaration.recipientTaxpayer === null ? "" : draft.taxDeclaration.recipientTaxpayer ? "1" : "9")} onChange={event => { const indicator = event.target.value as "1" | "2" | "9" | ""; changeTaxes({ recipientTaxpayerIndicator: indicator || undefined, recipientTaxpayer: indicator ? indicator !== "9" : null, ...(indicator === "2" || !indicator ? { recipientStateRegistration: null } : {}) }) }}><option value="">Declare conforme o cadastro fiscal</option><option value="1">Contribuinte do ICMS</option><option value="2">Contribuinte isento de IE</option><option value="9">Não contribuinte do ICMS</option></select></Field>
+              <h3 className="text-xs font-semibold">Operação e destinatário</h3>
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                {([["finalConsumer", "Operação para consumidor final"], ["ipiInIcmsBase", "Incluir IPI na base do ICMS para consumidor final"], ["icmsOutOfContributions", "Excluir ICMS da base de PIS e COFINS"]] as const).map(([key, label]) => <Field key={key} label={label}><select required disabled={draft.printType === 6 && key === "finalConsumer"} className="h-8 w-full min-w-0 rounded-lg border bg-background px-3" value={draft.taxDeclaration![key] === null ? "" : String(draft.taxDeclaration![key])} onChange={event => changeTaxes({ [key]: event.target.value === "" ? null : event.target.value === "true" })}><option value="">Declare conforme a instrução fiscal</option><option value="true">Sim</option><option value="false">Não</option></select></Field>)}
+                <Field label="Classificação ICMS do destinatário"><select required className="h-8 w-full min-w-0 rounded-lg border bg-background px-3" value={draft.taxDeclaration.recipientTaxpayerIndicator || (draft.taxDeclaration.recipientTaxpayer === null ? "" : draft.taxDeclaration.recipientTaxpayer ? "1" : "9")} onChange={event => { const indicator = event.target.value as "1" | "2" | "9" | ""; changeTaxes({ recipientTaxpayerIndicator: indicator || undefined, recipientTaxpayer: indicator ? indicator !== "9" : null, ...(indicator === "2" || !indicator ? { recipientStateRegistration: null } : {}) }) }}><option value="">Declare conforme o cadastro fiscal</option><option value="1">Contribuinte do ICMS</option><option value="2">Contribuinte isento de IE</option><option value="9">Não contribuinte do ICMS</option></select></Field>
                 <Field label="Inscrição estadual do destinatário"><Input maxLength={14} disabled={draft.taxDeclaration.recipientTaxpayerIndicator === "2"} required={draft.taxDeclaration.recipientTaxpayer === true && draft.taxDeclaration.recipientTaxpayerIndicator !== "2"} value={draft.taxDeclaration.recipientStateRegistration || ""} onChange={event => changeTaxes({ recipientStateRegistration: event.target.value || null })} /></Field>
+              </div>
+              <h3 className="text-xs font-semibold">Alíquotas e enquadramento</h3>
+              <div className="grid gap-3 grid-cols-2 lg:grid-cols-6">
                 {([["icmsRate", "Alíquota do ICMS (%)"], ["pisRate", "Alíquota do PIS (%)"], ["cofinsRate", "Alíquota da COFINS (%)"], ["ipiRate", "Alíquota do IPI (%)"]] as const).map(([key, label]) => <Field key={key} label={label}><Input inputMode="decimal" maxLength={7} value={draft.taxDeclaration![key] || ""} onChange={event => changeTaxes({ [key]: event.target.value || null })} /></Field>)}
                 <Field label="CST do IPI (em branco para nota sem IPI)"><Input maxLength={2} value={draft.taxDeclaration.ipiCst || ""} onChange={event => changeTaxes({ ipiCst: event.target.value || null })} /></Field>
                 <Field label="Código de enquadramento do IPI"><Input maxLength={3} value={draft.taxDeclaration.ipiFrameCode || ""} onChange={event => changeTaxes({ ipiFrameCode: event.target.value || null })} /></Field>
               </div>
               <p className="text-xs text-muted-foreground">Percentuais aceitam até 4 casas decimais. ICMS CST 00, PIS/COFINS CST 01 ou 02 e IPI tributado exigem alíquota explícita, inclusive 0%. CST sem tributação aceita somente alíquota zero ou em branco. ICMS disponível: 00, 40, 41 e 50; PIS/COFINS: 01, 02 e 04 a 09.</p>
-              <details className="rounded-lg border p-3" open={!!(draft.taxDeclaration.destinationIcmsRate || draft.taxDeclaration.destinationFcpRate)}><summary className="cursor-pointer font-medium">ICMS e FCP do destino · DIFAL</summary><div className="mt-3 space-y-3">
-              <div className="grid gap-4 sm:grid-cols-2">
+              <section className="rounded-lg border p-3"><h3 className="text-sm font-semibold">ICMS e FCP do destino • DIFAL</h3><div className="mt-3 space-y-3">
+              <div className="grid gap-3 sm:grid-cols-2">
                 <Field label="Alíquota interna do ICMS no destino (%)"><Input inputMode="decimal" maxLength={7} value={draft.taxDeclaration.destinationIcmsRate || ""} onChange={event => changeTaxes({ destinationIcmsRate: event.target.value || null })} /></Field>
                 <Field label="Alíquota do FCP no destino (%)"><Input inputMode="decimal" maxLength={7} value={draft.taxDeclaration.destinationFcpRate || ""} onChange={event => changeTaxes({ destinationFcpRate: event.target.value || null })} /></Field>
               </div>
               <p className="text-xs text-muted-foreground">No DIFAL, declare as duas alíquotas do destino, inclusive FCP zero. ICMS interestadual tributado aceita 4%, 7% ou 12%. Em operação sem DIFAL, deixe as alíquotas do destino em branco.</p>
-              </div></details>
-              <details className="rounded-lg border p-3"><summary className="cursor-pointer font-medium">IBS e CBS declarados</summary><div className="mt-3 space-y-3">
-              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              </div></section>
+              <section className="rounded-lg border p-3"><h3 className="text-sm font-semibold">IBS e CBS declarados</h3><div className="mt-3 space-y-3">
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
                 {([["cst", "CST do IBS/CBS", 3], ["classCode", "Classificação tributária IBS/CBS", 6], ["ibsStateRate", "Alíquota do IBS estadual (%)", 7], ["ibsCityRate", "Alíquota do IBS municipal (%)", 7], ["cbsRate", "Alíquota da CBS (%)", 7]] as const).map(([key, label, maximum]) => <Field key={key} label={label}><Input required maxLength={maximum} inputMode={key.endsWith("Rate") ? "decimal" : "numeric"} value={draft.taxDeclaration!.ibsCbs[key]} onChange={event => changeTaxes({ ibsCbs: { ...draft.taxDeclaration!.ibsCbs, [key]: event.target.value } })} /></Field>)}
               </div><p className="text-xs text-muted-foreground">O recorte disponível é tributação integral CST 000 / classificação 000001. Declare os códigos e todas as alíquotas conforme a instrução fiscal; não há preenchimento automático.</p>
-              </div></details>
+              </div></section>
               <Button type="button" variant="outline" onClick={() => { const { taxDeclaration: removed, ...input } = draft; void removed; setDraft(input) }}>Remover declaração tributária</Button>
             </> : <Button type="button" variant="outline" onClick={() => setDraft({ ...draft, taxDeclaration: { ...blankTaxDeclaration(), finalConsumer: draft.finalConsumer ?? null } })}>Adicionar declaração tributária CRT 3</Button>}
           </section>
           <NfeRetentionsFields draft={draft} change={patch => setDraft(previous => ({ ...previous, ...patch }))} />
-          <details className="rounded-xl border p-4" open={!!draft.ibpt}><summary className="cursor-pointer text-sm font-medium">Estimativa IBPT · {draft.ibpt ? "informada" : "opcional"}</summary><div className="mt-4"><IbptDraftFields selection={draft.ibpt} items={draft.items} onChange={ibpt => setDraft({ ...draft, ibpt })} /></div></details>
+          <IbptDraftFields selection={draft.ibpt} items={draft.items} onChange={ibpt => setDraft({ ...draft, ibpt })} />
           </div>
           <div hidden={step !== 4} data-editor-step="4" className="space-y-4">
           <NfeInstallmentsFields tenant={tenant} draft={draft} change={patch => setDraft(previous => ({ ...previous, ...patch }))} />
@@ -307,12 +331,14 @@ export function NfeDraftEditor({ id, sourceOrderId, initialModel = 55 }: { id?: 
             <div><dt className="text-muted-foreground">Operação</dt><dd className="mt-1 font-medium">{draft.operationNature || "Não informada"}</dd><dd>{draft.environment === "production" ? "Produção" : "Homologação · sem valor fiscal"}</dd></div>
             <div><dt className="text-muted-foreground">Produtos e pagamentos</dt><dd className="mt-1">{draft.items.length} item(ns) · {draft.payments?.length || 0} forma(s) de pagamento</dd><dd>{draft.taxDeclaration ? "Declaração tributária informada" : "Sem declaração tributária CRT 3"}</dd></div>
           </dl>
+          <NfeReview draft={draft} navigate={(targetStep, label) => { setStep(targetStep); if (targetStep === 1) setRecipientExpanded(true); requestAnimationFrame(() => { const panel = document.querySelector(`[data-editor-step="${targetStep}"]`); const field = Array.from(panel?.querySelectorAll<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>("input, select, textarea") || []).find(element => element.getAttribute("aria-label") === label || Array.from(element.labels || []).some(node => node.textContent?.trim() === label)); field?.focus(); field?.scrollIntoView({ block: "center", behavior: "smooth" }) }) }} />
           <p className="font-medium">Total bruto dos produtos: {total}</p>
           <p className="font-medium">Total da NF-e: {(() => { try { return `R$ ${invoiceTotal(draft).replace(".", ",")}` } catch { return "Confira as alíquotas e os valores" } })()}</p>
           <p className="text-sm text-muted-foreground">O total considera produtos, frete, seguro, outras despesas, desconto e IPI declarado, calculados por item. Os pagamentos e as parcelas devem corresponder ao total da nota.</p>
           <p className="text-sm text-muted-foreground">Salvar guarda o rascunho. Transmitir à SEFAZ exige uma ação separada após a gravação.</p>
           <div className="flex flex-wrap gap-3">
-            {canEdit && <Button type="submit" disabled={loading || saving || blocked || fiscalLocked || !profileReady || !!id && (!etag || uncertain) || !uncertain && !dirty}>{saving ? "Confirmando gravação…" : uncertain && !id ? "Confirmar mesma solicitação" : "Salvar rascunho"}</Button>}
+            {pendingAmounts && <p role="status" className="text-sm">Volte à etapa Produtos para aplicar ou descartar os totais digitados antes de salvar.</p>}
+            {canEdit && <Button type="submit" disabled={!!allocationError || pendingAmounts || loading || saving || blocked || fiscalLocked || !profileReady || !!id && (!etag || uncertain) || !uncertain && !dirty}>{saving ? "Confirmando gravação…" : uncertain && !id ? "Confirmar mesma solicitação" : "Salvar rascunho"}</Button>}
             {!id && <Button className="h-auto min-h-11 max-w-full whitespace-normal text-center" type="button" disabled>Transmitir {draft.model === 65 ? "NFC-e" : "NF-e"} à SEFAZ em {draft.environment === "production" ? "produção" : "homologação"}</Button>}
             <Button type="button" variant="outline" disabled={saving || loading} onClick={refresh}>Recarregar dados do servidor</Button>
           </div>
@@ -322,13 +348,13 @@ export function NfeDraftEditor({ id, sourceOrderId, initialModel = 55 }: { id?: 
         </section>
       </form>
       <div className="sticky bottom-0 z-10 flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-background p-3 shadow-sm">
-        <p className="text-sm"><span className="text-muted-foreground">Produtos: </span><strong>{total}</strong></p>
+        <NfeFooterTotals draft={draft} />
         <div className="flex gap-2"><Button type="button" variant="outline" disabled={step === 0} onClick={() => setStep(value => value - 1)}>Anterior</Button>{step < editorSteps.length - 1 ? <Button type="button" onClick={() => { setStep(value => value + 1); window.scrollTo({ top: 0, behavior: "smooth" }) }}>Próxima etapa</Button> : <Button type="button" variant="outline" onClick={() => setStep(0)}>Revisar dados</Button>}</div>
       </div>
       <div hidden={step !== 5} className="space-y-4">
       {snapshot?.data.ibptSnapshot && <IbptSavedSnapshot snapshot={snapshot.data.ibptSnapshot} revision={snapshot.data.revision} dirty={dirty} />}
       {readiness && !canTransmit && <section className="form-section space-y-2"><h2 className="font-semibold">Pendências para emitir</h2>{emissionBlockers.length ? emissionBlockers.map(blocker => <p key={blocker} className="text-sm">{blocker === "a1_certificate_missing_expired_or_unavailable" ? certificateMessage(certificateStatus, readiness.certificateVerified) : blockerLabels[blocker] || "Confira a configuração fiscal para esta operação"}</p>) : <p className="text-sm">Não foi possível confirmar a liberação fiscal. Atualize a configuração antes de transmitir.</p>}</section>}
-      {id && snapshot && <EmissionActions key={`${id}:${snapshot.data.revision}`} id={id} tenantId={tenant} draftRevision={snapshot.data.revision} environment={snapshot.data.input.environment} model={snapshot.data.input.model === 65 ? 65 : 55} canIssue={canIssue} canTransmit={canTransmit} canCancel={canCancel} canCorrect={canCorrect} dirty={loading || dirty || saving || uncertain} onLocked={setFiscalLocked} onDocument={setEmissionHeader} />}
+      {id && snapshot && <EmissionActions key={`${id}:${snapshot.data.revision}`} id={id} tenantId={tenant} draftRevision={snapshot.data.revision} environment={snapshot.data.input.environment} model={snapshot.data.input.model === 65 ? 65 : 55} canIssue={canIssue} canTransmit={canTransmit} canCancel={canCancel} canCorrect={canCorrect} dirty={!!allocationError || loading || dirty || saving || uncertain} onLocked={setFiscalLocked} onDocument={setEmissionHeader} />}
       </div>
     </>}
   </main>
