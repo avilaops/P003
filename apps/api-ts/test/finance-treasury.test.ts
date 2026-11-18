@@ -16,6 +16,7 @@ import {
   type BankPayment,
 } from "../src/modules/finance-treasury/mercadopago.js"
 import { parseEfiStatement } from "../src/modules/finance-treasury/efi-cnab.js"
+import { checkStatementWorkflow } from "./efi-workflow-cases.js"
 import { parseOfx } from "../src/modules/finance-treasury/ofx.js"
 
 test("production connection requires a distinct bank account and explicit deployment activation",()=>{
@@ -110,16 +111,14 @@ test("Mercado Pago adapter checks merchant before issuing, sends the persistent 
     await new Promise<void>((resolve, reject) => server.close((err) => (err ? reject(err) : resolve())))
   }
 })
-test("OFX, Efí CNAB 240 and signed Mercado Pago notifications validate fixed fields and account identity", () => {
-  assert.equal(parseOfx(ofx).lines[0]!.signedCents, 10000n)
-  assert.throws(() => parseOfx(ofx.replace("20260130", "20260231")))
+function efiFixture() {
   const record = (fields: [number, string][]) => {
     const row = Array<string>(240).fill(" ")
     for (const [offset, value] of fields) row.splice(offset - 1, value.length, ...value)
     return row.join("")
   }
   const account = "00001" + " " + "000000012345" + "6" + " "
-  const cnab = [
+  return [
     record([[1, "36400000"]]),
     record([
       [1, "36400011E0400033"],
@@ -147,6 +146,12 @@ test("OFX, Efí CNAB 240 and signed Mercado Pago notifications validate fixed fi
       [18, "000001000005"],
     ]),
   ].join("\r\n")
+}
+
+test("OFX, Efí CNAB 240 and signed Mercado Pago notifications validate fixed fields and account identity", () => {
+  assert.equal(parseOfx(ofx).lines[0]!.signedCents, 10000n)
+  assert.throws(() => parseOfx(ofx.replace("20260130", "20260231")))
+  const cnab = efiFixture()
   assert.deepEqual(
     parseEfiStatement(cnab).lines.map((v) => v.signedCents),
     [10000n],
@@ -177,7 +182,7 @@ test("OFX, Efí CNAB 240 and signed Mercado Pago notifications validate fixed fi
 test(
   "PostgreSQL treasury handles duplicate files, grouped matching, account locks and a single settlement across banking channels",
   { skip: !process.env.API_TS_TEST_ADMIN_URL },
-  async () => {
+  async (t) => {
     const url = new URL(process.env.API_TS_TEST_ADMIN_URL!),
       name = "finance_treasury_" + randomUUID().replaceAll("-", ""),
       admin = new Pool({ connectionString: url.toString() })
@@ -245,6 +250,16 @@ test(
         "INSERT INTO financial_accounts(id,tenant_id,code,name,status,account_type,account_number,revision) VALUES($1,$2,'TEST','Conta','active','bank','12345',1),($3,$2,'CX','Caixa','active','cash',null,1)",
         [account, tenant, target],
       )
+      await t.test("fluxo n8n Efí • consulta, importação e repetição pelo endpoint do ERP", async () => {
+        const bank = randomUUID()
+        await seed.query(
+          "INSERT INTO financial_accounts(id,tenant_id,code,name,status,account_type,account_number,revision) VALUES($1,$2,'EFI','Conta Efí','active','bank','123456',1)",
+          [bank, tenant],
+        )
+        await checkStatementWorkflow(app, tenant, bank, account, headers.authorization, efiFixture())
+        const lines = await seed.query("SELECT signed_cents FROM finance_bank_lines WHERE tenant_id=$1 AND account_id=$2", [tenant, bank])
+        assert.deepEqual(lines.rows.map(row => String(row.signed_cents)), ["10000"])
+      })
       const entry = {
         accountId: account,
         description: "Parcela de teste",

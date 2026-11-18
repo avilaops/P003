@@ -1,0 +1,473 @@
+{
+  "name": "ERP • Importar extrato Efí CNAB 240",
+  "active": false,
+  "nodes": [
+    {
+      "id": "start",
+      "name": "Iniciar coleta",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "config",
+      "name": "Configurar conta",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        200,
+        0
+      ],
+      "parameters": {
+        "mode": "manual",
+        "includeOtherFields": false,
+        "assignments": {
+          "assignments": [
+            {
+              "id": "tenantId",
+              "name": "tenantId",
+              "type": "string",
+              "value": ""
+            },
+            {
+              "id": "accountId",
+              "name": "accountId",
+              "type": "string",
+              "value": ""
+            },
+            {
+              "id": "apiErp",
+              "name": "apiErp",
+              "type": "string",
+              "value": ""
+            },
+            {
+              "id": "nomeArquivo",
+              "name": "nomeArquivo",
+              "type": "string",
+              "value": ""
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "validate",
+      "name": "Conferir configuração",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        400,
+        0
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const config = $input.first().json;\nconst uuid = /^[a-f\\d]{8}-(?:[a-f\\d]{4}-){3}[a-f\\d]{12}$/i;\nconst apiErp = String(config.apiErp || '').trim().replace(/\\/$/, '');\nif (!/^https:\\/\\/[a-z\\d.-]+(?::[1-9]\\d{0,4})?$/i.test(apiErp)) throw new Error('Informe a origem HTTPS da API TypeScript do ERP.');\nif (!uuid.test(config.tenantId) || !uuid.test(config.accountId)) throw new Error('Informe os UUIDs da empresa e da conta Efí cadastrada no ERP.');\nconst nomeArquivo = String(config.nomeArquivo || '').trim();\nif (nomeArquivo && (!/^[a-z\\d_-][a-z\\d._ -]{0,199}$/i.test(nomeArquivo) || nomeArquivo.includes('..'))) throw new Error('Escolha um nome de arquivo da listagem Efí.');\nreturn [{ json: { apiErp, tenantId: config.tenantId.toLowerCase(), accountId: config.accountId.toLowerCase(), nomeArquivo } }];"
+      }
+    },
+    {
+      "id": "auth",
+      "name": "Autorizar na Efí",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        600,
+        0
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://extratos.api.efipay.com.br/v1/oauth/token",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBasicAuth",
+        "provideSslCertificates": true,
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\"grant_type\":\"client_credentials\"}",
+        "options": {
+          "timeout": 30000,
+          "redirect": {
+            "redirect": {
+              "followRedirects": false
+            }
+          },
+          "response": {
+            "response": {
+              "responseFormat": "json",
+              "fullResponse": false
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "list",
+      "name": "Listar extratos",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        800,
+        0
+      ],
+      "parameters": {
+        "method": "GET",
+        "provideSslCertificates": true,
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "={{ \"Bearer \" + $(\"Autorizar na Efí\").first().json.access_token }}"
+            }
+          ]
+        },
+        "url": "https://extratos.api.efipay.com.br/v1/extrato-cnab/arquivos",
+        "options": {
+          "timeout": 30000,
+          "redirect": {
+            "redirect": {
+              "followRedirects": false
+            }
+          },
+          "response": {
+            "response": {
+              "responseFormat": "json",
+              "fullResponse": true
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "select",
+      "name": "Escolher extrato",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1000,
+        0
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const { body, statusCode } = $input.first().json;\nconst { nomeArquivo } = $('Conferir configuração').first().json;\nif (statusCode !== 200 || !Array.isArray(body) || body.some(file => typeof file?.nome !== 'string')) throw new Error('Resposta de listagem Efí inválida.');\nif (!nomeArquivo) {\n  const arquivos = body.map(file => ({ nome: file.nome, geradoEm: file.data_geracao, inicio: file.periodo_inicio, fim: file.periodo_fim }));\n  return [{ json: { importar: false, arquivos } }];\n}\nif (body.filter(file => file.nome === nomeArquivo).length !== 1) throw new Error('O arquivo escolhido deve aparecer uma única vez na listagem da conta Efí.');\nreturn [{ json: { importar: true, nomeArquivo } }];"
+      }
+    },
+    {
+      "id": "should-import",
+      "name": "Arquivo escolhido?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1200,
+        0
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "import",
+              "leftValue": "={{ $json.importar }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "files",
+      "name": "Arquivos disponíveis",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        1400,
+        180
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "download",
+      "name": "Baixar extrato",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1400,
+        0
+      ],
+      "parameters": {
+        "method": "GET",
+        "provideSslCertificates": true,
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "={{ \"Bearer \" + $(\"Autorizar na Efí\").first().json.access_token }}"
+            }
+          ]
+        },
+        "url": "={{ \"https://extratos.api.efipay.com.br/v1/extrato-cnab/download/\" + encodeURIComponent($json.nomeArquivo) }}",
+        "options": {
+          "timeout": 30000,
+          "redirect": {
+            "redirect": {
+              "followRedirects": false
+            }
+          },
+          "response": {
+            "response": {
+              "responseFormat": "text",
+              "fullResponse": true
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "hash",
+      "name": "Identificar arquivo",
+      "type": "n8n-nodes-base.crypto",
+      "typeVersion": 1,
+      "position": [
+        1600,
+        0
+      ],
+      "parameters": {
+        "action": "hash",
+        "type": "SHA256",
+        "binaryData": false,
+        "value": "={{ JSON.stringify([\"efi-extrato-v1\", $(\"Conferir configuração\").first().json.tenantId, $(\"Conferir configuração\").first().json.accountId, $(\"Escolher extrato\").first().json.nomeArquivo]) }}",
+        "dataPropertyName": "digest",
+        "encoding": "hex"
+      }
+    },
+    {
+      "id": "prepare",
+      "name": "Preparar importação",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1800,
+        0
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const config = $('Conferir configuração').first().json;\nconst { statusCode, body } = $('Baixar extrato').first().json;\nif (statusCode !== 200 || typeof body !== 'string' || body.length > 2200000) throw new Error('Download do extrato Efí inválido ou acima do limite da API.');\nlet content = body.replace(/^\\uFEFF/, '');\nif (content.trimStart().startsWith('\"')) content = JSON.parse(content);\nif (typeof content !== 'string' || !content.startsWith('36400000') || content.length > 2000000) throw new Error('Selecione um extrato Efí CNAB 240 de texto, sem compressão, de até 2 milhões de caracteres.');\nconst hash = $input.first().json.digest;\nif (!/^[a-f0-9]{64}$/.test(hash)) throw new Error('Identificador de arquivo inválido.');\nconst variant = ((parseInt(hash[16], 16) & 3) | 8).toString(16);\nconst key = [hash.slice(0,8), hash.slice(8,12), '8' + hash.slice(13,16), variant + hash.slice(17,20), hash.slice(20,32)].join('-');\nreturn [{ json: { apiErp: config.apiErp, tenantId: config.tenantId, accountId: config.accountId, key, content } }];"
+      }
+    },
+    {
+      "id": "import",
+      "name": "Importar no ERP",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2000,
+        0
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $json.apiErp + \"/api/v1/finance-treasury/import-cnab\" }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "oAuth2Api",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Tenant-Id",
+              "value": "={{ $json.tenantId }}"
+            },
+            {
+              "name": "Idempotency-Key",
+              "value": "={{ $json.key }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { accountId: $json.accountId, content: $json.content, autoMatch: false } }}",
+        "options": {
+          "timeout": 30000,
+          "redirect": {
+            "redirect": {
+              "followRedirects": false
+            }
+          },
+          "response": {
+            "response": {
+              "responseFormat": "json",
+              "fullResponse": true
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "result",
+      "name": "Conferir protocolo",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2200,
+        0
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const { body, headers, statusCode } = $input.first().json;\nconst config = $('Conferir configuração').first().json;\nconst data = body?.data;\nif (statusCode !== 201 || body?.tenantId !== config.tenantId || !/^[a-f\\d]{8}-(?:[a-f\\d]{4}-){3}[a-f\\d]{12}$/i.test(data?.statementId || '') || !Number.isSafeInteger(data.imported) || data.imported < 0) throw new Error('O ERP não confirmou o protocolo do extrato da empresa.');\nreturn [{ json: { tenantId: config.tenantId, accountId: config.accountId, nomeArquivo: config.nomeArquivo, extratoId: data.statementId, linhasImportadasNoComando: data.imported, repeticao: headers?.['idempotency-replayed'] === 'true' || data.duplicate === true } }];"
+      }
+    }
+  ],
+  "connections": {
+    "Iniciar coleta": {
+      "main": [
+        [
+          {
+            "node": "Configurar conta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Configurar conta": {
+      "main": [
+        [
+          {
+            "node": "Conferir configuração",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Conferir configuração": {
+      "main": [
+        [
+          {
+            "node": "Autorizar na Efí",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Autorizar na Efí": {
+      "main": [
+        [
+          {
+            "node": "Listar extratos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Listar extratos": {
+      "main": [
+        [
+          {
+            "node": "Escolher extrato",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Escolher extrato": {
+      "main": [
+        [
+          {
+            "node": "Arquivo escolhido?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Arquivo escolhido?": {
+      "main": [
+        [
+          {
+            "node": "Baixar extrato",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Arquivos disponíveis",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Baixar extrato": {
+      "main": [
+        [
+          {
+            "node": "Identificar arquivo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Identificar arquivo": {
+      "main": [
+        [
+          {
+            "node": "Preparar importação",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar importação": {
+      "main": [
+        [
+          {
+            "node": "Importar no ERP",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Importar no ERP": {
+      "main": [
+        [
+          {
+            "node": "Conferir protocolo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveExecutionProgress": false,
+    "saveManualExecutions": false,
+    "saveDataErrorExecution": "none",
+    "saveDataSuccessExecution": "none",
+    "executionTimeout": 180
+  }
+}
