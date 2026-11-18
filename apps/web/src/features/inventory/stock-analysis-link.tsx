@@ -18,13 +18,15 @@ type Props = {
   startDate?: string
   endDate?: string
   direction?: string
+  disabled?: boolean
   children: string
 }
 
-export function StockAnalysisLink({ dataset, tenant, warehouseId, productId, startDate, endDate, direction, children }: Props) {
+export function StockAnalysisLink({ dataset, tenant, warehouseId, productId, startDate, endDate, direction, disabled, children }: Props) {
   const { value } = useResource<ReportCatalog>("/api/erp/stock/reports?catalog=true")
   if (value?.tenantId !== tenant || !value.sources?.[dataset]) return null
   if (warehouseId && !value.warehouses?.some(warehouse => warehouse.id === warehouseId)) return null
+  if (disabled) return <span role="link" aria-disabled="true" className="inline-flex min-h-11 items-center font-medium text-muted-foreground">{children}</span>
   const href = stockUrl("/relatorios/estoque/analises", {
     dataset, productId: productId || null, warehouseId: warehouseId || null, tenant: warehouseId || productId ? tenant : null,
     startDate: startDate || null, endDate: endDate || null, movementDirection: direction || null,

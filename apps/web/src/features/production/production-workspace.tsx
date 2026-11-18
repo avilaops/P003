@@ -58,13 +58,15 @@ export function ProductionWorkspace({ id }: { id?: string }) {
   const [stageId, setStageId] = useState("")
   const [stageDraft, setStageDraft] = useState({ name: "", kind: "andamento", position: "1" })
   const [saving, setSaving] = useState(false)
+  const [postingPending, setPostingPending] = useState(false)
+  const [structurePending, setStructurePending] = useState(false)
   const [uncertain, setUncertain] = useState(false)
   const [writeError, setWriteError] = useState("")
   const [notice, setNotice] = useState("")
   const pending = useRef<PendingCommand | null>(null)
   const writing = useRef(false)
   const dirty = Boolean(draft.productId || draft.quantity || draft.unitCost || draft.reason || reversal.movement || stageDraft.name)
-  const locked = saving || uncertain
+  const locked = saving || uncertain || postingPending || structurePending
   const eligibleSales = sales?.data.filter(sale => ["accepted", "confirmed", "completed"].includes(sale.status)) || []
 
   useEffect(() => {
@@ -116,7 +118,7 @@ export function ProductionWorkspace({ id }: { id?: string }) {
   }
 
   function choose(job: Job) {
-    if (locked || (dirty && !window.confirm("Descartar os dados ainda não confirmados?"))) return
+    if (locked || selected === job.id || (dirty && !window.confirm("Descartar os dados ainda não confirmados?"))) return
     setSelected(job.id); setDetail(null); setDetailLoading(true); setDetailError("")
     setDraft({ productId: "", quantity: "", unitCost: "", reason: "" }); setReversal({ movement: "", reason: "" }); setNextStage("")
     setNotice(""); setWriteError("")
@@ -165,7 +167,7 @@ export function ProductionWorkspace({ id }: { id?: string }) {
     <PageHeader title="Ordens de produção" description="Acompanhe a fabricação dos pedidos por etapa e prazo." actions={<>
       {list?.canEdit && <Button disabled={locked} aria-expanded={showCreate} onClick={() => setShowCreate(!showCreate)}>Enviar pedido à produção</Button>}
       <Button variant="outline" disabled={loading || locked} onClick={reload}>Recarregar</Button>
-      {list && <StockAnalysisLink dataset="stock_production_progress" tenant={list.tenantId}>Andamento da produção</StockAnalysisLink>}
+      {list && <StockAnalysisLink dataset="stock_production_progress" tenant={list.tenantId} disabled={locked}>Andamento da produção</StockAnalysisLink>}
     </>} />
     {notice && <p role="status" className="rounded-xl border p-4">{notice}</p>}
     {writeError && <p role="alert" className="rounded-xl border p-4">{writeError}</p>}
@@ -209,7 +211,7 @@ export function ProductionWorkspace({ id }: { id?: string }) {
         <Button className="w-fit" type="submit">Salvar etapa</Button>
       </fieldset></form>
     </details>}
-    {list?.canEdit&&<Structures tenant={list.tenantId}/>}
+    {list?.canEdit&&<Structures tenant={list.tenantId} locked={locked} onPendingChange={setStructurePending}/>}
     {selected && <section className="form-section min-w-0 space-y-5" aria-label="Ordem selecionada">
       {detailLoading ? <p role="status">Carregando ordem…</p> : detailError ? <p role="alert">{detailError}</p> : detail && <>
         <h2 className="break-words text-xl font-semibold">{detail.data.name}</h2>
@@ -220,7 +222,7 @@ export function ProductionWorkspace({ id }: { id?: string }) {
         </form>}
         <PostingPanel key={detail.data.id+detail.data.revision} tenant={detail.tenantId} jobId={detail.data.id} productId={detail.data.productId}
           revision={detail.data.revision} version={detail.data.bomVersion??null} open={detail.data.status==="open"} canConsume={detail.canConsume}
-          planned={detail.planned??[]} postings={detail.postings??[]} refresh={()=>setRefresh(v=>v+1)} saved={()=>{setNotice("Apontamento confirmado.");setRefresh(v=>v+1)}}/>
+          planned={detail.planned??[]} postings={detail.postings??[]} onPendingChange={setPostingPending} refresh={()=>setRefresh(v=>v+1)} saved={()=>{setNotice("Apontamento confirmado.");setRefresh(v=>v+1)}}/>
         {detail.canConsume && detail.data.status === "open" && <div className="space-y-4 border-t pt-4">
           <h3 className="font-semibold">Consumo declarado por ordem</h3>
           <p className="text-sm text-muted-foreground">Use este lançamento para componentes adicionais. O apontamento consome os itens previstos na estrutura.</p>
