@@ -31,6 +31,7 @@ async function run() {
   const providerOrigin = "http://127.0.0.1:" + (browserPort + 3)
   const browserOrigin = "http://127.0.0.1:" + browserPort,
     nativeFetch = globalThis.fetch
+  let reportDownloads = 0
   let charged = 0,
     approved = false,
     reference = ""
@@ -58,7 +59,11 @@ async function run() {
       else reply(401, {})
       return
     }
-    if (req.url === "/document-mail" && req.method === "POST" && req.headers.authorization === "Bearer " + documentToken) {
+    if (
+      req.url === "/document-mail" &&
+      req.method === "POST" &&
+      req.headers.authorization === "Bearer " + documentToken
+    ) {
       const parts: Buffer[] = []
       for await (const chunk of req) parts.push(Buffer.from(chunk))
       const mail = JSON.parse(Buffer.concat(parts).toString("utf8"))
@@ -72,6 +77,30 @@ async function run() {
     }
     if (req.url === "/users/me") {
       reply(200, { id: 77, site_id: "MLB", tags: ["test_user"] })
+      return
+    }
+    if (req.url === "/v1/account/settlement_report/list" && req.method === "GET") {
+      reply(200, [
+        {
+          id: 881,
+          user_id: 77,
+          file_name: "retorno-piloto.csv",
+          begin_date: "2026-01-01T00:00:00Z",
+          end_date: "2026-01-31T23:59:59Z",
+        },
+      ])
+      return
+    }
+    if (req.url === "/v1/account/settlement_report/retorno-piloto.csv" && req.method === "GET") {
+      reportDownloads++
+      res.setHeader("content-type", "text/csv; charset=utf-8")
+      res.end(
+        "EXTERNAL_REFERENCE;SOURCE_ID;USER_ID;TRANSACTION_TYPE;TRANSACTION_AMOUNT;TRANSACTION_CURRENCY;SETTLEMENT_NET_AMOUNT\r\n" +
+          reference +
+          ";" +
+          paymentId +
+          ";77;SETTLEMENT;100.00;BRL;98.00",
+      )
       return
     }
     if (req.url?.startsWith("/v1/payments/search?")) {
@@ -213,14 +242,53 @@ async function run() {
     await app.listen({ host: "127.0.0.1", port: browserPort + 2 })
     process.on("message", async (msg: { command: string }) => {
       try {
-        if (msg.command === "seedReport") {
-          const titles = await seed.query(`WITH orders AS (INSERT INTO sales_orders(id,tenant_id,customer_id,customer_name,customer_tax_id,due_date,amount_cents,status)
+        if (msg.command === "seedBatch") {
+          delete process.env.FINANCE_MP_SANDBOX_ACCESS_TOKEN
+          const buyer = randomUUID(),
+            order = randomUUID(),
+            title = randomUUID()
+          await seed.query(
+            `INSERT INTO parties(id,tenant_id,person_type,legal_name,tax_id,is_customer,is_supplier,status)
+            VALUES($1,$2,'fisica','Cliente do borderô','11144477735',true,false,'active')`,
+            [buyer, tenant],
+          )
+          await seed.query(
+            `INSERT INTO sales_orders(id,tenant_id,customer_id,customer_name,customer_tax_id,due_date,amount_cents,status)
+            VALUES($1,$2,$3,'Cliente do borderô','11144477735','2028-03-02',9050,'completed')`,
+            [order, tenant, buyer],
+          )
+          await seed.query(
+            `INSERT INTO receivables(id,tenant_id,order_id,customer_name,due_date,amount_cents,status)
+            VALUES($1,$2,$3,'Cliente do borderô','2028-03-02',9050,'open')`,
+            [title, tenant, order],
+          )
+          process.send?.({ title })
+        } else if (msg.command === "batchSnapshot") {
+          const audit = (
+            await seed.query(
+              `SELECT b.reference,b.cancelled_at IS NOT NULL AS cancelled, b.cancel_reason AS reason,
+            count(*)::int AS count, count(DISTINCT i.party_id)::int AS parties, sum(i.amount_cents)::text AS cents,
+            count(i.released_at)::int AS released, (SELECT count(*)::int FROM finance_collection_charges WHERE tenant_id=$1) AS charges
+            FROM finance_collection_batches b JOIN finance_collection_batch_items i ON (i.tenant_id,i.batch_id)=(b.tenant_id,b.id)
+            WHERE b.tenant_id=$1 GROUP BY b.tenant_id,b.id`,
+              [tenant],
+            )
+          ).rows
+          process.send?.({ audit })
+        } else if (msg.command === "seedReport") {
+          const titles = await seed.query(
+            `WITH orders AS (INSERT INTO sales_orders(id,tenant_id,customer_id,customer_name,customer_tax_id,due_date,amount_cents,status)
               SELECT gen_random_uuid(),$1,$2,'Cliente selecionado','52998224725','2028-03-01',12345,'completed' FROM generate_series(1,105) RETURNING id)
             INSERT INTO receivables(id,tenant_id,order_id,customer_name,due_date,amount_cents,status)
-            SELECT gen_random_uuid(),$1,id,'Cliente selecionado','2028-03-01',12345,'open' FROM orders RETURNING id`, [tenant, party])
-          process.send?.({ ids: titles.rows.map(r => r.id) })
+            SELECT gen_random_uuid(),$1,id,'Cliente selecionado','2028-03-01',12345,'open' FROM orders RETURNING id`,
+            [tenant, party],
+          )
+          process.send?.({ ids: titles.rows.map((r) => r.id) })
         } else if (msg.command === "reportMail") {
-          const deliveries = await seed.query("SELECT id,snapshot,encode(pdf_content,'base64') AS pdf FROM finance_document_email_deliveries WHERE tenant_id=$1", [tenant])
+          const deliveries = await seed.query(
+            "SELECT id,snapshot,encode(pdf_content,'base64') AS pdf FROM finance_document_email_deliveries WHERE tenant_id=$1",
+            [tenant],
+          )
           process.send?.({ deliveries: deliveries.rows, messages: reportMail })
         } else if (msg.command === "approve") {
           approved = true
@@ -260,7 +328,13 @@ async function run() {
               [tenant, account],
             )
           ).rows[0]
-          process.send?.({ ...row, charged, reference, paymentId })
+          const imported = (
+            await seed.query(
+              "SELECT count(*)::int AS n FROM finance_collection_imports WHERE tenant_id=$1 AND report_id='881' AND content_sha256 IS NOT NULL AND csv_content IS NULL AND result IS NOT NULL",
+              [tenant],
+            )
+          ).rows[0]!.n
+          process.send?.({ ...row, charged, reference, paymentId, reportDownloads, importedReports: imported })
         } else if (msg.command === "stop") await stop()
       } catch (error) {
         process.send?.({ error: String(error) })

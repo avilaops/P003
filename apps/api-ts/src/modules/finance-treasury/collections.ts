@@ -14,6 +14,7 @@ export type Headers = Record<string, string | string[] | undefined>
 export const chargeSchema = z.strictObject({
   accountId: id,
   groupId: id.nullish(),
+  batchId: id.optional(),
   receivableIds: z
     .array(id)
     .min(1)
@@ -54,7 +55,7 @@ export async function collections(ctx: AuthorizedContext, groupId?: string) {
   ).rows.map((r) => ({ ...r, live: configs.find((c) => c.accountId === r.id)!.live }))
   const charges = (
     await ctx.client.query(
-      `SELECT c.id,c.account_id AS "accountId",c.group_id AS "groupId",c.method,c.due_on::text AS "dueOn",c.amount_cents::text cents,c.state,c.provider_id AS "providerId",c.instructions,c.review_reason AS "reviewReason",p.legal_name AS name,
+      `SELECT c.id,c.account_id AS "accountId",c.group_id AS "groupId",c.batch_id AS "batchId",c.method,c.due_on::text AS "dueOn",c.amount_cents::text cents,c.state,c.provider_id AS "providerId",c.instructions,c.review_reason AS "reviewReason",p.legal_name AS name,
     ARRAY(SELECT i.receivable_id FROM finance_collection_items i WHERE i.tenant_id=c.tenant_id AND i.charge_id=c.id ORDER BY i.receivable_id) AS "receivableIds"
     FROM finance_collection_charges c JOIN parties p ON (p.tenant_id,p.id)=(c.tenant_id,c.party_id) WHERE c.tenant_id=$1 AND ($2::uuid IS NULL OR c.group_id=$2) ORDER BY c.created_at DESC LIMIT 100`,
       [ctx.tenantId, groupId ?? null],
@@ -64,6 +65,7 @@ export async function collections(ctx: AuthorizedContext, groupId?: string) {
     await ctx.client.query(
       `SELECT p.id,p.party_name AS name,p.party_id AS "partyId",p.open_cents::text cents,p.due_date::text AS "dueOn" FROM finance_portfolio p
     WHERE p.tenant_id=$1 AND side='receivable' AND open_cents>0 AND NOT EXISTS(SELECT 1 FROM finance_collection_items i WHERE i.tenant_id=p.tenant_id AND i.receivable_id=p.id)
+      AND NOT EXISTS(SELECT FROM finance_collection_batch_items bi WHERE (bi.tenant_id,bi.receivable_id)=(p.tenant_id,p.id) AND bi.released_at IS NULL)
       AND NOT EXISTS(SELECT 1 FROM finance_operation_items i JOIN finance_active_operations g ON (g.tenant_id,g.id)=(i.tenant_id,i.operation_id)
         WHERE i.tenant_id=p.tenant_id AND i.receivable_id=p.id AND g.kind='billing_group')
     ORDER BY p.due_date,p.id LIMIT 100`,
@@ -92,6 +94,15 @@ export async function reserveCharge(
   if (selected.status !== "active" || selected.accountType !== "bank")
     throw conflict("Selecione uma conta bancária ativa")
   const cfg = requirePilot(ctx.tenantId, input.accountId)
+  const batchItems = (await ctx.client.query<{ batch_id:string; account_id:string; party_id:string; due:string; cents:string }>(
+    `SELECT b.id AS batch_id,b.account_id,i.party_id,i.due_on::text AS due,i.amount_cents::text AS cents
+     FROM finance_collection_batch_items i JOIN finance_collection_batches b ON (b.tenant_id,b.id)=(i.tenant_id,i.batch_id)
+     WHERE i.tenant_id=$1 AND i.receivable_id=ANY($2::uuid[]) AND i.released_at IS NULL`, [ctx.tenantId,input.receivableIds])).rows
+  const batchItem = batchItems[0]
+  if (input.batchId) {
+    if (input.groupId || input.receivableIds.length !== 1 || !batchItem || batchItem.batch_id !== input.batchId || batchItem.account_id !== input.accountId)
+      throw conflict("A conta e o título devem corresponder ao borderô ativo")
+  } else if (batchItem) throw conflict("Abra o borderô para emitir a cobrança deste título")
   if (input.groupId) {
     const active = await ctx.client.query(
       "SELECT 1 FROM finance_active_operations WHERE tenant_id=$1 AND id=$2 AND kind='billing_group'",
@@ -127,7 +138,8 @@ export async function reserveCharge(
       !same ||
       previous.account_id !== input.accountId ||
       previous.method !== input.billingType ||
-      (previous as Record<string, unknown>).group_id !== (input.groupId ?? null)
+      (previous as Record<string, unknown>).group_id !== (input.groupId ?? null) ||
+      (previous as Record<string, unknown>).batch_id !== (input.batchId ?? null)
     )
       throw conflict("Há uma cobrança reservada para estes títulos")
     return previous.id
@@ -146,6 +158,8 @@ export async function reserveCharge(
     throw conflict("Selecione títulos em aberto do mesmo cliente")
   const partyId = rows[0].party_id,
     total = rows.reduce((sum, r) => sum + BigInt(r.open_cents), 0n)
+  if (batchItem && (batchItem.cents !== total.toString() || batchItem.due !== rows[0].due || batchItem.party_id !== partyId))
+    throw conflict("O saldo, o cliente ou o vencimento diverge do borderô preparado")
   if (total > 99999999999999n) throw invalid("Valor fora do limite do banco")
   let dueOn = rows[0].due
   if (input.groupId) {
@@ -204,8 +218,8 @@ export async function reserveCharge(
     },
   }
   await ctx.client.query(
-    `INSERT INTO finance_collection_charges(tenant_id,id,account_id,party_id,group_id,method,amount_cents,due_on,provider_request,issue_key,live_mode,collector_id)
-    VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
+    `INSERT INTO finance_collection_charges(tenant_id,id,account_id,party_id,group_id,method,amount_cents,due_on,provider_request,issue_key,live_mode,collector_id,batch_id)
+    VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
     [
       ctx.tenantId,
       chargeId,
@@ -219,6 +233,7 @@ export async function reserveCharge(
       key,
       cfg.live,
       cfg.collectorId,
+      input.batchId ?? null,
     ],
   )
   for (const r of rows)

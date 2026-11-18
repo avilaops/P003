@@ -6,12 +6,14 @@ import { Input } from "@/components/ui/input"
 import { RequestError } from "@/components/feedback/session-recovery"
 import { useCommand, useResource } from "@/hooks/use-operation"
 import { brl, readBankFile } from "./treasury-reconciliation"
+import { CollectionBatches } from "./collection-batches"
 
 type Option = { id: string; name: string; partyId: string; cents: string; dueOn: string }
 type Charge = {
   id: string
   accountId: string
   groupId: string | null
+  batchId?: string | null
   name: string
   method: "PIX" | "BOLETO"
   state: string
@@ -69,6 +71,7 @@ function Collections({ group, groupTenant }: { group?: Group; groupTenant?: stri
     [file, setFile] = useState<File | null>(null),
     [notice, setNotice] = useState("")
   const [chosen, setChosen] = useState("")
+  const [reportAccount, setReportAccount] = useState("")
   const disabled = command.busy || command.uncertain || command.stale
   const snapshot = resource.value,
     bank = snapshot?.data
@@ -99,6 +102,9 @@ function Collections({ group, groupTenant }: { group?: Group; groupTenant?: stri
       {resource.loading && <p role="status">Consultando cobranças…</p>}
       {snapshot && bank && (!groupTenant || groupTenant === snapshot.tenantId) && (
         <>
+          {!group && (
+            <CollectionBatches key={snapshot.tenantId} tenant={snapshot.tenantId} connections={bank.accounts} />
+          )}
           {group && (
             <section className="space-y-2 rounded-xl border p-4">
               <h2 className="font-semibold">Agrupamento de cobrança</h2>
@@ -203,6 +209,24 @@ function Collections({ group, groupTenant }: { group?: Group; groupTenant?: stri
                     Conferir retorno
                   </Button>
                 </form>
+                {reportAccount === selected.id ? (
+                  <ProviderReports
+                    key={snapshot.tenantId + selected.id}
+                    tenant={snapshot.tenantId}
+                    accountId={selected.id}
+                    disabled={disabled}
+                    onImport={(id) => send("import-return", { accountId: selected.id, remoteReportId: id })}
+                  />
+                ) : (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={disabled}
+                    onClick={() => setReportAccount(selected.id)}
+                  >
+                    Consultar relatórios no Mercado Pago
+                  </Button>
+                )}
               </>
             )}
           </section>
@@ -241,6 +265,7 @@ function Collections({ group, groupTenant }: { group?: Group; groupTenant?: stri
                         accountId: c.accountId,
                         billingType: c.method,
                         groupId: c.groupId,
+                        ...(c.batchId ? { batchId: c.batchId } : {}),
                         receivableIds: c.receivableIds,
                       })
                     }
@@ -265,5 +290,64 @@ function Collections({ group, groupTenant }: { group?: Group; groupTenant?: stri
         </Button>
       )}
     </main>
+  )
+}
+
+function ProviderReports({
+  tenant,
+  accountId,
+  disabled,
+  onImport,
+}: {
+  tenant: string
+  accountId: string
+  disabled: boolean
+  onImport: (id: string) => void
+}) {
+  const resource = useResource<{
+    tenantId: string
+    data: { id: string; name: string; from: string | null; to: string | null }[]
+  }>("/api/erp/finance-treasury/provider-reports?accountId=" + accountId)
+  const [selected, setSelected] = useState("")
+  const files = resource.value?.tenantId === tenant ? resource.value.data : []
+  return (
+    <div className="space-y-2 rounded-lg border p-3">
+      <h3 className="font-medium">Relatórios Dinheiro em conta disponíveis</h3>
+      {resource.loading ? (
+        <p role="status">Consultando relatórios do vendedor…</p>
+      ) : resource.error ? (
+        <RequestError message={resource.error} status={resource.status} />
+      ) : files.length ? (
+        <label className="grid gap-1 text-sm">
+          Arquivo do vendedor
+          <select
+            className="rounded border p-2"
+            disabled={disabled}
+            value={selected}
+            onChange={(e) => setSelected(e.target.value)}
+          >
+            <option value="">Selecione o CSV</option>
+            {files.map((f) => (
+              <option key={f.id} value={f.id}>
+                {f.name}
+                {f.from && f.to && " • " + f.from.slice(0, 10) + " a " + f.to.slice(0, 10)}
+              </option>
+            ))}
+          </select>
+        </label>
+      ) : (
+        <p>Nenhum arquivo CSV disponível nesta conta.</p>
+      )}
+      <Button type="button" variant="outline" disabled={disabled || resource.loading} onClick={resource.reload}>
+        Atualizar arquivos
+      </Button>{" "}
+      <Button
+        type="button"
+        disabled={disabled || resource.loading || !files.some((f) => f.id === selected)}
+        onClick={() => onImport(selected)}
+      >
+        Importar arquivo selecionado
+      </Button>
+    </div>
   )
 }

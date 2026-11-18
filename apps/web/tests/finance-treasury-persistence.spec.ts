@@ -16,6 +16,8 @@ type Snapshot = {
   charged: number
   reference: string
   paymentId: string
+  reportDownloads: number
+  importedReports: number
 }
 function message<T>(child: ChildProcess, command?: string) {
   return new Promise<T>((resolve, reject) => {
@@ -33,10 +35,13 @@ function message<T>(child: ChildProcess, command?: string) {
       cleanup()
       reject(Error("Backend de teste encerrado • " + code))
     }
-    const timer = setTimeout(() => {
-      cleanup()
-      reject(Error("Backend de teste sem resposta"))
-    }, 60000)
+    const timer = setTimeout(
+      () => {
+        cleanup()
+        reject(Error("Backend de teste sem resposta"))
+      },
+      command ? 60000 : 180000,
+    )
     child.once("message", reply)
     child.once("exit", exit)
     if (command) child.send({ command })
@@ -64,6 +69,13 @@ test("Chromium • agrupamento, cobrança Pix, webhook, retorno e conciliação 
       page.waitForResponse((r) => r.request().method() === "POST" && new URL(r.url()).pathname === "/api/erp/" + p, {
         timeout: 60000,
       })
+    await page.goto("/financeiro")
+    const receivables = page.getByRole("link", { name: /^A receber\s+R\$\s*100,00$/ })
+    await expect(receivables).toBeVisible({ timeout: 40000 })
+    await receivables.click()
+    await expect(page.getByRole("table", { name: "Títulos do filtro" }).getByRole("row")).toHaveCount(3, {
+      timeout: 40000,
+    })
     await page.goto("/financeiro/faturamento-agrupado?partyId=" + ready.party)
     const titles = page.getByRole("checkbox", { name: /Selecionar A receber/ })
     await expect(titles).toHaveCount(2, { timeout: 40000 })
@@ -99,6 +111,20 @@ test("Chromium • agrupamento, cobrança Pix, webhook, retorno e conciliação 
     await page.getByRole("button", { name: "Conferir retorno" }).click()
     const report = await returned
     expect(report.ok(), await report.text()).toBeTruthy()
+    await page.getByRole("button", { name: "Consultar relatórios no Mercado Pago" }).click()
+    await page.getByLabel("Arquivo do vendedor").selectOption("881")
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const importing = submitted("finance-treasury/import-return")
+      await page.getByRole("button", { name: "Importar arquivo selecionado" }).click()
+      const imported = await importing
+      expect(imported.ok(), await imported.text()).toBeTruthy()
+    }
+    expect(await message<Snapshot>(backend, "snapshot")).toMatchObject({
+      importedReports: 1,
+      reportDownloads: 1,
+      receipts: 2,
+      net: "9800",
+    })
     const date = new Intl.DateTimeFormat("sv-SE", { timeZone: "America/Sao_Paulo" }).format(new Date()),
       compact = date.replaceAll("-", "")
     const statement =
@@ -147,12 +173,18 @@ test("Chromium • agrupamento, cobrança Pix, webhook, retorno e conciliação 
   }
 })
 
-test("Chromium • comando de envio preserva no PDF todos os 105 títulos filtrados da carteira", async ({ context, page, baseURL }) => {
-  test.setTimeout(240_000)
+test("Chromium • comando de envio preserva no PDF todos os 105 títulos filtrados da carteira", async ({
+  context,
+  page,
+  baseURL,
+}) => {
+  test.setTimeout(420_000)
   test.skip(!process.env.API_TS_TEST_ADMIN_URL, "Requer PostgreSQL de testes descartável")
   const api = path.resolve(process.cwd(), "../api-ts")
   const backend = fork(path.join(api, "test/treasury-browser-backend.ts"), [], {
-    cwd: api, execArgv: ["--import", "tsx"], stdio: ["ignore", "inherit", "inherit", "ipc"],
+    cwd: api,
+    execArgv: ["--import", "tsx"],
+    stdio: ["ignore", "inherit", "inherit", "ipc"],
   })
   try {
     const ready = await message<Ready>(backend)
@@ -170,32 +202,42 @@ test("Chromium • comando de envio preserva no PDF todos os 105 títulos filtra
     await expect(dialog).toContainText("Empresa piloto • posição em")
     await expect(dialog).toContainText("A receber • R$ 12.962,25")
     await dialog.getByLabel("Destinatário").fill("financeiro@example.test")
-    const sent = page.waitForResponse(r => r.request().method() === "POST" && r.url().endsWith("/financial-report/email"))
+    const sent = page.waitForResponse(
+      (r) => r.request().method() === "POST" && r.url().endsWith("/financial-report/email"),
+    )
     await dialog.getByRole("button", { name: "Enviar e-mail com anexo" }).click()
     const response = await sent
     expect(response.ok(), await response.text()).toBeTruthy()
     expect(response.request().postDataJSON().filters).toEqual({ side: "receivable", q: "selecionado" })
     await expect(dialog).toContainText("Aceito pelo servidor de e-mail")
     type Mail = { id: string; to: string; attachments: { content: string; filename: string }[] }
-    type Delivery = { id: string; pdf: string; snapshot: { rows: { id: string }[]; totals: { receivable: string }; asOf: string } }
+    type Delivery = {
+      id: string
+      pdf: string
+      snapshot: { rows: { id: string }[]; totals: { receivable: string }; asOf: string }
+    }
     const evidence = await message<{ deliveries: Delivery[]; messages: Mail[] }>(backend, "reportMail")
     expect(evidence.deliveries).toHaveLength(1)
     expect(evidence.messages).toHaveLength(1)
-    const delivery = evidence.deliveries[0]!, mail = evidence.messages[0]!
+    const delivery = evidence.deliveries[0]!,
+      mail = evidence.messages[0]!
     expect(mail.id).toBe(delivery.id)
     expect(mail.to).toBe("financeiro@example.test")
     expect(delivery.snapshot.totals.receivable).toBe("12962.25")
-    expect(delivery.snapshot.rows.map(r => r.id).sort()).toEqual(ids.sort())
+    expect(delivery.snapshot.rows.map((r) => r.id).sort()).toEqual(ids.sort())
     expect(mail.attachments[0]!.content).toBe(delivery.pdf.replace(/\s+/g, ""))
     const require = createRequire(path.join(process.cwd(), "package.json"))
     const pdfModule = pathToFileURL(require.resolve("pdfjs-dist/legacy/build/pdf.mjs")).href
-    const { getDocument } = await import(pdfModule) as typeof import("pdfjs-dist")
-    const task = getDocument({ data: new Uint8Array(Buffer.from(mail.attachments[0]!.content, "base64")), useSystemFonts: true })
+    const { getDocument } = (await import(pdfModule)) as typeof import("pdfjs-dist")
+    const task = getDocument({
+      data: new Uint8Array(Buffer.from(mail.attachments[0]!.content, "base64")),
+      useSystemFonts: true,
+    })
     const pdf = await task.promise
     const pages: string[] = []
     for (let n = 1; n <= pdf.numPages; n++) {
       const text = await (await pdf.getPage(n)).getTextContent()
-      pages.push(text.items.map(item => "str" in item ? item.str : "").join(" "))
+      pages.push(text.items.map((item) => ("str" in item ? item.str : "")).join(" "))
     }
     const contents = pages.join(" ")
     expect(contents).toContain("Empresa piloto")
@@ -204,6 +246,69 @@ test("Chromium • comando de envio preserva no PDF todos os 105 títulos filtra
     expect(contents).not.toContain("Cliente de teste")
     for (const id of ids) expect(contents).toContain(id)
     await task.destroy()
+  } finally {
+    if (backend.connected) {
+      const ended = new Promise((resolve) => backend.once("exit", resolve))
+      backend.send({ command: "stop" })
+      await ended
+    }
+  }
+})
+
+test("Chromium • borderô sem provedor preserva dois clientes, exporta conferência e cancela sem cobrança", async ({
+  context,
+  page,
+  baseURL,
+}) => {
+  test.setTimeout(420_000)
+  test.skip(!process.env.API_TS_TEST_ADMIN_URL, "Requer PostgreSQL descartável")
+  const api = path.resolve(process.cwd(), "../api-ts")
+  const backend = fork(path.join(api, "test/treasury-browser-backend.ts"), [], {
+    cwd: api,
+    execArgv: ["--import", "tsx"],
+    stdio: ["ignore", "inherit", "inherit", "ipc"],
+  })
+  try {
+    const ready = await message<Ready>(backend)
+    const { title } = await message<{ title: string }>(backend, "seedBatch")
+    await installFrontendFixture(context, baseURL, ready.tenant, ready.access)
+    await context.unroute("**/api/erp/**")
+    await page.goto("/financeiro/remessas-retornos")
+    await page.getByRole("button", { name: "Preparar ou consultar borderô" }).click()
+    await page.getByLabel("Conta do borderô").selectOption(ready.account)
+    await page.getByLabel("Referência do borderô").fill("Conferência regional")
+    await page.getByRole("checkbox", { name: /Cliente de teste.*40,00/ }).check()
+    await page.getByRole("checkbox", { name: /Cliente do borderô.*90,50/ }).check()
+    await page.getByRole("button", { name: "Preparar borderô", exact: true }).click()
+    await expect(page.getByText("Para emitir, vincule esta conta a um provedor de cobrança.")).toBeVisible({
+      timeout: 40000,
+    })
+    const promise = page.waitForEvent("download")
+    await page.getByRole("button", { name: "Exportar conferência CSV" }).click()
+    const downloaded = await promise,
+      stream = await downloaded.createReadStream()
+    const chunks: Buffer[] = []
+    for await (const chunk of stream!) chunks.push(Buffer.from(chunk))
+    const csv = Buffer.concat(chunks).toString("utf8")
+    expect(csv).toContain(title)
+    expect(csv).toContain("Cliente de teste")
+    expect(csv).toContain("90,50")
+    await page.getByLabel("Motivo do cancelamento").fill("Refazer seleção")
+    await page.getByRole("button", { name: "Cancelar borderô e liberar títulos" }).click()
+    await expect(page.getByText(/Cancelado em.*Refazer seleção/)).toBeVisible({ timeout: 40000 })
+    const snapshot = await message<{ audit: unknown[] }>(backend, "batchSnapshot")
+    expect(snapshot.audit).toEqual([
+      {
+        reference: "Conferência regional",
+        cancelled: true,
+        reason: "Refazer seleção",
+        count: 2,
+        parties: 2,
+        cents: "13050",
+        released: 2,
+        charges: 0,
+      },
+    ])
   } finally {
     if (backend.connected) {
       const ended = new Promise((resolve) => backend.once("exit", resolve))

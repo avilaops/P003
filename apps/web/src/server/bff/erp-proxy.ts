@@ -230,7 +230,9 @@ export async function forwardErp(request: Request, resource: string) {
         upstream.searchParams.set(key, value)
       }
     }
-    const timeout = AbortSignal.timeout(packageEmailResource ? 105000 : documentEmailResource || orderDocumentResource ? 25000 : invitationResource || accountResource ? 20000 : 10000)
+    const importBankReturn = resource === "/finance-treasury/import-return"
+    const listBankReports = resource === "/finance-treasury/provider-reports"
+    const timeout = AbortSignal.timeout(packageEmailResource || importBankReturn ? 105000 : documentEmailResource || orderDocumentResource || listBankReports ? 25000 : invitationResource || accountResource ? 20000 : 10000)
     const signal = productExportResource || productFinishesResource ? AbortSignal.any([request.signal, timeout]) : timeout
     const response = await fetch(upstream, { method: request.method, headers, body, cache: "no-store", redirect: "error", signal })
     // ETag is the backend revision used by If-Match; proxy encoding must not rewrite it.

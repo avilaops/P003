@@ -120,7 +120,7 @@ function payment(value: unknown, config: Merchant) {
     throw conflict("A resposta financeira diverge da conta e do ambiente vinculados")
   return parsed.data
 }
-export async function issue(config: Merchant, body: unknown, key: string, transport: typeof fetch = fetch) {
+export async function verifyMerchant(config: Merchant, transport: typeof fetch = fetch) {
   const identity = z
     .object({ id: z.coerce.string(), tags: z.array(z.string()), site_id: z.string() })
     .safeParse(await remote(transport, "https://api.mercadolibre.com/users/me", config))
@@ -131,6 +131,9 @@ export async function issue(config: Merchant, body: unknown, key: string, transp
     identity.data.tags.includes("test_user") === config.live
   )
     throw conflict("O vendedor e o ambiente devem corresponder ao vínculo financeiro brasileiro")
+}
+export async function issue(config: Merchant, body: unknown, key: string, transport: typeof fetch = fetch) {
+  await verifyMerchant(config,transport)
   const query = new URLSearchParams({ external_reference: key, sort: "date_created", criteria: "desc", limit: "2" })
   const existing = z
     .object({ results: z.array(z.object({ id: z.coerce.string().regex(/^\d+$/), external_reference: z.string() })) })

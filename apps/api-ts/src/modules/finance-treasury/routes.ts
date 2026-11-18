@@ -6,6 +6,8 @@ import { authorizeRequest, requirePermission, type AuthorizedContext } from "../
 import { withTenantTransaction } from "../../platform/database.js"
 import { commandKey, record, remember, replay } from "../../platform/commands.js"
 import { chargeSchema, collections, getCharge, observePayment, reserveCharge } from "./collections.js"
+import { batchQuery, cancelBatch, cancelBatchSchema, prepareBatch, prepareBatchSchema, readBatches } from "./collection-batches.js"
+import { listProviderReports, prepareProviderImport, remoteReportId, reportMerchant } from "./provider-reports.js"
 import { checkSignature, getPayment, issue, providerCents, requirePilot, settlementReport } from "./mercadopago.js"
 import {
   conflict,
@@ -20,6 +22,8 @@ import {
   transferSchema,
 } from "./ledger.js"
 import {
+  classifyAndMatch,
+  classifySchema,
   exception,
   exceptionSchema,
   importSchema,
@@ -71,6 +75,7 @@ export function registerFinanceTreasuryRoutes(app: FastifyInstance, deps: AppDep
           ? {
               input: {
                 accountId: (input as { accountId: string }).accountId,
+                ...((input as {autoMatch?:boolean}).autoMatch ? {autoMatch:true} : {}),
                 digest: createHash("sha256")
                   .update((input as { content: string }).content)
                   .digest("hex"),
@@ -138,6 +143,7 @@ export function registerFinanceTreasuryRoutes(app: FastifyInstance, deps: AppDep
     true,
   )
   command(treasury + "match", matchSchema, readEntries, writeEntries, "finance_reconciliation.matched", match)
+  command(treasury + "classify-movement", classifySchema, readEntries, writeEntries, "finance_reconciliation.movement_classified", classifyAndMatch)
   command(
     treasury + "exception",
     exceptionSchema,
@@ -164,6 +170,9 @@ export function registerFinanceTreasuryRoutes(app: FastifyInstance, deps: AppDep
   )
   const readCharges = "finance.collections.read",
     writeCharges = "finance.collections.manage"
+  read(treasury + "batches", readCharges, writeCharges, (ctx, req) => readBatches(ctx, parse(batchQuery, req.query)))
+  command(treasury + "prepare-batch", prepareBatchSchema, readCharges, writeCharges, "finance_collection_batch.prepared", prepareBatch)
+  command(treasury + "cancel-batch", cancelBatchSchema, readCharges, writeCharges, "finance_collection_batch.cancelled", cancelBatch)
   read(treasury + "collections", readCharges, writeCharges, (ctx, request) => {
     requirePermission(ctx, "finance.receivables.read")
     return collections(ctx, parse(z.strictObject({ groupId: z.guid().optional() }), request.query).groupId)
@@ -198,11 +207,17 @@ export function registerFinanceTreasuryRoutes(app: FastifyInstance, deps: AppDep
     })
     return reply.code(201).header("etag", '"1"').send({ tenantId, data })
   })
-  app.post(treasury + "import-return", { bodyLimit: 2_200_000 }, async (req, reply) => {
-    const input = parse(importSchema, req.body),
-      key = commandKey(req.headers["idempotency-key"])
-    const payload = { accountId: input.accountId, digest: createHash("sha256").update(input.content).digest("hex") }
-    const { tenantId, importId, saved } = await authorizeRequest(req, deps, async (ctx) => {
+  app.get(treasury + "provider-reports", async (req, reply) => {
+    const {accountId}=parse(z.strictObject({accountId:z.guid()}),req.query)
+    const cfg=await authorizeRequest(req,deps,async ctx=>{
+      requirePermission(ctx,readCharges);requirePermission(ctx,"finance.receivables.read")
+      return reportMerchant(ctx,accountId)
+    })
+    return reply.header("cache-control","no-store").send({tenantId:cfg.tenantId,data:await listProviderReports(cfg)})
+  })
+  async function prepareUpload(req:FastifyRequest,input:{accountId:string;content:string},key:string) {
+    const payload={accountId:input.accountId,digest:createHash("sha256").update(input.content).digest("hex")}
+    return authorizeRequest(req, deps, async (ctx) => {
       bankRights(ctx)
       const previous = await replay(ctx, key, "finance_collection.import", payload)
       const importId = previous ? String(previous.importId) : randomUUID()
@@ -219,11 +234,17 @@ export function registerFinanceTreasuryRoutes(app: FastifyInstance, deps: AppDep
           importId,
         ])
       ).rows[0]?.result
-      return { tenantId: ctx.tenantId, importId, saved }
+      return { tenantId: ctx.tenantId, importId, saved,content:input.content,cfg:null }
     })
+  }
+  app.post(treasury + "import-return", { bodyLimit: 2_200_000 }, async (req, reply) => {
+    const input=parse(z.union([importSchema,z.strictObject({accountId:z.guid(),remoteReportId})]),req.body)
+    const key=commandKey(req.headers["idempotency-key"])
+    const prepared="remoteReportId" in input ? await prepareProviderImport(req,deps,bankRights,input,key) : await prepareUpload(req,input,key)
+    const {tenantId,importId,saved,content}=prepared
     if (saved) return reply.header("etag", '"1"').send(saved)
-    const cfg = requirePilot(tenantId, input.accountId),
-      rows = settlementReport(input.content, cfg.collectorId)
+    const cfg = prepared.cfg ?? requirePilot(tenantId, input.accountId)
+    const rows = "remoteReportId" in input && !cfg.live && !content.trim() ? [] : settlementReport(content,cfg.collectorId)
     const outcomes: { id: string; state: string }[] = []
     for (const row of rows) {
       if (row.type !== "settlement" || !z.guid().safeParse(row.externalReference).success) {
@@ -263,6 +284,12 @@ export function registerFinanceTreasuryRoutes(app: FastifyInstance, deps: AppDep
         p.transaction_details?.net_received_amount == null ||
         providerCents(p.transaction_details.net_received_amount) !== centValue(row.net)
       ) {
+        await authorizeRequest(req, deps, async (ctx) => {
+          bankRights(ctx)
+          await ctx.client.query(`INSERT INTO finance_collection_events(tenant_id,charge_id,source,event_key,outcome)
+            VALUES($1,$2,'report_divergence',$3,'divergent') ON CONFLICT DO NOTHING`,
+            [ctx.tenantId,row.externalReference,importId + ":" + row.id + ":" + row.externalReference])
+        })
         outcomes.push({ id: row.id, state: "divergent" })
         continue
       }
@@ -276,7 +303,7 @@ export function registerFinanceTreasuryRoutes(app: FastifyInstance, deps: AppDep
     await authorizeRequest(req, deps, async (ctx) => {
       bankRights(ctx)
       await ctx.client.query(
-        "UPDATE finance_collection_imports SET result=$3 WHERE tenant_id=$1 AND id=$2 AND result IS NULL",
+        "UPDATE finance_collection_imports SET result=$3,csv_content=NULL WHERE tenant_id=$1 AND id=$2 AND result IS NULL",
         [ctx.tenantId, importId, value],
       )
     })

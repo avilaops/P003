@@ -166,10 +166,11 @@ async function createOperation(context: AuthorizedContext, headers: Headers, inp
       )
       if (existing.rows.length) conflict("Uma parcela já integra outra cobrança agrupada")
       const charged = await client.query(
-        "SELECT FROM finance_collection_items WHERE tenant_id=$1 AND receivable_id=ANY($2::uuid[]) LIMIT 1",
+        `SELECT FROM finance_collection_items WHERE tenant_id=$1 AND receivable_id=ANY($2::uuid[])
+         UNION ALL SELECT FROM finance_collection_batch_items WHERE tenant_id=$1 AND receivable_id=ANY($2::uuid[]) AND released_at IS NULL LIMIT 1`,
         [tenantId, selection.map((item) => item.id)],
       )
-      if (charged.rows.length) conflict("Uma parcela já possui cobrança bancária")
+      if (charged.rows.length) conflict("Uma parcela já possui cobrança bancária ou integra um borderô ativo")
     }
     if (input.kind === "restructure") {
       if (

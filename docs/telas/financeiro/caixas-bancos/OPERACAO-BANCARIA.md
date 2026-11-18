@@ -40,8 +40,22 @@ Para reproduzir o aceite local, informe a URL administrativa de um PostgreSQL de
 
 Para habilitação posterior de uma conta de produção, cadastre um vínculo próprio com `mode: "production"`, credenciais do vendedor e URL de notificações desse ambiente. A ativação exige `enabled: true` no vínculo e `FINANCE_MP_ENABLE_PRODUCTION=true` na API. A tela identifica o ambiente da conta antes da emissão.
 
+## Preparar um borderô
+
+Em **Financeiro • Remessas e retornos**, abra **Preparar ou consultar borderô**. Escolha uma conta bancária ativa, dê uma referência ao lote e selecione os títulos. O ERP preserva cliente, saldo e vencimento de cada título. A conta pode preparar o lote antes de vincular o vendedor do Mercado Pago.
+
+Abra o borderô no histórico para exportar o CSV de conferência interna. Com o vendedor vinculado, escolha o meio de cobrança e confirme a emissão de cada título. O histórico identifica a cobrança, o pagamento e as ocorrências de retorno. O cancelamento exige motivo e libera os títulos enquanto nenhuma emissão tiver começado. Para emitir uma cobrança única de vários pedidos do mesmo cliente, use **Faturamento agrupado**. A geração de remessa CNAB de cobrança depende do convênio e do leiaute contratados.
+
+## Importar um arquivo pronto do Mercado Pago
+
+Selecione a conta vinculada em **Cobranças e retornos**. Clique em **Consultar relatórios no Mercado Pago**, escolha o CSV na lista do vendedor e confirme **Importar arquivo selecionado**. O ERP verifica o vendedor, ambiente, arquivo e valores. Para conferir ocorrências ou divergências, abra o histórico do título no borderô. A seleção repetida reutiliza o registro da importação. O arquivo pode ter até 2 MB e 3.000 linhas de movimentação. Configure as colunas originais do relatório e o separador ponto e vírgula.
+
+A API lista os arquivos disponíveis e baixa o CSV selecionado. Nas contas de teste do Mercado Pago, a lista funciona e os relatórios oficiais são gerados sem movimentações. A coleta no ambiente oficial depende das credenciais da empresa. [Mercado Pago • listar e baixar relatórios](https://www.mercadopago.com.br/developers/pt/docs/reports/account-money/api) • [Mercado Pago • limites da conta de teste](https://www.mercadopago.com.br/developers/pt/docs/reports/account-money/introduction)
+
 ## Conferir extratos e fechar o período
 
 Em **Caixas e bancos**, escolha a conta e importe um OFX em BRL ou um extrato Efí CNAB 240. O cadastro precisa conter o número da conta conforme o extrato, incluindo o dígito quando fornecido. O importador Efí aceita um arquivo de um lote, serviço 04, versão 033 e segmentos E. Ele confere o número de registros e reconcilia o saldo inicial, os movimentos e o saldo final. A emissão de Pix e boleto usa a API do Mercado Pago. Arquivo de remessa de cobrança depende de um leiaute contratado. [Efí • extrato CNAB 240](https://dev.efipay.com.br/pdfelement/Manual_de_procedimentos_Extrato_CNAB_240.pdf)
 
-Selecione a linha do banco e os lançamentos que a compõem. Data e valor iguais geram sugestões. O operador confirma a seleção e justifica diferenças ou exceções. Antes do fechamento, importe o extrato até a data de corte, trate as linhas e vincule os movimentos da conta. O fechamento bloqueia novos movimentos no período, inclusive no PDV. A reabertura exige motivo e começa pelo último período encerrado.
+Na importação, marque **Conciliar correspondências únicas por data e valor** para vincular automaticamente uma linha pendente a um movimento de mesmo valor, sinal, conta e data. Duas linhas ou dois movimentos com os mesmos dados ficam pendentes. Para conciliar um depósito agrupado, selecione a linha e os movimentos que o compõem. Para uma tarifa ou outro movimento que só aparece no banco, selecione a linha, descreva o histórico, escolha a natureza e confirme **Criar movimento e conciliar**. Sem seleção explícita, o ERP aplica a natureza de movimentação da empresa para entrada ou saída.
+
+Antes do fechamento, importe o extrato até a data de corte, confira diferenças e exceções e vincule os movimentos da conta. O fechamento bloqueia novos movimentos no período, inclusive no PDV. A reabertura exige motivo e começa pelo último período encerrado.
