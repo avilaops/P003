@@ -3,6 +3,8 @@ import { createCipheriv,createHash,randomBytes,randomUUID } from "node:crypto"
 
 test("estoque • análise valorizada, Kardex, CSV completo e impressão",async({page,context})=>{
   const tenant="11111111-1111-4111-8111-111111111111",origin=process.env.ERP_TEST_WEB_ORIGIN!
+  await page.route("**/api/erp/me",route=>route.fulfill({json:{tenant:{id:tenant}}}))
+  await page.route("**/api/erp/company",route=>route.fulfill({json:{tenantId:tenant,data:{legalName:"Empresa do relatório de estoque"}}}))
   const iv=randomBytes(12),cipher=createCipheriv("aes-256-gcm",createHash("sha256").update(process.env.ERP_SESSION_SECRET!).digest(),iv)
   cipher.setAAD(Buffer.from("erp-session"))
   const encrypted=Buffer.concat([cipher.update(JSON.stringify({accessToken:"fixture-editor-token",tenantId:tenant,expiresAt:Date.now()+3600000})),cipher.final()])
