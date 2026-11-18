@@ -18,7 +18,7 @@ export async function replay(context: AuthorizedContext, key: string, scope: str
 export async function remember(context: AuthorizedContext, key: string, scope: string, input: unknown, result: unknown) {
   await context.client.query("INSERT INTO domain_commands(tenant_id,auth_subject,command_key,scope,request,result) VALUES($1,$2,$3,$4,$5,$6)", [context.tenantId, context.authSubject, key, scope, input, result])
 }
-export async function record(context: AuthorizedContext, headers: Record<string, string | string[] | undefined>, kind: string, id: string, event: string, details: unknown) {
+export async function record(context: Pick<AuthorizedContext, "client" | "tenantId" | "authSubject">, headers: Record<string, string | string[] | undefined>, kind: string, id: string, event: string, details: unknown) {
   const requestId = typeof headers["x-request-id"] === "string" ? headers["x-request-id"] : null
   await context.client.query("INSERT INTO audit_log(tenant_id,identity_id,action,entity_type,entity_id,request_id,details) VALUES($1,(SELECT id FROM identities WHERE auth_subject=$2),$3,$4,$5,$6,$7)", [context.tenantId, context.authSubject, event, kind, id, requestId, details])
   await context.client.query("INSERT INTO outbox_events(tenant_id,aggregate_type,aggregate_id,event_type,payload) VALUES($1,$2,$3,$4,$5)", [context.tenantId, kind, id, event, details])

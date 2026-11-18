@@ -3,9 +3,9 @@ import { createCipheriv, createHash, randomBytes } from "node:crypto"
 import { createServer } from "node:http"
 import type { PurchaseDetail, ReceiptDetail } from "../src/features/purchasing/purchase-types"
 
-// These responses verify browser/BFF behavior. Rust/PostgreSQL tests own transactional effects.
+// Browser fixtures exercise the BFF. The wallet integration test verifies PostgreSQL effects.
 test.setTimeout(45_000)
-const origin = "http://127.0.0.1:33118"
+const origin = process.env.ERP_TEST_WEB_ORIGIN || "http://127.0.0.1:33118"
 const secret = "danfe-browser-fixture-not-a-real-service-secret"
 const tenant = "11111111-1111-4111-8111-111111111111"
 const orderId = "22222222-2222-4222-8222-222222222222"
@@ -64,6 +64,8 @@ const upstream = createServer(async (request, response) => {
     if (url.pathname === `/api/v1/purchase-orders/${orderId}/receipts`) { response.end(JSON.stringify({ tenantId: tenant, total: receipts.length, data: receipts.map(item => item.data) })); return }
     if (url.pathname === `/api/v1/purchase-orders/${orderId}` && order) { response.setHeader("ETag", `"${order.data.revision}"`); response.end(JSON.stringify({ ...order, canEdit })); return }
     if (url.pathname === `/api/v1/purchase-receipts/${receiptId}` && receipts[0]) { response.end(JSON.stringify(receipts[0])); return }
+    if (url.pathname === "/api/v1/financial-accounts") {response.end(JSON.stringify({data:[{id:orderId,code:"BANCO",name:"Banco"}]}));return}
+    if (url.pathname === "/api/v1/financial-wallet-settings") {response.end(JSON.stringify({tenantId:tenant,categories:[],costCenters:[],data:{interestMonthlyBps:0,penaltyBps:0,graceDays:0,discountLimitBps:10000,paymentApprovalLimit:null}}));return}
     if (url.pathname === "/api/v1/financial-payables") { response.end(JSON.stringify({ tenantId: tenant, canEdit, total: payable ? 1 : 0, data: payable ? [payable.data] : [] })); return }
     if (url.pathname === `/api/v1/financial-payables/${payableId}` && payable) { response.setHeader("ETag", `"${payable.data.revision}"`); response.end(JSON.stringify({ ...payable, canEdit })); return }
     response.statusCode = 404; response.end(JSON.stringify({ title: "Registro não encontrado" }))
@@ -75,7 +77,7 @@ function cookie() {
   const encrypted = Buffer.concat([cipher.update(JSON.stringify({ accessToken: "purchase-fixture-token", tenantId: tenant, expiresAt: Date.now() + 3600_000 })), cipher.final()])
   return { name: "erp_session", value: Buffer.concat([iv, cipher.getAuthTag(), encrypted]).toString("base64url"), url: origin, httpOnly: true, sameSite: "Lax" as const }
 }
-test.beforeAll(async () => { await new Promise<void>(resolve => upstream.listen(33119, "127.0.0.1", resolve)) })
+test.beforeAll(async () => { await new Promise<void>(resolve => upstream.listen(Number(process.env.WALLET_TEST_API_PORT || 33119), "127.0.0.1", resolve)) })
 test.afterAll(async () => { await new Promise<void>(resolve => upstream.close(() => resolve())) })
 test.beforeEach(() => { order = null; payable = null; receipts = []; canEdit = true; permissions = ["purchasing.receipts.create", "inventory.stock.manage", "finance.payables.originate"]; plans = []; calls = []; failures = []; requests = [] })
 test.afterEach(() => { expect(failures).toEqual([]); expect(plans).toEqual([]) })
@@ -131,7 +133,8 @@ test("browser creates and edits a purchase, receives a partial delivery and reco
   await expect(page.getByText("Situação: Recebido parcialmente", { exact: true })).toBeVisible()
   expect(calls[3]).toMatchObject({ revision: '"3"', body: { reference: "REC-001", occurredOn: "2026-10-28", items: [{ productId, quantity: "1.000000" }] } })
   await page.getByRole("link", { name: "Consultar conta a pagar", exact: true }).click()
-  await page.getByLabel("Valor do pagamento", { exact: true }).filter({ visible: true }).fill("3.00")
+  await page.getByLabel("Principal pago", { exact: true }).filter({ visible: true }).fill("3.00")
+  await page.getByLabel("Conta de saída").selectOption(orderId)
   await page.getByLabel("Data do pagamento", { exact: true }).filter({ visible: true }).fill("2026-10-28")
   await page.getByLabel("Referência do pagamento", { exact: true }).filter({ visible: true }).fill("PAG-001")
   const payment: Payment = { id: paymentId, kind: "payment", amount: "3.00", method: "bank_transfer", reference: "PAG-001", occurredOn: "2026-10-28", reversesId: null }
@@ -196,7 +199,7 @@ test("receipt permissions are independent from purchase editing and readonly pay
   payable = initialPayable()
   await page.goto(`/financeiro/contas-pagar/${payableId}`)
   await expect(page.getByText("Somente consulta.", { exact: true })).toBeVisible()
-  await expect(page.getByLabel("Valor do pagamento", { exact: true }).filter({ visible: true })).toHaveCount(0)
+  await expect(page.getByLabel("Principal pago", { exact: true }).filter({ visible: true })).toHaveCount(0)
   await page.goto("/compras/pedidos/novo")
   await expect(page.getByRole("status")).toContainText("Somente consulta")
   await expect(page.getByLabel("Vencimento da compra", { exact: true }).filter({ visible: true })).toHaveCount(0)

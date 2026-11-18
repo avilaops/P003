@@ -1,3 +1,4 @@
+import { startPayrollWorker } from "./modules/finance-wallets/payroll.js"
 import { buildApp } from "./app.js"
 import { loadConfiguration } from "./platform/config.js"
 import { PostgresPool } from "./platform/database.js"
@@ -12,6 +13,9 @@ const outgoingNfse = configuration.fiscalEngine ? (() => {
 })() : undefined
 const app = buildApp({ pool, userinfoUrl: configuration.userinfoUrl, mcpResource: configuration.mcpResource, ...(outgoingNfse ? { outgoingNfse } : {}) })
 app.addHook("onClose", async () => { await pool.close() })
+const workers = process.env.ERP_BACKGROUND_WORKERS_ENABLED ?? "true"
+if (workers !== "false" && workers !== "true") throw new Error("ERP_BACKGROUND_WORKERS_ENABLED must be true or false")
+if (workers === "true") startPayrollWorker(app, pool)
 const shutdown = () => { void app.close().catch(() => { process.exitCode = 1 }) }
 process.once("SIGTERM", shutdown)
 process.once("SIGINT", shutdown)

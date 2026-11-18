@@ -1,5 +1,6 @@
 "use client"
 
+import { WalletSettingsPanel } from "./wallet-settings"
 import { erpFetch } from "@/lib/api/client"
 
 import Link from "next/link"
@@ -64,6 +65,6 @@ export function FinancialSettings() {
       </>}
     </section>
     <section className="space-y-4" aria-labelledby="financial-catalogs-title"><h2 id="financial-catalogs-title" className="text-lg font-semibold">Cadastros financeiros</h2><label className="grid max-w-md gap-2 text-sm">Buscar configurações financeiras<Input type="search" value={query} onChange={event => setQuery(event.target.value)} maxLength={120} /></label><div className="grid gap-4 lg:grid-cols-3">{filtered.map(kind => <Catalog key={kind} kind={kind} />)}</div>{!filtered.length && <p role="status">Nenhuma configuração encontrada.</p>}</section>
-    <section className="form-section space-y-2"><h2 className="font-semibold">Recursos ainda indisponíveis</h2><p className="text-sm text-muted-foreground">Condições de parcelamento, centros de custos e regras de comissão ainda não possuem configuração operacional nesta tela. Contas e categorias não calculam saldos; formas cadastradas e seus prazos são referências e ainda não são vinculados automaticamente às baixas.</p></section>
+    <WalletSettingsPanel/>
   </div>
 }
