@@ -63,10 +63,18 @@ test("stock and Kardex HTTP contracts on PostgreSQL", { skip: !adminUrl }, async
     assert.deepEqual(await snapshot(), ["10.000000", "0.000000", "10.000000"])
     await transition("confirm", 2)
     assert.deepEqual(await snapshot(), ["10.000000", "3.000000", "7.000000"])
+    const demand = (await get("/movements?productId="+id,tenant,"editor")).json().openOrders
+    assert.equal(demand.reserved,"3.000000")
+    assert.equal(demand.data[0].id,order)
+    assert.equal(demand.data[0].status,"confirmed")
+    assert.deepEqual((await kardex(id)).json().openOrders.data,[])
     assert.equal((await post({ ...input, direction: "issue", quantity: "7.000001" })).statusCode, 409)
     await transition("complete", 3)
     assert.deepEqual(await snapshot(), ["7.000000", "0.000000", "7.000000"])
     const issued = (await kardex(id)).json().data[0]
+    const issues = (await kardex(id,"&direction=issue")).json()
+    assert.equal(issues.total,1)
+    assert.deepEqual(issues.summary,{opening:"0.000000",receipts:"10.000000",issues:"3.000000",closing:"7.000000"})
     assert.equal(issued.sourceOrderId, order)
     assert.equal(issued.canReverse, false)
     assert.equal((await post({ ...input, quantity: "3.000000", reversesId: issued.id })).statusCode, 409)

@@ -23,7 +23,8 @@ async function validateReversal(context: AuthorizedContext, input: z.output<type
   const { client, tenantId } = context
   const row = (await client.query(`
     SELECT m.product_id,m.direction,m.quantity_micros,m.reverses_id,m.transfer_id,
-      coalesce(m.source_order_id,m.source_purchase_receipt_id,m.production_order_id,m.source_pos_sale_id,w.case_id)::text AS document,origin.inventory_count_id,origin.return_source_id,
+      coalesce(m.source_order_id,m.source_purchase_receipt_id,m.production_order_id,m.source_pos_sale_id,w.case_id)::text AS document,
+      coalesce(m.inventory_count_id::text,origin.inventory_count_id) AS inventory_count_id,origin.return_source_id,
       EXISTS (SELECT 1 FROM stock_movements r WHERE r.tenant_id=m.tenant_id AND r.reverses_id=m.id) AS reversed
     FROM stock_movements m ${movementOriginJoins}
     WHERE m.tenant_id=$1 AND m.id=$2

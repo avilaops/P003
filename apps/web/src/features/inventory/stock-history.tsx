@@ -13,9 +13,9 @@ import { historyPath, manualPath, pageOffset, pageSize, stockUrl, textLink, type
 import { StockMovementForm } from "./stock-movement-form"
 
 const origins = [
-  ["sourceOrderId", "Pedido"], ["sourcePurchaseReceiptId", "Recebimento"], ["productionOrderId", "Ordem de produção"],
-  ["sourcePosSaleId", "Venda no PDV"], ["sourceWarrantyCaseId", "Garantia"], ["sourceInventoryCountId", "Inventário"],
-  ["returnSourceId", "Origem da devolução"], ["reversesId", "Estorno do movimento"],
+  ["sourceOrderId", "Pedido", "/vendas/pedidos/"], ["sourcePurchaseReceiptId", "Recebimento", "/compras/recebimentos/"],
+  ["productionOrderId", "Ordem de produção", "/estoque/ordens-producao/"], ["sourcePosSaleId", "Venda no PDV", "/vendas/pdv/historico?venda="],
+  ["sourceWarrantyCaseId", "Garantia", "/vendas/garantias/"], ["sourceInventoryCountId", "Inventário", "/estoque/inventarios/"],
 ] as const
 
 export function StockHistory({ productId, tenant, manual }: { productId: string; tenant: string; manual: boolean }) {
@@ -26,18 +26,19 @@ export function StockHistory({ productId, tenant, manual }: { productId: string;
   const listQuery = { tenant, q: params.get("q"), offset: pageOffset(params.get("offset")), warehouseId }
   const startDate = params.get("startDate") || "", endDate = params.get("endDate") || ""
   const offset = pageOffset(params.get("movementOffset"))
-  const query = stockUrl("/api/erp/stock/movements", { productId, startDate, endDate, offset, limit: pageSize, warehouseId })
+  const direction = params.get("direction") || "", orderOffset = pageOffset(params.get("orderOffset"))
+  const query = stockUrl("/api/erp/stock/movements", { productId, startDate, endDate, offset, limit: pageSize, warehouseId, direction, orderOffset })
   const resource = useResource<History>(query)
   const history = resource.value?.tenantId === tenant && resource.value.product?.productId === productId.toLowerCase() ? resource.value : null
   const [reversal, setReversal] = useState<Movement | null>(null), [locked, setLocked] = useState(false)
   const [notice, setNotice] = useState("")
   const confirmNavigation = useConfirmNavigation()
-  const details = { ...listQuery, productId, sku: history?.product.sku || "", from: listPath, startDate, endDate, movementOffset: offset }
+  const details = { ...listQuery, productId, sku: history?.product.sku || "", from: listPath, startDate, endDate, movementOffset: offset, direction, orderOffset }
   const back = stockUrl(listPath, { ...listQuery, focus: productId })
-  function filter(startDate: string, endDate: string, movementOffset: number) {
+  function filter(startDate: string, endDate: string, movementOffset: number, type = direction) {
     if (locked || !confirmNavigation()) return
     setReversal(null); setNotice("")
-    window.history.pushState(null, "", stockUrl(path, { ...details, startDate, endDate, movementOffset }))
+    window.history.pushState(null, "", stockUrl(path, { ...details, startDate, endDate, movementOffset, direction:type }))
   }
   return <div className="workspace-page-frame">
     <PageHeader title={manual ? "Novo lançamento de estoque" : "Lançamentos de estoque"} back={{ href: back, label: "Voltar à consulta" }} />
@@ -47,6 +48,7 @@ export function StockHistory({ productId, tenant, manual }: { productId: string;
       <section aria-label="Movimentos do produto" className="form-section min-w-0 space-y-4">
         <h2 className="break-words font-semibold">{history.product.name}</h2>
         <p className="break-words">SKU {history.product.sku} • Unidade {history.product.unit}</p>
+        <GuardedLink className={textLink} href={"/compras/sugestoes/"+productId}>Consultar reposição</GuardedLink>
         {warehouseId && <p>Depósito • {history.warehouses?.find(w=>w.id===warehouseId)?.name || warehouseId}</p>}
         {!history.canEdit && <p>Somente consulta. Você não pode movimentar o estoque.</p>}
         {!manual && history.canEdit && <GuardedLink className={textLink} href={stockUrl(manualPath, details)}>Novo lançamento</GuardedLink>}
@@ -57,16 +59,26 @@ export function StockHistory({ productId, tenant, manual }: { productId: string;
         <form className="flex flex-wrap items-end gap-3" onSubmit={event => {
           event.preventDefault()
           const data = new FormData(event.currentTarget)
-          filter(String(data.get("startDate")), String(data.get("endDate")), 0)
-        }} key={startDate + endDate}>
+          filter(String(data.get("startDate")), String(data.get("endDate")), 0,String(data.get("direction")||""))
+        }} key={startDate + endDate + direction}>
+          <label>Tipo de movimento<select className="block min-h-9 rounded border px-2" name="direction" defaultValue={direction} disabled={locked}>
+            <option value="">Todos</option><option value="receipt">Entrada</option><option value="issue">Saída</option></select></label>
           <label>Data inicial<Input type="date" defaultValue={startDate} name="startDate" disabled={locked} /></label>
           <label>Data final<Input type="date" defaultValue={endDate} name="endDate" disabled={locked} /></label>
           <Button type="submit" variant="outline" disabled={locked}>Aplicar período</Button>
         </form>
+        {direction && <p>Os totais incluem todas as entradas e saídas do período.</p>}
         <dl className="grid grid-cols-2 gap-2 lg:grid-cols-4">
           {([["Saldo inicial", "opening"], ["Entradas", "receipts"], ["Saídas", "issues"], ["Saldo final", "closing"]] as const).map(([label, key]) =>
             <div key={key} className="min-w-0 rounded border p-2"><dt className="text-sm">{label}</dt><dd className="font-medium tabular-nums [overflow-wrap:anywhere]">{commercialQuantity(history.summary[key])} {history.product.unit}</dd></div>)}
         </dl>
+        {history.openOrders && <section className="space-y-2" aria-label="Reservas atuais">
+          <h3 className="font-medium">Reservado atualmente • {commercialQuantity(history.openOrders.reserved)} {history.product.unit}</h3>
+          {history.openOrders.data.length>0 && <ul>{history.openOrders.data.map(o=><li key={o.id}><GuardedLink className={textLink}
+            href={"/vendas/pedidos/"+o.id}>Pedido {o.number}</GuardedLink> • {o.status==="confirmed"?"Reservado":"Aceito"} • {commercialQuantity(o.quantity)} {history.product.unit}</li>)}</ul>}
+          {history.openOrders.total>25 && <Pagination offset={orderOffset} total={history.openOrders.total} pageSize={25} maxOffset={100000}
+            onOffsetChange={value=>{if(!locked && confirmNavigation()) window.history.pushState(null,"",stockUrl(path,{...details,orderOffset:value}))}}/>}
+        </section>}
         <h3 className="font-medium">Histórico registrado</h3>
         {history.data.length ? <ol className="divide-y border-y">{history.data.map(movement => <li key={movement.id} className="min-w-0 space-y-1 py-3 [overflow-wrap:anywhere]">
           <strong>{movement.direction === "receipt" ? "Entrada" : "Saída"} de {commercialQuantity(movement.quantity)} {history.product.unit}</strong>
@@ -75,7 +87,10 @@ export function StockHistory({ productId, tenant, manual }: { productId: string;
           {movement.transferId && <GuardedLink className={textLink} href={"/estoque/transferencias?documento="+movement.transferId}>Transferência • {movement.transferId}</GuardedLink>}
           <time dateTime={movement.occurredAt}>{new Date(movement.occurredAt).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" })}</time>
           <p className="text-xs text-muted-foreground">ID • {movement.id}</p>
-          {origins.map(([key, label]) => movement[key] && <p key={key}>{label} • {movement[key]}</p>)}
+          {origins.map(([key,label,base]) => movement[key] && <p key={key}>
+            <GuardedLink className={textLink} href={base+encodeURIComponent(movement[key])}>{label} • {movement[key]}</GuardedLink></p>)}
+          {movement.returnSourceId && <p>Origem da devolução • {movement.returnSourceId}</p>}
+          {movement.reversesId && <p>Estorno do movimento • {movement.reversesId}</p>}
           {manual && history.canEdit && movement.canReverse && <Button variant="outline" disabled={locked || history.product.status !== "active"}
             onClick={() => { if (confirmNavigation()) { setReversal(movement); setNotice("") } }}>Preparar estorno de {commercialQuantity(movement.quantity)}</Button>}
         </li>)}</ol> : <p>{history.total ? "Nenhum movimento nesta página." : startDate || endDate ? "Nenhum movimento registrado neste período." : "Nenhum movimento registrado para este produto."}</p>}

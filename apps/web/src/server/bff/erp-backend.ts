@@ -7,6 +7,9 @@ export type MigratedModule = "preferences" | "registrations" | "sales" | "report
 export type BackendEnvironment = { ERP_TYPESCRIPT_API_URL?: string | undefined; ERP_TYPESCRIPT_MODULES?: string | undefined }
 const uuid = "[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}"
 const routes: { module: MigratedModule; methods: readonly string[]; path: RegExp }[] = [
+  { module: "inventory", methods: ["GET","POST"], path: /^\/inventory-counts$/ },
+  { module: "inventory", methods: ["GET"], path: new RegExp(`^/inventory-counts/${uuid}$`, "i") },
+  { module: "inventory", methods: ["POST"], path: new RegExp(`^/inventory-counts/${uuid}/(?:lines|approve|cancel)$`, "i") },
   { module: "inventory", methods: ["GET","POST"], path: /^\/warehouses$/ },
   { module: "inventory", methods: ["GET","PUT"], path: new RegExp(`^/warehouses/${uuid}$`, "i") },
   { module: "inventory", methods: ["GET"], path: /^\/stock$/ },

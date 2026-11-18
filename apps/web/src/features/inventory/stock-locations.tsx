@@ -28,10 +28,10 @@ export function StockLocations({tenant}: {tenant:string}) {
         </li>)}</ul> : <p>O depósito Principal será criado ao configurar o estoque ou registrar o primeiro saldo.</p>}
         <Link href="/estoque/depositos" className={textLink}>Consultar cadastro de depósitos</Link>
       </section>
-      {data.canEdit && <SettingsForm key={data.revision} config={data} saved={()=>updated("Parâmetros de depósito salvos.")} />}
+      {data.canEdit && <SettingsForm key={"settings-"+data.revision} config={data} saved={()=>updated("Parâmetros de depósito salvos.")} />}
       {data.enabled && data.canEdit && (data.warehouses.length>=2 ? <StockTransferForm config={data} saved={()=>updated("Transferência registrada.")} /> :
         <p>Cadastre um segundo depósito para transferir produtos.</p>)}
-      <TransferList key={refresh} config={data} saved={()=>updated("Transferência estornada.")} />
+      <TransferList key={"transfers-"+refresh} config={data} saved={()=>updated("Transferência estornada.")} />
     </> : settings.loading ? <p role="status">Consultando depósitos…</p> :
       <div role="alert">{settings.error || "Recarregue os depósitos da empresa ativa."} <Button onClick={settings.reload}>Recarregar</Button></div>}
   </div>
@@ -55,6 +55,6 @@ function SettingsForm({config,saved}:{config:LocationSettings;saved:()=>void}) {
           {config.warehouses.map(w=><option key={w.id} value={w.id}>{w.code} • {w.name}</option>)}</select></label>)}</div>}
     </fieldset>
     {command.error && <p role="alert">{command.error}</p>}
-    <Button disabled={command.busy}>{command.uncertain ? "Repetir confirmação" : "Salvar parâmetros"}</Button>
+    <Button type="submit" disabled={command.busy}>{command.uncertain ? "Repetir confirmação" : "Salvar parâmetros"}</Button>
   </form>
 }

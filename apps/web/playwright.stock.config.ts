@@ -4,8 +4,8 @@ const origin = process.env.ERP_TEST_WEB_ORIGIN || "http://127.0.0.1:34242"
 
 export default defineConfig({
   testDir: "./tests",
-  testMatch: ["stock-persistence.spec.ts", "catalog-navigation-ui.spec.ts", "frontend-states-ui.spec.ts"],
-  grep: /estoque|resposta perdida/,
+  testMatch: ["stock-persistence.spec.ts", "inventory-counts-ui.spec.ts", "catalog-navigation-ui.spec.ts", "frontend-states-ui.spec.ts", "supply-ui.spec.ts"],
+  grep: /estoque|resposta perdida|supply-ui\.spec/iu,
   workers: 1,
   retries: 0,
   timeout: 120_000,

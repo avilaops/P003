@@ -1,6 +1,8 @@
 "use client"
 
 import { useState } from "react"
+import { useSearchParams } from "next/navigation"
+import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { quantity, useCommand, useResource } from "@/hooks/use-operation"
@@ -47,9 +49,11 @@ export function StockTransferForm({config,saved}:{config:LocationSettings;saved:
 }
 
 export function TransferList({config,saved}:{config:LocationSettings;saved:()=>void}) {
-  const [offset,setOffset]=useState(0),[id,setId]=useState("")
-  const list=useResource<{tenantId:string;data:TransferRecord[];hasMore:boolean}>(stockUrl(endpoint,{offset,limit:20}))
+  const selected=useSearchParams().get("documento")
+  const [offset,setOffset]=useState(0),[id,setId]=useState(selected||"")
+  const list=useResource<{tenantId:string;data:TransferRecord[];hasMore:boolean}>(stockUrl(endpoint,{offset,limit:20,id:selected}))
   return <section className="form-section space-y-3"><h2 className="font-semibold">Transferências registradas</h2>
+    {selected && <Link href="/estoque/transferencias" className="text-primary underline">Ver todas as transferências</Link>}
     {list.loading ? <p role="status">Consultando transferências…</p> : list.value?.tenantId!==config.tenantId ?
       <div role="alert">{list.error||"Consulta indisponível"} <Button onClick={list.reload}>Recarregar</Button></div> :
       <><ul className="divide-y">{list.value.data.map(t=><li key={t.id} className="space-y-2 py-2">
@@ -75,6 +79,6 @@ function TransferDetails({record,config,saved}:{record:TransferRecord;config:Loc
       const result=await cmd.send<{tenantId:string}>(endpoint+"/"+record.id+"/reverse",config.tenantId,{reason},"","POST",r=>r.tenantId===config.tenantId)
       if(result)saved()
     }}><label>Motivo do estorno<Input required minLength={3} maxLength={500} value={reason} disabled={cmd.busy||cmd.uncertain} onChange={e=>setReason(e.target.value)} /></label>
-      {cmd.error&&<p role="alert">{cmd.error}</p>}<Button variant="outline" disabled={cmd.busy}>{cmd.uncertain?"Repetir confirmação":"Estornar transferência"}</Button></form>}
+      {cmd.error&&<p role="alert">{cmd.error}</p>}<Button type="submit" variant="outline" disabled={cmd.busy}>{cmd.uncertain?"Repetir confirmação":"Estornar transferência"}</Button></form>}
   </div>
 }

@@ -68,7 +68,7 @@ export async function forwardErp(request: Request, resource: string) {
   const financialAccountEntriesResource = resource === "/financial-account-entries" && ["GET", "POST"].includes(request.method)
   const financialAccountTransfersResource = resource === "/financial-account-transfers" && request.method === "POST"
   const inventoryCountResource = request.method === "GET" && /^\/inventory-counts(?:\/[a-f0-9-]{36})?$/.test(resource)
-    || request.method === "POST" && (/^\/inventory-counts$/.test(resource) || /^\/inventory-counts\/[a-f0-9-]{36}\/(?:lines|approve)$/.test(resource))
+    || request.method === "POST" && (/^\/inventory-counts$/.test(resource) || /^\/inventory-counts\/[a-f0-9-]{36}\/(?:lines|approve|cancel)$/.test(resource))
   const serviceKeyResource = /^\/integrations\/service-keys(?:\/[a-f0-9-]{36})?$/i.test(resource)
   const productCatalogResource = /^\/products\/[a-f0-9-]{36}\/catalog$/i.test(resource) && ["GET", "PUT"].includes(request.method)
   const productFinishesResource = resource === "/products/finishes"
@@ -105,7 +105,8 @@ export async function forwardErp(request: Request, resource: string) {
     if (orderDocumentResource) headers.set("Accept", "application/pdf")
     let body: string | undefined
     const bodylessProductConfirm = productTransferResource && resource.endsWith("/confirm")
-    if ((request.method === "PUT" || request.method === "POST") && !bodylessProductConfirm) {
+    const bodylessCountApproval = inventoryCountResource && resource.endsWith("/approve") && !request.body
+    if ((request.method === "PUT" || request.method === "POST") && !bodylessProductConfirm && !bodylessCountApproval) {
       if (!request.headers.get("content-type")?.startsWith("application/json")) return Response.json({ title: "Envie JSON" }, { status: 415 })
       const reader = request.body?.getReader()
       const chunks: Uint8Array[] = []
@@ -207,8 +208,9 @@ export async function forwardErp(request: Request, resource: string) {
     }
     if (stockLocationPath(resource,request.method)) {
       const params = new URL(request.url).searchParams
+      const allowed = resource === "/stock/replenishment" ? ["offset","limit","mode","q"] : resource === "/stock/transfers" ? ["offset","limit","id"] : []
       for (const [key,value] of params) {
-        if (resource !== "/stock/transfers" || request.method !== "GET" || !["offset","limit"].includes(key) || params.getAll(key).length !== 1) return Response.json({title: "Filtro inválido"}, {status: 400})
+        if (request.method !== "GET" || !allowed.includes(key) || params.getAll(key).length !== 1) return Response.json({title: "Filtro inválido"}, {status: 400})
         upstream.searchParams.set(key,value)
       }
     }
@@ -217,6 +219,7 @@ export async function forwardErp(request: Request, resource: string) {
       const allowed = dashboardResource ? ["period"] : auditResource ? ["q", "action", "entity", "startDate", "endDate", "before"] : resource === "/system/files" ? ["q", "origin", "status", "offset", "limit"] : purchaseResource ? purchaseCollection ? ["offset", "limit"] : [] : financialAccountEntriesResource ? ["accountId", "offset", "limit"] : inventoryCountResource ? ["offset", "limit"] : resource === "/stock/movements" ? (request.method === "GET" ? ["productId", "startDate", "endDate", "offset", "limit"] : []) : resource === "/products/export" ? ["q", "status"] : ["/parties", "/staff"].includes(resource) ? ["q", "status", "role", "offset", "limit"] : resource === "/orders" ? ["q", "status", "sort", "offset", "limit"] : resource === "/receivables" ? ["offset", "limit"] : ["q", "status", "offset", "limit"]
       if (resource === "/products" || resource === "/stock") allowed.push("category_id")
       if (request.method === "GET" && (resource === "/stock" || resource === "/stock/movements")) allowed.push("warehouseId")
+      if (request.method === "GET" && resource === "/stock/movements") allowed.push("direction","orderOffset")
       for (const [key, value] of query) {
         if (!allowed.includes(key) || query.getAll(key).length !== 1) return Response.json({ title: "Filtro inválido" }, { status: 400 })
         upstream.searchParams.set(key, value)

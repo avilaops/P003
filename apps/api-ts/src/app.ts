@@ -2,6 +2,7 @@ import Fastify, { type FastifyInstance } from "fastify"
 import { randomUUID } from "node:crypto"
 
 import { registerLocationRoutes } from "./modules/inventory/location-routes.js"
+import { registerCountRoutes } from "./modules/inventory/count-routes.js"
 import { registerStockRoutes } from "./modules/inventory/routes.js"
 import { registerPartyRoutes } from "./modules/parties/routes.js"
 import { registerDashboardRoutes } from "./modules/dashboard/routes.js"
@@ -79,6 +80,7 @@ export function buildApp(_dependencies: AppDependencies): FastifyInstance {
   })
   registerStockRoutes(app, _dependencies)
   registerLocationRoutes(app, _dependencies)
+  registerCountRoutes(app, _dependencies)
   registerPartyRoutes(app, _dependencies)
   registerDashboardRoutes(app, _dependencies)
   registerReportRoutes(app, _dependencies)

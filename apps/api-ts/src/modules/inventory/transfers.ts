@@ -11,7 +11,7 @@ const reasonInput = z.string().trim().min(3).max(500)
 const transferInput = z.strictObject({ fromId: normalizedDatabaseId, toId: normalizedDatabaseId, reason: reasonInput,
   items: z.array(z.strictObject({ productId: normalizedDatabaseId, quantity: z.string() })).min(1).max(100) })
 const reverseInput = z.strictObject({ reason: reasonInput })
-const pageInput = z.strictObject({ offset: queryInteger(0, 100_000).default(0), limit: queryInteger(1, 100).default(25) })
+const pageInput = z.strictObject({ id: normalizedDatabaseId.optional(), offset: queryInteger(0, 100_000).default(0), limit: queryInteger(1, 100).default(25) })
 type Line = { productId: string; quantity: string; issueId?: string; receiptId?: string }
 type Transfer = { fromId: string; toId: string; reason: string; items: Line[] }
 type Headers = Record<string, string | string[] | undefined>
@@ -27,7 +27,7 @@ export async function listTransfers({ client, tenantId }: AuthorizedContext, que
     FROM stock_transfers t JOIN warehouses o ON (o.tenant_id,o.id)=(t.tenant_id,t.from_id)
     JOIN warehouses d ON (d.tenant_id,d.id)=(t.tenant_id,t.to_id)
     LEFT JOIN stock_transfers r ON (r.tenant_id,r.reverses_id)=(t.tenant_id,t.id)
-    WHERE t.tenant_id=$1 ORDER BY t.created_at DESC,t.id DESC LIMIT $2 OFFSET $3`, [tenantId, limit+1, offset])
+    WHERE t.tenant_id=$1 AND ($4::uuid IS NULL OR t.id=$4) ORDER BY t.created_at DESC,t.id DESC LIMIT $2 OFFSET $3`, [tenantId, limit+1, offset,page.data.id])
   return { tenantId, data: rows.rows.slice(0,limit), hasMore: rows.rows.length>limit, offset, limit }
 }
 

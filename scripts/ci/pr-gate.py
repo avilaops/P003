@@ -44,7 +44,7 @@ def native_api_required(paths):
                         "migrations/", "docs/", "architecture/", "packages/", "scripts/fiscal/",
                         "scripts/deploy/", "scripts/contracts/published/")
     platform_files = {
-        "pnpm-lock.yaml", "pnpm-workspace.yaml", "package.json", "deploy/web.Dockerfile", "deploy/CI-CD.md",
+        "pnpm-lock.yaml", "pnpm-workspace.yaml", "package.json", "deploy/web.Dockerfile", "deploy/CI-CD.md", "deploy/README.md",
         "deploy/migrate-release.py", "deploy/production-deploy.sh", "deploy/compose.yaml",
         "deploy/fiscal-compose.yaml", "deploy/api-ts.env.example", "scripts/ci/pr-gate.py",
         "scripts/ci/published-components.py", "scripts/ci/test_pr_gate.py",

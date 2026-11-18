@@ -5,7 +5,7 @@ import { buildApp } from "../src/app.js"
 import { PgClientAdapter } from "../src/platform/database.js"
 import { runMigrations } from "../src/platform/migrations.js"
 
-export async function stockFixture(adminUrl: string) {
+export async function stockFixture(adminUrl: string, migrationsDirectory = fileURLToPath(new URL("../../../migrations/", import.meta.url))) {
   const unique = randomUUID().replaceAll("-", ""), database = "stock_test_" + unique, role = "stock_app_" + unique
   const tenant = "11111111-1111-4111-8111-111111111111", otherTenant = randomUUID()
   const admin = new Pool({ connectionString: adminUrl })
@@ -35,7 +35,7 @@ export async function stockFixture(adminUrl: string) {
   }
   try {
     await admin.query(`CREATE DATABASE ${database}`)
-    await runMigrations(seed, { directory: fileURLToPath(new URL("../../../migrations/", import.meta.url)) })
+    await runMigrations(seed, { directory: migrationsDirectory })
     await seed.query(`CREATE ROLE ${role} NOLOGIN NOSUPERUSER NOBYPASSRLS`)
     await seed.query(`GRANT USAGE ON SCHEMA public TO ${role};
       GRANT SELECT,INSERT,UPDATE ON ALL TABLES IN SCHEMA public TO ${role};

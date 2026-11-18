@@ -9,6 +9,8 @@ import { activeStockLocations } from "./locations.js"
 const historyQuery = z.strictObject({
   productId: databaseId,
   warehouseId: databaseId.optional(),
+  direction: z.enum(["receipt","issue"]).optional(),
+  orderOffset: queryInteger(0,100_000).default(0),
   startDate: z.string().optional(),
   endDate: z.string().optional(),
   offset: queryInteger(0, 100_000).default(0),
@@ -85,7 +87,7 @@ export function movement(row: Record<string, unknown>) {
 export async function history(context: AuthorizedContext, query: unknown) {
   const parsed = historyQuery.safeParse(query)
   if (!parsed.success) throw new Problem(422, "invalid_input", "Filtros de movimentos inválidos")
-  const { productId, startDate, endDate, offset, limit, warehouseId } = parsed.data
+  const { productId, startDate, endDate, offset, limit, warehouseId, direction, orderOffset } = parsed.data
   await verifyLocation(context, warehouseId)
   if (startDate !== undefined) validateDate(startDate)
   if (endDate !== undefined) validateDate(endDate)
@@ -97,7 +99,7 @@ export async function history(context: AuthorizedContext, query: unknown) {
       SELECT coalesce($3::date::timestamp AT TIME ZONE 'America/Sao_Paulo','-infinity') AS since,
         coalesce(($4::date + 1)::timestamp AT TIME ZONE 'America/Sao_Paulo','infinity') AS until
     ), totals AS (
-      SELECT count(*) FILTER (WHERE created_at < until) AS total,
+      SELECT count(*) FILTER (WHERE created_at < until AND ($8::text IS NULL OR direction=$8)) AS total,
         coalesce(sum(quantity_micros) FILTER (WHERE direction='receipt' AND created_at < until AND ($7::uuid IS NOT NULL OR transfer_id IS NULL)),0) AS receipts,
         coalesce(sum(quantity_micros) FILTER (WHERE direction='issue' AND created_at < until AND ($7::uuid IS NOT NULL OR transfer_id IS NULL)),0) AS issues,
         coalesce(sum(CASE direction WHEN 'receipt' THEN quantity_micros ELSE -quantity_micros END)
@@ -107,11 +109,12 @@ export async function history(context: AuthorizedContext, query: unknown) {
     ), page AS (
       SELECT m.*, ${occurredAtSql} AS occurred_at FROM stock_movements m CROSS JOIN bounds
       WHERE tenant_id=$1 AND product_id=$2 AND created_at >= since AND created_at < until AND ($7::uuid IS NULL OR warehouse_id=$7)
+        AND ($8::text IS NULL OR direction=$8)
       ORDER BY created_at DESC,id DESC LIMIT $5 OFFSET $6
     )
     SELECT p.id AS selected_id,p.name,p.sku,p.unit,p.status,totals.*,
       coalesce(CASE WHEN $7::uuid IS NULL THEN b.quantity_micros ELSE local.quantity_micros END,0)-totals.later AS closing,
-      m.*,w.case_id,origin.inventory_count_id,origin.return_source_id,
+      m.*,w.case_id,coalesce(m.inventory_count_id::text,origin.inventory_count_id) AS inventory_count_id,origin.return_source_id,
       EXISTS (SELECT 1 FROM stock_movements r WHERE r.tenant_id=m.tenant_id AND r.reverses_id=m.id) AS reversed
     FROM products p CROSS JOIN totals
     LEFT JOIN stock_balances b ON b.tenant_id=p.tenant_id AND b.product_id=p.id
@@ -119,15 +122,30 @@ export async function history(context: AuthorizedContext, query: unknown) {
     LEFT JOIN page m ON true
     ${movementOriginJoins}
     WHERE p.tenant_id=$1 AND p.id=$2 ORDER BY m.created_at DESC,m.id DESC
-  `, [context.tenantId, productId, startDate, endDate, limit, offset, warehouseId])
+  `, [context.tenantId, productId, startDate, endDate, limit, offset, warehouseId, direction])
   const row = result.rows[0]
   if (!row) throw notFound()
   const closing = BigInt(String(row.closing)), receipts = BigInt(String(row.receipts)), issues = BigInt(String(row.issues))
   const opening = closing - receipts + issues
   if (opening < 0n || closing < 0n) throw new Problem(500, "internal_error", "Saldo histórico inconsistente")
+  const orders = await context.client.query(`
+    WITH demand AS (
+      SELECT o.id,o.number,o.status,l.quantity_micros FROM sales_order_lines l
+      JOIN sales_orders o ON (o.tenant_id,o.id)=(l.tenant_id,l.order_id)
+      LEFT JOIN stock_location_settings s ON s.tenant_id=l.tenant_id
+      WHERE l.tenant_id=$1 AND l.product_id=$2 AND o.status IN ('accepted','confirmed')
+        AND ($3::uuid IS NULL OR coalesce(l.warehouse_id,CASE WHEN o.status='accepted' THEN s.sales_id ELSE s.opening_id END)=$3)
+    ), page AS (SELECT * FROM demand WHERE $4 ORDER BY number,id LIMIT 25 OFFSET $5)
+    SELECT totals.*,p.id,p.number,p.status,p.quantity_micros FROM
+      (SELECT count(*) AS total,coalesce(sum(quantity_micros) FILTER (WHERE status='confirmed'),0) AS reserved FROM demand) totals
+    LEFT JOIN page p ON true ORDER BY p.number,p.id`,
+    [context.tenantId,productId,warehouseId,context.permissions.includes("sales.orders.read"),orderOffset])
+  const canReadOrders = context.permissions.includes("sales.orders.read")
   return { tenantId: context.tenantId, canEdit: context.permissions.includes("inventory.stock.manage"),
     product: { productId: row.selected_id, name: row.name, sku: row.sku, unit: row.unit, status: row.status },
     warehouses: await activeStockLocations(context),
+    openOrders: {reserved:amount(orders.rows[0]!.reserved),offset:orderOffset,total:canReadOrders ? Number(orders.rows[0]!.total) : 0,
+      data: orders.rows.filter(order=>order.id).map(order=>({id:order.id,number:String(order.number),status:order.status,quantity:amount(order.quantity_micros)}))},
     summary: { opening: amount(opening), receipts: amount(receipts), issues: amount(issues), closing: amount(closing) },
     data: result.rows.filter(item => item.id).map(movement), total: Number(row.total), offset, limit }
 }

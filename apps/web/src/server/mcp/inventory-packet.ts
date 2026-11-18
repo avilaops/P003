@@ -1,4 +1,9 @@
-const existingStockTools = new Set(["erp_get_stock", "erp_get_stock_movements", "erp_post_stock_movements"])
+const existingStockTools = new Set([
+  "erp_get_stock","erp_get_stock_movements","erp_post_stock_movements",
+  "erp_get_warehouses","erp_get_warehouses__id","erp_post_warehouses","erp_put_warehouses__id",
+  "erp_get_inventory_settings","erp_put_inventory_settings","erp_get_inventory_counts","erp_get_inventory_counts__id",
+  "erp_post_inventory_counts","erp_post_inventory_counts__id__lines","erp_post_inventory_counts__id__approve",
+])
 const maxRequestBytes = 16 * 1024 * 1024
 
 // This is the same transport limit as the existing MCP endpoint, including

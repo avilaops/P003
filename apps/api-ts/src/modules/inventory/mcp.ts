@@ -15,19 +15,27 @@ const rpcCall = z.object({
   params: z.object({ name: z.string(), arguments: z.unknown() }),
 })
 const queryField = z.union([z.string(), z.number().int()])
-const readArgs = z.strictObject({
-  tenant_id: databaseId,
-  query: z.record(z.string(), queryField).optional(),
+const argumentsSchema = z.strictObject({
+  tenant_id: databaseId, path:z.strictObject({id:databaseId}).optional(),
+  query:z.record(z.string(),queryField).optional(), body:z.record(z.string(),z.unknown()).optional(),
+  headers:z.strictObject({"Idempotency-Key":z.string().max(100).optional(),"If-Match":z.string().max(100).optional()}).optional(),
 })
-const writeArgs = z.strictObject({
-  tenant_id: databaseId,
-  headers: z.strictObject({ "Idempotency-Key": z.string().max(100) }),
-  body: z.record(z.string(), z.unknown()),
-})
-const routes = new Map<string, { method: "GET" | "POST"; resource: string }>([
-  ["erp_get_stock", { method: "GET", resource: "/api/v1/stock" }],
-  ["erp_get_stock_movements", { method: "GET", resource: "/api/v1/stock/movements" }],
-  ["erp_post_stock_movements", { method: "POST", resource: "/api/v1/stock/movements" }],
+type ToolRoute = {method:"GET"|"POST"|"PUT";resource:string;query?:boolean;key?:boolean;revision?:true|"optional";body?:boolean}
+const routes = new Map<string, ToolRoute>([
+  ["erp_get_stock", { method: "GET", resource: "/api/v1/stock",query:true }],
+  ["erp_get_stock_movements", { method: "GET", resource: "/api/v1/stock/movements",query:true }],
+  ["erp_post_stock_movements", { method: "POST", resource: "/api/v1/stock/movements",key:true,body:true }],
+  ["erp_get_warehouses",{method:"GET",resource:"/api/v1/warehouses",query:true}],
+  ["erp_get_warehouses__id",{method:"GET",resource:"/api/v1/warehouses/:id"}],
+  ["erp_post_warehouses",{method:"POST",resource:"/api/v1/warehouses",key:true,body:true}],
+  ["erp_put_warehouses__id",{method:"PUT",resource:"/api/v1/warehouses/:id",key:true,revision:true,body:true}],
+  ["erp_get_inventory_settings",{method:"GET",resource:"/api/v1/inventory-settings"}],
+  ["erp_put_inventory_settings",{method:"PUT",resource:"/api/v1/inventory-settings",revision:true,body:true}],
+  ["erp_get_inventory_counts",{method:"GET",resource:"/api/v1/inventory-counts",query:true}],
+  ["erp_get_inventory_counts__id",{method:"GET",resource:"/api/v1/inventory-counts/:id"}],
+  ["erp_post_inventory_counts",{method:"POST",resource:"/api/v1/inventory-counts",key:true,body:true}],
+  ["erp_post_inventory_counts__id__lines",{method:"POST",resource:"/api/v1/inventory-counts/:id/lines",key:true,revision:"optional",body:true}],
+  ["erp_post_inventory_counts__id__approve",{method:"POST",resource:"/api/v1/inventory-counts/:id/approve",key:true,revision:"optional"}],
 ])
 
 function result(id: unknown, payload: Record<string, unknown>, isError: boolean) {
@@ -68,25 +76,27 @@ export function registerInventoryMcp(app: FastifyInstance, resource: string, rea
     const route = routes.get(params.name)
     if (!route) return invalid(id, -32602, "Unknown tool")
     const grant = grants.get(request)!
-    const isWrite = route.method === "POST"
+    const isWrite = route.method !== "GET"
     if (!grant.scope.split(/\s+/).includes(isWrite ? "erp.write" : "erp.read")) return result(id, { status: 403, error: "insufficient_scope" }, true)
-    const args = isWrite ? writeArgs.safeParse(params.arguments) : readArgs.safeParse(params.arguments)
+    const args = argumentsSchema.safeParse(params.arguments)
     if (!args.success) return invalid(id, -32602, "Argumentos da consulta ou lançamento inválidos")
-    const { tenant_id: tenantId } = args.data
+    const {tenant_id:tenantId,path,query:filters,headers:requestedHeaders,body:input} = args.data
+    if (Boolean(path)!==route.resource.includes(":id") || Boolean(filters)&&!route.query ||
+        Boolean(requestedHeaders)!==Boolean(route.key||route.revision) ||
+        route.revision!=="optional" && Boolean(requestedHeaders?.["If-Match"])!==Boolean(route.revision) ||
+        Boolean(requestedHeaders?.["Idempotency-Key"])!==Boolean(route.key) || (input!==undefined)!==Boolean(route.body))
+      return invalid(id,-32602,"Argumentos incompatíveis com a operação")
     const headers: Record<string, string> = { "x-tenant-id": tenantId }
     if (typeof request.headers["x-request-id"] === "string") headers["x-request-id"] = request.headers["x-request-id"]
     const query = new URLSearchParams()
-    let body: string | undefined
-    if ("headers" in args.data) {
-      headers["idempotency-key"] = args.data.headers["Idempotency-Key"]
-      headers["content-type"] = "application/json"
-      body = stringifyJson(args.data.body)
-    } else {
-      for (const [name, value] of Object.entries(args.data.query ?? {})) query.set(name, String(value))
-    }
+    for (const [name,value] of Object.entries(filters??{})) query.set(name,String(value))
+    for (const [name,value] of Object.entries(requestedHeaders??{})) if(value) headers[name.toLowerCase()]=value
+    const body = input===undefined ? undefined : stringifyJson(input)
+    if(body!==undefined) headers["content-type"]="application/json"
+    const resourcePath=path ? route.resource.replace(":id",path.id) : route.resource
     const identity: AuthenticatedIdentity = { subject: grant.subject, email: grant.email, name: grant.name, emailVerified: grant.verified_email }
     const response = await runWithMcpIdentity(identity, () => app.inject({
-      method: route.method, url: route.resource + (query.size ? `?${query}` : ""), headers, ...(body === undefined ? {} : { payload: body }),
+      method: route.method, url: resourcePath + (query.size ? `?${query}` : ""), headers, ...(body === undefined ? {} : { payload: body }),
     }))
     const responseHeaders: Record<string, unknown> = {}
     for (const key of ["content-type", "x-request-id", "etag", "idempotency-replayed", "x-erp-backend", "retry-after"]) {

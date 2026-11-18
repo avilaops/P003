@@ -24,6 +24,9 @@ test("inventory MCP preserves the authenticated grant, exact tenant and idempote
     writes.push({ tenant: request.headers["x-tenant-id"], key: request.headers["idempotency-key"], body: request.body })
     return reply.code(201).send({ id: "movimento" })
   })
+  app.put<{Params:{id:string}}>("/api/v1/warehouses/:id",(request,reply)=>reply.header("etag",'"2"').send({
+    id:request.params.id,revision:request.headers["if-match"],request:request.body,
+  }))
   const call = (name: string, args: Record<string, unknown>, headers: Record<string, string> = auth) => app.inject({
     method: "POST", url: "/internal/mcp/inventory", headers, payload: { jsonrpc: "2.0", id: "capture", method: "tools/call", params: { name, arguments: args } },
   })
@@ -42,4 +45,10 @@ test("inventory MCP preserves the authenticated grant, exact tenant and idempote
   assert.equal(writes.length, 0)
   assert.equal((await call("erp_post_stock_movements", write)).json().result.structuredContent.status, 201)
   assert.deepEqual(writes, [{ tenant, key: "intent", body: write.body }])
+  const update={tenant_id:tenant,path:{id:tenant},headers:{"Idempotency-Key":"key","If-Match":'"1"'},body:{code:"PRINCIPAL"}}
+  const saved=(await call("erp_put_warehouses__id",update)).json().result
+  assert.deepEqual(saved.structuredContent.data,{id:tenant,revision:'"1"',request:{code:"PRINCIPAL"}})
+  assert.equal(saved.structuredContent.headers.etag,'"2"')
+  assert.equal((await call("erp_put_warehouses__id",{...update,path:{id:"../stock"}})).json().error.code,-32602)
+  assert.equal((await call("erp_put_warehouses__id",{...update,headers:{"Idempotency-Key":"key"}})).json().error.code,-32602)
 })

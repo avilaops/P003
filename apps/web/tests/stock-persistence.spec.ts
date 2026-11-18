@@ -97,6 +97,54 @@ test("resposta perdida repete a mesma chave sem duplicar o movimento", async ({ 
   expect((await history.json()).total).toBe(1)
 })
 
+test("estoque libera correção após resposta incerta e recusa definitiva", async ({ page, context }) => {
+  await session(context)
+  const name = "Peça com correção de lançamento"
+  const id = await product(context, name)
+  await page.goto("/estoque/lancamentos/novo")
+  await page.getByRole("link", { name: new RegExp("^Lançar movimento de " + name) }).click()
+  const reason = page.getByRole("textbox", { name: "Motivo", exact: true })
+  await page.getByRole("textbox", { name: "Quantidade (vírgula ou ponto)" }).fill("1")
+  await reason.fill("Entrada a conferir")
+  const keys: string[] = []
+  await page.route("**/api/erp/stock/movements", async route => {
+    if (route.request().method() !== "POST") return route.continue()
+    keys.push(route.request().headers()["idempotency-key"])
+    if (keys.length > 2) return route.continue()
+    return route.fulfill({ status: keys.length === 1 ? 503 : 422, json: { title: "Confira o motivo" } })
+  })
+  await page.getByRole("button", { name: "Confirmar lançamento" }).click()
+  await expect(reason).toBeDisabled()
+  await page.getByRole("button", { name: "Repetir confirmação" }).click()
+  await expect(reason).toBeEnabled()
+  await reason.fill("Entrada conferida e corrigida")
+  await page.getByRole("button", { name: "Confirmar lançamento" }).click()
+  await expect(page.getByRole("status").filter({ hasText: "Saldo após o lançamento: 1 UN" })).toBeVisible()
+  expect(keys).toHaveLength(3)
+  expect(keys[0]).toBe(keys[1])
+  expect(keys[2]).not.toBe(keys[1])
+  const history = await context.request.get("/api/erp/stock/movements?productId=" + id)
+  expect((await history.json()).total).toBe(1)
+})
+
+test("estoque calcula uma sugestão de compra pela regra salva no produto", async ({ page, context }) => {
+  await session(context)
+  const name = "Equipamento para reposição"
+  await product(context, name)
+  await page.goto("/compras/sugestoes")
+  await page.getByRole("combobox", { name: "Exibir" }).selectOption("all")
+  await page.getByRole("link", { name: new RegExp(name + " • SKU") }).click()
+  await page.getByLabel("Estoque mínimo (UN)").fill("9")
+  await page.getByLabel("Ponto de pedido (UN)").fill("12")
+  await page.getByLabel("Lote de compra (UN)").fill("5")
+  await page.getByLabel("Prazo do fornecedor (dias)").fill("7")
+  await page.getByRole("button", { name: "Salvar regra" }).click()
+  await expect(page.getByRole("status").filter({ hasText: "Regra de reposição salva" })).toBeVisible()
+  await page.goto("/compras/sugestoes")
+  const row = page.getByRole("listitem").filter({ hasText: name })
+  await expect(row.getByText("Compra sugerida • 10 UN")).toBeVisible()
+})
+
 test("estoque respeita consulta e cabe no celular", async ({ page, context }) => {
   await session(context)
   const name = "Consulta de estoque no celular"
@@ -131,7 +179,7 @@ test("estoque conserva depósito e SKU entre saldos, Kardex e transferência", a
   await page.getByRole("checkbox",{name:"Controlar saldos por depósito"}).check()
   await page.getByRole("button",{name:"Salvar parâmetros"}).click()
   await expect(page.getByRole("status").filter({hasText:"Parâmetros de depósito salvos."})).toBeVisible()
-  await page.getByLabel("Destino",{exact:true}).selectOption(second)
+  await page.getByRole("combobox",{name:"Destino",exact:true}).selectOption(second)
   await page.getByLabel("Buscar produto ou SKU na origem").fill(name)
   await page.getByRole("button",{name:/^Adicionar /}).click()
   await page.getByLabel(/^Quantidade •/).fill("2")

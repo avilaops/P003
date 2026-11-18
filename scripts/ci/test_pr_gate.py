@@ -9,6 +9,9 @@ spec.loader.exec_module(gate)
 
 
 class ScopeTests(unittest.TestCase):
+    def test_deployment_readme_does_not_request_a_native_build(self):
+        self.assertFalse(gate.native_api_required(["deploy/README.md"]))
+
     def test_private_signature_service_has_mandatory_project_scope(self):
         for path in ('apps/contract-signature-service/src/contract_signature_service/worker.py',
                      'deploy/contracts-validator/compose.yml', 'scripts/contracts/verify-signature-service.py'):

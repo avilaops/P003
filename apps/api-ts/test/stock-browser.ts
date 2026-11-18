@@ -7,6 +7,12 @@ const adminUrl = process.env.API_TS_TEST_ADMIN_URL
 if (!adminUrl) throw Error("Informe API_TS_TEST_ADMIN_URL para criar o banco descartável de estoque")
 const fixture = await stockFixture(adminUrl)
 try {
+  await fixture.seed.query(`
+    INSERT INTO role_permissions(role_id,permission_code) SELECT id,'inventory.counts.read' FROM roles;
+    INSERT INTO role_permissions(role_id,permission_code)
+      SELECT id,unnest(ARRAY['inventory.counts.manage','catalog.categories.read','catalog.categories.manage']) FROM roles WHERE code='editor';
+    INSERT INTO role_permissions(role_id,permission_code) SELECT id,'inventory.counts.approve' FROM roles WHERE code='visitor'
+  `)
   const api = await fixture.app.listen({ host: "127.0.0.1", port: 0 })
   const web = new URL("../../web/", import.meta.url)
   const cli = createRequire(new URL("package.json", web)).resolve("@playwright/test/cli")

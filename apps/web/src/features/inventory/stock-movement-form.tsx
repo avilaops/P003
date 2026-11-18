@@ -39,7 +39,8 @@ export function StockMovementForm({ tenant, product, reversal, resetReversal, co
         headers: { "Content-Type": "application/json", "X-Tenant-Id": tenant, "Idempotency-Key": attempt.key } })
       const body = await response.json()
       if (!response.ok) {
-        const retry = response.status >= 500 || uncertain
+        const retry = response.status >= 500 || response.status === 408 || response.status === 429
+        if (!retry) command.current = null
         setUncertain(retry); setLocked(retry); setError(body.title || "Lançamento recusado")
         return
       }

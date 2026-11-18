@@ -8,7 +8,8 @@ export type Movement = { id: string; productId: string; direction: "receipt" | "
   reason: string; occurredAt: string; reversesId: string | null; sourceOrderId: string | null;
   sourcePurchaseReceiptId: string | null; sourcePosSaleId: string | null; productionOrderId: string | null;
   sourceWarrantyCaseId: string | null; sourceInventoryCountId: string | null; returnSourceId: string | null; canReverse: boolean }
-export type History = Page<Movement> & { product: StockProduct; summary: { opening: string; receipts: string; issues: string; closing: string } }
+export type History = Page<Movement> & { product: StockProduct; summary: { opening: string; receipts: string; issues: string; closing: string };
+  openOrders?: {reserved:string;offset:number;total:number;data:{id:string;number:string;status:string;quantity:string}[]} }
 
 export const historyPath = "/estoque/lancamentos"
 export const manualPath = "/estoque/lancamentos/novo"
