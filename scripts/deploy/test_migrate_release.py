@@ -55,8 +55,9 @@ class ReleaseMigrationTests(unittest.TestCase):
         commands = [args for args, _ in self.runtime.calls]
         apply_index = next(i for i, args in enumerate(commands) if args[:2] == ["docker", "run"])
         self.assertEqual(sum("pg_dump" in args for args in commands[:apply_index]), 2)
-        self.assertIn("erp-next-api:sha-" + SHA, commands[apply_index])
-        self.assertEqual(commands[apply_index][-1], "migrate")
+        self.assertEqual(commands[apply_index][-4:], [
+            "erp-next-web:sha-" + SHA, "node", "/app/apps/api-ts/dist/migrate.js", "/app/migrations"
+        ])
         self.assertIn("none", commands[apply_index])
         self.assertIn("--read-only", commands[apply_index])
         self.assertNotIn("SENSITIVE", json.dumps(commands))

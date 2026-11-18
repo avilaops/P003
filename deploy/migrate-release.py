@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Apply the candidate image's SQLx migrations before replacing running services."""
+"""Apply the candidate web image's migrations with its TypeScript runner."""
 import hashlib
 import json
 import os
@@ -44,7 +44,7 @@ def migrate_release(sha, release, *, root=ROOT, run=subprocess.run):
             raise RuntimeError(f"Release {stage} failed; private diagnostic saved")
         return result.stdout.strip()
 
-    image = "erp-next-api:sha-" + sha
+    image = "erp-next-web:sha-" + sha
     image_id = execute(["docker", "image", "inspect", "--format", "{{.Id}}", image], "image-check")
     if not re.fullmatch(r"sha256:[0-9a-f]{64}", image_id):
         raise RuntimeError("Invalid candidate image identity")
@@ -78,7 +78,8 @@ def migrate_release(sha, release, *, root=ROOT, run=subprocess.run):
         raise RuntimeError("Invalid PostgreSQL operating-system identity")
     command = ["docker", "run", "--rm", "--name", "erp-next-migration-" + sha, "--network", "none", "--read-only",
                "--security-opt", "no-new-privileges:true", "--cap-drop", "ALL", "--pids-limit", "64", "--memory", "256m",
-               "--user", pg_uid, "--volume", "/var/run/postgresql:/var/run/postgresql:ro", "--env", "DATABASE_URL", image, "migrate"]
+               "--user", pg_uid, "--volume", "/var/run/postgresql:/var/run/postgresql:ro", "--env", "DATABASE_URL",
+               image, "node", "/app/apps/api-ts/dist/migrate.js", "/app/migrations"]
     environment = {**os.environ, "DATABASE_URL": "postgresql://postgres@localhost/erp_next?host=/var/run/postgresql"}
     output = execute(command, "migration", env=environment)
     private_file(private / "migration.log", output + "\n")
