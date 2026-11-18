@@ -51,15 +51,7 @@ type Result = {
     canReopen: boolean
   }
 }
-export function TreasuryReconciliation({
-  accountId,
-  tenantId,
-  type,
-}: {
-  accountId: string
-  tenantId: string
-  type: string
-}) {
+export function TreasuryReconciliation({ accountId, tenantId, type }: { accountId: string; tenantId: string; type: string }) {
   const [offset, setOffset] = useState(0),
     [entryOffset, setEntryOffset] = useState(0)
   const resource = useResource<Result>(
@@ -68,17 +60,22 @@ export function TreasuryReconciliation({
   const [selected, setSelected] = useState(""),
     [ids, setIds] = useState<string[]>([]),
     [reason, setReason] = useState(""),
+    [categoryId, setCategoryId] = useState(""),
     [end, setEnd] = useState("")
   const [file, setFile] = useState<File | null>(null),
     [format, setFormat] = useState("import-ofx"),
+    [autoMatch, setAutoMatch] = useState(false),
     [notice, setNotice] = useState("")
   const command = useCommand(),
     result = resource.value?.tenantId === tenantId ? resource.value : null,
     data = result?.data
   const disabled = command.busy || command.stale || command.uncertain
   const line = data?.lines.find((l) => l.id === selected)
+  const natures = useResource<{ data: { id: string; name: string; direction: string }[] }>(
+    line ? "/api/erp/financial-categories?status=active&limit=100" : "",
+  )
   async function send(action: string, body: object) {
-    const response = await command.send<{ tenantId: string; data: { imported?: number } }>(
+    const response = await command.send<{ tenantId: string; data: { imported?: number; matched?: number } }>(
       `/api/erp/finance-treasury/${action}`,
       tenantId,
       { accountId, ...body },
@@ -87,11 +84,12 @@ export function TreasuryReconciliation({
       setNotice(
         response.data.imported === undefined
           ? "Operação registrada."
-          : `${response.data.imported} lançamento(s) importado(s).`,
+          : `${response.data.imported} lançamento(s) importado(s). ${response.data.matched ?? 0} conciliado(s) automaticamente.`,
       )
       setSelected("")
       setIds([])
       setReason("")
+      setCategoryId("")
       resource.reload()
     }
   }
@@ -114,7 +112,7 @@ export function TreasuryReconciliation({
                 e.preventDefault()
                 if (file)
                   try {
-                    await send(format, { content: await readBankFile(file) })
+                    await send(format, { content: await readBankFile(file), ...(autoMatch ? { autoMatch: true } : {}) })
                   } catch (err) {
                     setNotice(String(err))
                   }
@@ -134,14 +132,15 @@ export function TreasuryReconciliation({
               </label>
               <label className="grid gap-1 text-sm">
                 Arquivo do banco
-                <Input
-                  disabled={disabled}
-                  type="file"
-                  required
-                  onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-                />
+                <Input disabled={disabled} type="file" required onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
               </label>
-              <Button type="submit" disabled={!file || disabled}>Importar extrato</Button>
+              <label className="flex items-center gap-2">
+                <input type="checkbox" checked={autoMatch} disabled={disabled} onChange={(e) => setAutoMatch(e.target.checked)} />
+                Conciliar correspondências únicas por data e valor
+              </label>
+              <Button type="submit" disabled={!file || disabled}>
+                Importar extrato
+              </Button>
             </form>
           )}
           <div className="grid gap-4 md:grid-cols-2">
@@ -165,23 +164,14 @@ export function TreasuryReconciliation({
                     {l.bookedOn} • {brl(l.cents)} • {l.description}
                     <small className="block text-muted-foreground">
                       {l.fitId} •{" "}
-                      {l.state === "matched"
-                        ? "Conciliado"
-                        : l.state === "exception"
-                          ? "Exceção justificada"
-                          : "Pendente"}
+                      {l.state === "matched" ? "Conciliado" : l.state === "exception" ? "Exceção justificada" : "Pendente"}
                       {l.reason ? " • " + l.reason : ""}
                     </small>
                   </span>
                 </label>
               ))}
               <div className="flex gap-2">
-                <Button
-                  size="sm"
-                  variant="outline"
-                  disabled={!offset || disabled}
-                  onClick={() => setOffset(offset - 50)}
-                >
+                <Button size="sm" variant="outline" disabled={!offset || disabled} onClick={() => setOffset(offset - 50)}>
                   Anteriores
                 </Button>
                 <Button
@@ -196,9 +186,7 @@ export function TreasuryReconciliation({
             </section>
             <section className="space-y-2">
               <h3 className="text-sm font-semibold">Movimentos do ERP disponíveis</h3>
-              {!data.entries.length && (
-                <p className="text-sm text-muted-foreground">Nenhum movimento disponível nesta página.</p>
-              )}
+              {!data.entries.length && <p className="text-sm text-muted-foreground">Nenhum movimento disponível nesta página.</p>}
               {data.entries.map((entry) => (
                 <label key={entry.id} className="flex items-start gap-2 rounded-md border p-2 text-sm">
                   <input
@@ -248,6 +236,29 @@ export function TreasuryReconciliation({
                   onClick={() => send("match", { lineId: line.id, entryIds: ids, reason: reason || null })}
                 >
                   Conciliar {ids.length} movimento(s)
+                </Button>
+                {ids.length === 0 && (
+                  <label className="grid gap-1 text-sm">
+                    Natureza do novo movimento
+                    <select value={categoryId} onChange={(e) => setCategoryId(e.target.value)} disabled={disabled}>
+                      <option value="">Padrão da conta</option>
+                      {natures.value?.data
+                        .filter((c) => c.direction === (BigInt(line.cents) > BigInt(0) ? "income" : "expense"))
+                        .map((c) => (
+                          <option key={c.id} value={c.id}>
+                            {c.name}
+                          </option>
+                        ))}
+                    </select>
+                  </label>
+                )}
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={ids.length > 0 || reason.trim().length < 3 || reason.trim().length > 200 || disabled}
+                  onClick={() => send("classify-movement", { lineId: line.id, reason, categoryId: categoryId || null })}
+                >
+                  Criar movimento e conciliar
                 </Button>
                 <Button
                   variant="outline"
@@ -305,8 +316,7 @@ export function TreasuryReconciliation({
       )}
       {data.periods.map((p, i) => (
         <p className="text-sm" key={p.throughDate + i}>
-          {p.throughDate} • {p.reopenedAt ? "Reaberto" : "Fechado"} • {p.reopenedBy ?? p.closedBy} •{" "}
-          {p.reopenReason ?? p.reason}
+          {p.throughDate} • {p.reopenedAt ? "Reaberto" : "Fechado"} • {p.reopenedBy ?? p.closedBy} • {p.reopenReason ?? p.reason}
         </p>
       ))}
       {notice && <p role="status">{notice}</p>}

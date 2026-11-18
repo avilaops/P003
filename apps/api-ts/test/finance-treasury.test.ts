@@ -406,6 +406,26 @@ test(
         ).rows[0].net,
         "9800",
       )
+      const bankFile=(fit:string,amount:string)=>ofx.replaceAll("202601","202803").replace("A-1",fit).replace("<TRNAMT>100.00","<TRNAMT>"+amount)
+      const later={...entry,occurredOn:"2028-03-30"}
+      await post("financial-account-entries",{...later,amount:"70.00"})
+      const unique=await post("finance-treasury/import-ofx",{accountId:account,content:bankFile("AUTO1","70.00"),autoMatch:true})
+      assert.equal(unique.data.matched,1)
+      await post("financial-account-entries",{...later,amount:"65.00"})
+      await post("financial-account-entries",{...later,amount:"65.00"})
+      const ambiguous=await post("finance-treasury/import-ofx",{accountId:account,content:bankFile("AUTO2","65.00"),autoMatch:true})
+      assert.equal(ambiguous.data.matched,0)
+      await post("finance-treasury/import-ofx",{accountId:account,content:bankFile("TARIFA","-3.00"),autoMatch:true})
+      const unclassified=(await seed.query("SELECT id FROM finance_bank_lines WHERE tenant_id=$1 AND fit_id='TARIFA'",[tenant])).rows[0]!
+      const key=randomUUID(), detail={accountId:account,lineId:unclassified.id,reason:"Tarifa identificada"}
+      const classified=await post("finance-treasury/classify-movement",detail,201,key)
+      assert.deepEqual((await post("finance-treasury/classify-movement",detail,201,key)).data,classified.data)
+      await post("finance-treasury/classify-movement",detail,409)
+      const movement=(await seed.query("SELECT direction,amount_cents,category_id FROM financial_account_entries WHERE tenant_id=$1 AND reference=$2",[tenant,unclassified.id])).rows
+      assert.equal(movement.length,1)
+      assert.equal(movement[0].direction,"debit")
+      assert.equal(movement[0].amount_cents,"300")
+      assert.ok(movement[0].category_id)
     } finally {
       for (const [key, v] of Object.entries(original)) {
         if (v === undefined) delete process.env[key]

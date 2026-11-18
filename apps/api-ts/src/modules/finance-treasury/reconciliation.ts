@@ -3,11 +3,15 @@ import { z } from "zod"
 import type { AuthorizedContext } from "../../platform/access.js"
 import { normalizedDatabaseId as id } from "../../platform/database-id.js"
 import { queryInteger } from "../registrations/query.js"
-import { account, assertOpenAccountPeriod, conflict, date, invalid, missing, money, textField } from "./ledger.js"
+import { account, assertOpenAccountPeriod, conflict, date, insertEntry, invalid, missing, money, textField } from "./ledger.js"
 import { parseOfx } from "./ofx.js"
 import { parseEfiStatement } from "./efi-cnab.js"
 
-export const importSchema = z.strictObject({ accountId: id, content: z.string().min(20).max(2_000_000) })
+export const importSchema = z.strictObject({
+  accountId: id,
+  content: z.string().min(20).max(2_000_000),
+  autoMatch: z.boolean().optional(),
+})
 export const matchSchema = z.strictObject({
   accountId: id,
   lineId: id,
@@ -19,6 +23,7 @@ export const matchSchema = z.strictObject({
   reason: textField(3, 500).nullable().optional(),
 })
 export const exceptionSchema = z.strictObject({ accountId: id, lineId: id, reason: textField(3, 500) })
+export const classifySchema = exceptionSchema.extend({ categoryId: id.nullish() })
 export const periodSchema = z.strictObject({ accountId: id, throughDate: date, reason: textField(3, 500) })
 export const reconciliationQuery = z.strictObject({
   accountId: id,
@@ -113,9 +118,38 @@ export async function importStatement(
     )
     imported++
   }
+  let matched = 0
+  if (input.autoMatch && imported) {
+    const pairs = await context.client.query<{ line_id: string; entry_id: string }>(
+      `
+      WITH pending AS (
+        SELECT id,statement_id,booked_on,signed_cents,count(*) OVER(PARTITION BY booked_on,signed_cents) AS alternatives
+        FROM finance_bank_lines WHERE tenant_id=$1 AND account_id=$2 AND state='pending' AND booked_on BETWEEN $4 AND $5
+      ), entries AS (
+        SELECT e.id,e.occurred_on,${signed} AS amount,count(*) OVER(PARTITION BY occurred_on,${signed}) AS alternatives
+        FROM financial_account_entries e WHERE e.tenant_id=$1 AND e.account_id=$2 AND e.occurred_on BETWEEN $4 AND $5 AND ${unmatched}
+      ) SELECT p.id AS line_id,e.id AS entry_id FROM pending p JOIN entries e ON p.booked_on=e.occurred_on AND p.signed_cents=e.amount
+        WHERE p.statement_id=$3 AND p.alternatives=1 AND e.alternatives=1`,
+      [...params, statementId, parsed.start, parsed.end],
+    )
+    if (pairs.rows.length) {
+      const lines = pairs.rows.map((p) => p.line_id),
+        entries = pairs.rows.map((p) => p.entry_id)
+      await context.client.query(
+        "INSERT INTO finance_bank_matches(tenant_id,line_id,entry_id) SELECT $1,l,e FROM unnest($2::uuid[],$3::uuid[]) AS pair(l,e)",
+        [context.tenantId, lines, entries],
+      )
+      await context.client.query(
+        "UPDATE finance_bank_lines SET state='matched',reviewed_at=now(),reviewed_by=$3,reason='Correspondência única por conta, data e valor' WHERE tenant_id=$1 AND id=ANY($2::uuid[])",
+        [context.tenantId, lines, context.authSubject],
+      )
+      matched = lines.length
+    }
+  }
   return envelope(context, statementId, {
     statementId,
     imported,
+    matched,
     duplicate: false,
     existing: parsed.lines.length - imported,
   })
@@ -196,12 +230,12 @@ export async function match(context: AuthorizedContext, input: z.infer<typeof ma
   for (const date of new Set(entries.map((e) => e.date))) await assertOpenAccountPeriod(context, input.accountId, date)
   const total = entries.reduce((sum, e) => sum + BigInt(e.amount), 0n)
   const difference = BigInt(line.amount) - total
-  if (difference && !input.reason)
-    throw conflict("Informe uma justificativa para a diferença de R$ " + money(difference))
-  await context.client.query(
-    "INSERT INTO finance_bank_matches(tenant_id,line_id,entry_id) SELECT $1,$2,unnest($3::uuid[])",
-    [context.tenantId, input.lineId, input.entryIds],
-  )
+  if (difference && !input.reason) throw conflict("Informe uma justificativa para a diferença de R$ " + money(difference))
+  await context.client.query("INSERT INTO finance_bank_matches(tenant_id,line_id,entry_id) SELECT $1,$2,unnest($3::uuid[])", [
+    context.tenantId,
+    input.lineId,
+    input.entryIds,
+  ])
   await context.client.query(
     "UPDATE finance_bank_lines SET state='matched',reason=$3,reviewed_by=$4,reviewed_at=now() WHERE tenant_id=$1 AND id=$2",
     [context.tenantId, input.lineId, input.reason ?? null, context.authSubject],
@@ -212,6 +246,21 @@ export async function match(context: AuthorizedContext, input: z.infer<typeof ma
     difference: money(difference),
     reason: input.reason ?? null,
   })
+}
+export async function classifyAndMatch(context: AuthorizedContext, input: z.infer<typeof classifySchema>) {
+  if (input.reason.length > 200) throw invalid("O histórico do movimento admite até 200 caracteres")
+  const line = await lineForReview(context, input.accountId, input.lineId)
+  const signed = BigInt(line.amount)
+  const movement = await insertEntry(context, {
+    accountId: input.accountId,
+    direction: signed > 0n ? "credit" : "debit",
+    amount: money(signed > 0n ? signed : -signed),
+    occurredOn: line.booked,
+    description: input.reason,
+    reference: input.lineId,
+    categoryId: input.categoryId ?? null,
+  })
+  return match(context, { accountId: input.accountId, lineId: input.lineId, entryIds: [movement.id], reason: input.reason })
 }
 export async function exception(context: AuthorizedContext, input: z.infer<typeof exceptionSchema>) {
   await lineForReview(context, input.accountId, input.lineId)
@@ -224,10 +273,7 @@ export async function exception(context: AuthorizedContext, input: z.infer<typeo
 export async function period(context: AuthorizedContext, input: z.infer<typeof periodSchema>, reopen: boolean) {
   const selected = await account(context, input.accountId),
     params = [context.tenantId, input.accountId, input.throughDate]
-  await context.client.query(
-    "SELECT 1 FROM financial_accounts WHERE tenant_id=$1 AND id=$2 FOR UPDATE",
-    params.slice(0, 2),
-  )
+  await context.client.query("SELECT 1 FROM financial_accounts WHERE tenant_id=$1 AND id=$2 FOR UPDATE", params.slice(0, 2))
   const latest = (
     await context.client.query<{ id: string; end: string }>(
       "SELECT id,through_date::text AS end FROM finance_account_periods WHERE tenant_id=$1 AND account_id=$2 AND reopened_at IS NULL ORDER BY through_date DESC LIMIT 1",
@@ -244,9 +290,7 @@ export async function period(context: AuthorizedContext, input: z.infer<typeof p
   }
   if (latest && latest.end >= input.throughDate) throw conflict("A data informada já está encerrada")
   const future = (
-    await context.client.query("SELECT 1 WHERE $1::date > (now() AT TIME ZONE 'America/Sao_Paulo')::date", [
-      input.throughDate,
-    ])
+    await context.client.query("SELECT 1 WHERE $1::date > (now() AT TIME ZONE 'America/Sao_Paulo')::date", [input.throughDate])
   ).rows.length
   if (future) throw invalid("Fechamento exige data até hoje")
   const openCash = await context.client.query(

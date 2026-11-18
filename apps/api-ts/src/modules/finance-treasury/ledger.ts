@@ -73,7 +73,7 @@ export async function account(context: TenantContext, accountId: string) {
 }
 export async function assertOpenAccountPeriod(context: TenantContext, accountId: string, occurredOn: string) {
   const locked = await context.client.query(
-    "SELECT 1 FROM finance_account_periods WHERE tenant_id=$1 AND account_id=$2 AND reopened_at IS NULL AND through_date >= $3 LIMIT 1",
+    "SELECT 1 FROM finance_account_periods WHERE tenant_id=$1 AND account_id=$2 AND reopened_at IS NULL AND through_date >= $3 UNION ALL SELECT 1 FROM finance_company_closed_dates WHERE tenant_id=$1 AND through_date >= $3 LIMIT 1",
     [context.tenantId, accountId, occurredOn],
   )
   if (locked.rows.length) throw conflict("O período desta conta está fechado")
