@@ -1,5 +1,6 @@
 "use client"
 import { PageTitle } from "@/components/workspace/page-title"
+import {OrderSerials} from "@/features/inventory/order-serials"
 
 import { erpFetch } from "@/lib/api/client"
 
@@ -201,6 +202,7 @@ export function NfeDraftEditor({ id, sourceOrderId, initialModel = 55 }: { id?: 
     <header><p className="text-sm text-primary">Fiscal / {draft.model === 65 ? "NFC-e" : "NF-e de saída"}</p><PageTitle className="mt-2 text-3xl font-semibold">{id ? `Preparação e emissão de ${draft.model === 65 ? "NFC-e" : "NF-e"}` : `Preparar ${draft.model === 65 ? "NFC-e" : "nota de saída"}`}</PageTitle><p className="mt-3 text-muted-foreground">{draft.environment === "production" ? `Produção · Modelo ${draft.model}` : `Homologação · Modelo ${draft.model} · Sem valor fiscal`}</p>{snapshot && <p className="mt-2 break-all text-xs text-muted-foreground">{snapshot.data.id} · Revisão {snapshot.data.revision} · Emitente: {snapshot.data.issuer.legalName}</p>}</header>
 
     {draft.sourceOrderId && <section className="rounded-xl border border-primary/30 p-4 text-sm"><p>Origem: <Link className="break-all text-primary underline" href={`/vendas/pedidos/${draft.sourceOrderId}`}>Pedido {draft.sourceOrderId}</Link>{preparation ? ` · Revisão consultada ${preparation.orderRevision}` : ""}</p>{preparation && <Link className="mt-2 inline-block text-primary underline" href={`/cadastros/clientes-fornecedores/${preparation.customerId}`}>Abrir cadastro do cliente</Link>}<p className="mt-2 text-muted-foreground">Esta preparação representa o pedido integral. Código, unidade, quantidade e preço permanecem os registrados na venda. Confira o endereço e informe o código IBGE e a tributação. Salvar não marca o pedido como faturado.</p></section>}
+    {draft.sourceOrderId && tenant && <OrderSerials key={draft.sourceOrderId} id={draft.sourceOrderId} tenant={tenant}/>}
     {loading && <p role="status">Carregando dados fiscais…</p>}
     {readiness && !profileReady && <p role="alert" className="rounded-xl border p-4 text-sm">Preencha ou corrija a <Link className="text-primary underline" href="/preferencias/fiscal" target="_blank" rel="noopener noreferrer">configuração fiscal do emitente</Link> antes de salvar. Depois, recarregue os dados.</p>}
     {error && <p role="alert" className="rounded-xl border border-destructive/30 p-4 text-sm text-destructive">{error}{blocked && " Sua edição foi preservada. Confira os dados atuais antes de tentar novamente."}</p>}

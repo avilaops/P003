@@ -32,12 +32,15 @@ import { OrderNegotiation } from "./order-negotiation"
 import { commercialMoney, orderNumber, orderStatusLabels as labels } from "./order-presentation"
 import { OrderPricing } from "@/features/commercial-settings/order-pricing"
 import { OrderDetailCommercial } from "./order-detail-commercial"
+import {DocumentWarehouses} from "@/features/inventory/document-warehouses"
+import {OrderSerials} from "@/features/inventory/order-serials"
 import { OrderEmail } from "./order-email"
 import { OrderPdfDownload } from "./order-pdf-download"
 import type { CheckoutSnapshot } from "./commercial-payment-model"
 import { OrderWeightSummary } from "./order-weight-summary"
 
-type Detail = Schema<"OrderSnapshot"> & { pricingOrigin?: boolean; checkout?: CheckoutSnapshot | null }
+type Detail = Schema<"OrderSnapshot"> & { pricingOrigin?: boolean; checkout?: CheckoutSnapshot | null;overdueProduction?:{id:string;sku:string;plannedOn:string}[];
+  realizedMargin?:{revenue:string;cost:string|null;grossProfit:string|null;marginPercent:string|null} }
 type Listing = Schema<"OrderList">
 export type Choice = { id: string; legalName?: string; name?: string; sku?: string; basePrice?: string; unit?: string; structureColors?: string[]; swingArmColors?: string[]; finishingPalette?: string | null; upholsteryColors?: string[]; upholsteryConfigurable?: boolean; plateHolderColors?: string[]; plateHolderTypes?: string[]; hasPhoto?: boolean }
 type SelectedItem = Choice & { quantity: string; preserved: boolean; structureColor: string; swingArmColor: string; upholsteryColor: string; plateHolderColor: string; plateHolderType: string }
@@ -252,9 +255,12 @@ function OrderDetail({ id }: { id: string }) {
         </div>
         {["completed", "cancelled"].includes(value.data.status) && <p className="rounded-lg border bg-muted/35 px-3 py-2 text-sm">Pedido {value.data.status === "completed" ? "concluído" : "cancelado"}: os dados comerciais estão disponíveis para consulta.</p>}
         <div className="space-y-2 print:hidden" role="group" aria-label="Documentos do pedido">
+          {value.overdueProduction?.map(p=><p role="status" key={p.id}>Fabricação em atraso • {p.sku} • Prazo {p.plannedOn.split("-").reverse().join("/")}
+            {access.value?.permissions.includes("production.read")&&<Link className={linkClass} href={"/estoque/ordens-producao/"+p.id}>Consultar produção</Link>}</p>)}
           <p className="text-xs font-medium text-muted-foreground">Documentos</p>
           <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap [&>button]:w-full sm:[&>button]:w-auto">
           <OrderPdfDownload id={id} number={value.data.number} tenantId={value.tenantId} etag={result.etag} onReload={result.reload} />
+          {access.value?.permissions.includes("inventory.stock.read") && <Link className={linkClass} href={"/estoque/series?documentId="+id}>Séries do pedido</Link>}
           <OrderEmail id={id} number={value.data.number} tenantId={value.tenantId} etag={result.etag} onReload={result.reload} />
           <Link className={buttonVariants({ variant: "outline", className: "col-span-2 h-9 px-3" })} href={`/vendas/pedidos/${id}/contratos`}>Pedido e contratos</Link>
           </div>
@@ -272,6 +278,13 @@ function OrderDetail({ id }: { id: string }) {
           <Button variant="outline" className="h-9 flex-1 px-3 sm:flex-none" disabled={boundary.locked || command.busy || command.stale || !result.etag} onClick={() => { if (window.confirm("Cancelar o pedido e liberar sua reserva, se houver?")) void act("cancel") }}>Cancelar pedido</Button>
         </div></div>}
         <OrderDetailCommercial order={value} permissions={access.value?.tenant.id === value.tenantId ? access.value.permissions : []} />
+        <DocumentWarehouses kind="sale" id={id} tenant={value.tenantId}/>
+        <OrderSerials key={id} id={id} tenant={value.tenantId}/>
+        {value.realizedMargin&&<section className="space-y-1" aria-label="Margem realizada"><h2 className="font-semibold">Margem bruta realizada</h2>
+          <p>Receita dos itens entregues • {commercialMoney(value.realizedMargin.revenue)}</p>
+          <p>Custo das saídas • {value.realizedMargin.cost===null?"Aguardando valorização":commercialMoney(value.realizedMargin.cost)}</p>
+          <p>Resultado bruto • {value.realizedMargin.grossProfit===null?"Aguardando valorização":commercialMoney(value.realizedMargin.grossProfit)}
+            {value.realizedMargin.marginPercent!==null&&" • "+value.realizedMargin.marginPercent.replace(".",",")+"%"}</p></section>}
         <OrderFinancePanel key={`${value.data.id}:${value.data.revision}`} orderId={id} onLockChange={boundary.setPrimaryLocked} parentBusy={command.busy || command.uncertain || command.stale || result.loading} />
         <div className="divide-y border-y">
           <details className="py-3"><summary className="cursor-pointer text-sm font-medium">Negociação e condições comerciais</summary><div className="space-y-4 pt-3"><OrderNegotiation id={id} onDecision={result.reload} showDirector={access.value?.tenant.id === value.tenantId && ["sales.approvals.director", "platform.company.manage"].every(permission => access.value?.permissions.includes(permission))} />{value.pricingOrigin && <OrderPricing id={id} onSaved={result.reload} showDirector={access.value?.tenant.id === value.tenantId && ["sales.approvals.director", "platform.company.manage"].every(permission => access.value?.permissions.includes(permission))} />}</div></details>

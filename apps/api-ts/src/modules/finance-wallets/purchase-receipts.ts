@@ -379,6 +379,7 @@ export function registerPurchaseReceipts(app: FastifyInstance, deps: AppDependen
       if (rounding.length) conflict("Desfaça os recebimentos posteriores para preservar o custo")
       const stockMovementIds: string[] = [],
         paymentReversalIds: string[] = []
+      await ctx.client.query("SELECT set_config('app.stock_effective_on',$1,true)", [occurredOn])
       for (const line of original.items) {
         const product = line.productId,
           quantity = fixed(String(line.quantity), 6)

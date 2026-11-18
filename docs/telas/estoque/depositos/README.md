@@ -18,7 +18,9 @@ Cadastrar os locais usados no controle de estoque.
 
 ## Regras e limites
 
-O cadastro guarda a identificação e a localização dos depósitos. Os saldos atuais são consolidados por produto e empresa, sem divisão por depósito; cadastrar um local não cria essa separação.
+Em **Transferências entre depósitos**, configure o uso de depósitos e os padrões de venda, compra e produção. A posição de abertura recebe o saldo consolidado anterior. O vínculo com cada documento indica o depósito efetivo da operação. Clique na quantidade de produtos de um depósito para consultar os SKUs com saldo físico positivo.
+
+Cada transferência registra uma saída na origem e uma entrada no destino na mesma transação. O estorno desfaz as duas pontas e verifica o disponível no destino.
 
 ## Referências para manutenção
 

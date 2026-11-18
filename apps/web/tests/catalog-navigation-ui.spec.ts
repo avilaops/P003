@@ -231,22 +231,22 @@ test("tabela publicada mantém preços desconto e ação acessíveis no celular"
 
 test("estoque usa linhas selecionáveis e quantidades legíveis sem perder precisão", async ({ page }) => {
   await page.route("**/api/erp/stock?*", route => route.fulfill({ json: { tenantId: tenant, canEdit: false, total: 1, data: [{ productId, name: product.name, sku: product.sku, unit: "UN", status: "active", quantity: "1234.500000", reserved: "0.000001", available: "1234.499999" }] } }))
-  await page.route("**/api/erp/stock/movements?*", route => route.fulfill({ json: { tenantId: tenant, canEdit: false, total: 1, data: [{ id: "33333333-3333-4333-8333-333333333333", productId, direction: "receipt", quantity: "1234.500000", balanceAfter: "1234.500000", reason: "Entrada conferida", occurredAt: "2026-11-09T12:00:00Z", reversesId: null, sourceOrderId: null }] } }))
+  await page.route("**/api/erp/stock/movements?*", route => route.fulfill({ json: { tenantId: tenant, canEdit: false, product: { ...product, productId }, summary: { opening: "0.000000", receipts: "1234.500000", issues: "0.000000", closing: "1234.500000" }, total: 1, data: [{ id: "33333333-3333-4333-8333-333333333333", productId, direction: "receipt", quantity: "1234.500000", balanceAfter: "1234.500000", reason: "Entrada conferida", occurredAt: "2026-11-09T12:00:00Z", reversesId: null, sourceOrderId: null }] } }))
   await page.goto("/estoque/saldos")
   const table = page.getByRole("table", { name: "Saldos por produto", exact: true })
   for (const width of [320, 390, 640, 768, 1280]) {
     await page.setViewportSize({ width, height: 900 })
     await expect(table).toBeVisible()
-    await expect(table.getByText("1.234,5 UN", { exact: true })).toBeVisible()
+    await expect(table.getByText("1.234,5", { exact: true }).filter({ visible: true })).toBeVisible()
     await expect(table.getByText("0,000001", { exact: true }).filter({ visible: true })).toBeVisible()
     await expect(table.getByText("1.234,499999", { exact: true }).filter({ visible: true })).toBeVisible()
     expect(await table.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true)
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
   }
-  const select = table.getByRole("button", { name: new RegExp(`^${product.name} SKU `) })
+  const select = table.getByRole("link", { name: `Ver movimentos de ${product.name} • SKU ${product.sku}` })
   await select.focus()
   await page.keyboard.press("Enter")
-  await expect(select).toHaveAttribute("aria-pressed", "true")
+  await expect(page).toHaveURL(/estoque\/lancamentos\?productId=/)
   await expect(page.getByRole("region", { name: "Movimentos do produto", exact: true })).toContainText("Entrada de 1.234,5 UN")
   await expect(page.getByText("Somente consulta. Você não pode movimentar o estoque.", { exact: true })).toBeVisible()
   await expect(page.getByRole("button", { name: "Confirmar lançamento", exact: true })).toHaveCount(0)
@@ -573,4 +573,79 @@ test("confirmação tardia não redireciona quem já saiu do editor", async ({ p
     await page.goto("/cadastros/produtos/novo")
     await expect(page.getByRole("textbox", { name: "Nome do produto", exact: true })).toHaveValue("")
   } finally { release!() }
+})
+
+test("estoque mantém busca, página e foco no SKU com barra e invalida a seleção ao trocar de empresa", async ({ page, context }) => {
+  const target = { productId, name: "Banco Flex", sku: "LD/B-02", unit: "UN", status: "active", quantity: "0.000000", reserved: "0.000000", available: "0.000000" }
+  const other = "66666666-6666-4666-8666-666666666666"
+  let selectedTenant = tenant, unavailable = true
+  const historyRequests: string[] = []
+  await page.route("**/api/erp/stock?*", route => {
+    const url = new URL(route.request().url())
+    if (unavailable) return route.fulfill({ status: 503, json: { title: "Consulta de estoque indisponível" } })
+    const matches = selectedTenant === other ? [] : [...Array.from({ length: 25 }, (_, i) => ({ ...target, productId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa" + String(i).padStart(2,"0"), sku: "LD/" + i })), target]
+    const offset = Number(url.searchParams.get("offset") || 0)
+    const filtered = matches.filter(row => row.name.toLowerCase().includes((url.searchParams.get("q") || "").toLowerCase()))
+    return route.fulfill({ json: { tenantId: selectedTenant, canEdit: false, total: filtered.length, offset, limit: 25, data: filtered.slice(offset,offset + 25) } })
+  })
+  await page.route("**/api/erp/stock/movements?*", route => {
+    const url = new URL(route.request().url())
+    historyRequests.push(url.searchParams.get("productId")!)
+    return route.fulfill({ json: { tenantId: selectedTenant, canEdit: false, product: target, total: 0, data: [],
+      summary: { opening: "0.000000", receipts: "0.000000", issues: "0.000000", closing: "0.000000" } } })
+  })
+  await page.goto("/estoque/saldos")
+  await expect(page.getByRole("alert").filter({ hasText: "Consulta de estoque indisponível" })).toBeVisible()
+  const table = page.getByRole("table", { name: "Saldos por produto" })
+  await expect(table).toHaveCount(0)
+  unavailable = false
+  await page.getByRole("button", { name: "Tentar novamente", exact: true }).click()
+  await expect(table).toBeVisible()
+  await page.getByRole("textbox", { name: "Buscar produto ou SKU" }).fill("Banco")
+  await expect(page).toHaveURL(/q=Banco/)
+  await page.getByRole("button", { name: "Próxima", exact: true }).click()
+  await expect(page).toHaveURL(/q=Banco&offset=25/)
+  const link = table.getByRole("link", { name: "Ver movimentos de Banco Flex • SKU LD/B-02" })
+  for (const [width,height] of [[360,800],[1366,768],[1920,1080]]) {
+    await page.setViewportSize({ width, height })
+    await expect(link).toBeVisible()
+    if (width === 360) {
+      await expect(table.locator("dl dt")).toHaveText(["Saldo","Reservado","Disponível","Valor"])
+      await expect(table.locator("dl dd")).toHaveText(["0","0","0","A apurar"])
+    }
+    else await expect(table.getByRole("columnheader")).toHaveText(["Produto","SKU","Unidade","Saldo","Reservado","Disponível","Valor","Quantidades e ação"])
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+  }
+  await link.focus()
+  await page.keyboard.press("Enter")
+  await expect(page).toHaveURL(/sku=LD%2FB-02/)
+  await expect(page.getByText("Nenhum movimento registrado para este produto.")).toBeVisible()
+  await expect(page.getByText("SKU LD/B-02 • Unidade UN")).toBeVisible()
+  await expect(page.getByRole("link", { name: "Novo lançamento", exact: true })).toHaveCount(0)
+  const saved = page.url()
+  expect(new URL(saved).searchParams.get("q")).toBe("Banco")
+  await page.goBack()
+  await expect(link).toBeFocused()
+  await link.click()
+  await expect(page).toHaveURL(saved)
+  await page.reload()
+  await expect(page.getByText("SKU LD/B-02 • Unidade UN")).toBeVisible()
+  await page.getByRole("link", { name: "Voltar à consulta" }).click()
+  await expect(page).toHaveURL(/q=Banco&offset=25&focus=/)
+  await expect(link).toBeFocused()
+  await expect(page.getByRole("textbox", { name: "Buscar produto ou SKU" })).toHaveValue("Banco")
+  await expect(page.getByText("Página 2", { exact: true })).toBeVisible()
+  await link.click()
+  await expect(page.getByText("SKU LD/B-02 • Unidade UN")).toBeVisible()
+  await page.goBack()
+  await expect(link).toBeFocused()
+  expect(historyRequests.every(id => id === productId)).toBe(true)
+  const before = historyRequests.length
+  selectedTenant = other
+  await authenticate(context, other)
+  await page.goto(saved)
+  await expect(page).toHaveURL(origin + "/estoque/lancamentos")
+  await expect(page.getByText("Nenhum produto encontrado.")).toBeVisible()
+  await expect(page.getByText("SKU LD/B-02 • Unidade UN")).toHaveCount(0)
+  expect(historyRequests.length).toBe(before)
 })

@@ -154,6 +154,11 @@ jobs:
         python3 scripts/ci/timed.py --label 'api/typescript-install' --output "artifacts/timings/$GITHUB_JOB.jsonl" -- pnpm install --frozen-lockfile --prefer-offline
         python3 scripts/ci/timed.py --label 'api/typescript-typecheck' --output "artifacts/timings/$GITHUB_JOB.jsonl" -- pnpm --filter api-ts typecheck
         python3 scripts/ci/timed.py --label 'api/typescript-tests' --output "artifacts/timings/$GITHUB_JOB.jsonl" -- pnpm --filter api-ts test
+    - name: Verify inventory commands and upgrades against PostgreSQL
+      if: inputs.typescript_only
+      env:
+        API_TS_TEST_ADMIN_URL: postgres://postgres:ci_isolated_only@127.0.0.1:5432/postgres
+      run: pnpm --filter api-ts exec tsx --test --test-concurrency=1 test/stock*.test.ts test/inventory*.test.ts
     - name: Apply complete SQLx history with the TypeScript migrator
       if: inputs.typescript_only
       run: |

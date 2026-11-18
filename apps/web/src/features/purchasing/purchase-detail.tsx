@@ -7,6 +7,7 @@ import { RequestError } from "@/components/feedback/session-recovery"
 import Link from "next/link"
 import { useState, type FormEvent } from "react"
 import { PageHeader } from "@/components/page-header"
+import {DocumentWarehouses,DocumentSeries} from "@/features/inventory/document-warehouses"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import type { Access } from "@/features/access/access-client"
@@ -40,6 +41,8 @@ export function PurchaseDetail({ id }: { id: string }) {
       {notice && <p role="status">{notice}</p>}
       {result.loading ? <p role="status">Carregando compra…</p> : result.error ? <div role="alert"><p><RequestError message={result.error} status={result.status} /></p><Button onClick={result.reload}>Tentar novamente</Button></div> : value && <>
         <h2 className="break-words text-lg font-semibold">{value.data.supplierName}</h2>
+        <DocumentWarehouses kind="purchase" id={id} tenant={value.tenantId}/>
+        {access.value?.permissions.includes("inventory.stock.read")&&<DocumentSeries id={id} tenant={value.tenantId}/>}
         <p>Situação: {purchaseLabels[value.data.status] || value.data.status}</p><p>Total: {money(value.data.amount)}</p><p>Vencimento: {value.data.dueDate} · Revisão {value.data.revision}</p>
         <ul className="space-y-3">{value.items.map(item => <li className="min-w-0 space-y-2 rounded-xl border p-4" key={item.productId}><strong className="block break-words">{item.name}</strong><p>SKU {item.sku}</p><p>Pedido: {item.quantity} {item.unit} · Recebido: {item.receivedQuantity} {item.unit}</p><p>Custo unitário: {money(item.unitCost)} · Total: {money(item.amount)}</p></li>)}</ul>
         {!value.canEdit && <p>Sem permissão para alterar o pedido.</p>}
