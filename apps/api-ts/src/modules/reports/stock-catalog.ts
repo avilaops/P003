@@ -12,6 +12,11 @@ const sources = {
     method:"Entradas e saídas por data efetiva, depósito e unidade. Cada lançamento conta como um movimento, inclusive transferências e estornos.",
     columns:{date:"Data efetiva",warehouse:"Depósito",unit:"Unidade",receipts:"Quantidade de entrada",issues:"Quantidade de saída",receipt_count:"Entradas",issue_count:"Saídas",movements:"Movimentos"},
   },
+  stock_movement_ledger: {
+    label:"Lançamentos de estoque",
+    method:"Movimentos individuais por data efetiva, do mais recente ao mais antigo. A origem identifica o documento vinculado ao lançamento. Um estorno manual referencia o movimento original.",
+    columns:{date:"Data efetiva",...product,warehouse:"Depósito",kind:"Tipo de origem",document:"Documento de origem",receipts:"Entrada",issues:"Saída",reason:"Motivo"},
+  },
   stock_count_progress: {
     label:"Progresso dos inventários",
     method:"Sessões abertas no período, com situação atual e percentual de linhas contadas. Ao selecionar um SKU, o progresso considera somente as linhas desse produto.",

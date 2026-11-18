@@ -1,5 +1,6 @@
 import type { AuthorizedContext } from "../../platform/access.js"
 import type { ReportRow } from "./stock-metrics.js"
+import { movementLedgerDetails, movementLedgerQuery } from "./stock-movement-ledger.js"
 
 // A timestamp belongs to the local business day, including when UTC has already
 // crossed midnight. Keep the timestamp column bare to allow a date range scan.
@@ -8,6 +9,7 @@ const openingPeriod = (column: string) => `
   AND ${column} < (($3::date + 1)::timestamp AT TIME ZONE 'America/Sao_Paulo')`
 
 const queries = {
+  stock_movement_ledger: movementLedgerQuery,
   stock_movement_activity: {
     sql: `SELECT i.effective_on::text AS date, coalesce(w.name,'Sem depósito registrado') AS warehouse,
         m.warehouse_id, p.unit,
@@ -75,13 +77,12 @@ export async function operationalReport(
   const {sql,order} = queries[dataset]
   const {start,end,productId,warehouseId,movementDirection,countStatus,productionStatus} = filters
   const args = [tenantId,start,end,productId,warehouseId,movementDirection ?? countStatus ?? productionStatus]
-  if (!page) {
-    const {rows} = await client.query<ReportRow>(`${sql} ORDER BY ${order}`,args)
-    return {rows,total:rows.length}
-  }
-  const {rows} = await client.query<ReportRow & {total_rows: number}>(`
+  const selected = page ? `
     SELECT summary.*,count(*) OVER()::float8 AS total_rows FROM (${sql}) summary
-    ORDER BY ${order} LIMIT $7 OFFSET $8`,[...args,page.limit,page.offset])
+    ORDER BY ${order} LIMIT $7 OFFSET $8` : `${sql} ORDER BY ${order}`
+  const statement = dataset==="stock_movement_ledger" ? movementLedgerDetails(selected,!!page) : selected
+  const {rows} = await client.query<ReportRow & {total_rows?:number}>(statement,page ? [...args,page.limit,page.offset] : args)
+  if (!page) return {rows,total:rows.length}
   if (rows.length || !page.offset) return {rows,total:rows[0]?.total_rows ?? 0}
   const count = await client.query<{total: number}>(`SELECT count(*)::float8 AS total FROM (${sql}) summary`,args)
   return {rows,total:count.rows[0]!.total}

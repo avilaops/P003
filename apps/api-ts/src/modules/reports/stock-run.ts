@@ -50,7 +50,7 @@ export async function runStockReport(ctx:AuthorizedContext,raw:unknown){
   if(!stockSource(key))throw new Problem(422,"invalid_input","Fonte de estoque inválida")
   requirePermission(ctx,stockPermission(key))
   if(q.warehouseId&&!(await ctx.client.query(warehouseSql+" AND w.id=$2",[ctx.tenantId,q.warehouseId])).rows.length)throw missing()
-  if((q.movementDirection && key!=="stock_movement_activity") || (q.countStatus && key!=="stock_count_progress") ||
+  if((q.movementDirection && key!=="stock_movement_activity" && key!=="stock_movement_ledger") || (q.countStatus && key!=="stock_count_progress") ||
     (q.productionStatus && key!=="stock_production_progress"))
     throw new Problem(422,"invalid_input","Filtro incompatível com a fonte de estoque")
   const source=stockCatalog[key]

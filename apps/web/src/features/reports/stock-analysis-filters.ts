@@ -1,11 +1,13 @@
 import { countLabels } from "../inventory/count-model.ts"
 
 type SpecificFilter = { key: string; label: string; all: string; options: Record<string, string> }
+const movementDirection = {
+  key: "movementDirection", label: "Direção do movimento", all: "Entradas e saídas",
+  options: { receipt: "Entrada", issue: "Saída" },
+}
 const specificFilters: Record<string, SpecificFilter> = {
-  stock_movement_activity: {
-    key: "movementDirection", label: "Direção do movimento", all: "Entradas e saídas",
-    options: { receipt: "Entrada", issue: "Saída" },
-  },
+  stock_movement_activity: movementDirection,
+  stock_movement_ledger: movementDirection,
   stock_count_progress: {
     key: "countStatus", label: "Situação do inventário", all: "Todas as situações", options: countLabels,
   },
@@ -32,7 +34,7 @@ export function tenantAnalysisParams(serialized: string, tenant: string) {
 
 export function hasPeriod(source: string) {
   return ["stock_turnover", "stock_kardex", "stock_divergences", "stock_accuracy",
-    "stock_movement_activity", "stock_count_progress", "stock_production_progress"].includes(source)
+    "stock_movement_activity", "stock_movement_ledger", "stock_count_progress", "stock_production_progress"].includes(source)
 }
 
 export function statusLabel(dataset: string, value: string) {
