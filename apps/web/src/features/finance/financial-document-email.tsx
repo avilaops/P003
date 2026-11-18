@@ -8,7 +8,7 @@ import { RequestError } from "@/components/feedback/session-recovery"
 import { useCommand, useResource } from "@/hooks/use-operation"
 
 type Delivery = { id: string; status: "sent" | "failed" | "uncertain"; recipient: string; createdAt: string }
-type EmailSnapshot = { tenantId: string; canSend: boolean; emailReady: boolean; recipient: string | null; documentTitle: string; scope: string; recordCount: number; snapshotHash: string; deliveries: Delivery[] }
+type EmailSnapshot = { tenantId: string; canSend: boolean; emailReady: boolean; recipient: string | null; documentTitle: string; suggestedSubject?: string; suggestedMessage?: string; scope: string; recordCount: number; snapshotHash: string; deliveries: Delivery[] }
 type Receipt = { tenantId: string; revision: number; delivery: Delivery }
 type Props = { tenantId: string; receivableId?: string; payableId?: string; contractId?: string; disabled?: boolean; onLockChange?: (locked: boolean) => void }
 const labels = { sent: "Aceito pelo servidor de e-mail", failed: "Recusado pelo servidor de e-mail", uncertain: "Confirmação pendente • não criar outro envio" }
@@ -29,14 +29,18 @@ function FinancialEmailComposer({ tenantId, receivableId, payableId, contractId,
   const messageId = useId()
   const [recipientOverride, setRecipientOverride] = useState<string | null>(null)
   const [subjectOverride, setSubjectOverride] = useState<string | null>(null)
-  const [message, setMessage] = useState(contractId ? "Olá,\n\nSegue a cópia do contrato para sua conferência." : "Olá,\n\nSegue o documento financeiro em anexo para conferência.\n\nFicamos à disposição.")
+  const [messageOverride, setMessageOverride] = useState<string | null>(null)
   const [receipt, setReceipt] = useState<Delivery | null>(null)
   const value = resource.value?.tenantId === tenantId && me.value?.tenant?.id === tenantId ? resource.value : null
   const pendingDelivery = receipt?.status === "uncertain" || !!value?.deliveries.some(delivery => delivery.status === "uncertain")
   const locked = command.busy || command.uncertain || !!pendingDelivery
   const frozen = locked || command.stale || receipt?.status === "sent"
   const recipient = (registeredRecipient ? value?.recipient : recipientOverride ?? (receivableId ? value?.recipient : "")) ?? ""
-  const subject = subjectOverride ?? value?.documentTitle ?? "Documento financeiro"
+  const subject = subjectOverride ?? value?.suggestedSubject ?? value?.documentTitle ?? ""
+  const message = messageOverride ?? value?.suggestedMessage ?? (contractId ? "Olá!\n\nSegue a cópia do contrato para consulta."
+    : payableId ? "Olá!\n\nSegue o demonstrativo do título a pagar, com o vencimento, os pagamentos registrados e o saldo."
+    : receivableId ? "Olá!\n\nSegue o demonstrativo do título, com o valor original, os recebimentos registrados e o saldo."
+    : "Olá!\n\nSegue o relatório financeiro com as contas a receber e a pagar, organizadas por vencimento.")
   const validSnapshot = !!value && /^[a-f0-9]{64}$/.test(value.snapshotHash) && /^"\d+"$/.test(resource.etag)
   const ready = !disabled && !resource.loading && !me.loading && !resource.error && !me.error && validSnapshot && value?.canSend && value.emailReady
   useEffect(() => { onLockChange?.(locked) }, [locked, onLockChange])
@@ -62,7 +66,7 @@ function FinancialEmailComposer({ tenantId, receivableId, payableId, contractId,
         <fieldset disabled={!ready || frozen} className="space-y-3">
           {registeredRecipient ? <p className="break-all">Destinatário • <strong>{recipient || "E-mail não cadastrado"}</strong></p> : <label className="block space-y-2">Destinatário<Input type="email" autoComplete="email" required maxLength={254} value={recipient} onChange={event => setRecipientOverride(event.target.value)} /></label>}
           <label className="block space-y-2">Assunto<Input required maxLength={200} value={subject} onChange={event => setSubjectOverride(event.target.value)} /></label>
-          <div className="space-y-2"><label className="block" htmlFor={messageId}>Mensagem</label><textarea id={messageId} required maxLength={10000} rows={5} className="w-full rounded-lg border border-input bg-background p-3" value={message} onChange={event => setMessage(event.target.value)} /></div>
+          <div className="space-y-2"><label className="block" htmlFor={messageId}>Mensagem</label><textarea id={messageId} required maxLength={10000} rows={5} className="w-full rounded-lg border border-input bg-background p-3" value={message} onChange={event => setMessageOverride(event.target.value)} /></div>
         </fieldset>
         {command.error && <p role="alert"><RequestError message={command.error} status={command.status} /></p>}
         {command.stale && <p role="status">Os dados mudaram. Recarregue o documento e confira novamente antes de enviar.</p>}

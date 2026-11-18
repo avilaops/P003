@@ -16,13 +16,15 @@ export async function verifySalesMail(seed: Pool, pool: DatabasePool, tenant: st
       const get = () => app.inject({ method: "GET", url, headers })
       const getInitial = await get()
       assert.equal(getInitial.statusCode, 200, getInitial.body)
+      assert.match(getInitial.json().suggestedSubject, kind === "order" ? /Pedido PV-/ : /Proposta .*versão/)
+      assert.match(getInitial.json().suggestedMessage, /Cliente/)
       const count = mails.length
       const key = randomUUID()
       const permission = `sales.${kind}s.manage`
       await seed.query("INSERT INTO role_permissions(role_id,permission_code) VALUES($1,$2) ON CONFLICT DO NOTHING", [role,permission])
       assert.equal((await get()).json().canSend, true)
       const post = (revision = '"1"', subject = "Documento") => app.inject({ method: "POST", url, headers: { ...headers, "if-match": revision, "idempotency-key": key },
-        payload: { recipient: "vendas@example.test", message: "Segue o documento.", subject } })
+        payload: { recipient: "vendas@example.test", message: "Confira <estas condições> & os itens.\nObrigado!", subject } })
       assert.equal((await post('"99"')).statusCode, 412)
       const result = await post()
       assert.equal(result.statusCode, 200, result.body)
@@ -32,7 +34,12 @@ export async function verifySalesMail(seed: Pool, pool: DatabasePool, tenant: st
       assert.equal((await post('"1"', "Outro")).statusCode, 409)
       assert.equal((await get()).json().deliveries[0].id, result.json().delivery.id)
       assert.equal(mails.length, count + 1)
-      const file = mails[count]!.attachments[0]!
+      const mail = mails[count]!
+      assert.equal(mail.subject, "Documento")
+      assert.ok(mail.text.includes("Confira <estas condições> & os itens.\nObrigado!"))
+      assert.ok(mail.html?.includes("Confira &lt;estas condições&gt; &amp; os itens.<br>Obrigado!"))
+      const file = mail.attachments[0]!
+      assert.ok(mail.text.includes(file.filename))
       if (kind === "order") assert.equal(file.content.subarray(0,5).toString(), "%PDF-")
       else assert.match(file.content.toString(), /Cliente/)
     }

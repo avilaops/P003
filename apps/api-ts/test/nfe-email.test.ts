@@ -1,5 +1,5 @@
 import assert from "node:assert/strict"
-import { createCipheriv, randomBytes } from "node:crypto"
+import { createCipheriv, randomBytes, randomUUID } from "node:crypto"
 import test from "node:test"
 import nodemailer from "nodemailer"
 import { renderDanfe, sha256 } from "../src/modules/nfe-email/danfe.js"
@@ -9,21 +9,74 @@ import type { DatabaseClient } from "../src/platform/database.js"
 const accessKey = "35261004252011000110550010000000011000000017"
 const xml = Buffer.from("<nfeProc>ç</nfeProc>")
 const pdf = Buffer.from("%PDF-1.7\nfixture")
+const envelope = { id: randomUUID(), company: "Ótica & Cia.", recipient: "fiscal@example.test", number: "4", series: 1,
+  environment: "homologation", accessKey, xml, pdf }
 
-test("the MIME envelope contains two intact attachments and labels homologation", async () => {
-  const envelope = { id: "mock", recipient: "fiscal@example.test", number: "4", series: 1, environment: "homologation", accessKey, xml, pdf }
+test("the MIME envelope contains both message formats and two intact attachments", async () => {
   const message = nfeMessage(envelope)
-  assert.match(message.subject, /Homologação • sem valor fiscal/)
+  assert.match(message.subject, /NF-e nº 4 • Série 1 • Homologação • sem valor fiscal • Ótica & Cia\./)
   assert.match(message.text, /Homologação • sem valor fiscal/)
+  assert.match(message.html, /<strong>Homologação • sem valor fiscal<\/strong>/)
+  assert.match(message.html, /Ótica &amp; Cia\./)
+  assert.match(message.text, /DANFE em PDF/)
   assert.doesNotMatch(nfeMessage({ ...envelope, environment: "production" }).subject, /Homologação/)
   const bytes = (await nodemailer.createTransport({ streamTransport: true, buffer: true }).sendMail({ ...message, from: "erp@example.test" })).message.toString()
   assert.match(bytes, /To: fiscal@example\.test/i)
+  assert.match(bytes, /Content-Type: multipart\/alternative/i)
+  assert.match(bytes, /Content-Type: text\/plain/i)
+  assert.match(bytes, /Content-Type: text\/html/i)
   for (const attachment of message.attachments) {
     assert.ok(bytes.includes(attachment.filename))
     assert.ok(bytes.includes(attachment.content.toString("base64")))
   }
   assert.equal(smtpFailure({ command: "CONN", code: "ECONNECTION" }), "unknown")
   assert.equal(smtpFailure({ command: "DATA", responseCode: 554 }), "failed")
+})
+
+test("XML-only fiscal messages identify the parties, reference, key and real files", () => {
+  for (const [kind, title, description] of [
+    ["nfce", "NFC-e nº 4 • Série 1", "XML autorizado da nota fiscal de consumidor"],
+    ["outgoing-nfses", "NFS-e emitida nº 4", "serviço que prestamos"],
+    ["received-nfses", "NFS-e recebida nº 4", "tomadora do serviço"],
+  ] as const) {
+    const key = kind === "nfce" ? accessKey.replace("55001", "65001") : "7".repeat(50)
+    const message = nfeMessage({ ...envelope, kind, environment: "production", pdf: null, accessKey: key,
+      recipientName: "Maria & Filhos", providerName: "Prestador <Sul>" })
+    assert.deepEqual(message.to, { name: "Maria & Filhos", address: envelope.recipient })
+    assert.ok(message.text.includes("Olá, Maria & Filhos."))
+    assert.ok(message.html.includes("Olá, Maria &amp; Filhos."))
+    assert.equal(message.attachments.length, 1)
+    for (const body of [message.text, message.html]) {
+      for (const fragment of [title, description, key, message.attachments[0]!.filename]) assert.ok(body.includes(fragment))
+      assert.doesNotMatch(body, /DANFE|Homologação/i)
+    }
+    if (kind === "received-nfses") {
+      assert.match(message.html, /Prestador &lt;Sul&gt;/)
+      assert.match(message.text, /XML original importado/)
+    } else assert.doesNotMatch(message.text, /Prestador/)
+  }
+  const unnamed = nfeMessage({ ...envelope, recipientName: "NF-E EMITIDA EM AMBIENTE DE HOMOLOGACAO - SEM VALOR FISCAL" })
+  assert.equal(unnamed.to.name, "")
+  assert.doesNotMatch(unnamed.text, /Olá, NF-E/)
+})
+
+test("n8n receives the same fiscal HTML, text and attachments as Node SMTP", async () => {
+  const client: DatabaseClient = { async query() { throw new Error("Unexpected database call") }, release() {} }
+  const env = { ERP_DOCUMENT_MAIL_N8N_TOKEN: "x".repeat(32), ERP_DOCUMENT_MAIL_N8N_URL: "https://mock.example.test/mail" }
+  let calls = 0
+  const sender = await resolveSender(client, env, async (_, options) => {
+    calls++
+    const payload = JSON.parse(String(options?.body))
+    const message = nfeMessage(envelope)
+    assert.equal(payload.html, message.html)
+    assert.equal(payload.text, message.text)
+    assert.equal(payload.subject, message.subject)
+    assert.equal(payload.to, envelope.recipient)
+    assert.deepEqual(payload.attachments, message.attachments.map(a => ({ ...a, content: a.content.toString("base64") })))
+    return Response.json({ id: envelope.id, status: "sent" })
+  })
+  assert.equal(await sender(envelope), "sent")
+  assert.equal(calls, 1)
 })
 
 test("the renderer only accepts the matching XML, access key, environment and PDF digest", async () => {

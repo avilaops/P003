@@ -5,6 +5,7 @@ import { z } from "zod"
 import { authorizeRequest, requirePermission, type AccessDependencies, type AuthorizedContext } from "../../platform/access.js"
 import { commandKey, record } from "../../platform/commands.js"
 import type { DatabasePool } from "../../platform/database.js"
+import { documentMailCompany } from "../../platform/document-mail-template.js"
 import { Problem } from "../../platform/problem.js"
 import { renderDanfe, sha256 } from "./danfe.js"
 import { commandDelivery, preview, type DocumentKind, type Delivery } from "./document.js"
@@ -108,13 +109,14 @@ function registerDocumentRoutes(app: FastifyInstance, deps: AccessDependencies, 
     const command = { kind, id, key, etag, recipient: input.data.recipientEmail }
     const first = await authorizeRequest(request, deps, context => prepare(context, command), false)
     if (first.saved) return respond(reply, first.snapshot, first.saved)
-    const doc = first.snapshot.doc
-    const pdf = doc.model === 55 ? await io.render({ issuerTaxId: doc.company_tax_id,
-      xml: doc.xml, accessKey: doc.access_key, environment: doc.environment }) : null
+    const initial = first.snapshot.doc
+    const pdf = initial.model === 55 ? await io.render({ issuerTaxId: initial.company_tax_id,
+      xml: initial.xml, accessKey: initial.access_key, environment: initial.environment }) : null
     const reserved = await authorizeRequest(request, deps, async context => {
       // Re-read the latest recipient, document, rights and delivery history under the tenant write lock.
       const { snapshot, saved } = await prepare(context, command)
       if (saved) return { snapshot, saved }
+      const company = await documentMailCompany(context)
       const sender = await io.sender(context.client)
       const deliveryId = randomUUID()
       const recipient = snapshot.result.recipientEmail!
@@ -123,11 +125,13 @@ function registerDocumentRoutes(app: FastifyInstance, deps: AccessDependencies, 
         VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'unknown')`,
       [deliveryId, context.tenantId, id, context.authSubject, key, etag, recipient, snapshot.xmlHash, pdf ? sha256(pdf) : null, kind])
       await record(context, request.headers, kind === "nfe" ? "fiscal_nfe_document" : kind === "received-nfses" ? "fiscal_received_nfse" : "outgoing_nfse", id, kind === "nfe" ? "fiscal.nfe.email_requested" : "fiscal.nfse.email_requested", { deliveryId })
-      return { snapshot, deliveryId, sender, subject: context.authSubject, recipient }
+      return { snapshot, deliveryId, sender, subject: context.authSubject, recipient, company }
     })
     if (reserved.saved) return respond(reply, reserved.snapshot, reserved.saved)
     const { tenantId } = reserved.snapshot.result
-    const outcome = await reserved.sender({ id: reserved.deliveryId, recipient: reserved.recipient, number: doc.number,
+    const doc = reserved.snapshot.doc
+    const outcome = await reserved.sender({ id: reserved.deliveryId, recipient: reserved.recipient, recipientName: doc.recipient_name,
+      providerName: doc.provider_name, company: reserved.company, number: doc.number,
       series: doc.series, environment: doc.environment, accessKey: doc.access_key, xml: Buffer.from(doc.xml), pdf, kind: kind === "nfe" && doc.model === 65 ? "nfce" : kind })
     await finish(deps.pool, tenantId, reserved.subject, reserved.deliveryId, outcome)
     const completed = await authorizeRequest(request, deps, async context => {

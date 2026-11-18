@@ -9,7 +9,7 @@ import { useCommand, useResource } from "@/hooks/use-operation"
 import { orderNumber } from "./order-presentation"
 
 type Delivery = { id: string; status: "sent" | "failed" | "uncertain"; recipient: string; createdAt: string }
-type EmailStatus = { tenantId: string; recipient: string | null; canSend: boolean; emailReady: boolean; deliveries: Delivery[] }
+type EmailStatus = { tenantId: string; recipient: string | null; canSend: boolean; emailReady: boolean; deliveries: Delivery[]; suggestedSubject?: string; suggestedMessage?: string }
 type Receipt = { tenantId: string; revision: number; delivery: Delivery }
 const deliveryLabels = { sent: "Aceito pelo servidor de e-mail", failed: "Recusado pelo servidor de e-mail", uncertain: "Confirmação pendente · não reenviar" }
 
@@ -32,11 +32,13 @@ function OrderEmailComposer({ id, number, tenantId, etag, onReload }: { id: stri
   const resource = useResource<EmailStatus>(`/api/erp/orders/${id}/email`)
   const command = useCommand()
   const [recipientOverride, setRecipientOverride] = useState<string | null>(null)
-  const [subject, setSubject] = useState(`Pedido ${orderNumber(number)}`)
-  const [message, setMessage] = useState(`Olá,\n\nSegue em anexo o pedido ${orderNumber(number)} para sua conferência.\n\nFicamos à disposição.`)
+  const [subjectOverride, setSubject] = useState<string | null>(null)
+  const [messageOverride, setMessage] = useState<string | null>(null)
   const [receipt, setReceipt] = useState<Delivery | null>(null)
   const value = resource.value?.tenantId === tenantId ? resource.value : null
   const recipient = recipientOverride ?? value?.recipient ?? ""
+  const subject = subjectOverride ?? value?.suggestedSubject ?? `Pedido ${orderNumber(number)}`
+  const message = messageOverride ?? value?.suggestedMessage ?? `Olá!\n\nO pedido ${orderNumber(number)} está no PDF anexo. Confira os itens e as condições comerciais.`
   const pendingDelivery = receipt?.status === "uncertain" || value?.deliveries.some(delivery => delivery.status === "uncertain")
   const frozen = command.busy || command.uncertain || command.stale || !!pendingDelivery || receipt?.status === "sent"
   if (resource.loading && !value) return <p role="status">Consultando envio de e-mail…</p>
