@@ -1,6 +1,6 @@
 # Financeiro • implementação e aceite local
 
-A entrega está na branch `feat/financeiro-integral-ts` e incorpora a revisão `bdd8dca9` da main, inclusive o envio de documentos financeiros pelo n8n. O [levantamento funcional](../../telas/financeiro/LEVANTAMENTO-2026-11-17.md) registra a referência TOTVS Protheus, a situação inicial das seis telas e os itens associados no Linear.
+A entrega está na branch local `feat/financeiro-integral-ts`, com a revisão `655ecfa4` da main como base de integração. O envio por n8n mantém a personalização dos e-mails. No cancelamento de venda concluída, o estorno financeiro preserva juros, rateios e comissões ao reverter os efeitos no estoque e na produção. O [levantamento funcional](../../telas/financeiro/LEVANTAMENTO-2026-11-17.md) registra a referência TOTVS Protheus, a situação inicial das seis telas e os itens associados no Linear.
 
 ## O que conferir no ERP
 
@@ -16,18 +16,42 @@ A entrega está na branch `feat/financeiro-integral-ts` e incorpora a revisão `
 
 ## Evidência reproduzível
 
+O aceite integrado de tesouraria inicia o navegador, o BFF, a API TypeScript e o PostgreSQL. A rota de identidade da empresa também usa TypeScript. As contrapartes HTTP do banco e do n8n são locais, o que permite conferir a cobrança, a repetição dos eventos e os bytes do PDF entregue sem usar contas externas.
+
 • [Carteira e operações em PostgreSQL](../../../apps/api-ts/test/finance-portfolio.test.ts) • 105 títulos, baixa parcial, limite, vencidos, projeção sem duplicar pedidos, estornos, alçada, adiantamentos e bloqueio do período financeiro.
 
 • [Baixas, compras e folha](../../../apps/api-ts/test/finance-wallets.test.ts) • encargos, comprovantes, lote, isolamento entre empresas e originação das obrigações.
+
+• [Atualização de uma base existente](../../../apps/api-ts/test/finance-upgrade.test.ts) • as migrações rodam sobre uma carteira com baixa parcial anterior. O título mantém os R$ 600 em aberto e a baixa antiga continua sem classificação bancária. A segunda execução das migrações preserva os registros.
+
+• [Borderô por conta](../../../apps/api-ts/test/finance-collection-batches.test.ts) • títulos de clientes diferentes, valor e vencimento conferidos antes da emissão, cancelamento, concorrência e rastreio das liquidações.
+
+• [Boleto no simulador HTTP](../../../apps/api-ts/test/treasury-boleto-cases.ts) • endereço do pagador, vencimento, recuperação de uma emissão após perda da resposta e confirmação repetida. Um boleto de R$ 60,20 gera uma baixa e um crédito de R$ 60,20.
 
 • [Aceite bancário completo em Chromium](../../../apps/web/tests/finance-treasury-persistence.spec.ts) • navegador, BFF e API reais, PostgreSQL descartável e instituição HTTP local. Duas parcelas somam R$ 100. A tarifa é R$ 2 e o crédito líquido é R$ 98. A conciliação vincula uma linha de extrato a três lançamentos. O teste confere os IDs das parcelas e os centavos no banco.
 
 • [Gestão e contabilidade](../../../apps/api-ts/test/finance-management.test.ts) • regras por evento, comissões, pendências, partidas dobradas, revisões e estornos.
 
-Para repetir as suítes da API, defina `API_TS_TEST_ADMIN_URL` com uma instância PostgreSQL descartável que permita criar e remover bancos de teste. Execute `pnpm --filter api-ts test`. Para os testes bancários no navegador utilize a mesma instância e `pnpm --filter web exec playwright test --config playwright.finance-treasury.config.ts`. O arquivo de teste especifica as portas de loopback e o provedor local.
+• [Cobranças e conciliação](../../../apps/api-ts/test/finance-treasury.test.ts) • importação OFX e CNAB de extrato, tarifa identificada no banco, vínculos únicos, correspondências ambíguas, congelamento da conta e retornos duplicados.
+
+Para repetir as suítes da API, defina `API_TS_TEST_ADMIN_URL` com uma instância PostgreSQL descartável que permita criar e remover bancos de teste. Execute `pnpm --filter api-ts test`.
+
+Para reproduzir o aceite no navegador com a versão compilada, execute `pnpm --filter web build`, defina `ERP_FINANCE_BROWSER_PRODUCTION=1` e mantenha a instância de teste em `API_TS_TEST_ADMIN_URL`. Execute em sequência `pnpm --filter web exec playwright test --config playwright.wallet.config.ts` e `pnpm --filter web exec playwright test --config playwright.finance-treasury.config.ts`. As configurações iniciam o ERP nas portas locais de cada suíte. Defina `ERP_BROWSER_CHANNEL=chrome` para usar o Chrome instalado.
+
+O envio por e-mail tem uma suíte adicional. Execute `pnpm --filter web exec playwright test --config playwright.commercial-documents.config.ts finance-email-bff.spec.ts finance-email-ui.spec.ts` usando o mesmo build. O teste da prévia rejeita filtros desconhecidos e chaves repetidas e preserva os filtros da carteira. O teste da tesouraria lê o texto do PDF recebido pelo transporte local e procura cada um dos 105 identificadores.
+
+## Resultado do aceite local em 18 de novembro de 2026
+
+Na revisão de aplicação `4eda831c`, que integra o Financeiro com estoque e produção, passaram os 115 testes da API e os 15 testes de arquitetura. As três suítes Playwright passaram sem repetição ou teste pulado • 9 de tesouraria e gestão, 28 de carteiras, compras e folha e 15 de documentos financeiros e envio. A API e a web compilaram, a verificação de tipos da API passou e o ESLint aceitou os 64 arquivos TypeScript de web alterados em relação à base.
+
+Os relatórios JSON do Chromium ficam em `artifacts/danfe-browser/financeiro-256-tesouraria/report.json`, `artifacts/danfe-browser/financeiro-256-carteiras/report.json` e `artifacts/danfe-browser/financeiro-256-documentos/report.json` na cópia de trabalho. A rodada de tesouraria manteve o serviço legado fora do caminho do teste.
+
+O catálogo da revisão `d2770c2a` inclui as rotas financeiras e seus destinos no BFF. Passaram as 29 verificações de contratos, descoberta de rotas e contexto de produto. Para repetir, execute `node --test verification/test/contracts.test.mjs verification/test/product-context.test.mjs verification/test/discovery.test.mjs`.
 
 ## Pendências externas
 
-A empresa confirmou em 18 de novembro de 2026 que ainda não configurou uma conta de teste do Mercado Pago ou da Efí. A integração de cobrança para o piloto é Mercado Pago por API. A Efí pode fornecer o extrato CNAB 240 segmento E para a conciliação. A remessa e o retorno de cobrança por arquivo dependem do convênio e do leiaute contratado. O aceite bancário externo deve registrar o identificador de uma cobrança Pix e de um boleto no ambiente de testes, a confirmação do provedor e o líquido conciliado. [Configuração e roteiro de homologação](../../telas/financeiro/caixas-bancos/OPERACAO-BANCARIA.md)
+A empresa confirmou em 18 de novembro de 2026 que ainda não configurou uma conta de teste do Mercado Pago ou da Efí. O piloto usa a API do Mercado Pago. O aceite externo deve registrar a emissão de Pix e boleto, a consulta de cada identificador e a recepção de uma notificação de teste. Os relatórios oficiais de teste do Mercado Pago vêm sem movimentações. O exemplo com tarifa e líquido pode ser repetido com a instituição local, e a conferência de um extrato real depende de habilitação posterior. [Configuração e homologação](../../telas/financeiro/caixas-bancos/OPERACAO-BANCARIA.md) • [Relatórios de teste do Mercado Pago](https://www.mercadopago.com.br/developers/pt/docs/reports/account-money/introduction)
+
+A Efí disponibiliza a API para baixar o extrato CNAB 240 aceito na conciliação do ERP. Para transmitir remessa e retorno de cobrança por arquivo, a empresa ainda precisa identificar o banco e seu convênio. O [roteiro de integração por arquivo](../../telas/financeiro/caixas-bancos/OPERACAO-BANCARIA.md#integrar-cobrança-por-remessa-e-retorno-cnab) identifica os dados bancários necessários, a implementação do adaptador e os testes de registro, rejeição e liquidação.
 
 O responsável financeiro deve conferir o mapeamento das naturezas e o contador deve aprovar as regras de débito e crédito da empresa antes do fechamento oficial. A revisão da implementação foi solicitada em branch local.
