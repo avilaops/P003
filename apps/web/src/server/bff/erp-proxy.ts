@@ -1,7 +1,6 @@
 import "server-only"
-import { stockLocationPath } from "./stock-location-path"
 import { fiscalApiOrigin } from "@/lib/api/local-fiscal-origin"
-import { selectErpBackend } from "@/server/bff/erp-backend"
+import { selectErpBackend, stockLocationPath } from "@/server/bff/erp-backend"
 
 import { currentIdentitySession, currentSession, erpConfiguration } from "@/server/auth/erp-session"
 

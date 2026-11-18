@@ -1,5 +1,6 @@
 import "server-only"
 import { stockLocationPath } from "./stock-location-path"
+export { stockLocationPath }
 
 // Permanent ownership after the four-module transition. The previous release,
 // rather than traffic flags, is the operational return path.

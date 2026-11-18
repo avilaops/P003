@@ -613,7 +613,7 @@ test("estoque mantém busca, página e foco no SKU com barra e invalida a seleç
       await expect(table.locator("dl dt")).toHaveText(["Saldo","Reservado","Disponível","Valor"])
       await expect(table.locator("dl dd")).toHaveText(["0","0","0","A apurar"])
     }
-    else await expect(table.getByRole("columnheader")).toHaveText(["Produto","SKU","Unidade","Saldo","Reservado","Disponível","Quantidades e ação"])
+    else await expect(table.getByRole("columnheader")).toHaveText(["Produto","SKU","Unidade","Saldo","Reservado","Disponível","Valor","Quantidades e ação"])
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
   }
   await link.focus()
