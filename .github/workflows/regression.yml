@@ -31,7 +31,7 @@ jobs:
       packages: write
     env:
       SOURCE: ${{ inputs.source_sha }}
-      REGISTRY: ghcr.io/avilaops/erp-next-contract-validator
+      REGISTRY: ghcr.io/avilaops/erp-next-contract-validator-private
     steps:
     - uses: actions/checkout@v4
       with:
@@ -68,10 +68,10 @@ jobs:
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
-        endpoint="users/avilaops/packages/container/erp-next-contract-validator"
+        endpoint="users/avilaops/packages/container/erp-next-contract-validator-private"
         require_private_package() {
           gh api "$endpoint" > "$RUNNER_TEMP/validator-destination.json" || return 1
-          jq -se 'length == 1 and (.[0] | .name == "erp-next-contract-validator" and .visibility == "private" and .owner.login == "avilaops")' \
+          jq -se 'length == 1 and (.[0] | .name == "erp-next-contract-validator-private" and .visibility == "private" and .owner.login == "avilaops")' \
             "$RUNNER_TEMP/validator-destination.json" >/dev/null
         }
         require_private_package

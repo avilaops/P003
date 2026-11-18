@@ -51,9 +51,11 @@ class WorkflowTests(unittest.TestCase):
         self.assertGreaterEqual(policy['timeout-minutes'], 15)
 
     def test_validator_push_requires_existing_private_account_package(self):
-        steps = self.workflows()['regression.yml']['jobs']['contracts-validator']['steps']
+        job = self.workflows()['regression.yml']['jobs']['contracts-validator']
+        self.assertEqual(job['env']['REGISTRY'], 'ghcr.io/avilaops/erp-next-contract-validator-private')
+        steps = job['steps']
         publish = next(step['run'] for step in steps if 'docker push' in step.get('run', ''))
-        self.assertIn('endpoint="users/avilaops/packages/container/erp-next-contract-validator"', publish)
+        self.assertIn('endpoint="users/avilaops/packages/container/erp-next-contract-validator-private"', publish)
         self.assertIn('gh api "$endpoint" > "$RUNNER_TEMP/validator-destination.json" || return 1', publish)
         self.assertIn('.visibility == "private"', publish)
         self.assertIn('length == 1', publish)
