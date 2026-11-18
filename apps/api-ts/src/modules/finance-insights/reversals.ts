@@ -1,3 +1,4 @@
+import { postOperationReversal } from "../finance-management/operation-postings.js"
 import { randomUUID } from "node:crypto"
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
@@ -116,6 +117,7 @@ async function reverse(context: AuthorizedContext, headers: Headers, input: Inpu
     "INSERT INTO finance_operation_reversals(tenant_id,operation_id,occurred_on,reason,recorded_by,entry_id) VALUES($1,$2,$3,$4,$5,$6)",
     [tenantId, input.id, input.occurredOn, input.reason, context.authSubject, entryId],
   )
+  if (operation.kind === "advance" || operation.kind === "restructure") await postOperationReversal(context, headers, input.id)
   await record(context, headers, "finance_operation", input.id, "finance.operation.reversed", {
     occurredOn: input.occurredOn,
     reason: input.reason,

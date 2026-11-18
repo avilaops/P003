@@ -223,6 +223,11 @@ test(
         "payable.cash",
         "commission.closing",
         "receivable.non_cash",
+        "receivable.advance",
+        "payable.advance",
+        "payable.non_cash",
+        "receivable.restructure_interest",
+        "payable.restructure_interest",
       ])
         await accounting("rules", { eventType, debitId: debit, creditId: credit })
       const oldPurchase = randomUUID(),
@@ -277,6 +282,86 @@ test(
         ),
       )
       await accounting("close", { month: "2025-01", reason: "Conferência contábil" })
+      const advanceInput = {
+        kind: "advance",
+        accountId: bank,
+        partyId: tenant,
+        amount: "50.00",
+        occurredOn: "2025-01-25",
+        reason: "Antecipação comercial",
+        side: "receivable",
+      }
+      assert.equal((await send("finance/operations", advanceInput, 1)).statusCode, 409)
+      assert.equal(
+        (
+          await pg.query("SELECT count(*)::int AS n FROM finance_operations WHERE tenant_id=$1 AND kind='advance'", [
+            tenant,
+          ])
+        ).rows[0].n,
+        0,
+      )
+      async function balancedReversal(sourceId: string, type: string, cents: string) {
+        const { rows } = await pg.query(
+          `SELECT e.id AS event,e.source_id,e.document_type,e.document_id,j.debit_id,j.credit_id,j.amount_cents,j.reverses_entry_id AS original,
+           j.id FROM accounting_events e JOIN accounting_entries j ON (j.tenant_id,j.event_id)=(e.tenant_id,e.id)
+           WHERE e.tenant_id=$1 AND (e.source_id=$2 OR e.reverses_event_id IN(SELECT id FROM accounting_events WHERE tenant_id=$1 AND source_id=$2))
+           AND e.event_type IN($3,$3||'.reversal') ORDER BY (e.reverses_event_id IS NOT NULL)`,
+          [tenant, sourceId, type],
+        )
+        assert.equal(rows.length, 2)
+        assert.equal(rows[0].source_id, sourceId)
+        assert.notEqual(rows[1].source_id, sourceId)
+        assert.equal(rows[1].original, rows[0].id)
+        assert.equal(rows[0].document_type, "party")
+        assert.equal(rows[0].document_id, tenant)
+        assert.equal(rows[0].debit_id, rows[1].credit_id)
+        assert.equal(rows[0].credit_id, rows[1].debit_id)
+        assert.ok(rows.every((e) => e.amount_cents === cents))
+      }
+      for (const side of ["receivable", "payable"]) {
+        const advance = check(
+          await send("finance/operations", { ...advanceInput, side, occurredOn: "2025-02-06" }, 1),
+          201,
+        )
+        check(
+          await send(
+            "finance/operation-reversals",
+            { id: advance.data.id, occurredOn: "2025-02-07", reason: "Antecipação devolvida" },
+            1,
+          ),
+        )
+        await balancedReversal(advance.data.id, side + ".advance", "5000")
+      }
+      const purchaseTitle = randomUUID()
+      await pg.query(
+        "INSERT INTO payables(id,tenant_id,receipt_id,supplier_name,due_date,amount_cents) VALUES($1,$2,$3,'Fornecedor','2025-02-01',25000)",
+        [purchaseTitle, tenant, oldReceipt],
+      )
+      const debt = check(
+        await send(
+          "finance/operations",
+          {
+            kind: "restructure",
+            side: "payable",
+            partyId: tenant,
+            reason: "Reparcelamento fornecedor",
+            occurredOn: "2025-02-10",
+            targets: [{ side: "payable", id: purchaseTitle, amount: "250.00", revision: "1" }],
+            schedule: [{ dueOn: "2025-03-01", amount: "275.00" }],
+            interest: "25.00",
+          },
+          1,
+        ),
+        201,
+      )
+      check(
+        await send(
+          "finance/operation-reversals",
+          { id: debt.data.id, occurredOn: "2025-02-12", reason: "Acordo desfeito" },
+          1,
+        ),
+      )
+      await balancedReversal(debt.data.id, "payable.restructure_interest", "2500")
       assert.equal(
         (
           await send(
@@ -387,6 +472,7 @@ test(
       )
       assert.equal(check(await get(commissions)).data.openAmount, "-92.00")
       assert.equal(check(await get(receivables)).data.outstandingAmount, "1000.00")
+      await balancedReversal(restructured.data.id, "receivable.restructure_interest", "14000")
       const adj = check(
         await send(
           commissions + "/adjustments",

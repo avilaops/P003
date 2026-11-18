@@ -1,3 +1,4 @@
+import { postCollectionFee } from "../finance-management/operation-postings.js"
 import { randomUUID } from "node:crypto"
 import { z } from "zod"
 import { requirePermission, type AuthorizedContext } from "../../platform/access.js"
@@ -329,6 +330,7 @@ export async function observePayment(
     settled_at=CASE WHEN $4='paid' THEN coalesce(settled_at,now()) ELSE settled_at END WHERE tenant_id=$1 AND id=$2`,
     [ctx.tenantId, charge.id, p.id, state, instructions, reason, feeId],
   )
+  if (feeId) await postCollectionFee(ctx, headers, charge.id)
   await ctx.client.query(
     "INSERT INTO finance_collection_events(tenant_id,charge_id,source,event_key,outcome) VALUES($1,$2,$3,$4,$5)",
     [ctx.tenantId, charge.id, source, eventKey, state],

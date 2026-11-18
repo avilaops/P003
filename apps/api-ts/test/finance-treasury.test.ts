@@ -357,6 +357,9 @@ test(
           ),
         true,
       )
+      const feeExpense=randomUUID(),feeBank=randomUUID()
+      await seed.query("INSERT INTO accounting_accounts(tenant_id,id,code,name,classification) VALUES($1,$2,'4.01','Tarifas','expense'),($1,$3,'1.01','Banco','asset')",[tenant,feeExpense,feeBank])
+      await seed.query("INSERT INTO accounting_rules(tenant_id,event_type,debit_id,credit_id) VALUES($1,'collection.fee',$2,$3)",[tenant,feeExpense,feeBank])
       const payment: BankPayment = {
         id: "1234",
         live_mode: false,
@@ -385,6 +388,11 @@ test(
           },
           true,
         )
+      const fees=await seed.query(`SELECT j.debit_id,j.credit_id,j.amount_cents,e.document_type,e.document_id,e.source_id
+        FROM accounting_events e JOIN accounting_entries j ON j.tenant_id=e.tenant_id AND j.event_id=e.id
+        WHERE e.tenant_id=$1 AND e.event_type='collection.fee'`,[tenant])
+      const bankFee=(await seed.query("SELECT fee_entry_id FROM finance_collection_charges WHERE tenant_id=$1 AND id=$2",[tenant,charge])).rows[0]
+      assert.deepEqual(fees.rows,[{debit_id:feeExpense,credit_id:feeBank,amount_cents:"200",document_type:"account",document_id:account,source_id:bankFee.fee_entry_id}])
       assert.equal(
         (await seed.query("SELECT count(*)::int n FROM receivable_payments WHERE receivable_id=ANY($1::uuid[])", [ids]))
           .rows[0].n,

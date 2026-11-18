@@ -1,3 +1,4 @@
+import { recoverOperationPostings } from "./operation-postings.js"
 import { consumeInvoices, onPurchaseReceipt, onPurchaseReversal, onSettlement } from "./accrual.js"
 import { type Context, type Headers } from "./shared.js"
 
@@ -22,6 +23,7 @@ export async function recoverAccountingHistory(context: Context, headers: Header
     [tenantId],
   )
   await consumeInvoices(context, headers)
+  await recoverOperationPostings(context, headers)
   const purchases = await client.query(
     `SELECT p.id FROM purchase_receipts p WHERE p.tenant_id=$1 AND p.amount_cents>0
     AND NOT EXISTS(SELECT 1 FROM accounting_events e WHERE e.tenant_id=p.tenant_id AND e.event_type='purchase.receipt' AND e.source_id=p.id)`,

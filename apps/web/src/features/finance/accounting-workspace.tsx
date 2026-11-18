@@ -30,6 +30,11 @@ const events: Record<string, string> = {
   "sale.invoice": "Venda faturada",
   "purchase.receipt": "Entrada de compra",
   "commission.closing": "Fechamento de comissão",
+  "receivable.advance": "Adiantamento recebido de cliente",
+  "payable.advance": "Adiantamento a fornecedor",
+  "receivable.restructure_interest": "Juros da renegociação a receber",
+  "payable.restructure_interest": "Juros da renegociação a pagar",
+  "collection.fee": "Tarifa de cobrança bancária",
   "manual.reversal": "Estorno contábil",
 }
 const parts: Record<string, string> = {
@@ -52,6 +57,8 @@ function source(type: string, id: string) {
     purchase: "/compras/pedidos/",
     receivable: "/financeiro/contas-receber/",
     payable: "/financeiro/contas-pagar/",
+    party: "/financeiro/ficha-financeira?partyId=",
+    account: "/financeiro/caixas-bancos?accountId=",
   }
   return paths[type] ? paths[type] + id : null
 }
