@@ -31,8 +31,8 @@ as imagens já construídas e validadas. O procedimento detalhado e a retenção
 estão em [CI, publicação e retenção](CI-CD.md).
 
 Antes das migrações, preserve um backup do schema e confira os arquivos/checksums
-contra `_sqlx_migrations`. Execute somente `erp-next-api migrate`, usando as
-migrações da mesma revisão da API. O SQLx aplica apenas as pendentes. Bootstrap e
+contra `_sqlx_migrations`. O dispatcher executa `node /app/apps/api-ts/dist/migrate.js /app/migrations`
+na imagem web candidata. O migrador TypeScript aplica as pendentes sob o mesmo lock. Bootstrap e
 importação do legado são operações de provisionamento e não fazem parte de uma
 publicação normal. Não os repita.
 
@@ -41,7 +41,7 @@ O dispatcher versionado em `deploy/production-deploy.sh` recebe também
 executa o helper antes de instalar o rollback de ativação ou iniciar serviços.
 O helper guarda schema, ledger SQLx e diagnóstico em
 `private/migration-<sha>/`, com diretório privado e arquivos de acesso restrito.
-Confere o banco local esperado e aplica o comando `migrate` da imagem candidata
+Confere o banco local esperado e executa o migrador TypeScript da imagem candidata
 por socket PostgreSQL, com a identidade local do postgres. Nenhuma senha é
 incluída na linha de comando. Não compila código no servidor.
 

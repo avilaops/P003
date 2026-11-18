@@ -1,4 +1,5 @@
 import { Suspense } from "react"
+import Link from "next/link"
 import { connection } from "next/server"
 import { PageHeader } from "@/components/page-header"
 import { currentWorkspaceAccess, WorkspaceAccessNotice } from "@/features/access/workspace-access"
@@ -20,6 +21,7 @@ async function AuthorizedReference({ kind, id, mode = "list" }: { kind: Referenc
   const access = await currentWorkspaceAccess()
   const config = referenceConfigs[kind]
   return <div className="mx-auto w-full min-w-0 max-w-6xl px-4 pb-24 pt-6 sm:px-6">
+    {access.session && kind==="depositos" && mode==="list" && <Link className="inline-flex min-h-11 items-center font-medium text-primary underline" href="/estoque/transferencias">Saldos por depósito e transferências</Link>}
     {access.session ? <ReferenceWorkspace key={`${kind}:${id || "new"}:${mode}`} kind={kind} id={id} mode={mode} /> : <>
       <PageHeader eyebrow="Cadastros" title={config.title} description={config.description} />
       <WorkspaceAccessNotice state={access.state} />

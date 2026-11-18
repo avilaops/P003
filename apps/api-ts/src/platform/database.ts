@@ -47,13 +47,14 @@ export async function withTenantTransaction<T>(
   authSubject: string,
   operation: (context: TenantContext) => Promise<T>,
   write = false,
+  consistentRead = false,
 ): Promise<T> {
   if (!tenantSchema.safeParse(tenantId).success) {
     throw new Problem(400, "invalid_tenant", "Identificador da empresa inválido")
   }
   const client = await pool.connect()
   try {
-    await client.query("BEGIN")
+    await client.query(consistentRead ? "BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY" : "BEGIN")
     await client.query(
       "SELECT set_config('app.tenant_id',$1,true),set_config('app.auth_subject',$2,true)",
       [tenantId, authSubject],

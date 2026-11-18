@@ -1,5 +1,7 @@
-import { PurchasingCapabilityUnavailable } from "@/features/purchasing/purchasing-capability-unavailable"
+import { ReplenishmentPage } from "@/features/inventory/replenishment-access"
 
 export const metadata = { title: "Detalhes de sugestão de compra" }
 
-export default function Page() { return <PurchasingCapabilityUnavailable title="Detalhe de sugestão de compra" description="Detalhes de uma necessidade de reposição persistida." requirement="Esta área não possui sugestões persistidas para consulta." /> }
+export default function Page({ params }: { params: Promise<{id:string}> }) {
+  return <ReplenishmentPage params={params} />
+}

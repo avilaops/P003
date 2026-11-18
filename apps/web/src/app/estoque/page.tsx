@@ -1,5 +1,4 @@
-import { Suspense } from "react"
-import { StockAccess } from "@/features/inventory/stock-access"
-export default function Page() { return <Suspense fallback={<p role="status">Carregando estoque…</p>}><StockAccess /></Suspense> }
+import { StockPage } from "@/features/inventory/stock-access"
 
 export const metadata = { title: "Estoque" }
+export default function Page() { return <StockPage path="/estoque" /> }

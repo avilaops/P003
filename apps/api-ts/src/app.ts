@@ -1,6 +1,10 @@
 import Fastify, { type FastifyInstance } from "fastify"
 import { randomUUID } from "node:crypto"
 
+import { registerLocationRoutes } from "./modules/inventory/location-routes.js"
+import { registerCountRoutes } from "./modules/inventory/count-routes.js"
+import { registerStockRoutes } from "./modules/inventory/routes.js"
+import { registerProduction } from "./modules/production/routes.js"
 import { registerPartyRoutes } from "./modules/parties/routes.js"
 import { registerDashboardRoutes } from "./modules/dashboard/routes.js"
 import { registerReportRoutes } from "./modules/reports/routes.js"
@@ -66,6 +70,7 @@ export function buildApp(_dependencies: AppDependencies): FastifyInstance {
     const problem = error instanceof Problem ? error
       : ["FST_ERR_CTP_INVALID_JSON_BODY", "FST_ERR_CTP_EMPTY_JSON_BODY", "FST_ERR_CTP_BODY_TOO_LARGE", "FST_ERR_CTP_INVALID_MEDIA_TYPE"].includes(databaseCode) ? new Problem(422, "invalid_input", request.routeOptions.url === "/api/v1/preferences" ? "Preferências inválidas ou campos desconhecidos" : "JSON inválido ou campos desconhecidos")
       : databaseCode === "23505" ? new Problem(409, "domain_conflict", "Já existe um cadastro com estes dados nesta empresa")
+      : databaseCode === "P4101" ? new Problem(409, "domain_conflict", error instanceof Error ? error.message : "O depósito não permite esta operação")
       : databaseCode === "23503" || databaseCode === "23514" ? new Problem(422, "invalid_input", "Cadastro incompatível com os registros da empresa")
       : new Problem(500, "internal_error", "Erro interno")
     void reply
@@ -74,6 +79,10 @@ export function buildApp(_dependencies: AppDependencies): FastifyInstance {
       .header("cache-control", "no-store")
       .send(problem.toJSON())
   })
+  registerStockRoutes(app, _dependencies)
+  registerProduction(app, _dependencies)
+  registerLocationRoutes(app, _dependencies)
+  registerCountRoutes(app, _dependencies)
   registerPartyRoutes(app, _dependencies)
   registerDashboardRoutes(app, _dependencies)
   registerReportRoutes(app, _dependencies)
