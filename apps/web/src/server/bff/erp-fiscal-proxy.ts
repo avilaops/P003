@@ -2,6 +2,7 @@ import "server-only"
 
 import { currentSession, erpConfiguration } from "../auth/erp-session"
 import { fiscalApiOrigin } from "@/lib/api/local-fiscal-origin"
+import { typescriptOrigin } from "./erp-backend"
 
 const noStore = { "Cache-Control": "no-store, no-transform", "X-Content-Type-Options": "nosniff" }
 const failure = (title: string, status: number) => Response.json({ title }, { status, headers: noStore })
@@ -21,6 +22,7 @@ async function bounded(stream: ReadableStream<Uint8Array> | null, maximum: numbe
 }
 
 export async function forwardFiscal(request: Request, resource: string) {
+  const nfeEmail = /^\/nfe\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\/email$/i.test(resource)
   const download = /^\/(?:received-nfes|outgoing-imports)\/[1-9][0-9]{0,18}\/(xml|danfe)$/.exec(resource) || /^\/received-nfses\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\/(xml)$/i.exec(resource) || /^\/nfe\/[a-f0-9-]{36}\/(xml)$/i.exec(resource) || /^\/monitor\/documents\/[1-9][0-9]{0,18}\/(xml)$/.exec(resource)
   const manifestation = /^\/monitor\/documents\/[1-9][0-9]{0,18}\/manifest$/.test(resource)
   const document = /^\/(?:received-nfes|outgoing-imports)\/[1-9][0-9]{0,18}$/.test(resource)
@@ -38,7 +40,7 @@ export async function forwardFiscal(request: Request, resource: string) {
   const valid = request.method === "GET"
     ? ["/config", "/readiness", "/received-nfes", "/outgoing-imports", "/certificate", "/nfe", "/issued-nfes", "/manifestations", "/monitor", "/nfe-events"].includes(resource) || fiscalSettings || operationRead || document || draft || preparation || cteRead || cteCommercialRead || nfseRead || !!download
     : request.method === "PUT" && (["/config", "/certificate"].includes(resource) || fiscalSettings || draft) || request.method === "DELETE" && resource === "/certificate" || request.method === "POST" && (["/received-nfes/import", "/outgoing-imports/import", "/nfe", "/manifestations", "/number-voids", "/monitor/sync", "/ibpt/quote"].includes(resource) || operationWrite || cteCommercialWrite || manifestation || nfseImport)
-  if (!valid) return failure("Recurso fiscal inválido", 400)
+  if (!valid && !(nfeEmail && ["GET", "POST"].includes(request.method))) return failure("Recurso fiscal inválido", 400)
   let body: Uint8Array<ArrayBuffer> | undefined
   try {
     const config = erpConfiguration()
@@ -47,7 +49,8 @@ export async function forwardFiscal(request: Request, resource: string) {
     const write = request.method !== "GET"
     if (write && request.headers.get("origin") !== config.origin) return failure("Origem não autorizada", 403)
     if ((write || download || cteRead || cteCommercialRead || nfseRead) && request.headers.get("x-tenant-id") !== session.tenantId) return failure("A empresa da sessão mudou. Recarregue os documentos antes de continuar", 409)
-    const api = fiscalApiOrigin(`/fiscal${resource}`, config.api, process.env.ERP_FISCAL_API_URL, process.env.NODE_ENV)
+    if (nfeEmail && request.headers.has("x-tenant-id") && request.headers.get("x-tenant-id") !== session.tenantId) return failure("A empresa da sessão mudou. Recarregue a NF-e", 409)
+    const api = nfeEmail ? typescriptOrigin({ ERP_TYPESCRIPT_API_URL: process.env.ERP_TYPESCRIPT_API_URL }) : fiscalApiOrigin(`/fiscal${resource}`, config.api, process.env.ERP_FISCAL_API_URL, process.env.NODE_ENV)
     const upstream = new URL(`${api}/api/v1/fiscal${resource}`)
     const query = new URL(request.url).searchParams
     for (const [key, value] of query) {
@@ -71,7 +74,7 @@ export async function forwardFiscal(request: Request, resource: string) {
     if (write && etag) headers.set("If-Match", etag)
     const command = request.headers.get("idempotency-key")
     if (write && command) headers.set("Idempotency-Key", command)
-    const response = await fetch(upstream, { method: request.method, headers, body, cache: "no-store", redirect: "error", signal: AbortSignal.timeout(operationWrite || nfseImport || resource === "/outgoing-imports/import" || resource === "/manifestations" || resource === "/number-voids" ? 110_000 : download || resource.startsWith("/monitor/") ? 60_000 : resource === "/certificate" ? 45_000 : 15_000) })
+    const response = await fetch(upstream, { method: request.method, headers, body, cache: "no-store", redirect: "error", signal: AbortSignal.timeout(operationWrite || nfeEmail && write || nfseImport || resource === "/outgoing-imports/import" || resource === "/manifestations" || resource === "/number-voids" ? 110_000 : download || resource.startsWith("/monitor/") ? 60_000 : resource === "/certificate" ? 45_000 : 15_000) })
     let bytes: Buffer
     try { bytes = await bounded(response.body, 8 * 1024 * 1024) }
     catch { return failure("Resposta fiscal excede o limite de download", 502) }

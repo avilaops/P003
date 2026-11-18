@@ -26,7 +26,7 @@ test("release dispatcher preserves private config and pins the restricted MCP ru
     assert.equal(value.api.environment.DANFE_MCP_TOKEN, privateToken);
     assert.equal(value.api.environment.ERP_CNPJ_WS_ENABLED, "true");
     assert.equal(value.api.environment.DANFE_MCP_TOOL_PREFIX, "bare");
-    assert.equal(value.api.environment.DANFE_MCP_URL, "http://127.0.0.1:8093/mcp");
+    assert.equal(value.api.environment.DANFE_MCP_URL, "http://127.0.0.1:8091/mcp/danfe");
     assert.equal(value.web.environment.ERP_SESSION_SECRET, "synthetic-original-session-secret");
     assert.equal(value["fiscal-mcp"].image, "erp-next-fiscal-mcp:sha-" + sha);
     assert.equal(value["fiscal-mcp"].read_only, true);
