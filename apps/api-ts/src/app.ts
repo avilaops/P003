@@ -38,6 +38,7 @@ import { registerDocumentCopies, type DocumentCopyIO } from "./modules/document-
 import { registerFinancialEmails } from "./modules/document-copies/financial-routes.js"
 import { registerContractPackage } from "./modules/document-copies/contract-package-routes.js"
 import { registerQualifiedReissue } from "./modules/contract-signatures/reissue.js"
+import { registerContractTemplateArchive } from "./modules/contract-templates/archive.js"
 
 export type AppDependencies = AccessDependencies & { outgoingNfse?: OutgoingNfseDependencies; nfeEmail?: NfeEmailIO; documentCopies?: DocumentCopyIO }
 
@@ -127,6 +128,7 @@ export function buildApp(_dependencies: AppDependencies): FastifyInstance {
   registerFinancialEmails(app, _dependencies, _dependencies.documentCopies)
   registerContractPackage(app, _dependencies, _dependencies.documentCopies, _dependencies.nfeEmail?.render)
   registerQualifiedReissue(app, _dependencies)
+  registerContractTemplateArchive(app, _dependencies)
   registerParticipantRoutes(app, _dependencies)
   return app
 }

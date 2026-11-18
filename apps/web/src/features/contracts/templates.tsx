@@ -29,9 +29,29 @@ export function Templates({ id }: { id?: string }) {
       <Editor tenant={listing.value.tenantId} canEdit={listing.value.canEdit} /> : id ? <Existing id={id} /> : <section className="form-section space-y-4">
         {listing.value.canEdit && <Link className={linkClass} href="/servicos/contratos/modelos/novo">Novo modelo</Link>}
         <p>Rascunhos em preparação. A publicação para uso nos pedidos é uma etapa separada.</p>
-        {!listing.value.data.length ? <p>Nenhum rascunho cadastrado.</p> : <ul className="space-y-3">{listing.value.data.map(model => <li key={model.id}><Link className={linkClass} href={`/servicos/contratos/modelos/${model.id}`}>{model.name}</Link> · Revisão {model.revision} · {model.publishedRevision ? `Publicada: revisão ${model.publishedRevision}` : "Ainda não publicado"}</li>)}</ul>}
+        <DraftList listing={listing.value} onArchived={listing.reload} />
       </section>}
     {!id && listing.value && <ConnectedModels tenant={listing.value.tenantId} />}
+  </>
+}
+
+function DraftList({ listing, onArchived }: { listing: Listing; onArchived: () => void }) {
+  const command = useCommand()
+  const [target, setTarget] = useState<string | null>(null)
+  async function archive(model: Listing["data"][number]) {
+    const retry = command.uncertain && target === model.id
+    if (!retry && !window.confirm(`Excluir o modelo "${model.name}"? Ele deixa de aparecer nesta lista e nos novos pedidos. Contratos já gerados, versões publicadas e o histórico são preservados.`)) return
+    setTarget(model.id)
+    const result = await command.send<{ archived: true }>(`/api/erp/contract-template-drafts/${model.id}/archive`, listing.tenantId, {}, `"${model.revision}"`)
+    if (result) { setTarget(null); command.reset(); onArchived() }
+  }
+  if (!listing.data.length) return <p>Nenhum rascunho cadastrado.</p>
+  return <>
+    <ul className="space-y-3">{listing.data.map(model => <li key={model.id} className="flex flex-wrap items-center gap-3">
+      <span><Link className={linkClass} href={`/servicos/contratos/modelos/${model.id}`}>{model.name}</Link> · Revisão {model.revision} · {model.publishedRevision ? `Publicada: revisão ${model.publishedRevision}` : "Ainda não publicado"}</span>
+      {listing.canEdit && <Button type="button" variant="outline" size="sm" aria-label={`Excluir modelo ${model.name}`} disabled={command.busy || command.stale || (command.uncertain && target !== model.id)} onClick={() => void archive(model)}>{command.busy && target === model.id ? "Excluindo…" : command.uncertain && target === model.id ? "Conferir exclusão" : "Excluir"}</Button>}
+    </li>)}</ul>
+    {command.error && <RequestError message={command.error} status={command.status} />}
   </>
 }
 
