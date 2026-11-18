@@ -6,13 +6,14 @@ import { normalizedDatabaseId } from "../../platform/database-id.js"
 import { Problem } from "../../platform/problem.js"
 import { decimal, fixed } from "../sales/fixed.js"
 import { queryInteger } from "../registrations/query.js"
+import { serialList } from "./serials.js"
 
 const reasonInput = z.string().trim().min(3).max(500)
 const transferInput = z.strictObject({ fromId: normalizedDatabaseId, toId: normalizedDatabaseId, reason: reasonInput,
-  items: z.array(z.strictObject({ productId: normalizedDatabaseId, quantity: z.string() })).min(1).max(100) })
+  items: z.array(z.strictObject({ productId: normalizedDatabaseId, quantity: z.string(), serials:serialList.optional() })).min(1).max(100) })
 const reverseInput = z.strictObject({ reason: reasonInput })
 const pageInput = z.strictObject({ id: normalizedDatabaseId.optional(), offset: queryInteger(0, 100_000).default(0), limit: queryInteger(1, 100).default(25) })
-type Line = { productId: string; quantity: string; issueId?: string; receiptId?: string }
+type Line = { productId: string; quantity: string; issueId?: string; receiptId?: string; serials?:string[]|undefined }
 type Transfer = { fromId: string; toId: string; reason: string; items: Line[] }
 type Headers = Record<string, string | string[] | undefined>
 const unavailable = () => new Problem(404, "not_found", "Transferência não encontrada nesta empresa")
@@ -64,8 +65,8 @@ async function postPair({ client, tenantId }: AuthorizedContext, id: string, lin
   for (const direction of ["issue","receipt"] as const) {
     const after = BigInt(balance.quantity_micros) - (direction==="issue" ? quantity : 0n)
     await client.query("UPDATE stock_balances SET quantity_micros=$3 WHERE tenant_id=$1 AND product_id=$2", [tenantId,line.productId,after])
-    await client.query(`INSERT INTO stock_movements(id,tenant_id,product_id,direction,quantity_micros,balance_after_micros,reason,transfer_id,reverses_id)
-      VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9)`, [randomUUID(),tenantId,line.productId,direction,quantity,after,reason,id,direction==="issue" ? line.receiptId : line.issueId])
+    await client.query(`INSERT INTO stock_movements(id,tenant_id,product_id,direction,quantity_micros,balance_after_micros,reason,transfer_id,reverses_id,serial_numbers)
+      VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`, [randomUUID(),tenantId,line.productId,direction,quantity,after,reason,id,direction==="issue" ? line.receiptId : line.issueId,direction==="issue" ? line.serials : null])
   }
 }
 

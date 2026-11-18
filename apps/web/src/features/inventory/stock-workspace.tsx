@@ -11,6 +11,7 @@ import { SearchInput } from "@/components/search-input"
 import { useResource } from "@/hooks/use-operation"
 import { commercialQuantity } from "@/features/sales/order-presentation"
 import { StockHistory } from "./stock-history"
+import { stockMoney } from "./stock-model"
 import { historyPath, manualPath, pageOffset, pageSize, stockUrl, textLink, type StockList } from "./stock-model"
 
 export function StockWorkspace({ tenant, path: pathname }: { tenant: string; path: string }) {
@@ -57,7 +58,7 @@ function StockGrid({ tenant, path }: { tenant: string; path: string }) {
   const manual = path === manualPath
   const title = manual ? "Novo lançamento de estoque" : path === historyPath ? "Lançamentos de estoque" : "Saldos de estoque"
   return <div className="workspace-page-frame">
-    <PageHeader title={title} actions={<Link href="/cadastros/produtos" className={textLink}>Consultar catálogo</Link>} />
+    <PageHeader title={title} actions={<div className="flex flex-wrap gap-3"><Link href="/estoque/series" className={textLink}>Rastrear número de série</Link><Link href="/cadastros/produtos" className={textLink}>Consultar catálogo</Link></div>} />
     <section className="form-section min-w-0 space-y-4" aria-label="Consulta de saldos">
       <form className="flex flex-wrap items-end gap-2" onSubmit={event => {
         event.preventDefault()
@@ -78,7 +79,7 @@ function StockGrid({ tenant, path }: { tenant: string; path: string }) {
           <thead><tr><th className="w-[56%] lg:w-[25%]" scope="col">Produto</th><th className="hidden lg:table-cell" scope="col">SKU</th>
             <th className="hidden w-[7%] lg:table-cell" scope="col">Unidade</th>
             {warehouseName && <th scope="col" className="hidden lg:table-cell">Depósito</th>}
-            {["Saldo", "Reservado", "Disponível"].map(label => <th key={label} className="hidden text-right lg:table-cell" scope="col">{label}</th>)}
+            {["Saldo", "Reservado", "Disponível", "Valor"].map(label => <th key={label} className="hidden text-right lg:table-cell" scope="col">{label}</th>)}
             <th scope="col" className="lg:w-[17%]"><span className="lg:sr-only">Quantidades e ação</span></th></tr></thead>
           <tbody>{stocks.data.map(stock => {
             const href = stockUrl(manual && stocks.canEdit ? manualPath : historyPath, { productId: stock.productId, sku: stock.sku, tenant, from: path, q, offset, warehouseId })
@@ -88,9 +89,11 @@ function StockGrid({ tenant, path }: { tenant: string; path: string }) {
               <td className="hidden lg:table-cell">{stock.sku}</td><td className="hidden lg:table-cell">{stock.unit}</td>
               {warehouseName && <td className="hidden lg:table-cell">{warehouseName}</td>}
               {[stock.quantity, stock.reserved, stock.available].map((value, i) => <td key={i} className="hidden text-right tabular-nums lg:table-cell">{commercialQuantity(value)}</td>)}
+              <td className="hidden text-right tabular-nums lg:table-cell">{stockMoney(stock.stockValue)}</td>
               <td className="align-top"><dl className="text-sm tabular-nums lg:hidden">
                 {([["Saldo", stock.quantity], ["Reservado", stock.reserved], ["Disponível", stock.available]] as const).map(([label, amount]) =>
                   <div key={label} className="flex flex-wrap justify-between gap-x-1"><dt>{label}</dt><dd>{commercialQuantity(amount)}</dd></div>)}
+                <div className="flex flex-wrap justify-between gap-x-1"><dt>Valor</dt><dd>{stockMoney(stock.stockValue)}</dd></div>
               </dl><Link id={"stock-" + stock.productId} className={textLink} href={href}
                 aria-label={`${manual && stocks.canEdit ? "Lançar movimento" : "Ver movimentos"} de ${stock.name} • SKU ${stock.sku}`}
                 onNavigate={() => {
@@ -101,6 +104,7 @@ function StockGrid({ tenant, path }: { tenant: string; path: string }) {
         </DataTable> : <p>{stocks.total ? "Nenhum produto nesta página." : "Nenhum produto encontrado."}</p>}
         <Pagination offset={offset} total={stocks.total} pageSize={pageSize} maxOffset={100000} onOffsetChange={value => setQuery(null, value)} />
       </>}
+      <Link className={textLink} href="/estoque/fechamento">Custos e fechamento mensal</Link>
       <Link className={textLink} href="/cadastros/produtos/novo" target="_blank" rel="noopener noreferrer">Cadastrar produto</Link>
     </section>
   </div>

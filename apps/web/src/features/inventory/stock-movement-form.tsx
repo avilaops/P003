@@ -18,11 +18,14 @@ export function StockMovementForm({ tenant, product, reversal, resetReversal, co
   const [direction, setDirection] = useState<"receipt" | "issue">(reversal?.direction === "receipt" ? "issue" : "receipt")
   const [quantity, setQuantity] = useState(reversal?.quantity || "")
   const [reason, setReason] = useState("")
+  const [effectiveDate, setEffectiveDate] = useState("")
+  const [unitCost, setUnitCost] = useState("")
+  const [serials,setSerials] = useState("")
   const [warehouseId,setWarehouse] = useState(selectedWarehouse||"")
   const [saving, setSaving] = useState(false), [uncertain, setUncertain] = useState(false)
   const [error, setError] = useState("")
   const pending = useRef(false), command = useRef<{ key: string; body: string } | null>(null)
-  useNavigationGuard(quantity || reason || reversal || uncertain ? "Descartar o lançamento ainda não confirmado?" : null)
+  useNavigationGuard(quantity || reason || unitCost || effectiveDate || reversal || uncertain ? "Descartar o lançamento ainda não confirmado?" : null)
   async function save(event: React.FormEvent) {
     event.preventDefault()
     if (pending.current || product.status !== "active") return
@@ -30,7 +33,10 @@ export function StockMovementForm({ tenant, product, reversal, resetReversal, co
     if (!uncertain && (!normalized || normalized === "0.000000")) { setError("Informe quantidade positiva com até seis casas decimais"); return }
     if (!uncertain) command.current = { key: crypto.randomUUID(),
       body: JSON.stringify({ productId: product.productId, direction, quantity: normalized, reason, reversesId: reversal?.id || null,
-        ...(!reversal && warehouseId ? {warehouseId} : {}) }) }
+        ...(effectiveDate ? {effectiveDate} : {}),
+        ...(direction==="receipt" && !reversal && unitCost ? {unitCost:normalizeDecimal(unitCost,6)} : {}),
+        ...(!reversal && warehouseId ? {warehouseId} : {}),
+        ...(!reversal && product.tracksSerials ? {serials:serials.split(/\r?\n/).map(s=>s.trim()).filter(Boolean)} : {}) }) }
     const attempt = command.current!
     pending.current = true
     setSaving(true); setLocked(true); setError("")
@@ -46,7 +52,9 @@ export function StockMovementForm({ tenant, product, reversal, resetReversal, co
       }
       if (body.productId !== product.productId || typeof body.balanceAfter !== "string") throw new Error()
       command.current = null
+      setSerials("")
       setUncertain(false); setLocked(false); setDirection("receipt"); setReason(""); setQuantity("")
+      setUnitCost(""); setEffectiveDate("")
       const message = `Movimento confirmado. Saldo após o lançamento: ${commercialQuantity(body.balanceAfter)} ${product.unit}.`
       if (reversal) resetReversal()
       confirmed(message)
@@ -65,7 +73,10 @@ export function StockMovementForm({ tenant, product, reversal, resetReversal, co
       <label>Direção<select className="block h-9 w-full rounded-lg border px-3" value={direction} disabled={Boolean(reversal)}
         onChange={event => setDirection(event.target.value as typeof direction)}><option value="receipt">Entrada</option><option value="issue">Saída</option></select></label>
       <label>Quantidade (vírgula ou ponto)<Input required inputMode="decimal" pattern={decimalPattern(6)} maxLength={19} disabled={Boolean(reversal)} value={quantity} onChange={event => setQuantity(event.target.value)} /></label>
+      {!reversal && product.tracksSerials && <label>Números de série (um por linha)<textarea className="block w-full rounded border p-2" required value={serials} onChange={e=>setSerials(e.target.value)} /></label>}
       <label className="sm:col-span-2">Motivo<Input required minLength={3} maxLength={500} value={reason} onChange={event => setReason(event.target.value)} /></label>
+      <label>Data efetiva<Input type="date" value={effectiveDate} onChange={event=>setEffectiveDate(event.target.value)}/><span className="text-xs">Em branco • data de hoje</span></label>
+      {direction==="receipt" && !reversal && <label>Custo unitário de entrada (R$)<Input inputMode="decimal" pattern={decimalPattern(6)} maxLength={19} value={unitCost} onChange={event=>setUnitCost(event.target.value)}/></label>}
     </fieldset>
     {product.status !== "active" && <p>Reative o produto no catálogo antes de movimentar.</p>}
     {error && <p role="alert">{error}</p>}

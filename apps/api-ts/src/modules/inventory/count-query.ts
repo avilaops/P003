@@ -131,7 +131,6 @@ type CountLineRow = {
 }
 export async function countDetail(ctx: AuthorizedContext, id: string) {
   const count = await countSummary(ctx, id)
-  const showExpected = !count.blind || count.status !== "open"
   const { rows } = await ctx.client.query<CountLineRow>(
     `SELECT l.*,p.sku,p.name,p.unit FROM inventory_count_lines l
     JOIN products p ON (p.tenant_id,p.id)=(l.tenant_id,l.product_id) WHERE l.tenant_id=$1 AND l.count_id=$2 ORDER BY p.name,p.id`,
@@ -139,6 +138,9 @@ export async function countDetail(ctx: AuthorizedContext, id: string) {
   )
   const canApprove =
     ctx.permissions.includes("inventory.counts.approve") && count.createdBy !== ctx.authSubject && !(await participated(ctx, id))
+  const showExpected = !count.blind || count.status !== "open" || canApprove && rows.every(row=>
+    row.counted_quantity_micros !== null && (row.recounted_at !== null ||
+      !needsRecount(BigInt(row.expected_quantity_micros),BigInt(row.counted_quantity_micros),count.recountPercent)))
   return {
     tenantId: ctx.tenantId,
     canEdit: canEdit(ctx),
@@ -153,6 +155,7 @@ export async function countDetail(ctx: AuthorizedContext, id: string) {
         name: row.name,
         unit: row.unit,
         expectedQuantity: showExpected ? decimal(expected, 6) : null,
+        difference: showExpected && counted!==null ? (counted<expected ? "-" + decimal(expected-counted,6) : decimal(counted-expected,6)) : null,
         countedQuantity: counted === null ? null : decimal(counted, 6),
         note: row.note,
         countedAt: row.counted_at?.toISOString() ?? null,

@@ -217,6 +217,7 @@ function CountSession({ detail, reload, loading }: { detail: CountDetail; reload
                     Esperado • {commercialQuantity(l.expectedQuantity)} {l.unit}
                   </p>
                 )}
+                {l.difference!=null && <p>Diferença • {commercialQuantity(l.difference)} {l.unit}</p>}
                 <p>
                   {l.stockChanged
                     ? "Estoque alterado desde a abertura"
@@ -263,7 +264,7 @@ function CountSession({ detail, reload, loading }: { detail: CountDetail; reload
                 onChange={(e) => setCancelReason(e.target.value)}
               />
             </label>
-            <Button disabled={pending} variant="outline">
+            <Button type="submit" disabled={pending} variant="outline">
               Confirmar cancelamento
             </Button>
           </form>

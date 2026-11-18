@@ -1,4 +1,5 @@
 import { buildApp } from "./app.js"
+import { startCostWorker } from "./modules/inventory/cost-jobs.js"
 import { loadConfiguration } from "./platform/config.js"
 import { PostgresPool } from "./platform/database.js"
 import { FiscalCertificateVault } from "./modules/outgoing-nfse/certificate-vault.js"
@@ -11,7 +12,8 @@ const outgoingNfse = configuration.fiscalEngine ? (() => {
   return { engine: new HttpOutgoingNfseEngine(configuration.fiscalEngine.url, configuration.fiscalEngine.token), certificateProvider: vault.material.bind(vault), automaticEnabled: configuration.fiscalEngine.automaticEnabled }
 })() : undefined
 const app = buildApp({ pool, userinfoUrl: configuration.userinfoUrl, mcpResource: configuration.mcpResource, ...(outgoingNfse ? { outgoingNfse } : {}) })
-app.addHook("onClose", async () => { await pool.close() })
+const stopCostWorker = startCostWorker(pool)
+app.addHook("onClose", async () => { await stopCostWorker(); await pool.close() })
 const shutdown = () => { void app.close().catch(() => { process.exitCode = 1 }) }
 process.once("SIGTERM", shutdown)
 process.once("SIGINT", shutdown)

@@ -3,11 +3,15 @@ import { authorizeRequest, requirePermission, type AccessDependencies } from "..
 import { balances, history } from "./queries.js"
 import { postMovement } from "./commands.js"
 import { registerManualSettings } from "./manual-settings.js"
+import { registerPeriods } from "./periods.js"
 import { registerReplenishment } from "./replenishment.js"
+import { registerSerials } from "./serials.js"
 
 export function registerStockRoutes(app: FastifyInstance, dependencies: AccessDependencies) {
   registerManualSettings(app,dependencies)
+  registerPeriods(app,dependencies)
   registerReplenishment(app,dependencies)
+  registerSerials(app,dependencies)
   for (const [path, load] of [["/stock", balances], ["/stock/movements", history]] as const) {
     app.get(`/api/v1${path}`, async (request, reply) => {
       reply.header("cache-control", "no-store")

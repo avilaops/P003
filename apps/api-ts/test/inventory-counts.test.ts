@@ -82,6 +82,10 @@ test("physical inventory workflows with tenant RLS and exact local quantities", 
     assert.equal((await call("POST", path + "/" + id + "/approve", {}, "visitor")).statusCode, 409)
     assert.equal((await call("POST", path + "/" + id + "/lines", { ...line, recount: true, countedQuantity: "1.900000" })).statusCode, 409)
     assert.equal((await call("POST", path + "/" + id + "/lines", { ...line, recount: true })).statusCode, 204)
+    const inspection=(await call("GET",path+"/"+id,undefined,"visitor")).json().lines[0]
+    assert.equal(inspection.difference,"-0.249999")
+    assert.equal(inspection.expectedQuantity,"2.000000")
+    assert.equal((await call("GET",path+"/"+id,undefined,"editor")).json().lines[0].expectedQuantity,null)
     assert.equal((await call("POST", path + "/" + id + "/approve", {})).statusCode, 403)
     const approve = randomUUID(),
       url = path + "/" + id + "/approve"

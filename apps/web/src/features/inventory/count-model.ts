@@ -21,6 +21,7 @@ export type CountLine = {
   name: string
   unit: string
   expectedQuantity: string | null
+  difference?: string | null
   countedQuantity: string | null
   needsRecount: boolean
   recountedAt: string | null

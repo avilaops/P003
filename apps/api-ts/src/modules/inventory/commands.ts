@@ -5,12 +5,17 @@ import { commandKey, record, remember, replay } from "../../platform/commands.js
 import { normalizedDatabaseId } from "../../platform/database-id.js"
 import { Problem } from "../../platform/problem.js"
 import { heldQuantity } from "../orders/fulfillment.js"
-import { decimal, fixed } from "../sales/fixed.js"
+import { decimal, fixed, validateDate } from "../sales/fixed.js"
+import { roundedCost } from "./valuation.js"
 import { movement, movementOriginJoins, notFound, occurredAtSql } from "./queries.js"
+import { serialList } from "./serials.js"
 
 const inputSchema = z.strictObject({
   productId: normalizedDatabaseId,
   warehouseId: normalizedDatabaseId.optional(),
+  effectiveDate: z.string().optional(),
+  unitCost: z.string().optional(),
+  serials: serialList.optional(),
   direction: z.enum(["receipt", "issue"]),
   quantity: z.string(),
   reason: z.string().trim().refine(value => Array.from(value).length >= 3 && Array.from(value).length <= 500),
@@ -49,6 +54,16 @@ export async function postMovement(context: AuthorizedContext, headers: Record<s
 
   const { client, tenantId } = context
   const settings = (await client.query("SELECT allow_manual_movements,minimum_reason_length FROM inventory_settings WHERE tenant_id=$1", [tenantId])).rows[0]
+  if (input.effectiveDate) {
+    const day = validateDate(input.effectiveDate)
+    if ((await client.query("SELECT $1::date > (now() AT TIME ZONE 'America/Sao_Paulo')::date AS future",[day])).rows[0]?.future)
+      throw new Problem(422,"invalid_input","A data efetiva precisa ser igual ou anterior a hoje")
+    await client.query("SELECT set_config('app.stock_effective_on',$1,true)",[day])
+  }
+  if (input.unitCost !== undefined) {
+    if (input.direction !== "receipt" || input.reversesId) throw new Problem(422,"invalid_input","Informe custo somente em uma entrada original")
+    await client.query("SELECT set_config('app.stock_input_value',$1,true)",[roundedCost(quantity*fixed(input.unitCost,6),10000n)])
+  }
   if (settings?.allow_manual_movements === false) conflict("Movimentações manuais desabilitadas em Preferências de estoque")
   if (settings && Array.from(input.reason).length < Number(settings.minimum_reason_length)) throw new Problem(422, "invalid_input", "Motivo menor que o mínimo configurado em Preferências de estoque")
   const product = (await client.query("SELECT status FROM products WHERE tenant_id=$1 AND id=$2", [tenantId, input.productId])).rows[0]
@@ -63,9 +78,9 @@ export async function postMovement(context: AuthorizedContext, headers: Record<s
   await client.query("UPDATE stock_balances SET quantity_micros=$3 WHERE tenant_id=$1 AND product_id=$2", [tenantId, input.productId, next])
   const id = randomUUID()
   const inserted = await client.query(`
-    INSERT INTO stock_movements(id,tenant_id,product_id,direction,quantity_micros,balance_after_micros,reason,reverses_id,warehouse_id)
-    VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *,${occurredAtSql} AS occurred_at
-  `, [id, tenantId, input.productId, input.direction, quantity, next, input.reason, input.reversesId, input.warehouseId])
+    INSERT INTO stock_movements(id,tenant_id,product_id,direction,quantity_micros,balance_after_micros,reason,reverses_id,warehouse_id,serial_numbers)
+    VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *,${occurredAtSql} AS occurred_at
+  `, [id, tenantId, input.productId, input.direction, quantity, next, input.reason, input.reversesId, input.warehouseId,input.serials])
   const result = movement(inserted.rows[0]!)
   await record(context, headers, "stock_movement", id, "stock.moved", { productId: input.productId, direction: input.direction,
     quantity: input.quantity, balanceAfter: decimal(next, 6), reversesId: input.reversesId })

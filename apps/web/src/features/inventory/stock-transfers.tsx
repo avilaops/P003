@@ -32,12 +32,14 @@ export function StockTransferForm({config,saved}:{config:LocationSettings;saved:
             onClick={()=>setSelected([...selected,{...p,quantity:""}])}>Adicionar {p.sku}</Button></li>)}</ul>}
       {selected.map(p=><div key={p.productId} className="flex flex-wrap items-end gap-2"><label>Quantidade • {p.sku} ({p.unit})
         <Input inputMode="decimal" value={p.quantity} onChange={e=>setSelected(selected.map(item=>item.productId===p.productId?{...item,quantity:e.target.value}:item))} /></label>
+        {p.tracksSerials&&<label>Séries de {p.sku} (uma por linha)<textarea className="block rounded border p-2" value={p.serials??""} onChange={e=>setSelected(selected.map(item=>item.productId===p.productId?{...item,serials:e.target.value}:item))}/></label>}
         <Button type="button" variant="outline" onClick={()=>setSelected(selected.filter(item=>item.productId!==p.productId))}>Remover {p.sku}</Button></div>)}
       <label>Motivo<Input value={reason} maxLength={500} onChange={e=>setReason(e.target.value)} /></label>
     </fieldset>
     {(error||command.error) && <p role="alert">{command.error||error}</p>}
     <Button disabled={command.busy} onClick={async()=>{
-      const items=selected.map(p=>({productId:p.productId,quantity:quantity(p.quantity)}))
+      const items=selected.map(p=>({productId:p.productId,quantity:quantity(p.quantity),
+        ...(p.tracksSerials ? {serials:(p.serials??"").split(/\r?\n/).map(s=>s.trim()).filter(Boolean)} : {})}))
       if(!command.uncertain && (!items.length||items.some(i=>!i.quantity||i.quantity==="0.000000")||!toId||fromId===toId||reason.trim().length<3)) {
         setError("Selecione depósitos distintos, informe quantidades positivas e descreva o motivo."); return
       }

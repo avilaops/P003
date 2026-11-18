@@ -145,6 +145,27 @@ test("estoque calcula uma sugestão de compra pela regra salva no produto", asyn
   await expect(row.getByText("Compra sugerida • 10 UN")).toBeVisible()
 })
 
+test("estoque identifica equipamento pelo número de série no celular", async ({page,context})=>{
+  await session(context)
+  const name="Equipamento identificado",id=await product(context,name)
+  await page.setViewportSize({width:375,height:844})
+  await page.goto("/estoque/series?productId="+id)
+  await page.getByRole("button",{name:"Ativar controle de série"}).click()
+  await expect(page.getByRole("status").filter({hasText:"Controle por série ativado"})).toBeVisible()
+  await page.goto("/estoque/lancamentos/novo?productId="+id)
+  await page.getByLabel("Quantidade (vírgula ou ponto)").fill("1")
+  await page.getByLabel("Números de série (um por linha)").fill("EQ-2026-41")
+  await page.getByLabel("Motivo",{exact:true}).fill("Conferência do equipamento")
+  await page.getByRole("button",{name:"Confirmar lançamento"}).click()
+  await expect(page.getByRole("status").filter({hasText:"Movimento confirmado"})).toBeVisible()
+  await page.goto("/estoque/series")
+  await page.getByLabel("Número de série ou SKU").fill("EQ-2026-41")
+  await page.getByRole("button",{name:"Buscar série"}).click()
+  await page.getByRole("button",{name:"Histórico de EQ-2026-41"}).click()
+  await expect(page.getByRole("heading",{name:"Histórico • EQ-2026-41"})).toBeVisible()
+  await expect(page.getByText(/Em estoque • Principal/).first()).toBeVisible()
+})
+
 test("estoque respeita consulta e cabe no celular", async ({ page, context }) => {
   await session(context)
   const name = "Consulta de estoque no celular"

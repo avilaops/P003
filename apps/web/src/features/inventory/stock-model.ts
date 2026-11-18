@@ -1,10 +1,16 @@
 import type { Warehouse } from "./stock-location-model"
-export type StockProduct = { productId: string; sku: string; name: string; unit: string; status: string }
-export type Stock = StockProduct & { quantity: string; reserved: string; available: string }
+export type StockProduct = { productId: string; sku: string; name: string; unit: string; status: string; tracksSerials?:boolean }
+export type Stock = StockProduct & { quantity: string; reserved: string; available: string; stockValue?: string | null; averageCost?: string | null }
+export function stockMoney(value: string | null | undefined) {
+  if (value == null) return "A apurar"
+  const [whole="0",fraction="00"]=value.split(".")
+  return "R$ "+BigInt(whole).toLocaleString("pt-BR")+","+fraction.replace(/(\d{2})0+$/,"$1")
+}
 type Page<T> = { tenantId: string; canEdit: boolean; data: T[]; total: number; offset: number; limit: number; warehouses?: Warehouse[] }
 export type StockList = Page<Stock>
 export type Movement = { id: string; productId: string; direction: "receipt" | "issue"; quantity: string; balanceAfter: string;
   warehouseId?: string | null; localBalanceAfter?: string | null; transferId?: string | null;
+  effectiveDate?: string; movementValue?: string | null; unitCost?: string | null;
   reason: string; occurredAt: string; reversesId: string | null; sourceOrderId: string | null;
   sourcePurchaseReceiptId: string | null; sourcePosSaleId: string | null; productionOrderId: string | null;
   sourceWarrantyCaseId: string | null; sourceInventoryCountId: string | null; returnSourceId: string | null; canReverse: boolean }

@@ -38,6 +38,8 @@ export async function stockFixture(adminUrl: string, migrationsDirectory = fileU
     await runMigrations(seed, { directory: migrationsDirectory })
     await seed.query(`CREATE ROLE ${role} NOLOGIN NOSUPERUSER NOBYPASSRLS`)
     await seed.query(`GRANT USAGE ON SCHEMA public TO ${role};
+      ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT,INSERT,UPDATE ON TABLES TO ${role};
+      ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT USAGE ON SEQUENCES TO ${role};
       GRANT SELECT,INSERT,UPDATE ON ALL TABLES IN SCHEMA public TO ${role};
       GRANT USAGE ON ALL SEQUENCES IN SCHEMA public TO ${role}`)
     await seed.query("INSERT INTO tenants(id,legal_name,tax_id) VALUES($1,'Empresa A','04252011000110'),($2,'Empresa B','52998224725')", [tenant, otherTenant])

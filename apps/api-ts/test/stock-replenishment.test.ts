@@ -35,4 +35,9 @@ test("purchase suggestions account for reservations, demand, open receipts and l
   await seed.query("UPDATE purchase_orders SET status='closed' WHERE id=$1 AND tenant_id=$2",[purchase,tenant])
   row=await list()
   assert.deepEqual([row.openPurchases,row.netNeed,row.suggested],["0.000000","9.000000","10.000000"])
+  const precision=await app.inject({method:"PUT",url,headers:{...headers,"idempotency-key":randomUUID()},
+    payload:{...payload,revision:2,minimum:"200000000001.000001",reorderPoint:"200000000002.000000",purchaseLot:"100000000000.000000"}})
+  assert.equal(precision.statusCode,200,precision.body)
+  row=await list()
+  assert.equal(row.suggested,"300000000000.000000")
 })

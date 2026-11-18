@@ -16,6 +16,7 @@ try {
   `)
   const api = await fixture.app.listen({ host: "127.0.0.1", port: 0 })
   const factory=await prepareProductionBrowser(fixture.seed,fixture.tenant)
+  await fixture.seed.query("INSERT INTO role_permissions(role_id,permission_code) SELECT id,unnest(ARRAY['inventory.periods.close','inventory.periods.reopen']) FROM roles WHERE code='editor'")
   const web = new URL("../../web/", import.meta.url)
   const cli = createRequire(new URL("package.json", web)).resolve("@playwright/test/cli")
   const origin = "http://127.0.0.1:" + (process.env.STOCK_TEST_WEB_PORT || "34242")

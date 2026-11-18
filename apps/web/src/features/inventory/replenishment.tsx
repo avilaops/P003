@@ -51,11 +51,11 @@ function Detail({tenant,id}:{tenant:string;id:string}) {
           <div key={k}><dt>{label}</dt><dd className="font-medium">{commercialQuantity(value.data[k])} {value.data.unit}</dd></div>)}</dl>
         <Link href={stockUrl("/estoque/lancamentos",{tenant,productId:id,sku:value.data.sku})} className={textLink}>Ver movimentos</Link>
       </section>
-      <Rule key={value.data.revision} data={value} saved={()=>{setNotice("Regra de reposição salva.");result.reload()}}/>
+      <Rule key={value.data.revision} data={value} refresh={result.reload} saved={()=>{setNotice("Regra de reposição salva.");result.reload()}}/>
     </>}
   </div>
 }
-function Rule({data,saved}:{data:Snapshot;saved:()=>void}) {
+function Rule({data,saved,refresh}:{data:Snapshot;saved:()=>void;refresh:()=>void}) {
   const cmd=useCommand(),[error,setError]=useState(""),p=data.data
   return <form className="form-section space-y-3" onSubmit={async event=>{
     event.preventDefault()
@@ -73,6 +73,7 @@ function Rule({data,saved}:{data:Snapshot;saved:()=>void}) {
       <label>Prazo do fornecedor (dias)<Input type="number" name="leadDays" min={0} max={3650} required defaultValue={p.leadDays}/></label>
     </fieldset>
     {(error||cmd.error)&&<p role="alert">{error||cmd.error}</p>}
-    {data.canEdit&&<Button type="submit" disabled={cmd.busy}>{cmd.uncertain?"Repetir confirmação":"Salvar regra"}</Button>}
+    {cmd.stale&&<Button type="button" variant="outline" onClick={refresh}>Consultar revisão atual</Button>}
+    {data.canEdit&&<Button type="submit" disabled={cmd.busy||cmd.stale}>{cmd.uncertain?"Repetir confirmação":"Salvar regra"}</Button>}
   </form>
 }

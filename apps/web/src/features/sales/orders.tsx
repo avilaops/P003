@@ -32,6 +32,7 @@ import { OrderNegotiation } from "./order-negotiation"
 import { commercialMoney, orderNumber, orderStatusLabels as labels } from "./order-presentation"
 import { OrderPricing } from "@/features/commercial-settings/order-pricing"
 import { OrderDetailCommercial } from "./order-detail-commercial"
+import {DocumentWarehouses} from "@/features/inventory/document-warehouses"
 import { OrderEmail } from "./order-email"
 import { OrderPdfDownload } from "./order-pdf-download"
 import type { CheckoutSnapshot } from "./commercial-payment-model"
@@ -257,6 +258,7 @@ function OrderDetail({ id }: { id: string }) {
           <p className="text-xs font-medium text-muted-foreground">Documentos</p>
           <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap [&>button]:w-full sm:[&>button]:w-auto">
           <OrderPdfDownload id={id} number={value.data.number} tenantId={value.tenantId} etag={result.etag} onReload={result.reload} />
+          {access.value?.permissions.includes("inventory.stock.read") && <Link className={linkClass} href={"/estoque/series?documentId="+id}>Séries do pedido</Link>}
           <OrderEmail id={id} number={value.data.number} tenantId={value.tenantId} etag={result.etag} onReload={result.reload} />
           <Link className={buttonVariants({ variant: "outline", className: "col-span-2 h-9 px-3" })} href={`/vendas/pedidos/${id}/contratos`}>Pedido e contratos</Link>
           </div>
@@ -274,6 +276,7 @@ function OrderDetail({ id }: { id: string }) {
           <Button variant="outline" className="h-9 flex-1 px-3 sm:flex-none" disabled={boundary.locked || command.busy || command.stale || !result.etag} onClick={() => { if (window.confirm("Cancelar o pedido e liberar sua reserva, se houver?")) void act("cancel") }}>Cancelar pedido</Button>
         </div></div>}
         <OrderDetailCommercial order={value} permissions={access.value?.tenant.id === value.tenantId ? access.value.permissions : []} />
+        <DocumentWarehouses kind="sale" id={id} tenant={value.tenantId}/>
         <OrderFinancePanel key={`${value.data.id}:${value.data.revision}`} orderId={id} onLockChange={boundary.setPrimaryLocked} parentBusy={command.busy || command.uncertain || command.stale || result.loading} />
         <div className="divide-y border-y">
           <details className="py-3"><summary className="cursor-pointer text-sm font-medium">Negociação e condições comerciais</summary><div className="space-y-4 pt-3"><OrderNegotiation id={id} onDecision={result.reload} showDirector={access.value?.tenant.id === value.tenantId && ["sales.approvals.director", "platform.company.manage"].every(permission => access.value?.permissions.includes(permission))} />{value.pricingOrigin && <OrderPricing id={id} onSaved={result.reload} showDirector={access.value?.tenant.id === value.tenantId && ["sales.approvals.director", "platform.company.manage"].every(permission => access.value?.permissions.includes(permission))} />}</div></details>

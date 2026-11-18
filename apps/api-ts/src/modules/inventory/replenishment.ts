@@ -48,7 +48,7 @@ async function position(context:AuthorizedContext,query:z.output<typeof querySch
     ), needs AS (
       SELECT *,greatest(0,min+accepted-available-supply) need FROM basis
     ), matches AS (
-      SELECT *,CASE WHEN lot>0 THEN ceil(need/lot)*lot ELSE need END AS suggested
+      SELECT *,CASE WHEN lot>0 THEN div(need::numeric+lot-1,lot)*lot ELSE need END AS suggested
       FROM needs WHERE $4 OR (configured AND available-accepted<=point AND need>0)
     ), page AS (SELECT * FROM matches ORDER BY name,id LIMIT $5 OFFSET $6)
     SELECT page.*,totals.total FROM (SELECT count(*) AS total FROM matches) totals LEFT JOIN page ON true ORDER BY page.name,page.id`,

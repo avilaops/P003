@@ -4,8 +4,10 @@ import { normalizedDatabaseId } from "../../platform/database-id.js"
 import { Problem } from "../../platform/problem.js"
 import { locationSettings, setLocations } from "./locations.js"
 import { listTransfers, postTransfer, transferItems } from "./transfers.js"
+import { registerDocumentLocations } from "./document-locations.js"
 
 export function registerLocationRoutes(app: FastifyInstance, dependencies: AccessDependencies) {
+  registerDocumentLocations(app,dependencies)
   function run<T>(request: FastifyRequest, operation: (context: AuthorizedContext) => Promise<T>) {
     return authorizeRequest(request, dependencies, context => {
       requirePermission(context, "inventory.stock.read")

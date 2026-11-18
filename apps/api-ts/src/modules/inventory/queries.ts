@@ -5,6 +5,7 @@ import { decimal, validateDate } from "../sales/fixed.js"
 import { databaseId } from "../../platform/database-id.js"
 import { z } from "zod"
 import { activeStockLocations } from "./locations.js"
+import { moneyFromMicros, productValue, projectedCosts, unitFromMicros } from "./valuation.js"
 
 const historyQuery = z.strictObject({
   productId: databaseId,
@@ -41,6 +42,7 @@ export async function balances(context: AuthorizedContext, query: unknown) {
         AND (strpos(lower(name),lower($3))>0 OR strpos(lower(sku),lower($3))>0)
     ), page AS (SELECT * FROM matches ORDER BY name,id LIMIT $4 OFFSET $5)
     SELECT totals.total, p.id, p.sku, p.name, p.unit, p.status,
+      EXISTS(SELECT 1 FROM stock_serial_products s WHERE (s.tenant_id,s.product_id)=(p.tenant_id,p.id)) AS tracked,
       coalesce(CASE WHEN $7::uuid IS NULL THEN b.quantity_micros ELSE local.quantity_micros END,0) AS quantity,
       (SELECT coalesce(sum(l.quantity_micros),0) FROM sales_order_lines l
        JOIN sales_orders o ON o.tenant_id=l.tenant_id AND o.id=l.order_id
@@ -53,10 +55,14 @@ export async function balances(context: AuthorizedContext, query: unknown) {
     LEFT JOIN stock_location_settings c ON c.tenant_id=p.tenant_id
     LEFT JOIN stock_positions local ON local.tenant_id=p.tenant_id AND local.product_id=p.id AND local.warehouse_id=$7 ORDER BY p.name,p.id
   `, [context.tenantId, status, q, limit, offset, category_id, warehouseId])
-  const data = result.rows.filter(row => row.id).map(row => {
+  const pageRows = result.rows.filter(row => row.id)
+  const { positions } = await projectedCosts(context,pageRows.map(row=>String(row.id)))
+  const data = pageRows.map(row => {
     const quantity = BigInt(String(row.quantity)), reserved = BigInt(String(row.reserved))
     if (reserved > quantity) throw new Problem(500, "internal_error", "Reserva superior ao saldo físico")
-    return { productId: row.id, name: row.name, sku: row.sku, unit: row.unit, status: row.status,
+    const valued = productValue(positions.values(),String(row.id),warehouseId)
+    return { productId: row.id, name: row.name, sku: row.sku, unit: row.unit, status: row.status, ...(row.tracked ? {tracksSerials:true}:{}),
+      stockValue:moneyFromMicros(valued.value),averageCost:unitFromMicros(valued.unit),
       quantity: amount(quantity), reserved: amount(reserved), available: amount(quantity - reserved) }
   })
   return { tenantId: context.tenantId, canEdit: context.permissions.includes("inventory.stock.manage"),
@@ -98,23 +104,26 @@ export async function history(context: AuthorizedContext, query: unknown) {
   // Subtract later movements from the current position to include pre-ledger opening stock.
   const result = await context.client.query(`
     WITH bounds AS (
-      SELECT coalesce($3::date::timestamp AT TIME ZONE 'America/Sao_Paulo','-infinity') AS since,
-        coalesce(($4::date + 1)::timestamp AT TIME ZONE 'America/Sao_Paulo','infinity') AS until
+      SELECT coalesce($3::date,'-infinity'::date) AS since,coalesce($4::date+1,'infinity'::date) AS until
+    ), ledger AS (
+      SELECT m.*,i.effective_on AS cost_date FROM stock_movements m JOIN stock_cost_inputs i
+        ON (i.tenant_id,i.movement_id)=(m.tenant_id,m.id) WHERE m.tenant_id=$1 AND m.product_id=$2
     ), totals AS (
-      SELECT count(*) FILTER (WHERE created_at < until AND ($8::text IS NULL OR direction=$8)) AS total,
-        coalesce(sum(quantity_micros) FILTER (WHERE direction='receipt' AND created_at < until AND ($7::uuid IS NOT NULL OR transfer_id IS NULL)),0) AS receipts,
-        coalesce(sum(quantity_micros) FILTER (WHERE direction='issue' AND created_at < until AND ($7::uuid IS NOT NULL OR transfer_id IS NULL)),0) AS issues,
+      SELECT count(*) FILTER (WHERE cost_date < until AND ($8::text IS NULL OR direction=$8)) AS total,
+        coalesce(sum(quantity_micros) FILTER (WHERE direction='receipt' AND cost_date < until AND ($7::uuid IS NOT NULL OR transfer_id IS NULL)),0) AS receipts,
+        coalesce(sum(quantity_micros) FILTER (WHERE direction='issue' AND cost_date < until AND ($7::uuid IS NOT NULL OR transfer_id IS NULL)),0) AS issues,
         coalesce(sum(CASE direction WHEN 'receipt' THEN quantity_micros ELSE -quantity_micros END)
-          FILTER (WHERE created_at >= until),0) AS later
-      FROM stock_movements CROSS JOIN bounds
-      WHERE tenant_id=$1 AND product_id=$2 AND created_at >= since AND ($7::uuid IS NULL OR warehouse_id=$7)
+          FILTER (WHERE cost_date >= until),0) AS later
+      FROM ledger CROSS JOIN bounds
+      WHERE cost_date >= since AND ($7::uuid IS NULL OR warehouse_id=$7)
     ), page AS (
-      SELECT m.*, ${occurredAtSql} AS occurred_at FROM stock_movements m CROSS JOIN bounds
-      WHERE tenant_id=$1 AND product_id=$2 AND created_at >= since AND created_at < until AND ($7::uuid IS NULL OR warehouse_id=$7)
+      SELECT m.*, ${occurredAtSql} AS occurred_at FROM ledger m CROSS JOIN bounds
+      WHERE cost_date >= since AND cost_date < until AND ($7::uuid IS NULL OR warehouse_id=$7)
         AND ($8::text IS NULL OR direction=$8)
-      ORDER BY created_at DESC,id DESC LIMIT $5 OFFSET $6
+      ORDER BY cost_date DESC,created_at DESC,id DESC LIMIT $5 OFFSET $6
     )
     SELECT p.id AS selected_id,p.name,p.sku,p.unit,p.status,totals.*,
+      EXISTS(SELECT 1 FROM stock_serial_products s WHERE (s.tenant_id,s.product_id)=(p.tenant_id,p.id)) AS tracked,
       coalesce(CASE WHEN $7::uuid IS NULL THEN b.quantity_micros ELSE local.quantity_micros END,0)-totals.later AS closing,
       m.*,w.case_id,coalesce(m.inventory_count_id::text,origin.inventory_count_id) AS inventory_count_id,origin.return_source_id,
       EXISTS (SELECT 1 FROM stock_movements r WHERE r.tenant_id=m.tenant_id AND r.reverses_id=m.id) AS reversed
@@ -123,7 +132,7 @@ export async function history(context: AuthorizedContext, query: unknown) {
     LEFT JOIN stock_positions local ON local.tenant_id=p.tenant_id AND local.product_id=p.id AND local.warehouse_id=$7
     LEFT JOIN page m ON true
     ${movementOriginJoins}
-    WHERE p.tenant_id=$1 AND p.id=$2 ORDER BY m.created_at DESC,m.id DESC
+    WHERE p.tenant_id=$1 AND p.id=$2 ORDER BY m.cost_date DESC,m.created_at DESC,m.id DESC
   `, [context.tenantId, productId, startDate, endDate, limit, offset, warehouseId, direction])
   const row = result.rows[0]
   if (!row) throw notFound()
@@ -147,11 +156,17 @@ export async function history(context: AuthorizedContext, query: unknown) {
         coalesce(sum(quantity_micros) FILTER (WHERE status IN ('confirmed','production')),0) AS reserved FROM demand) totals
     LEFT JOIN page p ON true ORDER BY p.number,p.id`,
     [context.tenantId,productId,warehouseId,context.permissions.includes("sales.orders.read"),orderOffset,context.permissions.includes("production.read")])
+  const {movements:costs}=await projectedCosts(context,[productId],endDate)
   return { tenantId: context.tenantId, canEdit: context.permissions.includes("inventory.stock.manage"),
-    product: { productId: row.selected_id, name: row.name, sku: row.sku, unit: row.unit, status: row.status },
+    product: { productId: row.selected_id, name: row.name, sku: row.sku, unit: row.unit, status: row.status, ...(row.tracked?{tracksSerials:true}:{}) },
     warehouses: await activeStockLocations(context),
     openOrders: {reserved:amount(orders.rows[0]!.reserved),offset:orderOffset,total:Number(orders.rows[0]!.total),
       data: orders.rows.filter(order=>order.id).map(order=>({id:order.id,number:String(order.number),status:order.status,quantity:amount(order.quantity_micros)}))},
     summary: { opening: amount(opening), receipts: amount(receipts), issues: amount(issues), closing: amount(closing) },
-    data: result.rows.filter(item => item.id).map(movement), total: Number(row.total), offset, limit }
+    data: result.rows.filter(item => item.id).map(item=>{
+      const result=movement(item), cost=costs.get(String(item.id))
+      return {...result,effectiveDate:cost?.date,movementValue:moneyFromMicros(cost?.amount??null),unitCost:unitFromMicros(cost?.unit??null),
+        balanceAfter:cost ? amount(cost.totalAfter) : result.balanceAfter,
+        localBalanceAfter:cost && result.warehouseId ? amount(cost.quantityAfter) : result.localBalanceAfter}
+    }), total: Number(row.total), offset, limit }
 }

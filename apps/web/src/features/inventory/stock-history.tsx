@@ -11,6 +11,7 @@ import { useResource } from "@/hooks/use-operation"
 import { commercialQuantity } from "@/features/sales/order-presentation"
 import { historyPath, manualPath, pageOffset, pageSize, stockUrl, textLink, type History, type Movement } from "./stock-model"
 import { StockMovementForm } from "./stock-movement-form"
+import { stockMoney } from "./stock-model"
 
 const origins = [
   ["sourceOrderId", "Pedido", "/vendas/pedidos/"], ["sourcePurchaseReceiptId", "Recebimento", "/compras/recebimentos/"],
@@ -49,6 +50,7 @@ export function StockHistory({ productId, tenant, manual }: { productId: string;
         <h2 className="break-words font-semibold">{history.product.name}</h2>
         <p className="break-words">SKU {history.product.sku} • Unidade {history.product.unit}</p>
         <GuardedLink className={textLink} href={"/compras/sugestoes/"+productId}>Consultar reposição</GuardedLink>
+        <GuardedLink className={textLink} href={stockUrl("/estoque/series",{productId,tenant})}>Rastrear séries do produto</GuardedLink>
         {warehouseId && <p>Depósito • {history.warehouses?.find(w=>w.id===warehouseId)?.name || warehouseId}</p>}
         {!history.canEdit && <p>Somente consulta. Você não pode movimentar o estoque.</p>}
         {!manual && history.canEdit && <GuardedLink className={textLink} href={stockUrl(manualPath, details)}>Novo lançamento</GuardedLink>}
@@ -80,12 +82,17 @@ export function StockHistory({ productId, tenant, manual }: { productId: string;
             onOffsetChange={value=>{if(!locked && confirmNavigation()) window.history.pushState(null,"",stockUrl(path,{...details,orderOffset:value}))}}/>}
         </section>}
         <h3 className="font-medium">Histórico registrado</h3>
+        {history.canEdit && <GuardedLink className={textLink} href={stockUrl("/estoque/fechamento",{productId,tenant})}>Informar valor do saldo de abertura</GuardedLink>}
         {history.data.length ? <ol className="divide-y border-y">{history.data.map(movement => <li key={movement.id} className="min-w-0 space-y-1 py-3 [overflow-wrap:anywhere]">
           <strong>{movement.direction === "receipt" ? "Entrada" : "Saída"} de {commercialQuantity(movement.quantity)} {history.product.unit}</strong>
           <p>{movement.reason}</p><p>Saldo após o movimento • {commercialQuantity(warehouseId && movement.localBalanceAfter ? movement.localBalanceAfter : movement.balanceAfter)} {history.product.unit}</p>
           {movement.warehouseId && Boolean(history.warehouses?.length) && <p>Depósito • {history.warehouses?.find(w=>w.id===movement.warehouseId)?.name||movement.warehouseId}</p>}
           {movement.transferId && <GuardedLink className={textLink} href={"/estoque/transferencias?documento="+movement.transferId}>Transferência • {movement.transferId}</GuardedLink>}
-          <time dateTime={movement.occurredAt}>{new Date(movement.occurredAt).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" })}</time>
+          <p>Data efetiva • {movement.effectiveDate?.split("-").reverse().join("/") || "Anterior ao controle"}</p>
+          <p>Custo unitário • {stockMoney(movement.unitCost)} • Valor do movimento • {stockMoney(movement.movementValue)}</p>
+          {history.canEdit && movement.direction==="receipt" && !movement.transferId && !movement.reversesId && <GuardedLink className={textLink}
+            href={stockUrl("/estoque/fechamento",{tenant,productId,movementId:movement.id})}>Conferir composição do custo</GuardedLink>}
+          <p>Registrado em <time dateTime={movement.occurredAt}>{new Date(movement.occurredAt).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" })}</time></p>
           <p className="text-xs text-muted-foreground">ID • {movement.id}</p>
           {origins.map(([key,label,base]) => movement[key] && <p key={key}>
             <GuardedLink className={textLink} href={base+encodeURIComponent(movement[key])}>{label} • {movement[key]}</GuardedLink></p>)}

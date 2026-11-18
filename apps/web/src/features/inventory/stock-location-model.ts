@@ -8,5 +8,5 @@ export type TransferRecord = {
   id: string; fromName: string; toName: string; createdAt: string; reason: string
   reversesId: string | null; reversedBy: string | null
 }
-export type TransferProduct = {productId: string; sku: string; name: string; unit: string; quantity: string}
+export type TransferProduct = {productId: string; sku: string; name: string; unit: string; quantity: string; tracksSerials?:boolean; serials?:string}
 export const selectClass = "block min-h-10 w-full rounded-lg border bg-background px-2"
