@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test"
+import { expect, test, type Page } from "@playwright/test"
 import { createCipheriv, createHash, randomBytes } from "node:crypto"
 import { createServer } from "node:http"
 import type { PurchaseDetail, ReceiptDetail } from "../src/features/purchasing/purchase-types"
@@ -97,6 +97,21 @@ test("purchase BFF rejects anonymous, foreign-origin, changed-company and unsupp
   expect(requests).toEqual(["GET /api/v1/purchase-orders?offset=25&limit=25"])
 })
 
+async function submitDraftAndOpenEditor(page: Page, label: string) {
+  const endpoint = "/api/erp/purchase-orders"
+  const [saved] = await Promise.all([
+    page.waitForResponse(r => new URL(r.url()).pathname === endpoint && r.request().method() === "POST", { timeout: 45_000 }),
+    page.getByRole("button", { name: label, exact: true }).click(),
+  ])
+  expect(saved.status(), await saved.text()).toBe(201)
+  const detail = origin + "/compras/pedidos/" + orderId
+  await expect(page).toHaveURL(detail, { timeout: 45_000 })
+  const edit = page.getByRole("link", { name: "Editar rascunho", exact: true })
+  await expect(edit).toHaveAttribute("href", "/compras/pedidos/" + orderId + "/editar", { timeout: 30_000 })
+  await edit.click()
+  await expect(page).toHaveURL(detail + "/editar", { timeout: 45_000 })
+}
+
 test("browser creates and edits a purchase, receives a partial delivery and records and reverses a partial payment", async ({ page, context }, testInfo) => {
   await context.addCookies([cookie()])
   const errors: string[] = []
@@ -112,10 +127,9 @@ test("browser creates and edits a purchase, receives a partial delivery and reco
   await expect(page.getByText("Total previsto: R$ 6,50", { exact: true })).toBeVisible()
   const created = draft()
   plans.push({ method: "POST", path: "/api/v1/purchase-orders", status: 201, response: created, revision: 1, apply: () => { order = created } })
-  await page.getByRole("button", { name: "Criar rascunho de compra", exact: true }).click()
-  await page.getByRole("link", { name: "Editar rascunho", exact: true }).click()
+  await submitDraftAndOpenEditor(page, "Criar rascunho de compra")
   expect(calls[0].body).toEqual({ supplierId, dueDate: "2026-11-20", items: [{ productId, quantity: "2.000000", unitCost: "3.25" }] })
-  await expect(page.getByLabel("Custo unitário de Produto da compra", { exact: true }).filter({ visible: true })).toHaveValue("3.25")
+  await expect(page.getByLabel("Custo unitário de Produto da compra", { exact: true }).filter({ visible: true })).toHaveValue("3.25", { timeout: 30_000 })
   await page.getByLabel("Custo unitário de Produto da compra", { exact: true }).filter({ visible: true }).fill("4.00")
   const edited = { ...created, data: { ...created.data, revision: 2, amount: "8.00" }, items: [{ ...created.items[0], unitCost: "4.00", amount: "8.00" }] }
   plans.push({ method: "PUT", path: `/api/v1/purchase-orders/${orderId}`, status: 200, response: edited, revision: 2, apply: () => { order = edited } })
@@ -171,8 +185,7 @@ test("ambiguous purchase creation repeats the same key and stale edits preserve 
   await expect(page.getByLabel("Custo unitário de Produto da compra", { exact: true }).filter({ visible: true })).toBeDisabled()
   const created = draft()
   plans.push({ method: "POST", path: "/api/v1/purchase-orders", status: 201, response: created, revision: 1, apply: () => { order = created } })
-  await page.getByRole("button", { name: "Conferir gravação da compra", exact: true }).click()
-  await page.getByRole("link", { name: "Editar rascunho", exact: true }).click()
+  await submitDraftAndOpenEditor(page, "Conferir gravação da compra")
   expect(calls[0]).toEqual(calls[1])
   await page.getByLabel("Custo unitário de Produto da compra", { exact: true }).filter({ visible: true }).fill("8.00")
   plans.push({ method: "PUT", path: `/api/v1/purchase-orders/${orderId}`, status: 412, response: { title: "Outra pessoa alterou a compra" } })
