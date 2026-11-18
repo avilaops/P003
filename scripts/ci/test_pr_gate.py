@@ -38,9 +38,12 @@ class ScopeTests(unittest.TestCase):
             self.assertFalse(gate.native_api_required([path]))
 
     def test_native_and_shared_integration_changes_keep_rust_validation(self):
-        for path in ("apps/api/src/main.rs", "migrations/123.sql", "Cargo.lock", "queries/users.sql", "apps/api-ts/scripts/contract-tests.mjs", "apps/api-ts/src/platform/mcp-dispatch.ts", ".github/workflows/ci.yml", "new-service/main.py"):
+        for path in ("apps/api/src/main.rs", "Cargo.lock", "queries/users.sql", "apps/api-ts/scripts/contract-tests.mjs", "new-service/main.py"):
             self.assertTrue(gate.native_api_required([path]), path)
-        self.assertTrue(gate.native_api_required(["apps/api-ts/src/modules/proposals/commands.ts", "migrations/123.sql"]))
+        self.assertFalse(gate.native_api_required(["apps/api-ts/src/modules/proposals/commands.ts", "migrations/123.sql"]))
+        for path in ("apps/api-ts/src/platform/mcp-dispatch.ts", ".github/workflows/ci.yml",
+                     "deploy/web.Dockerfile", "apps/fiscal-engine/src/server.ts", "pnpm-lock.yaml"):
+            self.assertFalse(gate.native_api_required([path]), path)
         self.assertFalse(gate.native_api_required(["apps/web/src/page.tsx", "docs/design.md"]))
 
     def test_migrations_and_rust_select_api(self):

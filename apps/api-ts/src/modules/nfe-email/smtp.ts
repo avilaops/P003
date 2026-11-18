@@ -1,5 +1,6 @@
 import { createDecipheriv } from "node:crypto"
 import nodemailer from "nodemailer"
+import { documentMailConfigured, sendDocumentMail } from "../../platform/document-mail.js"
 import { z } from "zod"
 import type { DatabaseClient } from "../../platform/database.js"
 import { Problem } from "../../platform/problem.js"
@@ -14,7 +15,7 @@ type SettingsRow = {
 }
 const unavailable = () => new Problem(503, "smtp_unavailable", "Configure o SMTP em Preferências do sistema • E-mail para enviar a NF-e")
 export type Envelope = {
-  id: string; recipient: string; number: string; series: number; environment: string; accessKey: string; xml: Buffer; pdf: Buffer
+  id: string; recipient: string; number: string; series: number; environment: string; accessKey: string; xml: Buffer; pdf: Buffer | null; kind?: "nfe" | "nfce" | "received-nfses" | "outgoing-nfses"
 }
 export type Outcome = "sent" | "failed" | "unknown"
 export type Sender = (envelope: Envelope) => Promise<Outcome>
@@ -30,6 +31,7 @@ function environmentSettings(env: NodeJS.ProcessEnv) {
 }
 
 export async function smtpConfigured(client: DatabaseClient, env = process.env) {
+  if (documentMailConfigured(env)) return true
   const row = (await client.query<{ enabled: boolean }>(
     "SELECT (data->>'enabled')::boolean AS enabled FROM platform_mail_settings WHERE singleton",
   )).rows[0]
@@ -65,19 +67,27 @@ export function smtpFailure(error: unknown): Outcome {
 
 export function nfeMessage(envelope: Envelope) {
   const notice = envelope.environment === "homologation" ? "Homologação • sem valor fiscal" : ""
+  const service = envelope.kind === "received-nfses" || envelope.kind === "outgoing-nfses"
+  const label = service ? "NFS-e" : envelope.kind === "nfce" ? "NFC-e" : "NF-e"
+  const title = label + " nº " + envelope.number + (service ? "" : " • Série " + envelope.series)
+  const content = envelope.pdf ? "Seguem o XML autorizado e o DANFE" : envelope.kind === "received-nfses" ? "Segue o XML original importado" : "Segue o XML autorizado"
   return {
     to: { name: "", address: envelope.recipient },
     messageId: `<${envelope.id}@nfe.avilaops.com>`,
-    subject: [`NF-e nº ${envelope.number} • Série ${envelope.series}`, notice].filter(Boolean).join(" • "),
-    text: [notice, `Seguem o XML autorizado e o DANFE da NF-e nº ${envelope.number}, série ${envelope.series}.`, `Chave de acesso • ${envelope.accessKey}`].filter(Boolean).join("\n\n"),
+    subject: [title, notice].filter(Boolean).join(" • "),
+    text: [notice, content + " da " + title + ".", `Chave de acesso • ${envelope.accessKey}`].filter(Boolean).join("\n\n"),
     attachments: [
-      { filename: `${envelope.accessKey}-procNFe.xml`, content: envelope.xml, contentType: "application/xml" },
-      { filename: `DANFE-${envelope.accessKey}.pdf`, content: envelope.pdf, contentType: "application/pdf" },
+      { filename: service ? `NFSE-${envelope.accessKey}.xml` : `${envelope.accessKey}-procNFe.xml`, content: envelope.xml, contentType: "application/xml" },
+      ...(envelope.pdf ? [{ filename: `DANFE-${envelope.accessKey}.pdf`, content: envelope.pdf, contentType: "application/pdf" }] : []),
     ],
   }
 }
 
 export async function resolveSender(client: DatabaseClient, env = process.env): Promise<Sender> {
+  if (documentMailConfigured(env)) return async envelope => {
+    const { subject, text, attachments } = nfeMessage(envelope)
+    return sendDocumentMail({ id: envelope.id, to: envelope.recipient, subject, text, attachments }, fetch, env)
+  }
   const row = (await client.query<SettingsRow>(
     "SELECT data,secret_context,secret_key_id,secret_nonce,secret_ciphertext FROM platform_mail_settings WHERE singleton",
   )).rows[0]

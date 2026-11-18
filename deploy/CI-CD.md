@@ -25,7 +25,9 @@ bootstrap e reimportação não integram uma publicação normal.
 
 A imagem web da mesma revisão inclui `apps/api-ts`, já compilada e com dependências de execução. O manifesto conserva os quatro componentes existentes. O serviço privado usa essa mesma imagem; não publica portas e compartilha apenas a rede da API Rust em `127.0.0.1:8081`.
 
-No layout de produção `compose.json`, o dispatcher sempre prepara `api-ts` com somente banco/Auth e `ERP_MCP_ORIGIN` extraídos da configuração da API, define a origem privada no BFF e no gateway e fixa a imagem no digest web validado. Sessão, SMTP, Fiscal e assinatura ficam fora desse processo. O serviço é obrigatório para as operações migradas e a saúde pública exige as duas APIs.
+No layout de produção `compose.json`, o dispatcher prepara `api-ts` com os parâmetros de banco, autenticação, MCP e motor fiscal. O BFF utiliza a origem privada dessa API. O serviço usa a imagem web validada e a saúde pública verifica as duas APIs.
+
+O envio de documentos pelo n8n usa `ERP_DOCUMENT_MAIL_N8N_URL` e `ERP_DOCUMENT_MAIL_N8N_TOKEN`. Em produção, o dispatcher carrega `/etc/erp-next/document-mail-n8n.env` apenas no serviço `api-ts`. Esse arquivo pertence ao root e usa modo 0600. A credencial do provedor de e-mail fica no n8n. O workflow versionado está em `docs/integrations/n8n-document-mail.json`.
 
 No layout `compose.yaml`, o serviço inicia sem perfil adicional. Antes do primeiro deploy a partir de uma release YAML antiga, prepare obrigatoriamente `api-ts.env` privado a partir de `api-ts.env.example`, com modo 0600 e a mesma role restrita da API. Copie somente as configurações de banco/Auth e a origem MCP; não reutilize o arquivo inteiro da API. O dispatcher conserva esse arquivo nas releases seguintes. O Compose fixa `ERP_TYPESCRIPT_API_URL=http://127.0.0.1:8081` nos serviços API e web. A ausência do arquivo impede a preparação; não deve ser contornada removendo o serviço ou afrouxando a saúde. O layout JSON extrai essa configuração automaticamente e não exige criar o arquivo.
 

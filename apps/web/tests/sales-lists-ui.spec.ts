@@ -64,7 +64,7 @@ test("menu de novo pedido fecha com Escape, restaura foco e fecha ao clicar fora
 })
 
 test("retorno do detalhe preserva busca, situação, página e rolagem da empresa", async ({ page }) => {
-  const rows = Array.from({ length: 25 }, (_, index) => ({ id: index === 24 ? record : `${record.slice(0, -2)}${String(index).padStart(2, "0")}`, number: String(index + 1), customerId: record, customerName: `Cliente ${index + 1}`, customerTaxId: "52998224725", status: "draft", amount: "100.00", dueDate: "2026-12-30", pricingOrigin: false, revision: 1, updatedAt: "2026-11-17T12:00:00Z" } satisfies Schema<"OrderSummary">))
+  const rows = Array.from({ length: 25 }, (_, index) => ({ id: index === 24 ? record : `${record.slice(0, -2)}${String(index).padStart(2, "0")}`, number: String(index + 1), customerId: record, customerName: `Cliente ${index + 1}`, customerTaxId: "52998224725", status: "draft", amount: "100.00", dueDate: "2026-12-30", pricingOrigin: false, revision: 1, updatedAt: "2026-11-17T12:00:00Z" } satisfies Schema<"OrderSummary"> & { pricingOrigin: boolean; updatedAt: string }))
   const detail = { tenantId: tenant, canEdit: false, pricingOrigin: false, data: rows[24], items: [] } satisfies Schema<"OrderSnapshot">
   await page.route("**/api/erp/orders?**", route => route.fulfill({ json: { tenantId: tenant, canEdit: false, total: 75, data: rows } }))
   await page.route(`**/api/erp/orders/${record}?**`, route => route.fulfill({ json: detail }))

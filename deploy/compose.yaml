@@ -27,6 +27,8 @@ services:
     env_file:
       - path: api-ts.env
         required: true
+      - path: /etc/erp-next/document-mail-n8n.env
+        required: false
     environment:
       NODE_ENV: production
       API_TS_HOST: 0.0.0.0

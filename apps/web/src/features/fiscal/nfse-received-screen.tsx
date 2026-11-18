@@ -5,6 +5,7 @@ import Link from "next/link"
 import { useCallback, useEffect, useRef, useState } from "react"
 import { Button, buttonVariants } from "@/components/ui/button"
 import { erpFetch } from "@/lib/api/client"
+import { NfeEmailPanel } from "./nfe-email-panel"
 import { saveDocument } from "./received-documents"
 import { decodeNfseBytes, nfseMoney, type ReceivedNfse, type ReceivedNfsePage } from "./nfse-received-model"
 import { importNfse, readNfseDetail, readNfsePage, readNfseXml } from "./nfse-received-documents"
@@ -20,6 +21,7 @@ async function activeCompany(signal: AbortSignal) {
 }
 
 export function NfseReceivedScreen() {
+  const [emailId, setEmailId] = useState("")
   const [view, setView] = useState<ReceivedNfsePage | null>(null)
   const [company, setCompany] = useState("")
   const [offset, setOffset] = useState(0)
@@ -137,6 +139,7 @@ export function NfseReceivedScreen() {
   return <div className="mx-auto max-w-6xl space-y-6 px-4 pb-24 pt-8 lg:px-6">
     <header className="flex flex-wrap items-start justify-between gap-4 border-b pb-6">
       <div className="min-w-0"><p className="text-sm text-primary">Fiscal / NFS-e</p><PageTitle className="mt-2 text-3xl font-semibold">NFS-e recebidas</PageTitle><p className="mt-2 break-words text-muted-foreground">{company || "Documentos da empresa ativa"}</p></div>
+      <Link className={buttonVariants({ variant: "outline" })} href="/fiscal/nfses/emitidas">NFS-e emitidas</Link>
       <Link className={buttonVariants({ variant: "outline" })} href="/fiscal">Abrir central fiscal</Link>
     </header>
     <section className="form-section space-y-3" aria-labelledby="nfse-source">
@@ -165,7 +168,8 @@ export function NfseReceivedScreen() {
           <p className="text-xs text-muted-foreground">Tomador: {document.companyTaxId} · Emissão: {new Date(document.document.issuedAt).toLocaleString("pt-BR")}</p>
           <p className="break-all text-xs text-muted-foreground">SHA-256: {document.document.xmlSha256}</p>
           <p className="text-xs text-muted-foreground">{document.document.verification.layout === "local_profile_valid" ? "Leiaute 1.01 conferido com perfil local de série; conferência fiscal pendente." : "Leiaute 1.00 conferido; conferência fiscal pendente."}</p>
-          <div className="flex flex-wrap gap-2"><Button variant="outline" disabled={loading || !!busy} onClick={() => void inspect(document, "detail")}>{detail?.id === document.id ? "Ocultar dados do serviço" : "Ver dados do serviço"}</Button><Button variant="outline" disabled={loading || !!busy} onClick={() => void inspect(document, "xml")}>Baixar XML original</Button></div>
+          <div className="flex flex-wrap gap-2"><Button variant="outline" disabled={loading || !!busy} onClick={() => void inspect(document, "detail")}>{detail?.id === document.id ? "Ocultar dados do serviço" : "Ver dados do serviço"}</Button><Button variant="outline" disabled={loading || !!busy} onClick={() => void inspect(document, "xml")}>Baixar XML original</Button>{view.canImport && <Button variant="outline" aria-expanded={emailId === document.id} aria-controls={`fiscal-email-${document.id}`} onClick={() => setEmailId(document.id)}>Enviar por e-mail</Button>}</div>
+          {view.canImport && emailId === document.id && <NfeEmailPanel key={view.tenantId + document.id} id={document.id} tenantId={view.tenantId} kind="received-nfses" label="NFS-e" onClose={() => setEmailId("")} />}
           {detail?.id === document.id && <dl className="grid min-w-0 gap-3 border-t pt-3 sm:grid-cols-2">
             <div className="min-w-0"><dt className="text-muted-foreground">Emitente</dt><dd className="break-words">{detail.document.issuer.name || "Sem nome no XML"}</dd><dd className="break-all">{detail.document.issuer.kind}: {detail.document.issuer.value}</dd></div>
             <div className="min-w-0"><dt className="text-muted-foreground">Prestador</dt><dd className="break-words">{detail.document.provider.name || "Sem nome no XML"}</dd><dd className="break-all">{detail.document.provider.kind}: {detail.document.provider.value}</dd></div>

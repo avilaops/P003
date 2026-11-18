@@ -18,6 +18,7 @@ const fiscalGroups = [
     shortcuts: [
       ["NF-e", "/fiscal/notas-saida", "Preparar e consultar notas de saída"],
       ["NFC-e", "/fiscal/nfce", "Preparar e consultar documentos modelo 65"],
+      ["NFS-e emitidas", "/fiscal/nfses/emitidas", "Consultar e enviar o XML da nota de serviço"],
     ],
   },
   {

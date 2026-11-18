@@ -38,16 +38,27 @@ def plan(paths):
 
 
 def native_api_required(paths):
+    # SQL migrations are applied and checked by the TypeScript image. Changes to
+    # native tooling, native queries or unknown build inputs retain the native gate.
+    typescript_paths = ("apps/api-ts/", "apps/web/", "apps/fiscal-engine/", "apps/fiscal-mcp/",
+                        "migrations/", "docs/", "architecture/", "packages/", "scripts/fiscal/",
+                        "scripts/deploy/", "scripts/contracts/published/")
+    platform_files = {
+        "pnpm-lock.yaml", "pnpm-workspace.yaml", "package.json", "deploy/web.Dockerfile", "deploy/CI-CD.md",
+        "deploy/migrate-release.py", "deploy/production-deploy.sh", "deploy/compose.yaml",
+        "deploy/fiscal-compose.yaml", "deploy/api-ts.env.example", "scripts/ci/pr-gate.py",
+        "scripts/ci/published-components.py", "scripts/ci/test_pr_gate.py",
+        "scripts/ci/test_typescript_api.py", "scripts/ci/test_published_components.py",
+        ".github/workflows/ci.yml", ".github/workflows/_validate-project.yml",
+        ".github/workflows/_validate-api.yml", ".github/workflows/_validate-fiscal.yml", ".github/workflows/_validate-web.yml",
+        ".github/workflows/release.yml",
+    }
     for path in paths:
-        if path.startswith('apps/api-ts/'):
-            if path.startswith(('apps/api-ts/scripts/', 'apps/api-ts/src/platform/')) or path in (
-                'apps/api-ts/src/app.ts', 'apps/api-ts/src/server.ts',
-                'apps/api-ts/package.json', 'apps/api-ts/tsconfig.json',
-                'apps/api-ts/tsconfig.build.json', 'apps/api-ts/test/postgres-sales.test.ts',
-            ):
-                return True
+        if path == "apps/api-ts/scripts/contract-tests.mjs":
+            return True
+        if path.startswith(typescript_paths) or path in platform_files:
             continue
-        if plan([path])['api']:
+        if plan([path])["api"]:
             return True
     return False
 
@@ -58,7 +69,8 @@ def signature_check_required(paths, *, full=False):
 
 
 def changed_paths():
-    base = os.environ['BASE_SHA']
+    base = os.environ.get('BASE_SHA') or subprocess.check_output(
+        ['git', 'rev-parse', 'HEAD^'], text=True).strip()
     if not re.fullmatch(r'[a-f0-9]{40}', base):
         raise ValueError('Invalid comparison base SHA')
     return [path for path in subprocess.check_output([

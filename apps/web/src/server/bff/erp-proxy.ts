@@ -72,8 +72,9 @@ export async function forwardErp(request: Request, resource: string) {
   const productCatalogResource = /^\/products\/[a-f0-9-]{36}\/catalog$/i.test(resource) && ["GET", "PUT"].includes(request.method)
   const productFinishesResource = resource === "/products/finishes"
   if (productFinishesResource && request.method !== "GET") return Response.json({ title: "Método inválido" }, { status: 405 })
-  const financialEmailResource = resource === "/financial-report/email" || /^\/receivables\/[a-f0-9-]{36}\/email$/i.test(resource)
-  const documentEmailResource = financialEmailResource || /^\/(?:orders|proposals)\/[a-f0-9-]{36}\/email$/i.test(resource)
+  const financialEmailResource = resource === "/financial-report/email" || /^\/(?:receivables|financial-payables|commercial-contracts)\/[a-f0-9-]{36}\/email$/i.test(resource)
+  const packageEmailResource = request.method === "POST" && /^\/commercial-contracts\/[a-f0-9-]{36}\/send-package$/i.test(resource)
+  const documentEmailResource = financialEmailResource || packageEmailResource || /^\/(?:orders|proposals)\/[a-f0-9-]{36}\/email$/i.test(resource)
   if (financialEmailResource && new URL(request.url).search) return Response.json({ title: "Consulta inválida" }, { status: 400 })
   const posReadResource = /^\/pos\/(?:products|sessions(?:\/current|\/[a-f0-9-]{36})?|sales(?:\/[a-f0-9-]{36})?)$/i.test(resource)
   const posWriteResource = /^\/pos\/(?:sessions(?:\/[a-f0-9-]{36}\/(?:movements|sales|close))?|sales\/[a-f0-9-]{36}\/cancel)$/i.test(resource)
@@ -220,7 +221,7 @@ export async function forwardErp(request: Request, resource: string) {
         upstream.searchParams.set(key, value)
       }
     }
-    const timeout = AbortSignal.timeout(documentEmailResource || orderDocumentResource ? 25000 : invitationResource || accountResource ? 20000 : 10000)
+    const timeout = AbortSignal.timeout(packageEmailResource ? 105000 : documentEmailResource || orderDocumentResource ? 25000 : invitationResource || accountResource ? 20000 : 10000)
     const signal = productExportResource || productFinishesResource ? AbortSignal.any([request.signal, timeout]) : timeout
     const response = await fetch(upstream, { method: request.method, headers, body, cache: "no-store", redirect: "error", signal })
     // ETag is the backend revision used by If-Match; proxy encoding must not rewrite it.

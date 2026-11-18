@@ -8,6 +8,9 @@ name: Validate fiscal
       full:
         type: boolean
         default: false
+      reuse_mcp_digest:
+        type: string
+        default: ''
       publish:
         type: boolean
         default: false
@@ -17,7 +20,7 @@ name: Validate fiscal
         value: ${{ jobs.fiscal-engine.outputs.digest }}
       mcp_digest:
         description: Validated registry image digest
-        value: ${{ jobs.fiscal-mcp.outputs.digest }}
+        value: ${{ inputs.reuse_mcp_digest || jobs.fiscal-mcp.outputs.digest }}
 jobs:
   fiscal-engine:
     runs-on: ubuntu-latest
@@ -161,6 +164,23 @@ jobs:
 
         '
       working-directory: apps/fiscal-mcp
+    - uses: docker/login-action@v3
+      if: inputs.publish
+      with:
+        registry: ghcr.io
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    - name: Load the published MCP image for the runtime check
+      if: inputs.full && inputs.reuse_mcp_digest != ''
+      env:
+        DIGEST: ${{ inputs.reuse_mcp_digest }}
+        SOURCE_SHA: ${{ inputs.source_sha }}
+      run: |
+        set -euo pipefail
+        [[ "$DIGEST" =~ ^sha256:[a-f0-9]{64}$ ]]
+        reference="ghcr.io/avilaops/erp-next-fiscal-mcp@$DIGEST"
+        docker pull "$reference"
+        docker tag "$reference" "erp-next-fiscal-mcp:sha-$SOURCE_SHA"
     - run: 'script_file=$(mktemp)
 
         trap ''rm -f -- "$script_file"'' EXIT
@@ -204,7 +224,7 @@ jobs:
         inputs.source_sha }} .'' --output "$GITHUB_WORKSPACE/artifacts/timings/$GITHUB_JOB.jsonl" -- bash --noprofile --norc -e -o pipefail "$script_file"
 
         '
-      if: inputs.full
+      if: inputs.full && inputs.reuse_mcp_digest == ''
     - name: Exercise MCP in its restricted runtime container
       shell: bash
       run: 'script_file=$(mktemp)
@@ -229,15 +249,9 @@ jobs:
 
         '
       if: inputs.full
-    - uses: docker/login-action@v3
-      if: inputs.publish
-      with:
-        registry: ghcr.io
-        username: ${{ github.actor }}
-        password: ${{ secrets.GITHUB_TOKEN }}
     - name: Publish fiscal-mcp by immutable digest
       id: image
-      if: inputs.publish
+      if: inputs.publish && inputs.reuse_mcp_digest == ''
       uses: docker/build-push-action@v6
       with:
         context: .
