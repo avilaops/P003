@@ -2,10 +2,12 @@ import "server-only"
 
 // Permanent ownership after the four-module transition. The previous release,
 // rather than traffic flags, is the operational return path.
-export type MigratedModule = "preferences" | "registrations" | "sales" | "reports"
+export type MigratedModule = "preferences" | "registrations" | "sales" | "reports" | "inventory"
 export type BackendEnvironment = { ERP_TYPESCRIPT_API_URL?: string | undefined; ERP_TYPESCRIPT_MODULES?: string | undefined }
 const uuid = "[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}"
 const routes: { module: MigratedModule; methods: readonly string[]; path: RegExp }[] = [
+  { module: "inventory", methods: ["GET"], path: /^\/stock$/ },
+  { module: "inventory", methods: ["GET", "POST"], path: /^\/stock\/movements$/ },
   { module: "preferences", methods: ["GET", "PUT"], path: /^\/preferences$/ },
   { module: "registrations", methods: ["GET"], path: /^\/products\/finishes$/ },
   { module: "registrations", methods: ["GET", "POST"], path: /^\/(?:parties|products|product-categories|product-groups|tag-groups|tags)$/ },

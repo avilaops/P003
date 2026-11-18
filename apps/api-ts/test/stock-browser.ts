@@ -1,0 +1,21 @@
+import { spawn } from "node:child_process"
+import { createRequire } from "node:module"
+import { fileURLToPath } from "node:url"
+import { stockFixture } from "./stock-fixture.js"
+
+const adminUrl = process.env.API_TS_TEST_ADMIN_URL
+if (!adminUrl) throw Error("Informe API_TS_TEST_ADMIN_URL para criar o banco descartável de estoque")
+const fixture = await stockFixture(adminUrl)
+try {
+  const api = await fixture.app.listen({ host: "127.0.0.1", port: 0 })
+  const web = new URL("../../web/", import.meta.url)
+  const cli = createRequire(new URL("package.json", web)).resolve("@playwright/test/cli")
+  const origin = "http://127.0.0.1:" + (process.env.STOCK_TEST_WEB_PORT || "34242")
+  const child = spawn(process.execPath, [cli, "test", "--config", "playwright.stock.config.ts", ...process.argv.slice(2)], {
+    cwd: fileURLToPath(web), stdio: "inherit",
+    env: { ...process.env, ERP_TEST_WEB_ORIGIN: origin, ERP_WEB_ORIGIN: origin, ERP_API_URL: api,
+      ERP_TYPESCRIPT_API_URL: api, AUTH_ISSUER: api, ERP_AUTH_CLIENT_ID: "stock-test", ERP_AUTH_CLIENT_SECRET: "stock-test",
+      ERP_SESSION_SECRET: "danfe-browser-fixture-not-a-real-service-secret", ERP_DEFAULT_TENANT_ID: fixture.tenant },
+  })
+  process.exitCode = await new Promise<number>((resolve, reject) => { child.on("error", reject); child.on("exit", code => resolve(code ?? 1)) })
+} finally { await fixture.close() }
