@@ -49,6 +49,9 @@ function BatchForm({
   const accounts = useResource<{ data: { id: string; code: string; name: string }[] }>(
     "/api/erp/financial-accounts?status=active&limit=100",
   )
+  const settings = useResource<{ accounts?: { id: string; code: string; name: string }[] }>(
+    "/api/erp/financial-wallet-settings",
+  )
   const command = useCommand(),
     suggested = useSuggestedPaymentMethod()
   const [message, setMessage] = useState(""),
@@ -104,7 +107,7 @@ function BatchForm({
             Conta financeira
             <select required className="block w-full rounded-md border p-2" name="account" defaultValue="">
               <option value="">Selecione</option>
-              {accounts.value?.data.map((a) => (
+              {(settings.value?.accounts ?? accounts.value?.data)?.map((a) => (
                 <option key={a.id} value={a.id}>
                   {a.code} • {a.name}
                 </option>

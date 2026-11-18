@@ -532,8 +532,11 @@ test(
             },
           })
         assert.equal((await classify(old.revision, [{ ...shares[0]!, basisPoints: 4999 }, shares[1]!])).statusCode, 422)
-        assert.equal((await classify(old.revision,[shares[0]!,shares[0]!])).statusCode,422)
-        assert.equal((await classify(old.revision,[{...shares[0]!,costCenterId:randomUUID()},shares[1]!])).statusCode,422)
+        assert.equal((await classify(old.revision, [shares[0]!, shares[0]!])).statusCode, 422)
+        assert.equal(
+          (await classify(old.revision, [{ ...shares[0]!, costCenterId: randomUUID() }, shares[1]!])).statusCode,
+          422,
+        )
         const split = await classify(old.revision, shares)
         assert.equal(split.statusCode, 200, split.body)
         assert.equal(split.json().data.costCenterId, null)
@@ -613,6 +616,11 @@ test(
         assert.equal(undo.statusCode, 200, undo.body)
         assert.deepEqual(undo.json().payments.at(-1).costCenterAllocations, recent.costCenterAllocations)
       }
+      await pg.query("DELETE FROM role_permissions WHERE role_id=$1 AND permission_code='finance.accounts.read'", [
+        tenantRole,
+      ])
+      const choices = await app.inject({ url: "/api/v1/financial-wallet-settings", headers })
+      assert.deepEqual(choices.json().accounts, [{ id: account, code: "BANCO", name: "Banco" }])
     } finally {
       await app.close()
       await api.end()

@@ -27,6 +27,7 @@ export type WalletSettings = {
   revision: number
   canEdit: boolean
   categories: Choice[]
+  accounts?: Choice[]
   costCenters: Choice[]
   data: SettingsData
 }
@@ -103,6 +104,7 @@ export function useWalletCalculation(amount: string, date: string, due: string, 
     categories:
       settings.value?.categories.filter((c) => c.direction === (wallet === "receivables" ? "income" : "expense")) ?? [],
     centers: settings.value?.costCenters ?? [],
+    accounts: settings.value?.accounts,
   }
 }
 const money = (cents: bigint) =>
@@ -365,7 +367,7 @@ export function WalletClassification({
             Conta prevista
             <select className={select} name="forecastAccount" defaultValue={title.forecastAccountId ?? ""}>
               <option value="">Sem conta prevista</option>
-              {accounts.value?.data.map((a) => (
+              {(settings.value.accounts ?? accounts.value?.data)?.map((a) => (
                 <option key={a.id} value={a.id}>
                   {a.code} • {a.name}
                 </option>

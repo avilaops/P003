@@ -134,6 +134,16 @@ export function registerWalletSettings(app: FastifyInstance, deps: AppDependenci
         tenantId: ctx.tenantId,
         canEdit: ctx.permissions.includes("platform.company.manage"),
         categories,
+        accounts: ctx.permissions.some((p) =>
+          ["finance.accounts.read", "finance.receivables.manage", "finance.payables.manage"].includes(p),
+        )
+          ? (
+              await ctx.client.query(
+                "SELECT id,code,name FROM financial_accounts WHERE tenant_id=$1 AND status='active' ORDER BY code,id",
+                [ctx.tenantId],
+              )
+            ).rows
+          : [],
         costCenters,
         ...settings,
       }
