@@ -9,16 +9,6 @@ Diferencie preparação de emissão, documentos recebidos e documentos autorizad
 - O monitor fiscal consulta distribuição e permite manifestação explícita quando configuração, certificado e permissões estão disponíveis.
 - Consultar ou importar um documento no monitor não cria movimentos de estoque ou financeiro.
 
-<Mermaid
-  title="Fluxo fiscal: rascunho, revisão e documento autorizado"
-  chart={`flowchart LR
-  A[Pedido] --> B[Rascunho de NF-e]
-  B --> C{Revisão}
-  C -->|Pendências| B
-  C -->|Conferido| D[Emissão bloqueada]
-  E[XML autorizado] --> F[DANFE]`}
-/>
-
 <HelpAction action="fiscal" /> <HelpAction action="monitor" />
 
 Revise o XML, a empresa e a situação informada pelo serviço. Uma consulta ou geração de PDF não equivale à autorização de uma nova NF-e.

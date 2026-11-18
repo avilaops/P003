@@ -55,9 +55,7 @@
     ".next-wallet-tests/types/**/*.ts",
     ".next-wallet-tests/dev/types/**/*.ts",
     ".next-treasury-tests/types/**/*.ts",
-    ".next-treasury-tests/dev/types/**/*.ts",
-    ".next-mermaid-check/types/**/*.ts",
-    ".next-mermaid-check/dev/types/**/*.ts"
+    ".next-treasury-tests/dev/types/**/*.ts"
   ],
   "exclude": [
     "node_modules"
