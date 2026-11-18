@@ -2,6 +2,8 @@
 
 [Todas as telas](../../README.md)
 
+[Levantamento de Vendas • pendências, prioridades e critérios de aceite em 17/11/2026](LEVANTAMENTO-2026-11-17.md) • [Capturas das 15 entradas no desktop e no celular](levantamento-visual-2026-11-17.pdf)
+
 Escolha a tela que deseja consultar. Novo cadastro, consulta e edição ficam no mesmo guia da listagem.
 
 | Tela | Para que serve |
