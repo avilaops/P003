@@ -1,5 +1,6 @@
 import type { AuthorizedContext } from "../../platform/access.js"
 import { documentMailLimit, type DocumentMail } from "../../platform/document-mail.js"
+import { renderDocumentEmail } from "../../platform/document-mail-template.js"
 import { Problem } from "../../platform/problem.js"
 import { readDocument } from "../nfe-email/document.js"
 import { renderDanfe } from "../nfe-email/danfe.js"
@@ -8,7 +9,7 @@ import { brl, financialPdf } from "./financial-pdf.js"
 import { copySource, digest } from "./source.js"
 
 type Snapshot = {
-  company: { legalName: string; taxId?: string }; customer: { name: string; taxId?: string }
+  company: { legalName: string; tradeName?: string; taxId?: string }; customer: { name: string; taxId?: string }
   order: { number: string; amount: string; revision: number }
 }
 type Payment = { id: string; amount: string; method: string; reference: string; date: string; count: number }
@@ -52,11 +53,8 @@ export async function packageFiles(input: Awaited<ReturnType<typeof packageSourc
   const { invoice, snapshot, payments, amount } = input
   const number = snapshot.order.number
   const filenameNumber = number.replace(/[^A-Za-z0-9_-]/g, "_")
-  const message = input.invoice.environment === "homologation" ? "Homologação • sem valor fiscal" : ""
-  const subject = [`Pedido ${number} • documentos da sua compra`, message].filter(Boolean).join(" • ")
-  const text = [`Olá, ${snapshot.customer.name}.`, message,
-    "Seguem o pedido, o DANFE, o XML autorizado da NF-e e o contrato. Os comprovantes de recebimento acompanham o pacote quando o pedido está quitado.",
-    `Atenciosamente,\n${snapshot.company.legalName}`].filter(Boolean).join("\n\n")
+  const notice = invoice.environment === "homologation" ? "Homologação • sem valor fiscal" : ""
+  const subject = [`Documentos do pedido ${number}`, notice].filter(Boolean).join(" • ")
   const attachments: Attachment[] = []
   const manifest: Record<string, unknown>[] = []
   let size = 0
@@ -85,5 +83,9 @@ export async function packageFiles(input: Awaited<ReturnType<typeof packageSourc
     add("payment", pdf(`comprovante-pagamento-${payment.id}.pdf`, receipt), { paymentId: payment.id, amountCents: BigInt(payment.amount), settlementTotalCents: amount, titleCount: payment.count })
   }
   for (const file of contracts) add("contract", file)
-  return { attachments, manifest, subject, text }
+  const receiptMessage = payments.length === 1 ? "Incluímos também o comprovante de recebimento." : payments.length > 1 ? "Incluímos também os comprovantes de recebimento." : ""
+  const message = ["Olá!", `Reunimos os documentos do pedido ${number}. Em anexo estão o pedido, o DANFE, o XML autorizado da NF-e e a cópia do contrato.`, receiptMessage].filter(Boolean).join("\n\n")
+  const content = renderDocumentEmail({ company: snapshot.company.tradeName?.trim() || snapshot.company.legalName, title: `Documentos do pedido ${number}`, message,
+    details: [{ label: "NF-e", value: `${invoice.number} • série ${invoice.series}` }], notice, attachments })
+  return { attachments, manifest, subject, ...content }
 }

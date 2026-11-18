@@ -61,6 +61,7 @@ export async function verifyNfeEmail(seed: Pool, pool: DatabasePool, tenant: str
     assert.equal((await post(tag)).json().status, "sent")
     assert.equal(intercepted.length, 1)
     const envelope = intercepted[0]!
+    assert.equal(envelope.company, "Empresa A"); assert.equal(envelope.recipientName, "Empresa A")
     assert.equal(envelope.recipient, email); assert.equal(envelope.environment, "homologation")
     assert.deepEqual(envelope.pdf, pdf); assert.deepEqual(envelope.xml, Buffer.from(xml))
     assert.equal((await get()).json().status, "sent")
@@ -71,7 +72,7 @@ export async function verifyNfeEmail(seed: Pool, pool: DatabasePool, tenant: str
 
     const consumer = randomUUID()
     const consumerKey = accessKey.slice(0,20) + "65" + accessKey.slice(22)
-    const consumerXml = xml.replaceAll(accessKey,consumerKey).replace("<mod>55</mod>", "<mod>65</mod>")
+    const consumerXml = source.replaceAll(accessKey,consumerKey).replace("<mod>55</mod>", "<mod>65</mod>")
     await seed.query(`INSERT INTO fiscal_nfe_drafts(tenant_id,id,environment,model,profile_revision,company_revision,issuer_snapshot,details,products_total_cents)
       VALUES($1,$2,'homologation',65,1,1,'{}','{}',1)`, [tenant, consumer])
     await seed.query(`INSERT INTO fiscal_nfe_documents(tenant_id,id,model,status,series,number,issued_at,random_code,access_key,signed_xml,authorized_xml,protocol)
@@ -89,22 +90,27 @@ export async function verifyNfeEmail(seed: Pool, pool: DatabasePool, tenant: str
     for (const permission of ["fiscal.nfse.read", "fiscal.nfse.import", "fiscal.outgoing_nfse.read", "fiscal.outgoing_nfse.issue"]) {
       await seed.query("INSERT INTO role_permissions(role_id,permission_code) VALUES($1,$2) ON CONFLICT DO NOTHING",[role,permission])
     }
-    for (const [resource, expectedXml] of [
-      ["nfe/" + consumer, consumerXml], ["received-nfses/" + received, receivedXml], ["outgoing-nfses/" + outgoing, outgoingXml],
-    ]) {
+    for (const [resource, expectedXml, recipientEmail, recipientName, providerName] of [
+      ["nfe/" + consumer, consumerXml, "local@example.test", "Destinatário", null],
+      ["received-nfses/" + received, receivedXml, email, "Empresa A", metadata.provider.name],
+      ["outgoing-nfses/" + outgoing, outgoingXml, email, metadata.recipient.name, null],
+    ] as const) {
       const url = "/api/v1/fiscal/" + resource + "/email"
       const result = await app.inject({ method: "GET", url, headers })
       assert.equal(result.statusCode,200,result.body)
       assert.equal(result.json().attachments.length,1)
-      assert.equal(result.json().recipientEmail,email)
+      assert.equal(result.json().recipientEmail,recipientEmail)
       const commandHeaders = { ...headers, "if-match": String(result.headers.etag), "idempotency-key": randomUUID() }
-      const send = () => app.inject({ method: "POST", url, headers: commandHeaders, payload: { recipientEmail: email } })
+      const send = () => app.inject({ method: "POST", url, headers: commandHeaders, payload: { recipientEmail } })
       const before: number = intercepted.length
       assert.equal((await send()).json().status,"sent")
       assert.equal((await send()).headers["idempotency-replayed"],"true")
       assert.equal(intercepted.length,before + 1)
       assert.deepEqual(intercepted.at(-1)?.xml,Buffer.from(expectedXml))
       assert.equal(intercepted.at(-1)?.pdf,null)
+      assert.equal(intercepted.at(-1)?.company,"Empresa A")
+      assert.equal(intercepted.at(-1)?.recipientName,recipientName)
+      assert.equal(intercepted.at(-1)?.providerName,providerName)
     }
   } finally {
     await app.close()

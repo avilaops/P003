@@ -4,6 +4,8 @@ import { z } from "zod"
 import { authorizeRequest, requirePermission, type AccessDependencies, type AuthorizedContext } from "../../platform/access.js"
 import { commandKey, record, remember, replay } from "../../platform/commands.js"
 import { documentMailConfigured, sendDocumentMail } from "../../platform/document-mail.js"
+import { documentMailCompany, renderDocumentEmail } from "../../platform/document-mail-template.js"
+import { brl } from "../document-copies/financial-pdf.js"
 import { Problem } from "../../platform/problem.js"
 import { parseRevision, revisionValue } from "../../platform/revision.js"
 import { formalizeProposal } from "../proposals/formalize.js"
@@ -13,24 +15,39 @@ type Kind = "order" | "proposal"
 type IO = { configured: typeof documentMailConfigured; send: typeof sendDocumentMail }
 const inputSchema = z.strictObject({
   recipient: z.string().refine(value => !/\p{Cc}/u.test(value)).trim().pipe(z.email().max(254)),
-  subject: z.string().refine(value => !/\p{Cc}/u.test(value)).trim().min(1).max(200),
-  message: z.string().trim().min(1).max(10000).refine(value => !/\p{Cc}/u.test(value.replace(/[\r\n\t]/g, ""))),
+  subject: z.string().max(200).refine(value => !!value.trim() && !/\p{Cc}/u.test(value)),
+  message: z.string().max(10000).refine(value => !!value.trim() && !/\p{Cc}/u.test(value.replace(/[\r\n\t]/g, ""))),
 })
 const fields = 'id,status,recipient,created_at::text AS "createdAt"'
 function notFound() { return new Problem(404, "not_found", "Documento não encontrado nesta empresa") }
 
 async function current(context: AuthorizedContext, kind: Kind, id: string) {
   const query = kind === "order"
-    ? `SELECT d.revision, p.email, 0 AS version, d.status <> 'cancelled' AS eligible
+    ? `SELECT d.revision, d.number::text, d.customer_name, d.amount_cents::text, d.due_date::text AS date,
+              p.email, 0 AS version, d.status <> 'cancelled' AS eligible
          FROM sales_orders d JOIN parties p ON p.tenant_id=d.tenant_id AND p.id=d.customer_id
         WHERE d.tenant_id=$1 AND d.id=$2`
-    : `SELECT d.revision, p.email, v.version,
+    : `SELECT d.revision, d.number::text, v.customer_name, v.amount_cents::text, v.valid_until::text AS date, p.email, v.version,
               (d.order_id IS NULL AND v.status IN ('draft','sent') AND v.valid_until >= (now() AT TIME ZONE 'America/Sao_Paulo')::date) AS eligible
          FROM sales_proposals d JOIN sales_proposal_versions v ON v.tenant_id=d.tenant_id AND v.proposal_id=d.id AND v.version=d.current_version
          JOIN parties p ON p.tenant_id=v.tenant_id AND p.id=v.customer_id WHERE d.tenant_id=$1 AND d.id=$2`
-  const { rows } = await context.client.query<{ revision: string; email: string | null; version: number; eligible: boolean }>(query, [context.tenantId,id])
+  const { rows } = await context.client.query<{ revision: string; number: string; customer_name: string; amount_cents: string; date: string;
+    email: string | null; version: number; eligible: boolean }>(query, [context.tenantId,id])
   if (!rows[0]) throw notFound()
   return rows[0]
+}
+
+function messageFor(kind: Kind, source: Awaited<ReturnType<typeof current>>, company: string) {
+  const order = kind === "order"
+  const title = order ? `Pedido PV-${source.number.padStart(6, "0")}` : `Proposta ${source.number} • versão ${source.version}`
+  const date = source.date.split("-").reverse().join("/")
+  const customer = source.customer_name.trim()
+  const forCustomer = customer ? ` para ${customer}` : ""
+  const message = order
+    ? `Olá!\n\nO PDF anexo reúne os itens, as quantidades e as condições do pedido PV-${source.number.padStart(6, "0")}${forCustomer}.\n\nConfira os dados do pedido e, se precisar de algum ajuste, entre em contato com nossa equipe comercial.`
+    : `Olá!\n\nPreparamos esta proposta${forCustomer}. O documento anexo detalha os itens, os valores e as condições comerciais desta versão. A proposta é válida até ${date}.\n\nSe quiser ajustar algum item ou seguir com o pedido, fale com nossa equipe comercial.`
+  return { title, suggestedSubject: `${title} • ${company}`.replace(/\s+/g, " ").slice(0,200), suggestedMessage: message,
+    details: [{ label: "Valor total", value: brl(BigInt(source.amount_cents)) }, { label: order ? "Vencimento do pedido" : "Validade da proposta", value: date }] }
 }
 
 async function receipt(context: AuthorizedContext, kind: Kind, id: string, deliveryId: unknown) {
@@ -62,7 +79,8 @@ export function registerSalesMail(app: FastifyInstance, deps: AccessDependencies
         }
         const deliveries = await context.client.query(`SELECT ${fields} FROM ${table}
           WHERE tenant_id=$1 AND ${kind}_id=$2 ORDER BY created_at DESC,id DESC LIMIT 50`, [context.tenantId,id])
-        return { tenantId: context.tenantId, canSend, emailReady: io.configured(), recipient: source.email, deliveries: deliveries.rows }
+        const { suggestedSubject, suggestedMessage } = messageFor(kind, source, await documentMailCompany(context))
+        return { tenantId: context.tenantId, canSend, emailReady: io.configured(), recipient: source.email, deliveries: deliveries.rows, suggestedSubject, suggestedMessage }
       })
       return reply.header("cache-control", "no-store").send(value)
     })
@@ -77,7 +95,8 @@ export function registerSalesMail(app: FastifyInstance, deps: AccessDependencies
         const parsed = inputSchema.safeParse(request.body)
         if (!parsed.success) throw new Problem(422, "invalid_input", "Confira o endereço de e-mail, o assunto e a mensagem")
         const input = parsed.data
-        const command = { id, revision, input }
+        // Existing receipts use trimmed fields to identify retries.
+        const command = { id, revision, input: { ...input, subject: input.subject.trim(), message: input.message.trim() } }
         const prior = await replay(context, key, `${kind}.email`, command)
         if (prior) return { prior: await receipt(context, kind, id, prior.deliveryId) }
         const source = await current(context, kind, id)
@@ -99,7 +118,11 @@ export function registerSalesMail(app: FastifyInstance, deps: AccessDependencies
         await record(context, request.headers, `sales_${kind}`, id, `${kind}.email_requested`,
           { deliveryId, revision, recipient: input.recipient, ...(kind === "proposal" ? { version: source.version } : {}) })
         await remember(context, key, `${kind}.email`, command, { deliveryId })
-        return { version: source.version, mail: { id: deliveryId, to: input.recipient, subject: input.subject, text: input.message, attachments: [attachment] } }
+        const company = await documentMailCompany(context)
+        const { title, details } = messageFor(kind, source, company)
+        const attachments = [attachment]
+        const body = renderDocumentEmail({ company, title, details, attachments, message: input.message })
+        return { version: source.version, mail: { id: deliveryId, to: input.recipient, subject: input.subject, ...body, attachments } }
       })
       reply.header("cache-control", "no-store")
       if (reserved.prior) return reply.header("idempotency-replayed", "true").header("etag", `"${reserved.prior.revision}"`).send(reserved.prior)

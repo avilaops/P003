@@ -8,34 +8,36 @@ import { RequestError } from "@/components/feedback/session-recovery"
 import { useCommand, useResource } from "@/hooks/use-operation"
 
 type Delivery = { id: string; status: "sent" | "failed" | "uncertain"; recipient: string; createdAt: string }
-type EmailStatus = { tenantId: string; recipient: string | null; canSend: boolean; emailReady: boolean; deliveries: Delivery[] }
+type EmailStatus = { tenantId: string; recipient: string | null; canSend: boolean; emailReady: boolean; deliveries: Delivery[]; suggestedSubject?: string; suggestedMessage?: string }
 type Receipt = { tenantId: string; revision: number; delivery: Delivery }
-type EmailDraft = { recipientOverride: string | null; subject: string; message: string }
+type EmailDraft = { recipientOverride: string | null; subject: string | null; message: string | null }
 const deliveryLabels = { sent: "Aceito pelo servidor de e-mail", failed: "Recusado pelo servidor de e-mail", uncertain: "Confirmação pendente · não reenviar" }
 
 export function ProposalEmail({ id, number, version, tenantId, etag, onReload, disabled = false }: { id: string; number: string; version: number; tenantId: string; etag: string; onReload: () => void; disabled?: boolean }) {
   const [open, setOpen] = useState(false)
   const command = useCommand()
   const [receipt, setReceipt] = useState<Delivery | null>(null)
-  const [draft, setDraft] = useState<EmailDraft>({ recipientOverride: null, subject: `Proposta ${number} · versão ${version}`, message: `Olá,\n\nSegue em anexo a proposta ${number} para sua conferência.\n\nFicamos à disposição.` })
+  const [draft, setDraft] = useState<EmailDraft>({ recipientOverride: null, subject: null, message: null })
   // Only consult delivery configuration/history when the composer is opened.
   return <>
     <Button variant="outline" className="h-9 px-3" disabled={disabled} title={disabled ? "Consulte a versão atual e aguarde operações pendentes para enviar" : undefined} onClick={() => setOpen(true)}>Enviar por e-mail</Button>
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-xl">
         <DialogHeader><DialogTitle>Enviar proposta {number} por e-mail</DialogTitle><DialogDescription>Confira o destinatário e a mensagem antes de enviar o documento da proposta.</DialogDescription></DialogHeader>
-        {open && <ProposalEmailComposer id={id} tenantId={tenantId} etag={etag} onReload={onReload} command={command} receipt={receipt} onReceipt={setReceipt} draft={draft} onDraftChange={patch => setDraft(previous => ({ ...previous, ...patch }))} />}
+        {open && <ProposalEmailComposer id={id} number={number} version={version} tenantId={tenantId} etag={etag} onReload={onReload} command={command} receipt={receipt} onReceipt={setReceipt} draft={draft} onDraftChange={patch => setDraft(previous => ({ ...previous, ...patch }))} />}
       </DialogContent>
     </Dialog>
   </>
 }
 
-function ProposalEmailComposer({ id, tenantId, etag, onReload, command, receipt, onReceipt, draft, onDraftChange }: { id: string; tenantId: string; etag: string; onReload: () => void; command: ReturnType<typeof useCommand>; receipt: Delivery | null; onReceipt: (delivery: Delivery) => void; draft: EmailDraft; onDraftChange: (patch: Partial<EmailDraft>) => void }) {
+function ProposalEmailComposer({ id, number, version, tenantId, etag, onReload, command, receipt, onReceipt, draft, onDraftChange }: { id: string; number: string; version: number; tenantId: string; etag: string; onReload: () => void; command: ReturnType<typeof useCommand>; receipt: Delivery | null; onReceipt: (delivery: Delivery) => void; draft: EmailDraft; onDraftChange: (patch: Partial<EmailDraft>) => void }) {
   const messageId = useId()
   const resource = useResource<EmailStatus>(`/api/erp/proposals/${id}/email`)
-  const { recipientOverride, subject, message } = draft
+  const { recipientOverride } = draft
   const value = resource.value?.tenantId === tenantId ? resource.value : null
   const recipient = recipientOverride ?? value?.recipient ?? ""
+  const subject = draft.subject ?? value?.suggestedSubject ?? `Proposta ${number} • versão ${version}`
+  const message = draft.message ?? value?.suggestedMessage ?? `Olá!\n\nA proposta ${number} está em anexo. Confira os itens, os valores e as condições desta versão.`
   const pendingDelivery = receipt?.status === "uncertain" || value?.deliveries.some(delivery => delivery.status === "uncertain")
   const frozen = command.busy || command.uncertain || command.stale || !!pendingDelivery || receipt?.status === "sent"
   if (resource.loading && !value) return <p role="status">Consultando envio de e-mail…</p>

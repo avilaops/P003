@@ -1,6 +1,7 @@
 import { createDecipheriv } from "node:crypto"
 import nodemailer from "nodemailer"
 import { documentMailConfigured, sendDocumentMail } from "../../platform/document-mail.js"
+import { renderDocumentEmail } from "../../platform/document-mail-template.js"
 import { z } from "zod"
 import type { DatabaseClient } from "../../platform/database.js"
 import { Problem } from "../../platform/problem.js"
@@ -16,6 +17,7 @@ type SettingsRow = {
 const unavailable = () => new Problem(503, "smtp_unavailable", "Configure o SMTP em Preferências do sistema • E-mail para enviar a NF-e")
 export type Envelope = {
   id: string; recipient: string; number: string; series: number; environment: string; accessKey: string; xml: Buffer; pdf: Buffer | null; kind?: "nfe" | "nfce" | "received-nfses" | "outgoing-nfses"
+  company: string; recipientName?: string | null; providerName?: string | null
 }
 export type Outcome = "sent" | "failed" | "unknown"
 export type Sender = (envelope: Envelope) => Promise<Outcome>
@@ -65,28 +67,47 @@ export function smtpFailure(error: unknown): Outcome {
   return "unknown"
 }
 
+const fiscalMessages = {
+  nfe: { label: "NF-e", body: "Encaminhamos o XML autorizado da nota fiscal eletrônica." },
+  nfce: { label: "NFC-e", body: "Segue o XML autorizado da nota fiscal de consumidor eletrônica referente à sua compra." },
+  "outgoing-nfses": { label: "NFS-e emitida", body: "Segue o XML autorizado da nota fiscal referente ao serviço que prestamos." },
+  "received-nfses": { label: "NFS-e recebida", body: "Encaminhamos para seu arquivo o XML original importado da nota fiscal de serviço. Nossa empresa consta como tomadora do serviço." },
+}
+
+function fiscalName(value?: string | null) {
+  const name = value?.replace(/[\r\n\0]+/g, " ").trim()
+  // SEFAZ may replace the recipient's name with a test-environment message.
+  return name && !/SEM VALOR FISCAL|EM AMBIENTE DE HOMOLOGA[ÇC][ÃA]O|CONSUMIDOR N[ÃA]O IDENTIFICADO/i.test(name) ? name : ""
+}
+
 export function nfeMessage(envelope: Envelope) {
-  const notice = envelope.environment === "homologation" ? "Homologação • sem valor fiscal" : ""
-  const service = envelope.kind === "received-nfses" || envelope.kind === "outgoing-nfses"
-  const label = service ? "NFS-e" : envelope.kind === "nfce" ? "NFC-e" : "NF-e"
+  const kind = envelope.kind ?? "nfe"
+  const service = kind === "received-nfses" || kind === "outgoing-nfses"
+  const { label, body } = fiscalMessages[kind]
   const title = label + " nº " + envelope.number + (service ? "" : " • Série " + envelope.series)
-  const content = envelope.pdf ? "Seguem o XML autorizado e o DANFE" : envelope.kind === "received-nfses" ? "Segue o XML original importado" : "Segue o XML autorizado"
+  const notice = envelope.environment === "homologation" ? "Homologação • sem valor fiscal" : undefined
+  const name = fiscalName(envelope.recipientName)
+  const provider = kind === "received-nfses" && fiscalName(envelope.providerName)
+  const details = [{ label: "Chave de acesso", value: envelope.accessKey }]
+  if (provider) details.push({ label: "Prestador do serviço", value: provider })
+  const attachments = [
+    { filename: service ? `NFSE-${envelope.accessKey}.xml` : `${envelope.accessKey}-procNFe.xml`, content: envelope.xml, contentType: "application/xml" },
+    ...(envelope.pdf ? [{ filename: `DANFE-${envelope.accessKey}.pdf`, content: envelope.pdf, contentType: "application/pdf" }] : []),
+  ]
+  const message = [name ? `Olá, ${name}.` : "Olá.", body + (envelope.pdf ? " O DANFE em PDF também está anexo para consulta." : "")].join("\n\n")
   return {
-    to: { name: "", address: envelope.recipient },
+    to: { name, address: envelope.recipient },
     messageId: `<${envelope.id}@nfe.avilaops.com>`,
-    subject: [title, notice].filter(Boolean).join(" • "),
-    text: [notice, content + " da " + title + ".", `Chave de acesso • ${envelope.accessKey}`].filter(Boolean).join("\n\n"),
-    attachments: [
-      { filename: service ? `NFSE-${envelope.accessKey}.xml` : `${envelope.accessKey}-procNFe.xml`, content: envelope.xml, contentType: "application/xml" },
-      ...(envelope.pdf ? [{ filename: `DANFE-${envelope.accessKey}.pdf`, content: envelope.pdf, contentType: "application/pdf" }] : []),
-    ],
+    subject: [title, notice, envelope.company].filter(Boolean).join(" • ").replace(/[\r\n\0]+/g, " ").slice(0, 250).trimEnd(),
+    ...renderDocumentEmail({ company: envelope.company, title, message, attachments, details, ...(notice && { notice }) }),
+    attachments,
   }
 }
 
-export async function resolveSender(client: DatabaseClient, env = process.env): Promise<Sender> {
+export async function resolveSender(client: DatabaseClient, env = process.env, request = fetch): Promise<Sender> {
   if (documentMailConfigured(env)) return async envelope => {
-    const { subject, text, attachments } = nfeMessage(envelope)
-    return sendDocumentMail({ id: envelope.id, to: envelope.recipient, subject, text, attachments }, fetch, env)
+    const { subject, text, html, attachments } = nfeMessage(envelope)
+    return sendDocumentMail({ id: envelope.id, to: envelope.recipient, subject, text, html, attachments }, request, env)
   }
   const row = (await client.query<SettingsRow>(
     "SELECT data,secret_context,secret_key_id,secret_nonce,secret_ciphertext FROM platform_mail_settings WHERE singleton",
