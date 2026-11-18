@@ -110,7 +110,7 @@ def snapshot_plan(root, active, rollback):
 
 def staging_plan(root):
     allowed = {'release.json', 'compose.yaml', 'fiscal-compose.yaml', 'migrate-release.py',
-               'release-retention.py', 'images.txt', 'api-image.tar.gz', 'web-image.tar.gz',
+               'release-retention.py', 'configure-api.py', 'images.txt', 'api-image.tar.gz', 'web-image.tar.gz',
                'fiscal-image.tar.gz', 'fiscal-mcp-image.tar.gz', 'grant-fiscal-monitor.sql', 'grant-cte-distribution.sql'}
     result = []
     for directory in sorted(root.iterdir()):

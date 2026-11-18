@@ -69,7 +69,8 @@ test('real AST discovery links page to BFF and backend and marks inline no-ops w
     'apps/web/src/features/list.tsx': `import "./cycle"; export function List(){fetch('/api/erp/items');fetch(dynamicUrl);return <button onClick={()=>{}}>Salvar</button>}`,
     'apps/web/src/features/cycle.ts': 'import "./list";',
     'apps/web/src/app/api/erp/items/route.ts': 'export const GET=(r:Request)=>forwardErp(r,"/items"); export const POST=(r:Request)=>forwardErp(r,"/items")',
-    'apps/api/src/router.rs': 'fn routes(){Router::new().route("/api/v1/items",get(list).post(create))}',
+    'apps/api/src/router.rs': 'fn routes(){Router::new().route("/api/v1/items",post(create))}',
+    'apps/api-ts/src/modules/document-endpoints.json': JSON.stringify({ items: { GET: '/api/v1/items', POST: '/api/v1/items' } }),
     'apps/web/tests/items.spec.ts': 'test("items",async({page})=>{await page.goto("/items")})',
     'migrations/0001.sql': 'CREATE TABLE items(id uuid);',
   };
@@ -78,6 +79,8 @@ test('real AST discovery links page to BFF and backend and marks inline no-ops w
     const inventory = await discover(root, { typescript });
     const findings = analyze(inventory);
     assert.equal(inventory.pages.length, 1); assert.equal(inventory.bff.length, 1); assert.equal(inventory.api.length, 1);
+    assert.deepEqual(inventory.api[0].methods, ['GET', 'POST']);
+    assert.equal(inventory.api[0].file, 'apps/api-ts/src/modules/document-endpoints.json');
     const page = inventory.pages[0];
     assert.equal(page.path, '/items'); assert.equal(page.runtimeVerdict, 'not_verified_per_route');
     assert.equal(page.dependencies.length, 3); assert.equal(page.emptyActions.length, 1);
