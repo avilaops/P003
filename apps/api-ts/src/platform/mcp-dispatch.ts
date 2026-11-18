@@ -6,6 +6,7 @@ import type { AppDependencies } from "../app.js"
 import type { AuthenticatedIdentity } from "./auth.js"
 import { Problem } from "./problem.js"
 import { runWithMcpIdentity } from "./request-identity.js"
+import { registerInventoryMcp } from "../modules/inventory/mcp.js"
 
 type Credential = { subject: string; email: string; name: string; verified_email: boolean; scope: string }
 const allowedHeaders = new Set(["x-tenant-id", "if-match", "idempotency-key", "content-type", "accept", "x-request-id"])
@@ -33,6 +34,7 @@ async function credential(authorization: string | string[] | undefined, dependen
 
 export function registerMcpDispatch(app: FastifyInstance, dependencies: AppDependencies) {
   if (!dependencies.mcpResource) return
+  registerInventoryMcp(app, dependencies.mcpResource, authorization => credential(authorization, dependencies))
   const credentials = new WeakMap<object, Credential>()
   app.post("/internal/mcp/dispatch", {
     // A product body can contain an inline photo. Its existing inner route
