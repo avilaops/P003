@@ -47,6 +47,13 @@ jobs:
         python-version: '3.13'
     - name: Exercise the production image with the Linux isolation and transport harness
       run: |
+        # The isolated child clears LD_LIBRARY_PATH. Supply the hosted interpreter's
+        # exact shared library in the system loader path already used by production.
+        runtime_library=$(python -c 'from pathlib import Path; import sysconfig as c; print(Path(c.get_config_var("LIBDIR")) / c.get_config_var("INSTSONAME"))')
+        test -f "$runtime_library"
+        sudo install -m 0644 "$runtime_library" /usr/local/lib/
+        sudo ldconfig
+        env -u LD_LIBRARY_PATH "$(command -v python)" -I -c 'import ssl'
         python -m pip install uv==0.12.24
         uv sync --frozen --project apps/contract-signature-service --python 3.13
         uv build --project apps/contract-signature-service --out-dir "$RUNNER_TEMP/signature-service-dist"
