@@ -17,7 +17,8 @@ const API_KEYS = [
 const WEB_KEYS = ['AUTH_ISSUER', 'ERP_WEB_ORIGIN', 'ERP_AUTH_CLIENT_ID',
   'ERP_AUTH_CLIENT_SECRET', 'ERP_SESSION_SECRET', 'ERP_DEFAULT_TENANT_ID', 'ERP_FISCAL_API_URL'];
 const SYSTEM_KEYS = ['PATH', 'HOME', 'LANG', 'LC_ALL', 'TZ', 'SSL_CERT_FILE', 'SSL_CERT_DIR'];
-const TYPESCRIPT_KEYS = ['DATABASE_URL', 'DATABASE_MAX_CONNECTIONS', 'AUTH_ISSUER', 'AUTH_USERINFO_URL', 'ERP_MCP_ORIGIN'];
+// BROWSER_USE_API_KEY is optional: without it the Browser Use route answers 503.
+const TYPESCRIPT_KEYS = ['DATABASE_URL', 'DATABASE_MAX_CONNECTIONS', 'AUTH_ISSUER', 'AUTH_USERINFO_URL', 'ERP_MCP_ORIGIN', 'BROWSER_USE_API_KEY'];
 
 function select(env, keys) {
   return Object.fromEntries(keys.filter(key => typeof env[key] === 'string' && env[key] !== '')

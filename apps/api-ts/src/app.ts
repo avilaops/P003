@@ -39,8 +39,9 @@ import { registerFinancialEmails } from "./modules/document-copies/financial-rou
 import { registerContractPackage } from "./modules/document-copies/contract-package-routes.js"
 import { registerQualifiedReissue } from "./modules/contract-signatures/reissue.js"
 import { registerContractTemplateArchive } from "./modules/contract-templates/archive.js"
+import { registerBrowserUseRoutes, type BrowserUseDependencies } from "./modules/browser-use/routes.js"
 
-export type AppDependencies = AccessDependencies & { outgoingNfse?: OutgoingNfseDependencies; nfeEmail?: NfeEmailIO; documentCopies?: DocumentCopyIO }
+export type AppDependencies = AccessDependencies & { outgoingNfse?: OutgoingNfseDependencies; nfeEmail?: NfeEmailIO; documentCopies?: DocumentCopyIO; browserUse?: BrowserUseDependencies }
 
 export function buildApp(_dependencies: AppDependencies): FastifyInstance {
   const app = Fastify({ logger: false, bodyLimit: 65_536 })
@@ -130,5 +131,6 @@ export function buildApp(_dependencies: AppDependencies): FastifyInstance {
   registerQualifiedReissue(app, _dependencies)
   registerContractTemplateArchive(app, _dependencies)
   registerParticipantRoutes(app, _dependencies)
+  registerBrowserUseRoutes(app, _dependencies, _dependencies.browserUse)
   return app
 }
