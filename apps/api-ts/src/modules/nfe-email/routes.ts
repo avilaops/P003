@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto"
+import endpoints from "../document-endpoints.json" with { type: "json" }
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify"
 import { z } from "zod"
 import { authorizeRequest, requirePermission, type AccessDependencies, type AuthorizedContext } from "../../platform/access.js"
@@ -77,7 +78,7 @@ export function registerNfeEmail(app: FastifyInstance, deps: AccessDependencies,
   for (const kind of ["nfe", "received-nfses", "outgoing-nfses"] as const) {
     registerDocumentRoutes(app, deps, io, kind)
   }
-  app.get("/api/v1/fiscal/outgoing-nfses", async (request, reply) => {
+  app.get(endpoints["outgoing-nfse-list"].GET, async (request, reply) => {
     const query = z.object({ offset: z.coerce.number().int().min(0).max(1000000).default(0) }).safeParse(request.query)
     if (!query.success) throw new Problem(400, "invalid_offset", "Página inválida")
     return reply.header("cache-control","no-store").send(await authorizeRequest(request, deps, async context => {
@@ -92,12 +93,11 @@ export function registerNfeEmail(app: FastifyInstance, deps: AccessDependencies,
 }
 
 function registerDocumentRoutes(app: FastifyInstance, deps: AccessDependencies, io: NfeEmailIO, kind: DocumentKind) {
-  const path = `/api/v1/fiscal/${kind}/:id/email`
-  app.get(path, async (request, reply) => {
+  app.get(endpoints[kind].GET, async (request, reply) => {
     const id = documentId(request)
     return respond(reply, await authorizeRequest(request, deps, context => load(context, id, kind)))
   })
-  app.post(path, async (request, reply) => {
+  app.post(endpoints[kind].POST, async (request, reply) => {
     const id = documentId(request)
     const input = confirmation.safeParse(request.body)
     if (!input.success) throw new Problem(422, "invalid_input", "Confirme o e-mail apresentado na nota")

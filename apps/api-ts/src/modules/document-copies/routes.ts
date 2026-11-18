@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto"
+import endpoints from "../document-endpoints.json" with { type: "json" }
 import type { FastifyInstance, FastifyReply } from "fastify"
 import { z } from "zod"
 import { authorizeRequest, requirePermission, type AuthorizedContext, type AccessDependencies } from "../../platform/access.js"
@@ -14,7 +15,6 @@ const inputSchema = z.strictObject({
   subject: z.string().min(1).max(200).refine(v => v.trim().length > 0 && !/\p{Cc}/u.test(v)),
   message: z.string().min(1).max(10000).refine(v => v.trim().length > 0 && !/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/u.test(v)),
 })
-const paths: Record<Kind, string> = { payable: "financial-payables", contract: "commercial-contracts" }
 type Delivery = { id: string; status: "sent" | "failed" | "uncertain"; recipient: string; createdAt: Date }
 type Saved = Delivery & { source_id: string; source_revision: string; snapshot_hash: string; subject: string; message: string }
 const fields = "id,status,array_to_string(recipients,', ') AS recipient,created_at AS \"createdAt\""
@@ -55,8 +55,7 @@ export type DocumentCopyIO = { configured: typeof documentMailConfigured; send: 
 export function registerDocumentCopies(app: FastifyInstance, deps: AccessDependencies,
   io: DocumentCopyIO = { configured: documentMailConfigured, send: sendDocumentMail }) {
   for (const kind of ["payable", "contract"] as const) {
-    const path = `/api/v1/${paths[kind]}/:id/email`
-    app.get<{ Params: { id: string } }>(path, async (request, reply) => {
+    app.get<{ Params: { id: string } }>(endpoints[kind].GET, async (request, reply) => {
       const { id } = request.params
       const result = await authorizeRequest(request, deps, async context => {
         requirePermission(context, readRight(kind))
@@ -70,7 +69,7 @@ export function registerDocumentCopies(app: FastifyInstance, deps: AccessDepende
       })
       return reply.header("etag", `"${result.revision}"`).header("cache-control", "no-store").send(result)
     })
-    app.post<{ Params: { id: string } }>(path, async (request, reply) => {
+    app.post<{ Params: { id: string } }>(endpoints[kind].POST, async (request, reply) => {
       const id = request.params.id.toLowerCase()
       if (!z.guid().safeParse(id).success) throw notFound()
       const key = commandKey(request.headers["idempotency-key"])

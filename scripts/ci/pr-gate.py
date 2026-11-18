@@ -56,6 +56,12 @@ def native_api_required(paths):
     for path in paths:
         if path == "apps/api-ts/scripts/contract-tests.mjs":
             return True
+        # The project gate executes the source catalogue, scanners and their tests.
+        # The suite runners can invoke the native toolchain and retain its validation.
+        if (path.startswith(("verification/", "scripts/verification/"))
+                and path.endswith((".md", ".json", ".mjs", ".ts", ".py"))
+                and path not in ("verification/suites.mjs", "verification/run.mjs")):
+            continue
         if path.startswith(typescript_paths) or path in platform_files:
             continue
         if plan([path])["api"]:

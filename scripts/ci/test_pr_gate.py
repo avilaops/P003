@@ -51,6 +51,15 @@ class ScopeTests(unittest.TestCase):
             with self.subTest(path=path):
                 self.assertEqual(gate.plan([path]), {"web": False, "api": True, "fiscal": False})
 
+    def test_contract_catalogue_and_scanners_keep_project_validation_without_native_build(self):
+        for path in ("verification/contracts.json", "verification/contracts.mjs", "verification/discovery.mjs",
+                     "verification/test/contracts.test.mjs", "scripts/verification/inspect-proposal-pdf.py"):
+            self.assertTrue(all(gate.plan([path]).values()), path)
+            self.assertFalse(gate.native_api_required([path]), path)
+        for path in ("verification/run.mjs", "verification/suites.mjs", "scripts/verification/order-pdf-harness.ps1",
+                     "verification/new-adapter.rs"):
+            self.assertTrue(gate.native_api_required([path]), path)
+
     def test_fiscal_and_shared_packages(self):
         self.assertEqual(gate.plan(["apps/fiscal-engine/src/main.ts", "packages/shared/test.ts"]),
                          {"web": True, "api": False, "fiscal": True})
