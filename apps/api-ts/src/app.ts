@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto"
 import { registerPartyRoutes } from "./modules/parties/routes.js"
 import { registerDashboardRoutes } from "./modules/dashboard/routes.js"
 import { registerReportRoutes } from "./modules/reports/routes.js"
+import { registerPosSessionRoutes } from "./modules/pos-sessions/routes.js"
 import { registerFinanceInsightRoutes } from "./modules/finance-insights/routes.js"
 import { registerFinanceWalletRoutes } from "./modules/finance-wallets/routes.js"
 import { registerFinanceManagementRoutes } from "./modules/finance-management/routes.js"
@@ -78,6 +79,7 @@ export function buildApp(_dependencies: AppDependencies): FastifyInstance {
   registerPartyRoutes(app, _dependencies)
   registerDashboardRoutes(app, _dependencies)
   registerReportRoutes(app, _dependencies)
+  registerPosSessionRoutes(app, _dependencies)
   registerFinanceInsightRoutes(app, _dependencies)
   registerFinanceWalletRoutes(app, _dependencies)
   registerFinanceManagementRoutes(app, _dependencies)

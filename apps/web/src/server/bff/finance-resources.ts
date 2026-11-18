@@ -1,3 +1,5 @@
+import { posSessionRoute } from "./pos-resources"
+
 // Only resources implemented by the finance API may be forwarded through the session BFF.
 const id = "[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}"
 const portfolio = ["side","partyId","categoryId","from","to","q","status","bucket","limit","offset"]
@@ -51,5 +53,5 @@ const routes: FinanceRoute[] = [
   {path:new RegExp("^/orders/"+id+"/documents$","i"),methods:["GET","POST"]},
 ]
 export function financeRoute(method:string,resource:string) {
-  return routes.find(route=>route.methods.includes(method.toUpperCase()) && route.path.test(resource))
+  return posSessionRoute(method,resource) ?? routes.find(route=>route.methods.includes(method.toUpperCase()) && route.path.test(resource))
 }
