@@ -5,7 +5,7 @@ export const referenceConfigs = {
     title: "Depósitos de estoque", singular: "depósito", endpoint: "warehouses",
     create: "Novo depósito", plural: "depósitos",
     emptyText: "Depósitos identificam os locais físicos do estoque, como galpão, loja ou showroom.",
-    description: "Cadastre e organize os depósitos da empresa. Os saldos atuais são consolidados por produto e empresa, sem divisão por depósito.",
+    description: "Cadastre os locais onde a empresa armazena produtos.",
     defaults: { code: "", name: "", status: "active", notes: null, location: null },
   },
   "grupos-produtos": {

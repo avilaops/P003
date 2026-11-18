@@ -23,6 +23,7 @@ function fixture(kind: "order" | "proposal", withCheckout = false) {
       if (sql.includes("FROM sales_order_checkouts")) return result(withCheckout ? [{ customer_snapshot: { legalName: "Cliente", stateRegistration: "123456" }, entry_amount_cents: "2000", entry_payment_method_id: id, entry_payment_method: { id, code: "PIX", name: "Pix", modality: "pix" }, entry_due_on: "2026-12-01", manufacturing_days: 30, delivery_notes: "Entrega", payment_notes: "", notes: "" }] : [])
       if (sql.includes("FROM sales_order_installments")) return result([{ id, number: 0, payment_method_id: id, payment_method: {}, due_on: "2026-12-02", amount_cents: "2000" }, { id, number: 1, payment_method_id: id, payment_method: { id, code: "PIX", name: "Pix", modality: "pix" }, due_on: "2026-12-31", amount_cents: "8000" }])
       if (sql.includes("FROM receivables")) return result([{ originated: true }])
+      if (sql.includes("FROM production_orders o")) return result([])
       if (sql.includes("FROM sales_proposals")) {
         if (sql.includes("COALESCE($3")) revisions.push(values[2])
         return result([{ id, number: "9", version: values[2] ?? 2, revision: "3", customer_id: id, customer_name: "Cliente", customer_tax_id: "04252011000110", valid_until: "2026-12-31", payment_terms: "À vista", delivery_terms: "Entrega", notes: "", amount: "100.00", status: "draft", expired: false, order_id: null, is_current: values[2] !== 1, created_at: "2026-11-16", updated_at: "2026-11-16", sent_at: null, decided_at: null, decided_by: null, decision_reason: null }])

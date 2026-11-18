@@ -21,7 +21,7 @@ Conferir o fluxo de inventário e contagem disponível na empresa.
 
 ## Regras e limites
 
-A sessão começa com o saldo atual dos produtos ativos. Não há seleção de depósito nesta tela; o estoque é consolidado por produto e empresa. A aprovação dos ajustes é uma ação separada da contagem e só fica habilitada quando todos os itens da sessão aberta foram contados.
+A abertura registra a posição dos produtos selecionados. É possível filtrar por categoria, selecionar o depósito quando habilitado e bloquear a movimentação dos itens durante a conferência. Na contagem cega, o operador informa a quantidade sem consultar o saldo esperado. A aprovação aplica as divergências e identifica a sessão em cada ajuste. O cancelamento libera os itens bloqueados.
 
 ## Referências para manutenção
 

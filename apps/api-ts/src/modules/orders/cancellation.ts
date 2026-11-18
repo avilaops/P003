@@ -6,6 +6,7 @@ import { reverseOrderInvoices } from "../finance-management/accrual.js"
 import { decimal } from "../sales/fixed.js"
 import { conflict } from "./acceptance.js"
 import type { CommandHeaders } from "./receivables.js"
+import { reversePostings } from "../production/movements.js"
 
 function inventoryPermission(context: AuthorizedContext) {
   requirePermission(context, "inventory.stock.read"); requirePermission(context, "inventory.stock.manage")
@@ -19,16 +20,17 @@ export async function requireCancellationPermissions(context: AuthorizedContext,
   const exists = await context.client.query("SELECT EXISTS(SELECT 1 FROM production_orders WHERE tenant_id=$1 AND order_id=$2) AS present", [context.tenantId, order])
   if (!exists.rows[0]?.present) return
   requirePermission(context, "production.read"); requirePermission(context, "production.manage")
-  const consumed = await context.client.query("SELECT EXISTS(SELECT 1 FROM production_consumptions c JOIN production_orders o ON o.tenant_id=c.tenant_id AND o.id=c.production_order_id WHERE o.tenant_id=$1 AND o.order_id=$2) AS present", [context.tenantId, order])
+  const consumed = await context.client.query("SELECT EXISTS(SELECT 1 FROM production_orders o WHERE o.tenant_id=$1 AND o.order_id=$2 AND (EXISTS(SELECT 1 FROM production_consumptions c WHERE (c.tenant_id,c.production_order_id)=(o.tenant_id,o.id)) OR EXISTS(SELECT 1 FROM production_postings p WHERE (p.tenant_id,p.production_order_id)=(o.tenant_id,o.id)))) AS present", [context.tenantId, order])
   if (consumed.rows[0]?.present) inventoryPermission(context)
 }
 
-async function cancelProduction(context: AuthorizedContext, headers: CommandHeaders, order: string, cancellation: string, reason: string) {
+export async function cancelProduction(context: AuthorizedContext, headers: CommandHeaders, order: string, cancellation: string, reason: string) {
   await requireCancellationPermissions(context, order)
   const { client, tenantId } = context, ids: string[] = [], movements: string[] = []
   const jobs = await client.query("SELECT id,status,revision FROM production_orders WHERE tenant_id=$1 AND order_id=$2 ORDER BY id FOR UPDATE", [tenantId, order])
   for (const job of jobs.rows) {
     if (job.status === "cancelled") continue
+    movements.push(...await reversePostings(context,headers,String(job.id),reason))
     const active = await client.query("SELECT m.id,m.product_id,m.quantity_micros FROM stock_movements m JOIN production_consumptions c ON c.tenant_id=m.tenant_id AND c.stock_movement_id=m.id WHERE m.tenant_id=$1 AND m.production_order_id=$2 AND m.direction='issue' AND m.reverses_id IS NULL AND NOT EXISTS(SELECT 1 FROM stock_movements r WHERE r.tenant_id=m.tenant_id AND r.reverses_id=m.id) ORDER BY m.product_id,m.id", [tenantId, job.id])
     if (active.rows.length) inventoryPermission(context)
     for (const row of active.rows) {
@@ -50,23 +52,40 @@ async function cancelProduction(context: AuthorizedContext, headers: CommandHead
   return { status: ids.length ? "applied" : "not_required", applied: ids.length > 0, cancelledCount: ids.length, orderIds: ids, stockMovementIds: movements }
 }
 
-export async function reconcileUnshipped(context: AuthorizedContext, headers: CommandHeaders, order: string, next: Revision) {
+export async function fiscalCancellation(context: AuthorizedContext, order: string) {
   const { client, tenantId } = context
   const pending = await client.query("SELECT EXISTS(SELECT 1 FROM fiscal_nfe_documents WHERE tenant_id=$1 AND source_order_id=$2 AND (status IN ('preparing','prepared','unknown') OR lease_until>clock_timestamp())) AS present", [tenantId, order])
   if (pending.rows[0]?.present) conflict("Concilie a emissão fiscal em andamento antes de cancelar a venda")
   const required = Boolean((await client.query("SELECT EXISTS(SELECT 1 FROM fiscal_nfe_documents WHERE tenant_id=$1 AND source_order_id=$2 AND status='authorized') AS present", [tenantId, order])).rows[0]?.present)
-  const id = randomUUID(), reason = "Cancelamento do pedido antes da expedição", occurred = new Date().toISOString().slice(0, 10)
-  const production = await cancelProduction(context, headers, order, id, reason)
-  await reverseOrderInvoices(context, headers, order, id, occurred, reason)
+  return { requested: required, status: required ? "pending" : "not_required" }
+}
+
+export async function commissionReconciliation(context: AuthorizedContext, order: string) {
+  const { client, tenantId } = context
   const commissions = (await client.query("SELECT count(*) AS count,count(*) FILTER (WHERE NOT EXISTS(SELECT 1 FROM commission_entries reversed WHERE reversed.tenant_id=e.tenant_id AND reversed.reverses_entry_id=e.id)) AS unreversed FROM commission_entries e WHERE e.tenant_id=$1 AND e.order_id=$2 AND e.kind IN ('receipt','invoice')", [tenantId, order])).rows[0]!
-  if (BigInt(String(commissions.unreversed)) > 0n) conflict("Há comissões de recebimentos sem estorno; concilie antes de cancelar")
+  if (BigInt(String(commissions.unreversed)) > 0n) conflict("Há comissões sem estorno. Concilie antes de cancelar")
   const count = revisionValue(commissions.count), applied = BigInt(count) > 0n
-  const commission = { status: applied ? "applied" : "not_required", applied, reversedEntries: count, paymentsPreserved: true }
-  const summary = { id, kind: "sale_cancellation", sourceId: order, orderId: order, cancellationId: id, revision: next, reason, occurredOn: occurred, receivableId: null, stockMovementIds: [], paymentReversalIds: [], beforeShipment: true, fiscalCancellation: { requested: required, status: required ? "pending" : "not_required" }, reconciliation: { commission, production } }
-  await client.query("INSERT INTO sales_order_cancellations(id,tenant_id,order_id,reason,occurred_on,order_revision,summary) VALUES($1,$2,$3,$4,$5,$6,$7)", [id, tenantId, order, reason, occurred, next, summary])
+  return { status: applied ? "applied" : "not_required", applied, reversedEntries: count, paymentsPreserved: true }
+}
+
+export async function requestContractWithdrawals(context: AuthorizedContext, headers: CommandHeaders, order: string, id: string, reason: string) {
+  const { client, tenantId } = context
   const contracts = await client.query("SELECT id,status FROM commercial_contracts WHERE tenant_id=$1 AND order_id=$2 ORDER BY id", [tenantId, order])
   for (const contract of contracts.rows) {
     if (!["completed", "declined", "expired"].includes(String(contract.status))) await record(context, headers, "commercial_contract", String(contract.id), "contract.withdrawal_requested", { orderId: order, cancellationId: id, reason, status: "pending", filesPreserved: true })
   }
+}
+
+export async function reconcileUnshipped(context: AuthorizedContext, headers: CommandHeaders, order: string, next: Revision) {
+  const { client, tenantId } = context
+  const fiscal = await fiscalCancellation(context, order)
+  const id = randomUUID(), reason = "Cancelamento do pedido antes da expedição", occurred = new Date().toISOString().slice(0, 10)
+  await client.query("SELECT set_config('app.stock_effective_on',$1,true)", [occurred])
+  const production = await cancelProduction(context, headers, order, id, reason)
+  await reverseOrderInvoices(context, headers, order, id, occurred, reason)
+  const commission = await commissionReconciliation(context, order)
+  const summary = { id, kind: "sale_cancellation", sourceId: order, orderId: order, cancellationId: id, revision: next, reason, occurredOn: occurred, receivableId: null, stockMovementIds: [], paymentReversalIds: [], beforeShipment: true, fiscalCancellation: fiscal, reconciliation: { commission, production } }
+  await client.query("INSERT INTO sales_order_cancellations(id,tenant_id,order_id,reason,occurred_on,order_revision,summary) VALUES($1,$2,$3,$4,$5,$6,$7)", [id, tenantId, order, reason, occurred, next, summary])
+  await requestContractWithdrawals(context, headers, order, id, reason)
   await record(context, headers, "sales_order", order, "sales.order.reconciliation_requested", summary)
 }

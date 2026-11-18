@@ -11,7 +11,8 @@ import { CashNav, controlClass, Failure, SaleReceipt } from "./pos-shared"
 import { money, when, type CashSession, type Envelope, type Listing, type Sale } from "./pos-model"
 
 export function CashHistory() {
-  const selected = useSearchParams().get("caixa")
+  const paramsInUrl = useSearchParams()
+  const selected = paramsInUrl.get("caixa"), selectedSale=paramsInUrl.get("venda")
   const [query, setQuery] = useState({ status: "", register: "", startDate: "", endDate: "", offset: 0 })
   const params = new URLSearchParams({ offset: String(query.offset), limit: "20" })
   for (const key of ["status", "register", "startDate", "endDate"] as const) if (query[key]) params.set(key, query[key])
@@ -24,6 +25,8 @@ export function CashHistory() {
     {!history.value.data.length && <p>Nenhum caixa encontrado neste período.</p>}
     <nav aria-label="Paginação do histórico" className="flex items-center justify-between gap-3"><Button variant="outline" disabled={!query.offset} onClick={() => setQuery(value => ({ ...value, offset: Math.max(0, value.offset - 20) }))}>Anterior</Button><span className="text-xs">Página {Math.floor(query.offset / 20) + 1}</span><Button variant="outline" disabled={query.offset + 20 >= history.value.total} onClick={() => setQuery(value => ({ ...value, offset: value.offset + 20 }))}>Próxima</Button></nav>
     {selected && <SessionSales id={selected} tenant={history.value.tenantId} onChanged={history.reload} />}
+    {selectedSale && /^[\da-f-]{36}$/i.test(selectedSale) && <SavedSale key={selectedSale} id={selectedSale} tenant={history.value.tenantId}
+      onClose={()=>window.history.replaceState(null,"","/vendas/pdv/historico")} onChanged={history.reload} />}
   </>}</div>
 }
 

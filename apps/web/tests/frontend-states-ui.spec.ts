@@ -215,14 +215,15 @@ test("configurações mistas preservam tema local e não simulam gravação ou a
 test("estoque aceita seis casas com vírgula e conserva o comando na repetição", async ({ page }) => {
   await page.setViewportSize({ width: 320, height: 844 })
   await page.route("**/api/erp/stock?*", route => route.fulfill({ json: { tenantId: tenant, canEdit: true, total: 1, data: [{ productId: record, sku: "DECIMAL", name: "Produto decimal", unit: "UN", status: "active", quantity: "0.000000", reserved: "0.000000", available: "0.000000" }] } }))
-  await page.route("**/api/erp/stock/movements?*", route => route.fulfill({ json: { tenantId: tenant, canEdit: true, total: 0, data: [] } }))
+  await page.route("**/api/erp/stock/movements?*", route => route.fulfill({ json: { tenantId: tenant, canEdit: true, product: { productId: record, name: "Produto decimal", sku: "DECIMAL", unit: "UN", status: "active" }, summary: { opening: "0", receipts: "0", issues: "0", closing: "0" }, total: 0, data: [] } }))
   const commands: { body: unknown; key: string | undefined }[] = []
   await page.route("**/api/erp/stock/movements", route => {
     commands.push({ body: route.request().postDataJSON(), key: route.request().headers()["idempotency-key"] })
     return route.fulfill({ status: 503, json: { title: "Confirmação indisponível no teste" } })
   })
   await page.goto("/estoque/saldos")
-  await page.getByRole("button", { name: /^Produto decimal SKU/ }).click()
+  await page.getByRole("link", { name: /^Ver movimentos de Produto decimal/ }).click()
+  await page.getByRole("link", { name: "Novo lançamento", exact: true }).click()
   await page.getByLabel("Quantidade (vírgula ou ponto)", { exact: true }).fill("10,000001")
   await page.getByLabel("Motivo", { exact: true }).fill("Conferência decimal")
   await page.getByRole("button", { name: "Confirmar lançamento", exact: true }).click()
