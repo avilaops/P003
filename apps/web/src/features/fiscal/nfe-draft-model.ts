@@ -20,7 +20,7 @@ export type DraftInput = Omit<Schema<"DraftInput">, "taxDeclaration" | "ibpt" | 
   recipient: Schema<"Recipient"> & { complement?: string | null; phone?: string | null; email?: string | null; cityName?: string | null; foreignId?: string | null; countryCode?: string | null; countryName?: string | null };
 }
 export type NfeDraft = Schema<"Draft">
-export type FiscalReadiness = Schema<"Readiness"> & { crt?: number | null; series?: number | null; nextNumber?: number | null }
+export type FiscalReadiness = Schema<"Readiness"> & { modelEnvironment?:string; crt?: number | null; series?: number | null; nextNumber?: number | null }
 type TaxBooleanField = "recipientTaxpayer" | "finalConsumer" | "ipiInIcmsBase" | "icmsOutOfContributions"
 export type TaxDeclaration = Omit<Schema<"TaxDeclaration">, TaxBooleanField> & Record<TaxBooleanField, boolean | null> & { recipientTaxpayerIndicator?: "1" | "2" | "9" | null }
 
@@ -140,6 +140,9 @@ function ibptSubmission(selection: IbptDraftSelection, count: number): Schema<"I
 }
 
 export const blockerLabels: Record<string, string> = {
+  nfce_csc_unavailable: "Configure o CSC da NFC-e para esta empresa e ambiente",
+  nfce_numbering_unavailable: "Confira a série e a próxima numeração da NFC-e",
+  nfce_readiness_unavailable: "Atualize a prontidão da NFC-e para conferir CSC e numeração",
   fiscal_engine_not_configured: "O motor fiscal ainda não foi configurado",
   homologation_emission_requires_sp: "Emissão disponível para emitente de São Paulo",
   homologation_emission_requires_supported_tax_rule_scope: "O regime fiscal da empresa exige regras além do recorte disponível",

@@ -1,3 +1,4 @@
+import { applyPriceLists } from "./price-origin.js"
 import { createHash } from "node:crypto"
 import type { AuthorizedContext } from "../../platform/access.js"
 import { canonicalJson } from "../../platform/json.js"
@@ -36,6 +37,7 @@ export async function prepareNegotiation(context: AuthorizedContext, input: Nego
     if (!source) throw new Problem(409, "domain_conflict", "Produto ou custo alterado, indisponível ou fora da tabela. Atualize e publique a tabela")
     sources.push(sourceItem(source))
   }
+  await applyPriceLists(context,sources,input.customerId,input.channel)
   const { sale, director } = calculateNegotiation(parameters.data, rules, input, sources)
   const raw = { tenantId: context.tenantId, input, rulesRevision, rules, policy: row.policy_snapshot, sources, sale, director }
   return { kind: "single" as const, sale, director, rules, policy: row.policy_snapshot, sources, digest: createHash("sha256").update(canonicalJson(raw)).digest("hex"), version: revisionValue(row.version) }

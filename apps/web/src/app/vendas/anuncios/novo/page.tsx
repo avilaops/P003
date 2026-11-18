@@ -1,4 +1,4 @@
-import { SalesCapabilityUnavailable } from "@/features/sales/sales-capability-unavailable"
-export default function Page() { return <SalesCapabilityUnavailable title="Novo anúncio" description="Criação e publicação de anúncios por canal." backHref="/vendas/anuncios" /> }
+import { ChannelWorkspace } from "@/features/sales/channel-workspace"
 
-export const metadata = { title: "Novo anúncio" }
+export const metadata = {title:"Novo anúncio"}
+export default function Page() { return <ChannelWorkspace mode="new"/> }

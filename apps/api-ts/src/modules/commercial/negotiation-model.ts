@@ -6,13 +6,14 @@ import { commercialCents as cents, invalidCommercial as invalid, rounded, up, si
 
 const nullableText = z.string().nullable().default(null), uuid = z.guid().transform(value => value.toLowerCase())
 export const negotiationInputSchema = z.strictObject({
+  customerId: uuid.optional(), channel: z.string().trim().min(1).max(80).optional(),
   line: z.string(), versionId: uuid, destinationState: z.string(), taxpayer: z.boolean(),
   discount: z.discriminatedUnion("kind", [z.strictObject({ kind: z.literal("percent"), value: unsigned32 }), z.strictObject({ kind: z.literal("amount"), value: unsigned64 }), z.strictObject({ kind: z.literal("total"), value: unsigned64 })]),
   freightCents: unsigned64, downPaymentCents: unsigned64.nullable().default(null),
   items: z.array(z.strictObject({ productId: normalizedDatabaseId, quantity: unsigned32, structureColor: nullableText, swingArmColor: z.preprocess(value => value === null ? undefined : value, z.string().optional()), plateHolderColor: nullableText, plateHolderType: nullableText, upholsteryColor: nullableText })),
 })
 export type NegotiationInput = z.infer<typeof negotiationInputSchema>
-export type SourceItem = { productId: string; sku: string; name: string; unit: string; productRevision: Revision; costRevision: Revision | null; priceCents: number | bigint; purchaseCents: number | bigint; creditBps: number; packagingCents: number | bigint }
+export type SourceItem = { priceOrigin?: import("./price-origin.js").PriceOrigin; productId: string; sku: string; name: string; unit: string; productRevision: Revision; costRevision: Revision | null; priceCents: number | bigint; purchaseCents: number | bigint; creditBps: number; packagingCents: number | bigint }
 export type ApprovalRules = { belowTarget: boolean; freight: boolean; directorAutoApproval: boolean; managerLimit: "profit" | "target" }
 
 export function calculateNegotiation(p: CommercialParameters, rules: ApprovalRules, input: NegotiationInput, sources: SourceItem[]) {
@@ -58,7 +59,7 @@ export function calculateNegotiation(p: CommercialParameters, rules: ApprovalRul
     if (!unitNet) invalid("Desconto deixa um equipamento sem valor comercial")
     const unitTotal = gross(unitNet), lineNet = unitNet * BigInt(item.quantity), ipi = (unitTotal - unitNet) * BigInt(item.quantity)
     totalIpi += ipi; net += lineNet
-    return { productId: item.productId, sku: source.sku, name: source.name, unit: source.unit, quantity: item.quantity, tableUnitCents: Number(source.priceCents), unitNetCents: cents(unitNet), unitTotalCents: cents(unitTotal), netCents: cents(lineNet), ipiCents: cents(ipi), totalCents: cents(lineNet + ipi), structureColor: item.structureColor, ...(item.swingArmColor === undefined ? {} : { swingArmColor: item.swingArmColor }), plateHolderColor: item.plateHolderColor, plateHolderType: selectPlateHolderType(item.plateHolderType ?? undefined), upholsteryColor: item.upholsteryColor }
+    return { ...(source.priceOrigin ? {priceOrigin:source.priceOrigin} : {}), productId: item.productId, sku: source.sku, name: source.name, unit: source.unit, quantity: item.quantity, tableUnitCents: Number(source.priceCents), unitNetCents: cents(unitNet), unitTotalCents: cents(unitTotal), netCents: cents(lineNet), ipiCents: cents(ipi), totalCents: cents(lineNet + ipi), structureColor: item.structureColor, ...(item.swingArmColor === undefined ? {} : { swingArmColor: item.swingArmColor }), plateHolderColor: item.plateHolderColor, plateHolderType: selectPlateHolderType(item.plateHolderType ?? undefined), upholsteryColor: item.upholsteryColor }
   })
   const total = net + totalIpi, taxes = rounded(net * BigInt(tax), 10000n), difalAmount = rounded(net * BigInt(difal), 10000n), cost = rounded(costScaled, 100000000n)
   const fixed = BigInt(input.freightCents) + BigInt(p.fixedOrderFeeCents), beforeIr = net - taxes - difalAmount - cost - fixed, ir = rounded((beforeIr > 0n ? beforeIr : 0n) * BigInt(p.incomeTaxBps), 10000n), profit = beforeIr - ir

@@ -23,12 +23,24 @@ async function bounded(stream: ReadableStream<Uint8Array> | null, maximum: numbe
 
 export async function forwardFiscal(request: Request, resource: string) {
   const outgoingNfses = request.method === "GET" && resource === "/outgoing-nfses"
+  const returnPolicy=resource==="/return-policy" && ["GET","PUT"].includes(request.method)
+  const orderLots = /^\/order-lots\/[0-9a-f-]{36}$/i.test(resource) && ["GET","POST"].includes(request.method)
+  const workspaceRead = request.method === "GET" && (["/outgoing-documents", "/nfce-readiness", "/received-nfes","/sales-returns"].includes(resource) || /^\/received-nfes\/[1-9][0-9]{0,18}(?:\/(?:xml|danfe))?$/.test(resource))
+  const incomingEngine = /^\/(?:monitor(?:\/sync|\/documents\/[1-9][0-9]{0,18}\/(?:xml|manifest))?|received-nfes\/import|received-nfes\/[1-9][0-9]{0,18}\/purchase(?:\/(?:preview|match))?|distribution\/(?:query|status|documents(?:\/[0-9]{15})?)|manifestations(?:\/[a-f0-9-]{36}(?:\/reconcile)?)?)$/i.test(resource)
+  const purchaseRead = request.method === "GET" && /^\/received-nfes\/[1-9][0-9]{0,18}\/purchase\/(options|progress)$/.test(resource)
+  const purchaseWrite = request.method === "POST" && /^\/received-nfes\/[1-9][0-9]{0,18}\/purchase\/(confirm|receive)$/.test(resource)
   const nfeEmail = /^\/(?:nfe|received-nfses|outgoing-nfses)\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\/email$/i.test(resource)
-  const download = /^\/(?:received-nfes|outgoing-imports)\/[1-9][0-9]{0,18}\/(xml|danfe)$/.exec(resource) || /^\/received-nfses\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\/(xml)$/i.exec(resource) || /^\/nfe\/[a-f0-9-]{36}\/(xml)$/i.exec(resource) || /^\/monitor\/documents\/[1-9][0-9]{0,18}\/(xml)$/.exec(resource)
+  const download = /^\/(?:received-nfes|outgoing-imports)\/[1-9][0-9]{0,18}\/(xml|danfe)$/.exec(resource) || /^\/received-nfses\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\/(xml)$/i.exec(resource) || /^\/nfe\/[a-f0-9-]{36}\/(xml|danfe)$/i.exec(resource) || /^\/monitor\/documents\/[1-9][0-9]{0,18}\/(xml)$/.exec(resource)
   const manifestation = /^\/monitor\/documents\/[1-9][0-9]{0,18}\/manifest$/.test(resource)
   const document = /^\/(?:received-nfes|outgoing-imports)\/[1-9][0-9]{0,18}$/.test(resource)
   const draft = /^\/nfe\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(resource)
   const preparation = /^\/order-preparations\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(resource)
+  const emittedRoute=/^\/nfe\/[0-9a-f-]{36}\/(?:emission|xml|danfe|events|issue|consult|cancel|correction)$/i.test(resource)
+  const outgoingArchive = request.method==="GET" && (resource==="/outgoing-imports" || /^\/outgoing-imports\/[1-9][0-9]{0,18}(\/(xml|danfe))?$/.test(resource)) || request.method==="POST" && resource==="/outgoing-imports/import"
+  const fiscalSetup = request.method==="PUT" && (["/certificate","/config"].includes(resource) || /^\/settings\/(nfce|operation-natures|delivery)$/.test(resource)) || request.method==="DELETE" && resource==="/certificate"
+  const orderCancellation=/^\/order-cancellations\/[a-f0-9-]{36}\/process$/i.test(resource) && ["GET","POST"].includes(request.method)
+  const outgoingEngine = orderCancellation || fiscalSetup || outgoingArchive || returnPolicy || request.method==="GET" && (["/config","/certificate","/readiness","/nfe","/issued-nfes","/nfe-events"].includes(resource) || draft || preparation || /^\/settings\/(nfce|operation-natures|delivery)$/.test(resource))
+    || request.method==="POST" && ["/nfe","/ibpt/quote","/number-voids"].includes(resource) || request.method==="PUT" && draft || emittedRoute
   const cteRead = ["/cte-distribution/status", "/cte-distribution/documents"].includes(resource) || /^\/cte-distribution\/(?:documents|runs)\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(resource) || /^\/cte-distribution\/documents\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\/inspection$/i.test(resource)
   const cteInspect = /^\/cte-distribution\/documents\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\/inspect$/i.test(resource)
   const cteCommercialRead = /^\/cte-distribution\/documents\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\/(?:commercial-links|commercial-options)$/i.test(resource)
@@ -39,9 +51,9 @@ export async function forwardFiscal(request: Request, resource: string) {
   const operationRead = /^\/nfe\/[a-f0-9-]{36}\/(?:emission|events)$|^\/distribution\/(?:status|documents(?:\/[0-9]{15})?)$|^\/received-nfes\/[1-9][0-9]{0,18}\/purchase$|^\/manifestations\/[a-f0-9-]{36}$/i.test(resource)
   const operationWrite = /^\/nfe\/[a-f0-9-]{36}\/(?:issue|consult|cancel|correction)$|^\/distribution\/query$|^\/received-nfes\/[1-9][0-9]{0,18}\/purchase(?:\/(?:preview|match))?$|^\/order-cancellations\/[a-f0-9-]{36}\/process$|^\/manifestations\/[a-f0-9-]{36}\/reconcile$/i.test(resource) || cteInspect
   const valid = request.method === "GET"
-    ? ["/config", "/readiness", "/received-nfes", "/outgoing-imports", "/certificate", "/nfe", "/issued-nfes", "/manifestations", "/monitor", "/nfe-events"].includes(resource) || fiscalSettings || operationRead || document || draft || preparation || cteRead || cteCommercialRead || nfseRead || !!download
+    ? ["/config", "/readiness", "/received-nfes", "/outgoing-imports", "/certificate", "/nfe", "/issued-nfes", "/manifestations", "/monitor", "/nfe-events"].includes(resource) || fiscalSettings || orderCancellation || operationRead || document || draft || preparation || cteRead || cteCommercialRead || nfseRead || !!download
     : request.method === "PUT" && (["/config", "/certificate"].includes(resource) || fiscalSettings || draft) || request.method === "DELETE" && resource === "/certificate" || request.method === "POST" && (["/received-nfes/import", "/outgoing-imports/import", "/nfe", "/manifestations", "/number-voids", "/monitor/sync", "/ibpt/quote"].includes(resource) || operationWrite || cteCommercialWrite || manifestation || nfseImport)
-  if (!valid && !outgoingNfses && !(nfeEmail && ["GET", "POST"].includes(request.method))) return failure("Recurso fiscal inválido", 400)
+  if (!purchaseRead && !purchaseWrite && !returnPolicy && !orderLots && !workspaceRead && !valid && !outgoingNfses && !(nfeEmail && ["GET", "POST"].includes(request.method))) return failure("Recurso fiscal inválido", 400)
   let body: Uint8Array<ArrayBuffer> | undefined
   try {
     const config = erpConfiguration()
@@ -51,11 +63,11 @@ export async function forwardFiscal(request: Request, resource: string) {
     if (write && request.headers.get("origin") !== config.origin) return failure("Origem não autorizada", 403)
     if ((write || download || cteRead || cteCommercialRead || nfseRead) && request.headers.get("x-tenant-id") !== session.tenantId) return failure("A empresa da sessão mudou. Recarregue os documentos antes de continuar", 409)
     if (nfeEmail && request.headers.has("x-tenant-id") && request.headers.get("x-tenant-id") !== session.tenantId) return failure("A empresa da sessão mudou. Recarregue a NF-e", 409)
-    const api = nfeEmail || outgoingNfses ? typescriptOrigin({ ERP_TYPESCRIPT_API_URL: process.env.ERP_TYPESCRIPT_API_URL }) : fiscalApiOrigin(`/fiscal${resource}`, config.api, process.env.ERP_FISCAL_API_URL, process.env.NODE_ENV)
+    const api = purchaseRead || purchaseWrite || incomingEngine || outgoingEngine || orderLots || workspaceRead || nfeEmail || outgoingNfses ? typescriptOrigin({ ERP_TYPESCRIPT_API_URL: process.env.ERP_TYPESCRIPT_API_URL }) : fiscalApiOrigin(`/fiscal${resource}`, config.api, process.env.ERP_FISCAL_API_URL, process.env.NODE_ENV)
     const upstream = new URL(`${api}/api/v1/fiscal${resource}`)
     const query = new URL(request.url).searchParams
     for (const [key, value] of query) {
-      const allowed = outgoingNfses ? ["offset"] : resource === "/nfe-events" ? ["kind", "cursor", "limit"] : cteCommercialRead && resource.endsWith("/commercial-options") ? ["kind", "offset", "limit"] : ["/received-nfes", "/outgoing-imports"].includes(resource) ? ["q", "from", "to", "offset", "limit"] : ["/nfe", "/issued-nfes"].includes(resource) ? ["cursor", "limit"] : resource === "/manifestations" ? ["offset", "limit", "accessKey"] : ["/distribution/documents", "/cte-distribution/documents", "/received-nfses", "/monitor"].includes(resource) ? ["offset", "limit"] : []
+      const allowed = purchaseRead && resource.endsWith("/options") ? ["limit","offset"] : orderLots && request.method === "GET" ? ["environment","creditOffset"] : resource==="/sales-returns" ? ["q","environment","status","offset"] : resource === "/outgoing-documents" ? ["q","from","to","limit","offset","model","status","environment"] : resource === "/received-nfes" ? ["q","from","to","limit","offset","purchase","manifestation","salesReturn"] : resource === "/nfce-readiness" ? ["environment"] : outgoingNfses ? ["offset"] : resource === "/nfe-events" ? ["kind", "cursor", "limit"] : cteCommercialRead && resource.endsWith("/commercial-options") ? ["kind", "offset", "limit"] : ["/received-nfes", "/outgoing-imports"].includes(resource) ? ["q", "from", "to", "offset", "limit"] : ["/nfe", "/issued-nfes"].includes(resource) ? ["cursor", "limit"] : resource === "/manifestations" ? ["offset", "limit", "accessKey"] : ["/distribution/documents", "/cte-distribution/documents", "/received-nfses", "/monitor"].includes(resource) ? ["offset", "limit"] : []
       if (!allowed.includes(key) || query.getAll(key).length !== 1) return failure("Filtro fiscal inválido", 400)
       upstream.searchParams.set(key, value)
     }
@@ -75,7 +87,7 @@ export async function forwardFiscal(request: Request, resource: string) {
     if (write && etag) headers.set("If-Match", etag)
     const command = request.headers.get("idempotency-key")
     if (write && command) headers.set("Idempotency-Key", command)
-    const response = await fetch(upstream, { method: request.method, headers, body, cache: "no-store", redirect: "error", signal: AbortSignal.timeout(operationWrite || nfeEmail && write || nfseImport || resource === "/outgoing-imports/import" || resource === "/manifestations" || resource === "/number-voids" ? 110_000 : download || resource.startsWith("/monitor/") ? 60_000 : resource === "/certificate" ? 45_000 : 15_000) })
+    const response = await fetch(upstream, { method: request.method, headers, body, cache: "no-store", redirect: "error", signal: AbortSignal.timeout(orderLots && write || operationWrite || nfeEmail && write || nfseImport || resource === "/outgoing-imports/import" || resource === "/manifestations" || resource === "/number-voids" ? 110_000 : download || resource.startsWith("/monitor/") ? 60_000 : resource === "/certificate" ? 45_000 : 15_000) })
     let bytes: Buffer
     try { bytes = await bounded(response.body, 8 * 1024 * 1024) }
     catch { return failure("Resposta fiscal excede o limite de download", 502) }

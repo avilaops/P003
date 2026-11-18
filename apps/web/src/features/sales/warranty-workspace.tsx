@@ -1,67 +1,113 @@
 "use client"
-import { PageTitle } from "@/components/workspace/page-title"
 
-import Link from "next/link"
-import { useState } from "react"
-import { useCommand, useResource } from "@/hooks/use-operation"
-import { Input } from "@/components/ui/input"
+import { useState,type ReactNode } from "react"
+import { GuardedLink as Link } from "@/components/shell/navigation-guard"
+import { PageHeader } from "@/components/page-header"
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { useCommand,useResource } from "@/hooks/use-operation"
+import { normalizeDecimal } from "@/lib/decimal-input"
+import { Lookup,type Choice } from "./orders"
+import { WarrantyAssignment } from "./warranty-assignment"
+import { WarrantySettlement } from "./warranty-settlement"
+import { WarrantyRecords } from "./warranty-records"
+import { priorities,stages } from "./warranty-list"
 
-type CaseRow = { id: string; protocol: string; title: string; criticality: string; coverageStatus: string; status: string; queue: string; assignedTo: string | null; slaDueAt: string | null; serialNumber: string | null; lot: string | null; revision: number; updatedAt: string }
-type CaseDetail = CaseRow & { description: string; productId: string | null; timeline: { id: string; eventType: string; status: string; createdAt: string }[]; serviceOrders: { id: string; revision: number }[]; parts: unknown[]; approvals: unknown[]; rmas: { id: string; revision: number; status: string }[]; quarantines: { id: string; revision: number; status: string }[] }
-type CasesResponse = { tenantId: string; data: CaseRow[] }
-type CaseResponse = { tenantId: string; data: CaseDetail }
-
-const statusLabel: Record<string, string> = { opened: "Aberta", triage: "Triagem", diagnosis: "Diagnóstico", treatment: "Tratamento", resolved: "Resolvida", closed: "Encerrada", cancelled: "Cancelada" }
-
-export function WarrantyList() {
-  const cases = useResource<CasesResponse>("/api/erp/warranty-cases")
-  const command = useCommand()
-  const [open, setOpen] = useState(false)
-  const [title, setTitle] = useState("")
-  const [description, setDescription] = useState("")
-  const [criticality, setCriticality] = useState("normal")
-  async function create() {
-    if (!cases.value || title.trim().length < 3 || description.trim().length < 15) return
-    const result = await command.send<{ tenantId: string }>("/api/erp/warranty-cases", cases.value.tenantId, { title, description, criticality })
-    if (result) { setTitle(""); setDescription(""); setOpen(false); cases.reload() }
-  }
-  return <main className="mx-auto max-w-6xl space-y-3 px-4 pb-8 sm:space-y-5 sm:pb-24 pt-8">
-    <header className="flex flex-wrap items-end justify-between gap-2 border-b pb-3 sm:gap-4 sm:pb-6"><div><p className="text-sm font-medium text-primary">Vendas / Pós-venda</p><PageTitle className="mt-2 text-3xl font-semibold">Garantias e assistência técnica</PageTitle><p className="mt-2 text-muted-foreground">Acompanhe elegibilidade, triagem, reparo, aprovação e encerramento por empresa.</p></div><Button variant={open ? "outline" : "default"} onClick={() => setOpen(!open)}>{open ? "Cancelar" : "Nova garantia"}</Button></header>
-    {open && <section className="form-section space-y-2 sm:space-y-4"><h2 className="font-semibold">Abrir solicitação</h2><label className="grid gap-1 text-sm sm:gap-2">Título<Input value={title} onChange={e => setTitle(e.target.value)} /></label><label className="grid gap-1 text-sm sm:gap-2">Descrição<Input value={description} onChange={e => setDescription(e.target.value)} /></label><label className="grid gap-1 text-sm sm:gap-2">Criticidade<select className="h-10 rounded-lg border bg-background px-3" value={criticality} onChange={e => setCriticality(e.target.value)}><option value="low">Baixa</option><option value="normal">Normal</option><option value="high">Alta</option><option value="critical">Crítica</option></select></label><Button disabled={command.busy || title.trim().length < 3 || description.trim().length < 15} onClick={() => void create()}>{command.busy ? "Salvando…" : "Abrir garantia"}</Button>{command.error && <p role="alert">{command.error}</p>}</section>}
-    {cases.loading && <p role="status">Carregando garantias…</p>}
-    {cases.error && <p role="alert">{cases.error}</p>}
-    {cases.value && <section className="overflow-hidden rounded-2xl border"><div className="border-b px-3 py-2 sm:p-4"><strong>{cases.value.data.length}</strong> solicitações registradas</div>{cases.value.data.length ? <div className="divide-y">{cases.value.data.map(item => <Link className="block p-4 hover:bg-muted/30" href={`/vendas/garantias/${item.id}`} key={item.id}><div className="flex flex-wrap justify-between gap-3"><div><strong>{item.protocol} · {item.title}</strong><p className="mt-1 text-sm text-muted-foreground">Criticidade: {item.criticality} · Atualizada em {new Date(item.updatedAt).toLocaleDateString("pt-BR")}</p></div><span className="text-sm font-medium">{statusLabel[item.status] || item.status}</span></div></Link>)}</div> : <p className="p-3 text-muted-foreground sm:p-5">Nenhuma solicitação registrada.</p>}</section>}
-  </main>
+type SubRecord={id:string;revision:number;status:string}
+type CaseRow={id:string;protocol:string;title:string;description:string;revision:number;status:string;criticality:string;coverageStatus:string;queue:string;assignedTo:string|null;slaDueAt:string|null;productId:string|null;customerName:string|null;productName:string|null;orderId:string|null;orderNumber:string|null;serialNumber:string|null}
+type Detail=CaseRow & {
+  invoiceNumber:string|null
+  lineNumber:number|null
+  equipment:{invoiceNumber:string;expiresOn:string;remainingDays:number;coverageStatus:string}|null
+  timeline:{id:string;eventType:string;status:string|null;createdAt:string}[]
+  serviceOrders:(SubRecord & {diagnosis?:string;laborCents?:number})[]
+  parts:{id:string;productName:string;quantityMicros:number;amountCents:number}[]
+  approvals:{id:string;action:string;decision:string;amountCents:number|null}[]
+  rmas:(SubRecord & {reference:string})[]
+  quarantines:SubRecord[]
 }
-
-export function WarrantyDetail({ id }: { id: string }) {
-  const resource = useResource<CaseResponse>(`/api/erp/warranty-cases/${id}`)
-  const command = useCommand()
-  const [diagnosis, setDiagnosis] = useState("")
-  const [labor, setLabor] = useState("0")
-  const [approvalAction, setApprovalAction] = useState("exchange")
-  const [approvalDecision, setApprovalDecision] = useState("approved")
-  const [approvalNotes, setApprovalNotes] = useState("")
-  const [carrier, setCarrier] = useState("")
-  const [trackingCode, setTrackingCode] = useState("")
-  const [quarantineQuantity, setQuarantineQuantity] = useState("1")
-  const [quarantineReason, setQuarantineReason] = useState("")
-  const [serviceOrderId, setServiceOrderId] = useState("")
-  const [partProductId, setPartProductId] = useState("")
-  const [partQuantity, setPartQuantity] = useState("1")
-  const [partAmount, setPartAmount] = useState("0")
-  if (resource.loading) return <main className="p-6"><p role="status">Carregando garantia…</p></main>
-  if (resource.error || !resource.value) return <main className="p-6"><p role="alert">{resource.error || "Garantia não encontrada"}</p></main>
-  const item = resource.value.data
-  const next = item.status === "opened" ? "triage" : item.status === "triage" ? "diagnosis" : item.status === "diagnosis" ? "treatment" : item.status === "treatment" ? "resolved" : item.status === "resolved" ? "closed" : ""
-  async function transition() { if (!next) return; const result = await command.send(`/api/erp/warranty-cases/${id}/transition`, resource.value!.tenantId, { status: next, details: {} }, resource.etag); if (result) resource.reload() }
-  async function createServiceOrder() { const value = Number(labor.replace(",", ".")); if (!Number.isFinite(value) || value < 0) return; const result = await command.send(`/api/erp/warranty-cases/${id}/service-order`, resource.value!.tenantId, { diagnosis: diagnosis.trim() || null, report: {}, scheduledAt: null, laborCents: Math.round(value * 100) }, resource.etag); if (result) { setDiagnosis(""); setLabor("0"); resource.reload() } }
-  async function approve() { const amount = Number(labor.replace(",", ".")); const result = await command.send(`/api/erp/warranty-cases/${id}/approval`, resource.value!.tenantId, { action: approvalAction, decision: approvalDecision, amountCents: Number.isFinite(amount) ? Math.round(amount * 100) : null, notes: approvalNotes }, resource.etag); if (result) { setApprovalNotes(""); resource.reload() } }
-  async function createRma() { const result = await command.send(`/api/erp/warranty-cases/${id}/rma`, resource.value!.tenantId, { supplierId: null, carrier: carrier || null, trackingCode: trackingCode || null, notes: "RMA solicitado pela assistência" }, resource.etag); if (result) { setCarrier(""); setTrackingCode(""); resource.reload() } }
-  async function quarantine() { if (!item.productId || !quarantineReason.trim()) return; const result = await command.send(`/api/erp/warranty-cases/${id}/quarantine`, resource.value!.tenantId, { productId: item.productId, quantity: quarantineQuantity, reason: quarantineReason }, resource.etag); if (result) { setQuarantineReason(""); resource.reload() } }
-  async function addPart() { const amount = Number(partAmount.replace(",", ".")); if (!serviceOrderId || !partProductId || !Number.isFinite(amount)) return; const result = await command.send(`/api/erp/warranty-service-orders/${serviceOrderId}/parts`, resource.value!.tenantId, { productId: partProductId, quantity: partQuantity, amountCents: Math.round(amount * 100) }, resource.etag); if (result) resource.reload() }
-  async function transitionRma(rma: { id: string; revision: number; status: string }) { const nextRma = rma.status === "requested" ? "in_transit" : rma.status === "in_transit" ? "received" : "closed"; const result = await command.send(`/api/erp/warranty-rmas/${rma.id}/transition`, resource.value!.tenantId, { status: nextRma, details: {} }, `"${rma.revision}"`); if (result) resource.reload() }
-  async function transitionQuarantine(quarantine: { id: string; revision: number; status: string }) { const nextQuarantine = quarantine.status === "quarantined" ? "released" : "disposed"; const result = await command.send(`/api/erp/warranty-quarantines/${quarantine.id}/transition`, resource.value!.tenantId, { status: nextQuarantine, details: {} }, `"${quarantine.revision}"`); if (result) resource.reload() }
-  return <main className="mx-auto max-w-6xl space-y-5 px-4 pb-24 pt-8"><Link className="text-sm text-muted-foreground underline" href="/vendas/garantias">Voltar para garantias</Link><header className="flex flex-wrap items-end justify-between gap-4 border-b pb-6"><div><p className="text-sm font-medium text-primary">{item.protocol}</p><PageTitle className="mt-2 text-3xl font-semibold">{item.title}</PageTitle><p className="mt-2 text-muted-foreground">{item.description}</p></div>{next && <Button disabled={command.busy} onClick={() => void transition()}>{command.busy ? "Atualizando…" : `Avançar para ${statusLabel[next]}`}</Button>}</header><div className="grid gap-5 lg:grid-cols-2"><section className="rounded-2xl border p-5"><h2 className="mb-4 font-semibold">Resumo</h2><dl className="grid gap-4 sm:grid-cols-2"><div><dt className="text-xs text-muted-foreground">Situação</dt><dd>{statusLabel[item.status] || item.status}</dd></div><div><dt className="text-xs text-muted-foreground">Criticidade</dt><dd>{item.criticality}</dd></div><div><dt className="text-xs text-muted-foreground">Cobertura</dt><dd>{item.coverageStatus}</dd></div><div><dt className="text-xs text-muted-foreground">Revisão</dt><dd>{item.revision}</dd></div></dl></section><section className="rounded-2xl border p-5"><h2 className="mb-4 font-semibold">Linha do tempo</h2><ol className="space-y-3">{item.timeline.map(event => <li className="text-sm" key={event.id}>{event.eventType} · {statusLabel[event.status] || event.status}</li>)}</ol></section></div><div className="grid gap-5 lg:grid-cols-2"><section className="space-y-4 rounded-2xl border p-5"><h2 className="font-semibold">Ordem de serviço</h2><label className="grid gap-2 text-sm">Diagnóstico<Input value={diagnosis} onChange={e => setDiagnosis(e.target.value)} /></label><label className="grid gap-2 text-sm">Mão de obra (R$)<Input inputMode="decimal" value={labor} onChange={e => setLabor(e.target.value)} /></label><Button disabled={command.busy} onClick={() => void createServiceOrder()}>Registrar ordem de serviço</Button><label className="grid gap-2 text-sm">ID da ordem para peça<Input value={serviceOrderId} onChange={e => setServiceOrderId(e.target.value)} placeholder="UUID da ordem" /></label><label className="grid gap-2 text-sm">Produto da peça<Input value={partProductId} onChange={e => setPartProductId(e.target.value)} placeholder="UUID do produto" /></label><label className="grid gap-2 text-sm">Quantidade da peça<Input value={partQuantity} onChange={e => setPartQuantity(e.target.value)} /></label><label className="grid gap-2 text-sm">Valor da peça (R$)<Input value={partAmount} onChange={e => setPartAmount(e.target.value)} /></label><Button disabled={command.busy} onClick={() => void addPart()}>Registrar peça</Button></section><section className="space-y-4 rounded-2xl border p-5"><h2 className="font-semibold">Aprovação por alçada</h2><label className="grid gap-2 text-sm">Ação<select className="h-10 rounded-lg border bg-background px-3" value={approvalAction} onChange={e => setApprovalAction(e.target.value)}><option value="exchange">Troca</option><option value="credit">Crédito</option><option value="refund">Reembolso</option></select></label><label className="grid gap-2 text-sm">Decisão<select className="h-10 rounded-lg border bg-background px-3" value={approvalDecision} onChange={e => setApprovalDecision(e.target.value)}><option value="approved">Aprovar</option><option value="rejected">Rejeitar</option></select></label><label className="grid gap-2 text-sm">Notas<Input value={approvalNotes} onChange={e => setApprovalNotes(e.target.value)} /></label><Button disabled={command.busy} onClick={() => void approve()}>Registrar decisão</Button></section></div><div className="grid gap-5 lg:grid-cols-2"><section className="space-y-4 rounded-2xl border p-5"><h2 className="font-semibold">RMA</h2><label className="grid gap-2 text-sm">Transportadora<Input value={carrier} onChange={e => setCarrier(e.target.value)} /></label><label className="grid gap-2 text-sm">Código de rastreio<Input value={trackingCode} onChange={e => setTrackingCode(e.target.value)} /></label><Button disabled={command.busy} onClick={() => void createRma()}>Solicitar RMA</Button>{item.rmas.map(rma => <div className="flex items-center justify-between gap-3 text-sm" key={rma.id}><span>{rma.status} · revisão {rma.revision}</span><Button variant="outline" disabled={command.busy || rma.status === "closed"} onClick={() => void transitionRma(rma)}>Avançar RMA</Button></div>)}</section><section className="space-y-4 rounded-2xl border p-5"><h2 className="font-semibold">Quarentena de produto</h2><label className="grid gap-2 text-sm">Quantidade<Input value={quarantineQuantity} onChange={e => setQuarantineQuantity(e.target.value)} /></label><label className="grid gap-2 text-sm">Motivo<Input value={quarantineReason} onChange={e => setQuarantineReason(e.target.value)} /></label><Button disabled={command.busy || !item.productId || !quarantineReason.trim()} onClick={() => void quarantine()}>Enviar para quarentena</Button>{item.quarantines.map(quarantine => <div className="flex items-center justify-between gap-3 text-sm" key={quarantine.id}><span>{quarantine.status} · revisão {quarantine.revision}</span><Button variant="outline" disabled={command.busy || quarantine.status !== "quarantined"} onClick={() => void transitionQuarantine(quarantine)}>Resolver quarentena</Button></div>)}{!item.productId && <p className="text-sm text-muted-foreground">Este caso não possui produto vinculado.</p>}</section></div>{command.error && <p role="alert">{command.error}</p>}</main>
+type ResponseData={tenantId:string;canEdit:boolean;canApprove:boolean;data:Detail}
+const path="/api/erp/warranty-cases/"
+const formatMoney=(value:number)=>(value/100).toLocaleString("pt-BR",{style:"currency",currency:"BRL"})
+const cents=(value:string)=>{const exact=normalizeDecimal(value,2);return exact===null ? null : Number(exact.replace(".",""))}
+const coverage:Record<string,string>={eligible:"Elegível",expired:"Prazo encerrado",pending:"Em análise",rejected:"Recusada"}
+const eventName:Record<string,string>={opened:"Abertura",triaged:"Triagem",diagnosed:"Diagnóstico",treated:"Atendimento",resolved:"Resolução",closed:"Encerramento",cancelled:"Cancelamento",note:"Atualização",approval:"Decisão",attachment:"Evidência"}
+const actions:Record<string,string>={exchange:"Troca",credit:"Crédito",refund:"Reembolso"}
+const rmaStates:Record<string,string>={requested:"Solicitado",authorized:"Autorizado",in_transit:"Em trânsito",received:"Recebido",closed:"Encerrado",cancelled:"Cancelado"}
+const section="space-y-3 rounded-lg border p-4"
+const select="min-h-10 rounded-lg border bg-background px-2"
+type ActionProps={tenant:string;url:string;etag:string;body:object;label:string;disabled?:boolean;reload:()=>void;children?:ReactNode}
+function Action({tenant,url,etag,body,label,disabled=false,reload,children}:ActionProps) {
+  const command=useCommand()
+  return <div className="space-y-2">
+    {children && <fieldset className="grid gap-3" disabled={command.busy || command.uncertain || command.stale}>{children}</fieldset>}
+    {command.error && <p role="alert">{command.error}</p>}
+    {command.stale ? <Button variant="outline" onClick={reload}>Atualizar registro</Button> : <Button disabled={command.busy || !etag || (!command.uncertain && disabled)} onClick={async()=>{
+      if(await command.send(url,tenant,body,etag,"POST",(reply: {tenantId:string})=>reply?.tenantId===tenant)) reload()
+    }}>{command.uncertain?"Conferir confirmação":label}</Button>}
+  </div>
+}
+export function WarrantyDetail({id}:{id:string}) {
+  const resource=useResource<ResponseData>(path+id)
+  if(resource.loading) return <p className="p-6" role="status">Carregando garantia…</p>
+  if(resource.error || !resource.value) return <div className="p-6" role="alert">{resource.error || "Garantia não encontrada"} <Button onClick={resource.reload}>Tentar novamente</Button></div>
+  return <CaseWorkspace key={resource.value.tenantId+":"+id+":"+resource.value.data.revision} snapshot={resource.value} etag={resource.etag} reload={resource.reload}/>
+}
+function CaseWorkspace({snapshot,etag,reload}:{snapshot:ResponseData;etag:string;reload:()=>void}) {
+  const {data:item,tenantId}=snapshot, url=path+item.id
+  const command={tenant:tenantId,etag,reload}
+  const writable=snapshot.canEdit && !["closed","cancelled"].includes(item.status)
+  const next:Record<string,string>={opened:"triage",triage:"diagnosis",diagnosis:"treatment",treatment:"resolved",resolved:"closed"}
+  const to=next[item.status]
+  const [diagnosis,setDiagnosis]=useState(""),[labor,setLabor]=useState("0")
+  const [selectedOS,setOS]=useState(""),[part,setPart]=useState<Choice|null>(null),[qty,setQty]=useState("1"),[price,setPrice]=useState("0")
+  const order=item.serviceOrders.find(o=>o.id===selectedOS),units=normalizeDecimal(qty,6)
+  const [action,setAction]=useState("exchange"),[decision,setDecision]=useState("approved"),[amount,setAmount]=useState(""),[notes,setNotes]=useState("")
+  const money=cents(amount),needsAmount=decision==="approved" && action!=="exchange"
+  const [carrier,setCarrier]=useState(""),[tracking,setTracking]=useState(""),[qQty,setQQty]=useState("1"),[reason,setReason]=useState("")
+  const quarantineUnits=normalizeDecimal(qQty,6)
+  const cost=item.serviceOrders.reduce((n,o)=>n+(o.laborCents??0),0)+item.parts.reduce((n,p)=>n+p.amountCents,0)
+  return <div className="mx-auto max-w-6xl space-y-4 px-4 py-6">
+    <PageHeader title={item.title} back={{href:"/vendas/garantias",label:"Voltar para garantias"}} eyebrow={item.protocol} description={item.description}/>
+    <div className="grid gap-4 md:grid-cols-2"><section className={section}><h2 className="font-semibold">Resumo</h2>
+      <dl className="grid grid-cols-2 gap-2"><dt>Situação</dt><dd>{stages[item.status]}</dd><dt>Criticidade</dt><dd>{priorities[item.criticality]}</dd>
+        <dt>Cobertura</dt><dd>{coverage[item.coverageStatus]}</dd><dt>Revisão</dt><dd>{item.revision}</dd>
+        {item.customerName && <><dt>Cliente</dt><dd>{item.customerName}</dd></>}{item.productName && <><dt>Equipamento</dt><dd>{item.productName}</dd></>}{item.serialNumber && <><dt>Série</dt><dd>{item.serialNumber}</dd></>}
+        {item.orderId && <><dt>Pedido de origem</dt><dd><Link className="underline" href={"/vendas/pedidos/"+item.orderId}>Pedido {item.orderNumber}</Link></dd></>}
+        {(item.invoiceNumber || item.equipment) && <><dt>Nota fiscal de origem</dt><dd>NF-e {item.invoiceNumber ?? item.equipment?.invoiceNumber}{item.lineNumber && ` • Item ${item.lineNumber}`}</dd></>}
+        {item.equipment && <><dt>Fim da cobertura</dt><dd>{item.equipment.expiresOn.split("-").reverse().join("/")}</dd>{item.equipment.coverageStatus && item.equipment.coverageStatus !== item.coverageStatus && <><dt>Cobertura atual da série</dt><dd>{coverage[item.equipment.coverageStatus]}</dd></>}</>}
+        <dt>Custo do atendimento</dt><dd>{formatMoney(cost)}</dd></dl>
+      {writable && to && <Action {...command} url={url+"/transition"} body={{status:to,details:{}}} label={"Avançar para "+stages[to]}/>}
+    </section><section className={section}><h2 className="font-semibold">Linha do tempo</h2><ol className="space-y-2">{item.timeline.map(e=><li key={e.id}>{eventName[e.eventType] || e.eventType} • {new Date(e.createdAt).toLocaleString("pt-BR",{timeZone:"America/Sao_Paulo"})}</li>)}</ol></section></div>
+    <div className="grid gap-4 md:grid-cols-2"><section className={section}><h2 className="font-semibold">Ordem de serviço</h2>
+      {item.serviceOrders.map((o,i)=><p key={o.id}>OS {i+1} • {o.diagnosis || "Diagnóstico em aberto"} • {formatMoney(o.laborCents??0)}</p>)}
+      {writable && <Action {...command} url={url+"/service-order"} label="Registrar ordem de serviço" disabled={Boolean(item.serviceOrders.length) || cents(labor)===null} body={{diagnosis:diagnosis.trim()||null,report:{},scheduledAt:null,laborCents:cents(labor)}}>
+        <label>Diagnóstico<Input value={diagnosis} onChange={e=>setDiagnosis(e.target.value)}/></label><label>Mão de obra (R$)<Input inputMode="decimal" value={labor} onChange={e=>setLabor(e.target.value)}/></label></Action>}
+      {item.parts.map(p=><p key={p.id}>{p.productName} • {p.quantityMicros/1000000} • {formatMoney(p.amountCents)}</p>)}
+      {writable && item.serviceOrders.length>0 && <Action {...command} url={"/api/erp/warranty-service-orders/"+order?.id+"/parts"} etag={order?'"'+order.revision+'"':""} label="Registrar peça" disabled={!part || !units || Number(units)<=0 || cents(price)===null} body={{productId:part?.id,quantity:units,amountCents:cents(price)}}>
+        <label className="grid">Ordem de serviço da peça<select className={select} value={selectedOS} onChange={e=>setOS(e.target.value)}><option value="">Selecione a ordem</option>{item.serviceOrders.map((o,i)=><option key={o.id} value={o.id}>OS {i+1} • {item.protocol}</option>)}</select></label>
+        <Lookup endpoint="products" label="produto da peça" disabled={false} choose={setPart} compact searchOnly/>{part && <p>Peça selecionada • {part.name}</p>}
+        <label>Quantidade da peça<Input value={qty} onChange={e=>setQty(e.target.value)}/></label><label>Valor da peça (R$)<Input inputMode="decimal" value={price} onChange={e=>setPrice(e.target.value)}/></label></Action>}
+    </section><section className={section}><h2 className="font-semibold">Aprovação por alçada</h2>
+      {item.approvals.map(a=><p key={a.id}>{actions[a.action]} • {a.decision==="approved"?"Aprovado":"Rejeitado"}{a.amountCents!==null && " • "+formatMoney(a.amountCents)}</p>)}
+      {snapshot.canApprove && !["closed","cancelled"].includes(item.status) && <Action {...command} url={url+"/approval"} label="Registrar decisão" body={{action,decision,amountCents:money,notes}} disabled={needsAmount && !(money && money>0) || Boolean(amount.trim()) && money===null || item.approvals.some(a=>a.action===action)}>
+        <label className="grid">Ação<select className={select} value={action} onChange={e=>setAction(e.target.value)}>{Object.entries(actions).map(([k,v])=><option key={k} value={k}>{v}</option>)}</select></label>
+        <label className="grid">Decisão<select className={select} value={decision} onChange={e=>setDecision(e.target.value)}><option value="approved">Aprovar</option><option value="rejected">Rejeitar</option></select></label>
+        <label>Valor da decisão (R$)<Input inputMode="decimal" required={needsAmount} value={amount} onChange={e=>setAmount(e.target.value)}/></label><label>Notas<Input value={notes} onChange={e=>setNotes(e.target.value)}/></label></Action>}
+    </section></div>
+    <WarrantyRecords id={item.id} tenant={tenantId} etag={etag} writable={writable} orders={item.serviceOrders} orderId={item.orderId} reload={reload}/>
+    {writable && <WarrantyAssignment item={item} tenantId={tenantId} etag={etag} onSaved={reload}/>}
+    <WarrantySettlement item={item} tenantId={tenantId} onChanged={reload}/>
+    <div className="grid gap-4 md:grid-cols-2"><section className={section}><h2 className="font-semibold">RMA</h2>
+      {writable && <Action {...command} url={url+"/rma"} label="Solicitar RMA" body={{supplierId:null,carrier:carrier||null,trackingCode:tracking||null,notes:""}}>
+        <label>Transportadora<Input value={carrier} onChange={e=>setCarrier(e.target.value)}/></label><label>Código de rastreio<Input value={tracking} onChange={e=>setTracking(e.target.value)}/></label></Action>}
+      {item.rmas.map(r=>{const step:Record<string,string>={requested:"in_transit",authorized:"in_transit",in_transit:"received",received:"closed"};return <div key={r.id}>{r.reference} • {rmaStates[r.status]}{snapshot.canEdit && step[r.status] && <Action {...command} url={"/api/erp/warranty-rmas/"+r.id+"/transition"} etag={'"'+r.revision+'"'} body={{status:step[r.status],details:{}}} label={"Registrar "+rmaStates[step[r.status]]}/>}</div>})}
+    </section><section className={section}><h2 className="font-semibold">Quarentena de produto</h2>
+      {writable && item.productId && <Action {...command} url={url+"/quarantine"} label="Enviar para quarentena" disabled={!quarantineUnits || Number(quarantineUnits)<=0 || reason.trim().length<3} body={{productId:item.productId,quantity:quarantineUnits,reason}}>
+        <label>Quantidade<Input value={qQty} onChange={e=>setQQty(e.target.value)}/></label><label>Motivo<Input value={reason} onChange={e=>setReason(e.target.value)}/></label></Action>}
+      {!item.productId && <p>Este chamado aguarda vínculo com um produto.</p>}
+      {item.quarantines.map(q=><div key={q.id}>{q.status==="released"?"Liberada":q.status==="disposed"?"Descartada":"Em quarentena"}
+        {snapshot.canEdit && q.status==="quarantined" && <div className="flex gap-2">{["released","disposed"].map(s=><Action key={s} {...command} url={"/api/erp/warranty-quarantines/"+q.id+"/transition"} etag={'"'+q.revision+'"'} label={s==="released"?"Liberar para estoque":"Confirmar descarte"} body={{status:s,details:{}}}/>)}</div>}</div>)}
+    </section></div>
+  </div>
 }

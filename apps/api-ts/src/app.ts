@@ -1,19 +1,37 @@
 import Fastify, { type FastifyInstance } from "fastify"
 import { randomUUID } from "node:crypto"
 
+import {registerCertificates} from "./modules/fiscal-workspace/certificates.js"
+import {registerFiscalSettings} from "./modules/fiscal-workspace/settings.js"
+import {registerOutgoingImports} from "./modules/fiscal-workspace/outgoing-imports.js"
+import { registerEmissionEvents } from "./modules/fiscal-workspace/emission-events.js"
+import { registerEmission } from "./modules/fiscal-workspace/emission.js"
+import { registerFiscalDrafts } from "./modules/fiscal-workspace/drafts.js"
+import type { FiscalOperations } from "./modules/fiscal-workspace/engine.js"
+import { registerFiscalIncoming } from "./modules/fiscal-workspace/incoming.js"
+import { registerFiscalReceipts } from "./modules/fiscal-incoming/routes.js"
+import { registerOrderLots } from "./modules/fiscal-workspace/order-lots.js"
+import { registerFiscalOutgoing } from "./modules/fiscal-workspace/outgoing.js"
 import { registerPartyRoutes } from "./modules/parties/routes.js"
+import { registerWarranties } from "./modules/warranties/routes.js"
 import { registerDashboardRoutes } from "./modules/dashboard/routes.js"
 import { registerReportRoutes } from "./modules/reports/routes.js"
 import { registerCommercialApprovalRoutes } from "./modules/commercial/approvals.js"
 import { registerCommercialSimulation } from "./modules/commercial/simulation.js"
 import { registerCommercialConversion } from "./modules/commercial/conversion.js"
 import { registerCommercialTables } from "./modules/commercial/tables.js"
+import { registerCommercialPricingSettings } from "./modules/commercial/pricing-inputs.js"
+import { channelServiceRoute } from "./modules/commercial/channel-service.js"
+import { registerSalesPolicies } from "./modules/commercial/policy-routes.js"
 import { registerOpportunityRoutes } from "./modules/opportunities/routes.js"
 import { registerCommercialMetrics } from "./modules/commercial/metrics.js"
 import { registerOrderRoutes } from "./modules/orders/routes.js"
 import { registerSalesMail } from "./modules/sales/mail-routes.js"
+import { registerSalesOverview } from "./modules/sales/overview.js"
 import { registerPreferenceRoutes } from "./modules/preferences/routes.js"
 import { registerProductRoutes } from "./modules/products/routes.js"
+import { registerPosRoutes } from "./modules/pos/routes.js"
+import { registerOrderImports } from "./modules/order-imports/routes.js"
 import { registerProposalRoutes } from "./modules/proposals/routes.js"
 import { registerReferenceRoutes } from "./modules/reference-data/routes.js"
 import { registerRegistrationSettingsRoutes } from "./modules/registration-settings/routes.js"
@@ -27,7 +45,7 @@ import { registerDocumentCopies, type DocumentCopyIO } from "./modules/document-
 import { registerFinancialEmails } from "./modules/document-copies/financial-routes.js"
 import { registerContractPackage } from "./modules/document-copies/contract-package-routes.js"
 
-export type AppDependencies = AccessDependencies & { outgoingNfse?: OutgoingNfseDependencies; nfeEmail?: NfeEmailIO; documentCopies?: DocumentCopyIO }
+export type AppDependencies = AccessDependencies & { fiscalVault?:import("./modules/outgoing-nfse/certificate-vault.js").FiscalCertificateVault; fiscalOperations?:FiscalOperations; outgoingNfse?: OutgoingNfseDependencies; nfeEmail?: NfeEmailIO; documentCopies?: DocumentCopyIO }
 
 export function buildApp(_dependencies: AppDependencies): FastifyInstance {
   const app = Fastify({ logger: false, bodyLimit: 65_536 })
@@ -49,7 +67,7 @@ export function buildApp(_dependencies: AppDependencies): FastifyInstance {
     reply.header("x-request-id", requestId)
     if (request.routeOptions.url?.startsWith("/api/v1/") && !request.routeOptions.url.startsWith("/api/v1/integrations/nfse/")) {
       reply.header("x-erp-backend", "typescript")
-      await authenticateRequest(request, _dependencies)
+      if (!channelServiceRoute(request.method,request.routeOptions.url)) await authenticateRequest(request, _dependencies)
     }
   })
   app.get("/health/live", async () => ({ status: "ok" }))
@@ -74,19 +92,35 @@ export function buildApp(_dependencies: AppDependencies): FastifyInstance {
       .header("cache-control", "no-store")
       .send(problem.toJSON())
   })
+  registerFiscalOutgoing(app, _dependencies)
+  registerFiscalDrafts(app,_dependencies)
+  registerEmission(app,_dependencies)
+  registerEmissionEvents(app,_dependencies)
+  registerOutgoingImports(app,_dependencies)
+  registerFiscalSettings(app,_dependencies)
+  registerCertificates(app,_dependencies)
+  registerOrderLots(app, _dependencies)
+  registerFiscalIncoming(app, _dependencies)
+  registerFiscalReceipts(app, _dependencies)
   registerPartyRoutes(app, _dependencies)
+  registerWarranties(app, _dependencies)
   registerDashboardRoutes(app, _dependencies)
   registerReportRoutes(app, _dependencies)
   registerCommercialApprovalRoutes(app, _dependencies)
   registerCommercialSimulation(app, _dependencies)
   registerCommercialConversion(app, _dependencies)
   registerCommercialTables(app, _dependencies)
+  registerCommercialPricingSettings(app, _dependencies)
+  registerSalesPolicies(app, _dependencies)
   registerOpportunityRoutes(app, _dependencies)
   registerCommercialMetrics(app, _dependencies)
   registerOrderRoutes(app, _dependencies)
   registerSalesMail(app, _dependencies, _dependencies.documentCopies)
+  registerSalesOverview(app, _dependencies)
   registerPreferenceRoutes(app, _dependencies)
   registerProductRoutes(app, _dependencies)
+  registerPosRoutes(app, _dependencies)
+  registerOrderImports(app, _dependencies)
   registerProposalRoutes(app, _dependencies)
   registerReferenceRoutes(app, _dependencies)
   registerRegistrationSettingsRoutes(app, _dependencies)

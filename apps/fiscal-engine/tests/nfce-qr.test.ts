@@ -1,3 +1,4 @@
+import {dispatch} from "../src/engine.ts";
 import assert from "node:assert/strict";
 import { createHash, createPublicKey, verify } from "node:crypto";
 import { test } from "node:test";
@@ -10,6 +11,10 @@ import { layoutInvoice } from "./fiscal-layout-fixture.ts";
 import { qrInvoice } from "./nfce-qr-fixture.ts";
 import { createNfceQrPayload, NfceQrError } from "@/lib/fiscal/nfce-qr";
 import type { NfceQrProfile } from "@/lib/fiscal/nfce-qr";
+
+import {renderNfceReceipt} from "@/lib/fiscal/nfce-receipt";
+import {nfceSp} from "@/lib/fiscal/nfce-sp";
+import { supplementNfce } from "@/lib/fiscal/simplified-nfe";
 
 const key = signingKeyOf(testPfx(), "senha-de-teste");
 const otherKey = signingKeyOf(testPfx(), "senha-de-teste");
@@ -187,4 +192,49 @@ test("QR: bloqueia XML ambíguo, DTD, entidades, encoding incompatível e entrad
     xml.replace('encoding="UTF-8"', 'encoding="ISO-8859-1"'),
     xml + "\0", xml + "\ud800", "x".repeat(1_048_577),
   ]) await assert.rejects(() => createNfceQrPayload({ signedXml: bad, profile: version2 }), invalid);
+});
+
+test("NFC-e • a autorização recebe o suplemento ligado ao XML assinado online e offline",async()=>{
+  for(const emission of ["1","9"]){
+    const {xml}=qrInvoice(key,{emission});
+    const urls={qrCodeUrl:"https://teste.sefaz.gov.br/qrcode",accessKeyUrl:"https://teste.sefaz.gov.br/consulta"};
+    const supplemented=await supplementNfce(xml,version2,urls);
+    assert.ok(supplemented.xml.includes("<qrCode>"+supplemented.url+"</qrCode>"));
+    assert.ok(supplemented.xml.includes("<urlChave>"+urls.accessKeyUrl+"</urlChave>"));
+    assert.equal((await createNfceQrPayload({signedXml:supplemented.xml,profile:version2})).payload,supplemented.qr.payload);
+  }
+});
+
+// Folha de endereços de SP • https://portal.fazenda.sp.gov.br/servicos/nfce/Paginas/WebServices.aspx
+test("NFC-e • serviços de autorização e consulta pública de SP por ambiente",()=>{
+  assert.equal(nfceSp("homologacao").qrCodeUrl,"https://www.homologacao.nfce.fazenda.sp.gov.br/qrcode");
+  assert.equal(nfceSp("homologacao").accessKeyUrl,"https://www.homologacao.nfce.fazenda.sp.gov.br/consulta");
+  assert.equal(nfceSp("producao").accessKeyUrl,"https://www.nfce.fazenda.sp.gov.br/NFCeConsultaPublica");
+  for(const env of ["producao","homologacao"] as const){
+    const endpoints=nfceSp(env),host=env==="producao"?"nfce.fazenda.sp.gov.br":"homologacao.nfce.fazenda.sp.gov.br";
+    for(const service of [endpoints.authorize,endpoints.consult,endpoints.event])assert.equal(new URL(service).hostname,host);
+  }
+});
+
+test("DANFE NFC-e • cupom térmico em PDF com QR do XML autorizado",async()=>{
+  const {xml,accessKey}=qrInvoice(key,{amount:"100.00"});
+  const signed=await supplementNfce(xml,version2,nfceSp("homologacao"));
+  const processed='<nfeProc xmlns="http://www.portalfiscal.inf.br/nfe" versao="4.00">'+signed.xml.replace(/^<\?xml[^>]*>/,"")+
+    '<protNFe><infProt><chNFe>'+accessKey+'</chNFe><nProt>135260000000001</nProt><dhRecbto>2026-10-02T23:30:00-03:00</dhRecbto></infProt></protNFe></nfeProc>';
+  const pdf=await renderNfceReceipt(processed,accessKey);
+  assert.equal(pdf.subarray(0,5).toString(),"%PDF-");
+  assert.ok(pdf.includes(Buffer.from("/Subtype /Image")));assert.ok(pdf.includes(Buffer.from("%%EOF")));
+  await assert.rejects(renderNfceReceipt(processed.replace(signed.url,"https://example.test/other"),accessKey));
+});
+
+
+test("Contingência NFC-e • o cupom impresso antes da autorização usa o XML 65 offline assinado",async()=>{
+  const {xml,accessKey}=qrInvoice(key,{emission:"9",amount:"100.00"});
+  const signed=await supplementNfce(xml,version2,nfceSp("homologacao"));
+  const payload={accessKey,signedXml:signed.xml,environment:"homologation"};
+  const result=await dispatch("offline-receipt",payload,async()=>{throw Error("Envio externo inesperado")});
+  const pdf=Buffer.from(String(result.pdf),"base64");
+  assert.ok(pdf.subarray(0,5).equals(Buffer.from("%PDF-")));assert.ok(pdf.includes(Buffer.from("/Subtype /Image")));
+  await assert.rejects(dispatch("offline-receipt",{...payload,environment:"production"}));
+  await assert.rejects(dispatch("offline-receipt",{...payload,signedXml:signed.xml.replace("<vNF>100.00</vNF>","<vNF>200.00</vNF>")}));
 });

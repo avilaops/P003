@@ -14,11 +14,18 @@ test("todos os módulos operacionais têm entrada própria e visão geral", () =
 })
 
 test("operações antes ausentes são acessíveis no módulo correspondente", () => {
-  const expected = { Cadastros: [ "/cadastros/grupos-produtos", "/cadastros/grupos-tags", "/cadastros/tags"], Fiscal: ["/fiscal/ctes", "/fiscal/nfses", "/fiscal/danfe", "/fiscal/guias", "/fiscal/monitor"], Vendas: ["/vendas/pdv/fechamento", "/vendas/pdv/historico"], Serviços: ["/servicos/contratos/modelos"] }
+  const expected = { Cadastros: [ "/cadastros/grupos-produtos", "/cadastros/grupos-tags", "/cadastros/tags"], Fiscal: ["/fiscal/ctes", "/fiscal/nfses", "/fiscal/danfe", "/fiscal/guias", "/fiscal/monitor"], Vendas: ["/vendas/pdv"], Serviços: ["/servicos/contratos/modelos"] }
   for (const [label, paths] of Object.entries(expected)) {
     const links = desktopMenus.find(menu => menu.label === label)?.columns.flatMap(group => group.items.map(item => item.href)) ?? []
     for (const path of paths) assert.ok(links.includes(path), `${label}: ${path}`)
   }
+})
+
+test("Vendas agrupa o caixa no menu e indexa as três operações do PDV", () => {
+  const menu = desktopMenus.find(menu => menu.label === "Vendas").columns.flatMap(group => group.items)
+  const isCash = item => item.href === "/vendas/pdv" || item.href.startsWith("/vendas/pdv/")
+  assert.deepEqual(menu.filter(isCash).map(item => item.href), ["/vendas/pdv"])
+  assert.deepEqual(navigationDestinations.filter(isCash).map(item => item.href), ["/vendas/pdv", "/vendas/pdv/fechamento", "/vendas/pdv/historico"])
 })
 
 test("todas as configurações disponíveis são encontradas na busca sem destinos repetidos", () => {

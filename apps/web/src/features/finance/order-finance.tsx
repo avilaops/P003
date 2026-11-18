@@ -15,9 +15,9 @@ import { useProtectedReload } from "./use-protected-reload"
 import { useSuggestedPaymentMethod } from "./settings/use-suggested-payment-method"
 
 export type ReceiptSnapshot = Schema<"ReceivableSnapshot">
-type Projection = { tenantId: string; orderId: string; orderStatus: string; orderAmount: string; titleAmount: string; receivedAmount: string; outstandingAmount: string; state: string; canEdit: boolean; receivables: ReceiptSnapshot[] }
+type Projection = { tenantId: string; orderId: string; orderStatus: string; orderAmount: string; titleAmount: string; abatedAmount?: string; receivedAmount: string; outstandingAmount: string; state: string; canEdit: boolean; receivables: ReceiptSnapshot[] }
 type Method = { id: string; code: string; name: string; modality: string }
-const states: Record<string, string> = { not_originated: "Títulos ainda não gerados", open: "Em aberto", partial: "Recebido parcialmente", paid: "Recebimento integral declarado", cancelled: "Pedido cancelado", inconsistent: "Títulos precisam de conciliação" }
+const states: Record<string, string> = { not_originated: "Títulos ainda não gerados", open: "Em aberto", partial: "Saldo parcialmente liquidado", settled_with_credit: "Saldo liquidado com abatimento", paid: "Recebimento integral declarado", cancelled: "Pedido cancelado", inconsistent: "Títulos precisam de conciliação" }
 export function installmentName(snapshot: ReceiptSnapshot) {
   const data = snapshot.data as ReceiptSnapshot["data"] & { installmentKind?: string; installmentNumber?: number }
   return data.installmentKind === "entry" ? "Entrada" : data.installmentKind === "balance" ? `Parcela ${data.installmentNumber}` : "Título do pedido"
@@ -100,6 +100,7 @@ export function OrderFinancePanel({ orderId, receivableId, allowReceipt = true, 
       {result.loading && !value ? <p role="status">Consultando recebimentos…</p> : result.error || !value ? <p role="status">{result.status === 403 ? "Sem acesso ao financeiro deste pedido." : "Financeiro indisponível no momento. Os dados comerciais continuam disponíveis."}</p> : <>
         <p className="text-sm">{states[value.state] || "Situação financeira indisponível"}</p>
         <dl className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-3">{[["Total do pedido", value.orderAmount, "order-total"], ["Recebido líquido", value.receivedAmount, "order-received"], ["Saldo em aberto", value.outstandingAmount, "order-outstanding"]].map(([label, amount, id]) => <div className="min-w-0" key={id}><dt className="text-xs text-muted-foreground">{label}</dt><dd data-testid={id} className="break-words font-semibold tabular-nums">{commercialMoney(amount)}</dd></div>)}</dl>
+        {value.abatedAmount && value.abatedAmount !== "0.00" && <p className="text-sm">Abatimentos e créditos aplicados • {commercialMoney(value.abatedAmount)}</p>}
         {value.state === "not_originated" && <p className="text-sm">As condições negociadas ainda não geraram títulos. Nenhum recebimento foi confirmado.</p>}
         {value.state === "inconsistent" && <p role="status">Confira os títulos no financeiro antes de registrar novos recebimentos.</p>}
         {!receivableId && scoped.length > 0 && <ul className="space-y-3">{scoped.map(title => <li key={title.data.id} className="min-w-0 rounded-lg border p-3 text-sm">

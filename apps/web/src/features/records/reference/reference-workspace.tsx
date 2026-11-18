@@ -10,7 +10,7 @@ import { BankIdentity, BankPicker } from "./bank-picker"
 import { RequestError } from "@/components/feedback/session-recovery"
 
 import { GuardedLink as Link, useNavigationGuard, useListNavigationHref } from "@/components/shell/navigation-guard"
-import { useRouter } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
 import { useId, useState } from "react"
 import { PageHeader } from "@/components/page-header"
 import { RecordCompany } from "@/components/record-company"
@@ -153,7 +153,8 @@ function Editor({ kind, initial, tenantId, etag, reload }: { kind: ReferenceKind
   const config = referenceConfigs[kind]
   const router = useRouter(), command = useCommand()
   const listHref = useListNavigationHref()
-  const [draft, setDraft] = useState<ReferenceFields>(() => initial ? Object.fromEntries(Object.keys(config.defaults).map(key => [key, initial.data[key]])) as ReferenceFields : { ...config.defaults })
+  const initialType = useSearchParams().get("tipo")
+  const [draft, setDraft] = useState<ReferenceFields>(() => initial ? Object.fromEntries(Object.keys(config.defaults).map(key => [key, initial.data[key]])) as ReferenceFields : { ...config.defaults, ...(kind === "contas-financeiras" && initialType === "cash" ? { accountType: "cash" } : {}) })
   const [dirty, setDirty] = useState(false)
   const frozen = command.busy || command.uncertain || command.stale
   useNavigationGuard(dirty || command.uncertain ? "Sair sem confirmar as alterações deste cadastro?" : null)

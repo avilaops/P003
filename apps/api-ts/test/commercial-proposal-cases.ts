@@ -155,7 +155,7 @@ export async function verifyCommercialProposals(app: FastifyInstance, seed: Pool
   assert.equal(directorSent.statusCode, 200, directorSent.body)
   const accepted = await app.inject({ method: "POST", url: `/api/v1/proposals/${excessId}/accept`, headers: { ...sellerHeaders, "idempotency-key": randomUUID(), "if-match": '"2"' }, payload: {} })
   assert.equal(accepted.statusCode, 200, accepted.body)
-  const revised = await app.inject({ method: "POST", url: `/api/v1/proposals/${excessId}/revise`, headers: { ...headers, "idempotency-key": randomUUID(), "if-match": '"3"' } })
+  const revised = await app.inject({ method: "POST", url: `/api/v1/proposals/${excessId}/revise`, headers: { ...sellerHeaders, "idempotency-key": randomUUID(), "if-match": '"3"' } })
   assert.equal(revised.statusCode, 200, revised.body)
   assert.equal(revised.json().data.version, 2)
   assert.equal(revised.json().items[0].technical.weightStack, "120 kg")

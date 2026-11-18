@@ -18,9 +18,9 @@ export const desktopMenus = [
   {
     label: "Vendas",
     columns: [
-      { title: "Operação", items: [{ label: "Visão geral", href: "/vendas" }, { label: "Funil comercial", href: "/vendas/funil" }, { label: "Tabela publicada", href: "/vendas/tabela-precos" }, { label: "Simulador", href: "/vendas/simulador" }, { label: "Propostas", href: "/vendas/propostas" }, { label: "Pedidos de venda", href: "/vendas/pedidos" }, { label: "PDV", href: "/vendas/pdv" }, { label: "Fechamento do PDV", href: "/vendas/pdv/fechamento" }, { label: "Histórico do PDV", href: "/vendas/pdv/historico" }, { label: "Garantias", href: "/vendas/garantias" }] },
+      { title: "Operação", items: [{ label: "Visão geral", href: "/vendas" }, { label: "Funil comercial", href: "/vendas/funil" }, { label: "Aprovações", href: "/vendas/aprovacoes" }, { label: "Tabela publicada", href: "/vendas/tabela-precos" }, { label: "Simulador", href: "/vendas/simulador" }, { label: "Propostas", href: "/vendas/propostas" }, { label: "Pedidos de venda", href: "/vendas/pedidos" }, { label: "PDV", href: "/vendas/pdv" }, { label: "Garantias", href: "/vendas/garantias" }] },
       { title: "Canais e importação", items: [{ label: "Loja virtual", href: "/vendas/loja-virtual" }, { label: "Anúncios", href: "/vendas/anuncios" }, { label: "Importar pedidos", href: "/vendas/importacao" }, { label: "Relatórios de vendas", href: "/relatorios/vendas" }] },
-      { title: "Documentos fiscais", items: [{ label: "NF-e", href: "/fiscal/notas-saida" }, { label: "NFC-e", href: "/fiscal/nfce" }, { label: "Notas fiscais de entrada", href: "/compras/notas-entrada" }] },
+      { title: "Documentos fiscais", items: [{ label: "NF-e", href: "/fiscal/notas-saida" }, { label: "NFC-e", href: "/fiscal/nfce" }, { label: "Notas fiscais de entrada", href: "/compras/notas-entrada?origem=vendas" }] },
     ],
   },
   {
@@ -123,6 +123,8 @@ const candidates = [
   ...preferenceGroups.flatMap(group => group.items.map(item => ({ ...item, category: `Preferências / ${group.label}` }))),
   ...moduleLinks.map(([label, href]) => ({ label, href, category: "Módulos" })),
   ...desktopMenus.flatMap(menu => menu.columns.flatMap(column => column.items.map(item => ({ ...item, category: `${menu.label} / ${column.title}` })))),
+  { label: "Fechamento do PDV", href: "/vendas/pdv/fechamento", category: "Vendas / Operação" },
+  { label: "Histórico do PDV", href: "/vendas/pdv/historico", category: "Vendas / Operação" },
   ...categoryPreferences.flatMap(group => group.items.map(item => ({ ...item, category: `Preferências / ${group.label}` }))),
   { label: "Monitor fiscal", href: "/fiscal/monitor", category: "Fiscal" },
 ]

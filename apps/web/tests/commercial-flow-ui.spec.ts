@@ -58,8 +58,7 @@ for (const width of [320, 390, 430, 1366, 1440]) test(`tabela nacional até pedi
   await page.getByRole("button", { name: "Simular", exact: true }).click()
   await expect(page.getByRole("region", { name: "Resultado da simulação", exact: true })).toContainText("R$ 180,00")
   await expect(page.getByText("Selecione o cliente e informe o vencimento para criar o pedido.", { exact: true })).toBeVisible()
-  await page.getByRole("button", { name: "Continuar pedido", exact: true }).click()
-  await expect(page.getByRole("heading", { name: "Dados para criar o pedido", exact: true })).toBeFocused()
+  await expect(page.getByRole("button", { name: "Continuar no novo pedido", exact: true })).toBeEnabled()
   await chooseCustomer(page)
   await page.screenshot({ path: info.outputPath(`commercial-ready-${width}.png`), fullPage: true })
   await page.getByRole("button", { name: "Criar pedido com estas condições", exact: true }).click()
@@ -107,7 +106,8 @@ test("atualiza tabela obsoleta sem perder cliente, vencimento ou acabamentos", a
   await expect(page.getByLabel("Vencimento da conta a receber", { exact: true })).toHaveValue("2026-12-30")
   await expect(page.getByRole("combobox", { name: `Cor da estrutura de ${name}`, exact: true })).toContainText("Preto")
   await page.getByRole("button", { name: "Simular", exact: true }).click()
-  expect(simulations.at(-1)).toMatchObject({ versionId: nextVersion, items: [{ productId: product, structureColor: "Preto" }] })
+  await expect(page.getByRole("status").filter({ hasText: "Tabela v7" })).toContainText("Calculada")
+  await expect.poll(() => simulations.at(-1)).toMatchObject({ versionId: nextVersion, items: [{ productId: product, structureColor: "Preto" }] })
 })
 
 test("retorno à tabela pede confirmação e conserva a busca nacional", async ({ page, baseURL }) => {
@@ -150,4 +150,37 @@ test("equipamento removido da publicação continua visível e exige remoção e
   await expect(page.getByRole("region", { name: "Resultado da simulação", exact: true })).toContainText("R$ 180,00")
   expect(simulations).toHaveLength(1)
   expect(simulations[0]).toMatchObject({ items: [{ productId: product, quantity: 1 }] })
+})
+
+test("transferência ao novo pedido conserva condições e exige conferência se somente a regra mudou", async ({page})=>{
+ const singleInputs:Record<string,any>[]=[], mixedInputs:Record<string,any>[]=[], writes:string[]=[]
+ let moved=false
+ await page.route(/\/api\/erp\/commercial\/tables\/(imported|national)(?:\?.*)?$/,route=>route.fulfill({json:{tenantId:tenant,line:new URL(route.request().url()).pathname.split("/").at(-1),canManage:false,data:table}}))
+ await page.route("**/api/erp/commercial/policies/catalog",route=>route.fulfill({json:{tenantId:tenant,channels:[{channel:"Loja"}],terms:[]}}))
+ await page.route("**/api/erp/commercial/simulate",route=>{singleInputs.push(route.request().postDataJSON());return route.fulfill({json:{tenantId:tenant,digest:(moved?"e":"c").repeat(64),sale:sale(2),director:null}})})
+ await page.route("**/api/erp/commercial/mixed/simulate",route=>{mixedInputs.push(route.request().postDataJSON());return route.fulfill({json:{tenantId:tenant,digest:"b".repeat(64),sale:sale(2),director:null}})})
+ page.on("request",r=>{if(r.method()==="POST"&&r.url().includes("/api/erp/")&&!r.url().endsWith("simulate"))writes.push(r.url())})
+ await page.goto("/vendas/simulador?produto="+product+"&destinationState=MG&taxpayer=true")
+ await page.getByLabel(`Quantidade de ${name}`,{exact:true}).fill("2")
+ await page.locator("summary").filter({hasText:"Acabamentos de "+name}).click()
+ await chooseCatalogColor(page,"Cor da estrutura de "+name,"Preto")
+ await page.getByLabel("Tipo de anilheiro de "+name,{exact:true}).selectOption("Olímpico")
+ await page.getByRole("combobox",{name:"Canal comercial",exact:true}).selectOption("Loja")
+ await page.getByLabel("Desconto (%)",{exact:true}).fill("7,5")
+ await page.getByLabel("Frete por nossa conta",{exact:true}).check()
+ await page.getByLabel("Frete pago pela empresa (R$)",{exact:true}).fill("45,67")
+ await page.getByLabel(/Entrada negociada/).fill("125,50")
+ const next=page.getByRole("button",{name:"Continuar no novo pedido",exact:true})
+ await expect(next).toBeEnabled()
+ const original=singleInputs.at(-1)!
+ expect(original).toMatchObject({line:"imported",versionId:version,channel:"Loja",destinationState:"MG",taxpayer:true,discount:{kind:"percent",value:750},freightCents:4567,downPaymentCents:12550,items:[{productId:product,quantity:2,structureColor:"Preto",plateHolderType:"Olímpico"}]})
+ moved=true
+ await next.click()
+ await expect(page).toHaveURL(/\/vendas\/pedidos\/novo\?simulacao=/)
+ await expect.poll(()=>mixedInputs.at(-1)).toMatchObject({channel:"Loja",destinationState:"MG",taxpayer:true,discount:original.discount,freightCents:4567,downPaymentCents:12550,items:[{...original.items[0],line:"imported",versionId:version}]})
+ expect(singleInputs.at(-1)).toEqual(original)
+ await expect(page.getByRole("button",{name:"Salvar pedido",exact:true})).toBeDisabled()
+ await page.getByRole("button",{name:"Conferi os valores e a alçada"}).click()
+ await expect(page.getByRole("button",{name:"Salvar pedido",exact:true})).toBeEnabled()
+ expect(writes).toEqual([])
 })

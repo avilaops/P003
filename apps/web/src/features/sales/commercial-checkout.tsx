@@ -1,5 +1,6 @@
 "use client"
 
+import {PaymentTermPicker,type AppliedTerm} from "./payment-term-picker"
 import { useEffect, useId, useImperativeHandle, useRef, useState, type ReactNode, type Ref } from "react"
 import { GuardedLink } from "@/components/shell/navigation-guard"
 import { Button } from "@/components/ui/button"
@@ -51,6 +52,7 @@ export function CommercialCheckout({ ref, customerId, tenantId, methods, totalCe
   const [count, setCount] = useState("1")
   const [firstDays, setFirstDays] = useState("30")
   const [interval, setInterval] = useState("30")
+  const [appliedTerm,setAppliedTerm]=useState<AppliedTerm|null>(null)
   const [rows, setRows] = useState<Row[]>([])
   const [generatedSignature, setGeneratedSignature] = useState(rowSignature([]))
   const [replaceOpen, setReplaceOpen] = useState(false)
@@ -132,7 +134,11 @@ export function CommercialCheckout({ ref, customerId, tenantId, methods, totalCe
   useImperativeHandle(ref, () => ({ read() {
     const first = validation.issues[0]
     if (first) fail(first.field.replace(/^checkout\./, ""), first.message)
-    return validation.value!
+    const planMatches = appliedTerm && appliedTerm.entryCents===entryCents &&
+      (!entryCents || appliedTerm.entry.dueOn===entryDate && appliedTerm.entry.paymentMethodId===entryMethod) &&
+      appliedTerm.installments.length===rows.length && rows.every((row,index)=>row.paymentMethodId===appliedTerm.installments[index].paymentMethodId && row.dueOn===appliedTerm.installments[index].dueOn && parseAmount(row.amount)===appliedTerm.installments[index].amountCents)
+    const term=planMatches ? appliedTerm.term : null
+    return {...validation.value!,...(term?{paymentTerm:{id:term.id,revision:term.revision,start:term.start}}:{})}
   }, focus(field) {
     const rawField = field.replace(/^checkout\./, "")
     setAttempted(true)
@@ -177,6 +183,11 @@ export function CommercialCheckout({ ref, customerId, tenantId, methods, totalCe
     <label className="grid min-w-0 gap-1">{renderOrder ? "Observações" : "Observações do pedido"}<textarea aria-label={renderOrder ? "Observações" : "Observações do pedido"} className={textareaClass} rows={2} maxLength={10000} value={notes} onChange={event => setNotes(event.target.value)} /></label>
   </>
   const paymentFields = <>
+    <PaymentTermPicker key={customerId} tenant={tenantId} customer={customerId} total={totalCents} disabled={disabled} apply={value=>{
+      setAppliedTerm(value);onEntryChange(inputAmount(value.entryCents));setEntryMethod(value.entry.paymentMethodId??"");setEntryDate(value.entry.dueOn)
+      const next=value.installments.map(item=>({...item,key:crypto.randomUUID(),amount:inputAmount(item.amountCents)}))
+      setRows(next);setGeneratedSignature(rowSignature(next));setBalanceMethod(next[0]?.paymentMethodId??"");setCount(String(next.length||1));onDueDateChange(next[0]?.dueOn??value.entry.dueOn);onDirty()
+    }}/>
     <fieldset disabled={disabled} className="min-w-0 space-y-3" onChange={() => { setIssue(null); onDirty() }}>
       {!renderOrder && <><label className="grid min-w-0 gap-1">Inscrição estadual do cliente<Input maxLength={40} value={registration} placeholder="Número ou ISENTO" onChange={event => setRegistration({ customerId, value: event.target.value })} /></label><p className="text-xs text-muted-foreground">A condição de contribuinte é conferida nas condições comerciais.</p></>}
       <section className={renderOrder ? "order-payment-grid min-w-0" : "min-w-0 space-y-3 border-t pt-3"} aria-label="Forma de pagamento negociada">

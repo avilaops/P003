@@ -1,5 +1,5 @@
 import { DOMParser, XMLSerializer } from "@xmldom/xmldom";
-import { createFiscalQrPayload } from "./nfce-qr.ts";
+import { createFiscalQrPayload,createNfceQrPayload,type NfceQrProfile } from "./nfce-qr.ts";
 import type { SigningKey } from "./sign.ts";
 import { assertFiscalXml } from "./local-layout.ts";
 
@@ -59,6 +59,12 @@ export async function supplementSimplifiedNfe(input: {
   if (!amount || !/^\d+(?:\.\d{2})?$/.test(amount) || !amountParts || BigInt(amountParts[0]) * 100n + BigInt(amountParts[1] ?? "0") > 20_000_000n) {
     throw new Error("Valor total do DANFE Simplificado Tipo 2 excede o limite de R$ 200.000,00.");
   }
+  const xml=await withSupplement(doc,qrCodeUrl,accessKeyUrl);
+  return { xml, qrCodeUrl, accessKeyUrl, payload: qr.payload, accessKey: qr.accessKey };
+}
+
+async function withSupplement(doc:ReturnType<DOMParser["parseFromString"]>,qrCodeUrl:string,accessKeyUrl:string) {
+  const root=doc.documentElement!,ns="http://www.portalfiscal.inf.br/nfe";
   for (const old of Array.from(root.getElementsByTagNameNS(ns, "infNFeSupl"))) old.parentNode!.removeChild(old);
   const supplement = doc.createElementNS(ns, "infNFeSupl");
   for (const [name, value] of [["qrCode", qrCodeUrl], ["urlChave", accessKeyUrl]]) {
@@ -68,5 +74,13 @@ export async function supplementSimplifiedNfe(input: {
   root.insertBefore(supplement, signature);
   const xml = new XMLSerializer().serializeToString(doc);
   await assertFiscalXml(xml, "nfe");
-  return { xml, qrCodeUrl, accessKeyUrl, payload: qr.payload, accessKey: qr.accessKey };
+  return xml;
+}
+
+export async function supplementNfce(signedXml:string,profile:NfceQrProfile,urls:SimplifiedNfeEndpoints){
+  const qr=await createNfceQrPayload({signedXml,profile});
+  const code=endpoint(urls.qrCodeUrl)+"?p="+qr.payload,consult=endpoint(urls.accessKeyUrl);
+  const doc=new DOMParser().parseFromString(signedXml,"application/xml");
+  const xml=await withSupplement(doc,code,consult);
+  return {xml,url:code,qr};
 }

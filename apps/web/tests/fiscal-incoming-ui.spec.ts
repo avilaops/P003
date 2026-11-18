@@ -46,8 +46,8 @@ test("consulta NSU repete o comando após resposta perdida e respeita o interval
   })
   await page.setViewportSize({ width: 320, height: 720 })
   await page.goto("/fiscal/monitor")
-  const from = await page.getByLabel("Emissão de (UTC)", { exact: true }).boundingBox()
-  const to = await page.getByLabel("Emissão até (UTC)", { exact: true }).boundingBox()
+  const from = await page.getByLabel("Emissão de", { exact: true }).boundingBox()
+  const to = await page.getByLabel("Emissão até", { exact: true }).boundingBox()
   expect(from!.y).toBe(to!.y)
   expect(to!.x + to!.width).toBeLessThanOrEqual(320)
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(320)
@@ -126,11 +126,42 @@ test("manifestação incerta consulta o histórico e bloqueia um segundo envio d
   await expect(page.getByRole("button", { name: "Criar rascunho com custos da nota", exact: true })).toHaveCount(0)
 })
 
+test("recebimento físico confirma a compra e repete uma entrega incerta pelo mesmo comando", async ({page}) => {
+  await details(page)
+  await page.setViewportSize({width:390,height:844})
+  const base="**/api/erp/fiscal/received-nfes/11/purchase"
+  await page.route(base, route=>route.fulfill({headers:{ETag:'"2"'},json:{receivedNfeId:11,revision:2,purchaseOrderId:purchase,canConvert:true,items:[item]}}))
+  let rev=1
+  const current=()=>({tenantId:tenant,purchaseOrderId:purchase,revision:rev,status:rev===1?"draft":rev===2?"confirmed":"received",canConfirm:true,canReceive:true,
+    items:[{productId:product,name:"Produto físico",unit:"UN",remaining:rev===3?"0.000000":"1.000000",received:rev===3?"1.000000":"0.000000"}],
+    receipts:rev===3?[{id:"recibo",reference:"Entrega 70",occurredOn:"2026-11-18",amount:"10.00",payableId:"conta-70"}]:[]})
+  await page.route(base+"/progress",route=>route.fulfill({headers:{ETag:'"'+rev+'"'},json:current()}))
+  await page.route(base+"/confirm",route=>{rev=2;return route.fulfill({headers:{ETag:'"2"'},json:current()})})
+  const calls:Command[]=[]
+  await page.route(base+"/receive",route=>{
+    calls.push({key:route.request().headers()["idempotency-key"],revision:route.request().headers()["if-match"],body:route.request().postDataJSON()})
+    if(calls.length===1)return route.abort("failed")
+    rev=3;return route.fulfill({headers:{ETag:'"3"'},json:current()})
+  })
+  await page.goto("/fiscal/monitor/11")
+  await page.getByRole("button",{name:"Confirmar compra vinculada"}).click()
+  await page.getByLabel("Referência da entrega").fill("Entrega 70")
+  await page.getByLabel("Data do recebimento").fill("2026-11-18")
+  await page.getByLabel("Quantidade recebida de Produto físico").fill("1")
+  await page.getByRole("button",{name:"Registrar recebimento físico"}).click()
+  await expect(page.getByLabel("Referência da entrega")).toBeDisabled()
+  await page.getByRole("button",{name:"Conferir recebimento anterior"}).click()
+  await expect(page.getByText("Conta a pagar • conta-70")).toBeVisible()
+  expect(calls).toHaveLength(2)
+  expect(calls[1]).toEqual(calls[0])
+  expect(calls[0].body).toEqual({reference:"Entrega 70",occurredOn:"2026-11-18",items:[{productId:product,quantity:"1.000000"}]})
+})
+
 for (const viewport of [{ width: 320, height: 720 }, { width: 390, height: 844 }, { width: 568, height: 320 }, { width: 844, height: 390 }, { width: 1440, height: 900 }]) {
   test(`conciliação exige prévia e preserva o comando em ${viewport.width}x${viewport.height}`, async ({ page }) => {
     await details(page)
     await page.setViewportSize(viewport)
-    await page.route("**/api/erp/purchase-orders?**", route => route.fulfill({ json: { data: [{ id: purchase, supplierName: "Fornecedor da nota", amount: "20.00", status: "confirmed", revision: 2 }], total: 1 } }))
+    await page.route("**/purchase/options?**", route => route.fulfill({ json: { data: [{ id: purchase, supplierName: "Fornecedor da nota", amount: "20.00", status: "confirmed", revision: 2 }], total: 1 } }))
     let linked = false
     const calls: Command[] = []
     await page.route("**/api/erp/fiscal/received-nfes/11/purchase", route => route.fulfill({ headers: { ETag: linked ? '"2"' : '"1"' }, json: { receivedNfeId: 11, revision: linked ? 2 : 1, purchaseOrderId: linked ? purchase : null, canConvert: true, items: [{ ...item, ncm: "95069100" }], costs: [] } }))

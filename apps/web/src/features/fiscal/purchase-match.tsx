@@ -18,7 +18,7 @@ const quantity = (value: number) => (value / 1_000_000).toLocaleString("pt-BR", 
 
 export function PurchaseMatch({ noteId, tenantId, items, onLinked, onBack }: { noteId: number; tenantId: string; items: FiscalPurchaseItem[]; onLinked: (id: string) => void; onBack: () => void }) {
   const [offset, setOffset] = useState(0)
-  const purchases = useResource<{ data: Purchase[]; total: number }>(`/api/erp/purchase-orders?limit=10&offset=${offset}`)
+  const purchases = useResource<{ data: Purchase[]; total: number }>(`/api/erp/fiscal/received-nfes/${noteId}/purchase/options?limit=10&offset=${offset}`)
   const command = useCommand()
   const [selected, setSelected] = useState<Purchase | null>(null)
   const [mapping, setMapping] = useState<Record<number, PurchaseChoice>>({})

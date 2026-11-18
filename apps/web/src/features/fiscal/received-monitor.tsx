@@ -17,17 +17,21 @@ import { DistributionActions } from "./incoming-actions"
 import { FiscalDistribution } from "./fiscal-distribution"
 
 type Note = ReceivedNote
-type Result = Schema<"ReceivedPage">
-const initialFilters = { q: "", from: "", to: "" }
+type Result = Omit<Schema<"ReceivedPage">,"data"> & {data:(Note & {returnOrderId?:string | null; purchaseId?:string | null; manifestation?:string; manifestationKind?:string | null})[]}
+const initialFilters = { q: "", from: "", to: "", purchase:"", manifestation:"",salesReturn:"" }
 const money = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" })
-const date = (value: string) => new Date(value).toLocaleString("pt-BR")
+const date = (value: string) => new Date(value).toLocaleString("pt-BR",{timeZone:"America/Sao_Paulo"})
 const maximumBatch = 10
 
-export function ReceivedMonitor() {
+export type MonitorOrigin = "fiscal" | "compras" | "vendas"
+const originTitles = {fiscal:"Fiscal",compras:"Compras",vendas:"Vendas"}
+const manifestLabels: Record<string,string> = {"210200":"Confirmada","210210":"Ciência","210220":"Desconhecida","210240":"Operação não realizada",confirmacao:"Confirmada",ciencia:"Ciência",desconhecimento:"Desconhecida",nao_realizada:"Operação não realizada"}
+export function ReceivedMonitor({origin = "fiscal"}:{origin?:MonitorOrigin}) {
+  const defaults = {...initialFilters,purchase:origin === "compras" ? "unlinked" : ""}
   const [result, setResult] = useState<Result | null>(null)
   const [company, setCompany] = useState("")
-  const [filters, setFilters] = useState(initialFilters)
-  const [query, setQuery] = useState({ ...initialFilters, offset: 0 })
+  const [filters, setFilters] = useState(defaults)
+  const [query, setQuery] = useState({ ...defaults, offset: 0 })
   const [refresh, setRefresh] = useState(0)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
@@ -44,7 +48,7 @@ export function ReceivedMonitor() {
   useEffect(() => {
     const controller = new AbortController()
     const parameters = new URLSearchParams({ offset: String(query.offset), limit: "25" })
-    for (const key of ["q", "from", "to"] as const) if (query[key]) parameters.set(key, query[key])
+    for (const key of ["q", "from", "to","purchase","manifestation","salesReturn"] as const) if (query[key]) parameters.set(key, query[key])
     Promise.all([
       erpFetch(`/api/erp/fiscal/received-nfes?${parameters}`, { cache: "no-store", signal: controller.signal }),
       erpFetch("/api/erp/me", { cache: "no-store", signal: controller.signal }),
@@ -136,29 +140,18 @@ export function ReceivedMonitor() {
 
   return <div className="mx-auto max-w-6xl space-y-3 px-4 pb-8 pt-8 sm:space-y-6 sm:pb-24 lg:px-6">
     <header className="flex flex-wrap items-start justify-between gap-2 border-b pb-3 sm:gap-4 sm:pb-6">
-      <div><nav aria-label="Caminho de navegação" className="text-sm text-primary"><ol className="flex flex-wrap items-center gap-1"><li><GuardedLink className="underline-offset-4 hover:underline" href="/fiscal">Fiscal</GuardedLink></li><li><span aria-hidden="true" className="mr-1">/</span><span aria-current="page">Notas recebidas</span></li></ol></nav><PageTitle className="mt-1 text-3xl font-semibold">Monitor de notas fiscais</PageTitle><p className="mt-1 break-words text-sm text-muted-foreground">{company || "Documentos da empresa ativa"}</p></div>
+      <div><nav aria-label="Caminho de navegação" className="text-sm text-primary"><ol className="flex flex-wrap items-center gap-1"><li><GuardedLink className="underline-offset-4 hover:underline" href={"/"+origin}>{originTitles[origin]}</GuardedLink></li><li><span aria-hidden="true" className="mr-1">/</span><span aria-current="page">{origin === "fiscal" ? "Notas recebidas" : "Notas fiscais de entrada"}</span></li></ol></nav><PageTitle className="mt-1 text-3xl font-semibold">{origin === "fiscal" ? "Monitor de notas fiscais" : "Notas fiscais de entrada"}</PageTitle><p className="mt-1 break-words text-sm text-muted-foreground">{company || "Documentos da empresa ativa"}</p></div>
       <Link className={buttonVariants({ variant: "outline" })} href="/preferencias/fiscal">Configurações fiscais</Link>
     </header>
-    <FiscalDistribution onChanged={() => { setLoading(true); setRefresh(value => value + 1) }} />
-    {result?.canImport && <details className="min-w-0 space-y-4">
-      <summary className="cursor-pointer font-medium">Distribuição em homologação, sem valor fiscal</summary>
-      <DistributionActions key={result.tenantId} tenantId={result.tenantId} onChanged={() => { setLoading(true); setRefresh(value => value + 1) }} />
-    </details>}
-    <section className="form-section space-y-2 sm:space-y-4" aria-labelledby="import-title">
-      <h2 id="import-title" className="flex items-center gap-2 text-lg font-semibold"><Upload className="size-5 text-primary" />Importar NF-e recebida</h2>
-      <p className="text-sm text-muted-foreground">Selecione o XML completo da NF-e, com protocolo de autorização e destinado à empresa ativa.</p>
-      <form className="flex flex-wrap items-end gap-3" onSubmit={importXml}>
-        <label className="min-w-0 flex-1 space-y-2 text-sm">XML da NF-e<input ref={fileInput} type="file" accept=".xml,application/xml,text/xml" className="block min-h-11 w-full min-w-0 rounded-lg border p-2" disabled={loading || !!busy || !result?.canImport} onChange={event => { setFile(event.target.files?.[0] || null); setNotice(""); setError("") }} /></label>
-        <Button type="submit" disabled={!file || loading || !!busy || !result?.canImport}>{busy === "import" ? "Importando XML…" : "Importar XML"}</Button>
-      </form>
-      <details className="text-sm text-muted-foreground"><summary className="flex min-h-11 cursor-pointer items-center">Sobre a importação</summary><p>A importação confere a estrutura e a coerência do protocolo declarado. Não comprova a assinatura digital nem a situação atual na SEFAZ. Compras, estoque e financeiro não são alterados por esta ação. O XML fica disponível para consulta e download.</p></details>
-    </section>
     <section className="form-section space-y-2 sm:space-y-4" aria-labelledby="notes-title">
       <div className="flex flex-wrap items-center justify-between gap-3"><h2 id="notes-title" className="text-lg font-semibold">Notas armazenadas{result ? ` (${result.total})` : ""}</h2><Button variant="outline" disabled={loading || !!busy} onClick={() => { setLoading(true); setRefresh(value => value + 1) }}><RefreshCw className="size-4" />Atualizar</Button></div>
       <form className="grid min-w-0 grid-cols-2 items-end sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] gap-2 lg:grid-cols-[minmax(0,1fr)_minmax(0,170px)_minmax(0,170px)_auto] lg:gap-3" onSubmit={event => { event.preventDefault(); setLoading(true); setQuery({ ...filters, offset: 0 }) }}>
         <label className="col-span-full min-w-0 space-y-1 text-sm lg:col-span-1">Buscar fornecedor, CNPJ, nota ou chave<Input value={filters.q} maxLength={200} onChange={event => setFilters({ ...filters, q: event.target.value })} /></label>
-        <label className="min-w-0 space-y-1 text-sm">Emissão de (UTC)<Input type="date" value={filters.from} onChange={event => setFilters({ ...filters, from: event.target.value })} /></label>
-        <label className="min-w-0 space-y-1 text-sm">Emissão até (UTC)<Input type="date" value={filters.to} min={filters.from || undefined} onChange={event => setFilters({ ...filters, to: event.target.value })} /></label>
+        <label className="min-w-0 space-y-1 text-sm">Emissão de<Input type="date" value={filters.from} onChange={event => setFilters({ ...filters, from: event.target.value })} /></label>
+        <label className="min-w-0 space-y-1 text-sm">Emissão até<Input type="date" value={filters.to} min={filters.from || undefined} onChange={event => setFilters({ ...filters, to: event.target.value })} /></label>
+        <label className="grid gap-1 text-sm">Compra<select className="min-w-0 rounded-lg border p-2" value={filters.purchase} onChange={e=>setFilters({...filters,purchase:e.target.value})}><option value="">Todas</option><option value="unlinked">Sem vínculo</option><option value="linked">Vinculadas</option></select></label>
+        {origin==="vendas" && <label className="grid gap-1 text-sm">Devolução de venda<select className="min-w-0 rounded-lg border p-2" value={filters.salesReturn} onChange={e=>setFilters({...filters,salesReturn:e.target.value})}><option value="">Todas as entradas</option><option value="linked">Vinculadas ao pedido</option><option value="unlinked">Sem devolução vinculada</option></select></label>}
+        <label className="grid gap-1 text-sm">Manifestação<select className="min-w-0 rounded-lg border p-2" value={filters.manifestation} onChange={e=>setFilters({...filters,manifestation:e.target.value})}><option value="">Todas</option><option value="pending">Sem manifestação aceita</option><option value="accepted">Manifestação aceita</option></select></label>
         <Button className="col-span-full justify-self-end sm:col-span-1" type="submit" disabled={loading || !!busy}>Filtrar</Button>
       </form>
       {result && result.data.length > 0 && <div className="flex flex-wrap items-center gap-3 rounded-xl border p-3">
@@ -169,7 +162,8 @@ export function ReceivedMonitor() {
       </div>}
       {loading ? <p role="status">Carregando notas da empresa…</p> : result && !result.data.length ? <div className="py-4 text-center sm:py-10"><FileText className="mx-auto size-7 text-muted-foreground" /><p className="mt-3 font-medium">Nenhuma nota encontrada</p><p className="mt-1 text-sm text-muted-foreground">Importe um XML recebido ou ajuste os filtros da consulta.</p></div> : result && <div className="space-y-3">{result.data.map(note => <article className="rounded-xl border p-4" key={note.id}>
         <label className="mb-3 flex items-center gap-2 text-sm"><input type="checkbox" checked={selected.includes(note.id)} disabled={loading || !!busy || !selected.includes(note.id) && selected.length >= maximumBatch} onChange={event => setSelected(values => event.target.checked ? [...values, note.id] : values.filter(id => id !== note.id))} />Selecionar NF-e {note.number} para o lote</label>
-        <div className="flex flex-wrap items-start justify-between gap-3"><div><h3 className="font-semibold"><Link href={`/fiscal/monitor/${note.id}`} className="text-primary underline">NF-e {note.number} · Série {note.series}</Link></h3><p className="mt-1 text-sm">{note.issuerName} · {note.issuerDocument}</p><p className="mt-1 text-xs text-muted-foreground">Emissão: {date(note.issuedAt)} · {note.itemCount} item(ns) · {note.environment === 2 ? "Homologação, sem valor fiscal" : "Ambiente de produção declarado no XML"}</p></div><strong>{money.format(note.totalCents / 100)}</strong></div>
+        <div className="flex flex-wrap items-start justify-between gap-3"><div><h3 className="font-semibold"><Link href={`/fiscal/monitor/${note.id}${origin === "fiscal" ? "" : "?origem="+origin}`} className="text-primary underline">NF-e {note.number} · Série {note.series}</Link></h3><p className="mt-1 text-sm">{note.issuerName} · {note.issuerDocument}</p><p className="mt-1 text-xs text-muted-foreground">Emissão: {date(note.issuedAt)} · {note.itemCount} item(ns) · {note.environment === 2 ? "Homologação, sem valor fiscal" : "Ambiente de produção declarado no XML"}</p></div><strong>{money.format(note.totalCents / 100)}</strong></div>
+        <p className="mt-2 flex flex-wrap gap-2 text-sm"><span>{note.manifestation==="accepted" ? manifestLabels[note.manifestationKind || ""] || "Manifestação aceita" : note.manifestation==="unknown" ? "Manifestação por confirmar" : note.manifestation==="rejected" ? "Manifestação rejeitada" : "Manifestação pendente"}</span> • {note.returnOrderId ? <Link className="text-primary underline" href={"/vendas/pedidos/"+note.returnOrderId}>Devolução de venda vinculada</Link> : note.purchaseId ? <Link className="text-primary underline" href={"/compras/pedidos/"+note.purchaseId}>Compra vinculada</Link> : <span>Sem compra vinculada</span>}</p>
         <p className="mt-3 break-all text-xs text-muted-foreground">Chave: {note.accessKey}</p>
         <div className="mt-4 flex flex-wrap gap-2">{(["xml", "danfe"] as const).map(format => <Button key={format} variant="outline" disabled={!!busy} onClick={() => void download(note, format)}><Download className="size-4" />{busy === `${note.id}-${format}` ? "Preparando…" : format === "xml" ? "Baixar XML" : "Baixar DANFE"}</Button>)}<details className="w-full text-xs text-muted-foreground"><summary className="cursor-pointer py-2">Integridade e recebimento</summary><p className="break-all">SHA-256 do XML: {note.xmlSha256}</p><p className="mt-1">Importado em {date(note.createdAt)}. A situação atual na SEFAZ não foi consultada.</p></details></div>
       </article>)}</div>}
@@ -178,6 +172,20 @@ export function ReceivedMonitor() {
     {error && <p role="alert" className="rounded-xl border border-destructive/30 p-4 text-sm text-destructive">{error}</p>}
     {notice && <p role="status" className="rounded-xl border border-primary/30 p-4 text-sm">{notice}</p>}
     <p className="text-sm text-muted-foreground"><Link className="text-primary underline" href="/fiscal/danfe">Gerar DANFE de outro XML autorizado</Link>.</p>
+    <FiscalDistribution onChanged={() => { setLoading(true); setRefresh(value => value + 1) }} />
+    {result?.canImport && <details className="min-w-0 space-y-4">
+      <summary className="cursor-pointer font-medium">Distribuição em homologação, sem valor fiscal</summary>
+      <DistributionActions key={result.tenantId} tenantId={result.tenantId} onChanged={() => { setLoading(true); setRefresh(value => value + 1) }} />
+    </details>}
+    {result?.canImport && <section className="form-section space-y-2 sm:space-y-4" aria-labelledby="import-title">
+      <h2 id="import-title" className="flex items-center gap-2 text-lg font-semibold"><Upload className="size-5 text-primary" />Importar NF-e recebida</h2>
+      <p className="text-sm text-muted-foreground">Selecione o XML completo da NF-e, com protocolo de autorização e destinado à empresa ativa.</p>
+      <form className="flex flex-wrap items-end gap-3" onSubmit={importXml}>
+        <label className="min-w-0 flex-1 space-y-2 text-sm">XML da NF-e<input ref={fileInput} type="file" accept=".xml,application/xml,text/xml" className="block min-h-11 w-full min-w-0 rounded-lg border p-2" disabled={loading || !!busy || !result?.canImport} onChange={event => { setFile(event.target.files?.[0] || null); setNotice(""); setError("") }} /></label>
+        <Button type="submit" disabled={!file || loading || !!busy || !result?.canImport}>{busy === "import" ? "Importando XML…" : "Importar XML"}</Button>
+      </form>
+      <details className="text-sm text-muted-foreground"><summary className="flex min-h-11 cursor-pointer items-center">Sobre a importação</summary><p>A importação confere a estrutura e a coerência do protocolo declarado. Não comprova a assinatura digital nem a situação atual na SEFAZ. Compras, estoque e financeiro não são alterados por esta ação. O XML fica disponível para consulta e download.</p></details>
+    </section>}
   </div>
 }
 

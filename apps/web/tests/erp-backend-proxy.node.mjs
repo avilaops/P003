@@ -66,6 +66,65 @@ test("BFF selects one backend per module and never retries commands on Rust", as
   }
 });
 
+test("price table publication reaches TypeScript with the reviewed version, company, digest and command key", async () => {
+  const previousFetch=globalThis.fetch, previousOrigin=process.env.ERP_TYPESCRIPT_API_URL, origin="http://127.0.0.1:8081";
+  process.env.ERP_TYPESCRIPT_API_URL=origin;
+  try {
+    const calls=[], path="/price-tables/national/publish", digest="a".repeat(64);
+    globalThis.fetch=async (url,init)=>{
+      calls.push({url:new URL(url),init});
+      return Response.json({tenantId:tenant,version:3,status:"published"},{headers:{etag:'"7"',"idempotency-replayed":"true"}});
+    };
+    const response=await forwardErp(new Request("http://fixture.local"+path,{method:"POST",body:JSON.stringify({digest}),
+      headers:{origin:"http://fixture.local","content-type":"application/json","if-match":'"7"',"x-tenant-id":tenant,"idempotency-key":tenant}}),path);
+    assert.equal(response.status,200);
+    assert.equal(calls.length,1);
+    assert.equal(calls[0].url.href,origin+"/api/v1"+path);
+    const headers=new Headers(calls[0].init.headers);
+    assert.equal(headers.get("if-match"),'"7"');
+    assert.equal(headers.get("idempotency-key"),tenant);
+    assert.equal(headers.get("x-tenant-id"),tenant);
+    assert.deepEqual(JSON.parse(calls[0].init.body),{digest});
+    assert.equal(response.headers.get("etag"),'"7"');
+  } finally {
+    globalThis.fetch=previousFetch;
+    if(previousOrigin===undefined) delete process.env.ERP_TYPESCRIPT_API_URL;
+    else process.env.ERP_TYPESCRIPT_API_URL=previousOrigin;
+  }
+});
+
+test("BFF forwards the eleven order methods and title operations with the company, revision and original binary", async () => {
+  const previousFetch=globalThis.fetch, previousOrigin=process.env.ERP_TYPESCRIPT_API_URL, origin="http://127.0.0.1:8081";
+  process.env.ERP_TYPESCRIPT_API_URL=origin;
+  const id=tenant, sale="/orders/"+id+"/", title="/receivables/"+id;
+  const binary=Buffer.from([0x25,0x50,0x44,0x46,0x2d,0xff,0x00,0x41]);
+  try {
+    for(const [method,resource] of [["GET",sale+"document"],["GET",sale+"finance"],["GET",sale+"documents"],["POST",sale+"documents"],["GET",sale+"documents/"+id],
+      ["GET",sale+"commission"],["PUT",sale+"commission"],["GET",sale+"cancellations"],["POST",sale+"cancel-completed"],["GET",sale+"email"],["POST",sale+"email"],
+      ["GET",title],["POST",title+"/payments"],["POST",title+"/reverse-payment"],["GET","/orders/"+id],["GET","/proposals/"+id]]) {
+      const requests=[], download=resource.endsWith("/document")||resource===sale+"documents/"+id;
+      globalThis.fetch=async(url,init)=>{
+        requests.push({url:new URL(url),init});
+        return download ? new Response(binary,{headers:{"content-type":"application/pdf","content-disposition":'attachment; filename="pedido.pdf"',etag:'"3"'}}) : Response.json({ok:true});
+      };
+      const req=new Request("http://fixture.local"+resource,{method,headers:{origin:"http://fixture.local","content-type":"application/json","if-match":'"3"',"x-tenant-id":tenant,"idempotency-key":id},...(method==="GET"?{}:{body:"{}"})});
+      const response=await forwardErp(req,resource);
+      assert.equal(response.status,200,method+" "+resource);
+      assert.equal(requests.length,1,resource);
+      assert.equal(requests[0].url.origin,origin);
+      assert.equal(requests[0].url.pathname,"/api/v1"+resource);
+      assert.equal(requests[0].init.method,method);
+      assert.equal(requests[0].init.headers.get("authorization"),"Bearer session-token");
+      assert.equal(requests[0].init.headers.get("x-tenant-id"),tenant);
+      if(method!=="GET"||download) assert.equal(requests[0].init.headers.get("if-match"),'"3"');
+      if(download) {assert.equal(response.headers.get("x-content-type-options"),"nosniff");assert.deepEqual(Buffer.from(await response.arrayBuffer()),binary);assert.equal(response.headers.get("content-disposition"),'attachment; filename="pedido.pdf"');}
+    }
+  } finally {
+    globalThis.fetch=previousFetch;
+    if(previousOrigin===undefined) delete process.env.ERP_TYPESCRIPT_API_URL; else process.env.ERP_TYPESCRIPT_API_URL=previousOrigin;
+  }
+});
+
 test("BFF sends only the product finishes GET and its single IDs filter to TypeScript", async () => {
   const previousFetch = globalThis.fetch;
   const previousOrigin = process.env.ERP_TYPESCRIPT_API_URL;

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { useSearchParams } from "next/navigation"
 import { GuardedLink as Link } from "@/components/shell/navigation-guard"
 import { PageHeader } from "@/components/page-header"
@@ -28,7 +28,8 @@ export function CommercialTable() {
   function navigate(patch: Partial<CommercialTableQuery>, replace = false) {
     // The URL changes before Next commits useSearchParams; preserve newer actions.
     const current = readCommercialTableQuery(new URLSearchParams(window.location.search))
-    window.history[replace ? "replaceState" : "pushState"](null, "", commercialTableHref({ ...current, ...patch }))
+    const url = new URL(commercialTableHref({ ...current, ...patch }), window.location.origin)
+    window.history[replace ? "replaceState" : "pushState"](null, "", url)
   }
   function select(productId: string, change: number) {
     const current = readCommercialTableQuery(new URLSearchParams(window.location.search))
@@ -47,7 +48,10 @@ export function CommercialTable() {
   const table = useResource<PriceTable>(`/api/erp/commercial/tables/${line}${apiParams.size ? `?${apiParams}` : ""}`)
   const data = table.value?.data
   const destination = query.destinationState || data?.context?.destinationState || data?.originState || ""
-  const items = (data?.items || []).filter(item => `${item.name} ${item.sku}`.toLocaleLowerCase("pt-BR").includes(q.toLocaleLowerCase("pt-BR")))
+  const [showAll, setShowAll] = useState(query.includeUnavailable === true)
+  useEffect(() => setShowAll(query.includeUnavailable === true), [query.includeUnavailable])
+  const unavailableCount = data?.items.filter(item => item.available === false).length || 0
+  const items = (data?.items || []).filter(item => showAll || item.available !== false).filter(item => `${item.name} ${item.sku}`.toLocaleLowerCase("pt-BR").includes(q.toLocaleLowerCase("pt-BR")))
   const limit = commercialTablePageSize
   const units = query.items.reduce((total, item) => total + item.quantity, 0)
   const cartAvailable = !!table.value?.canCreateOrder && !!data && query.items.every(selected => data.items.some(item => item.productId === selected.productId && item.available === true))
@@ -78,7 +82,16 @@ export function CommercialTable() {
     {table.loading ? <p role="status">Carregando tabela…</p> : table.error ? <div role="alert"><RequestError message={table.error} status={table.status} /><Button variant="outline" onClick={table.reload}>Tentar novamente</Button></div> : !data ? <section className="form-section space-y-3"><p>Nenhuma tabela publicada nesta linha.</p>{table.value?.canManage && <Link className="text-primary underline" href={`/preferencias/tabela-precos?linha=${line}`}>Criar tabela de preços</Link>}</section> : <>
       <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground"><p>Tabela v{data.version} · {new Date(data.publishedAt).toLocaleDateString("pt-BR")} · {data.items.length} equipamentos</p>{table.value?.authority && <p>Seu acesso: <strong className="font-medium text-foreground">{authorityLabels[table.value.authority]}</strong></p>}</div>
       {table.value?.canCreateOrder === false && <p className="text-xs text-muted-foreground">Seu acesso permite consultar e simular. Criar pedidos exige permissão de gestão de vendas.</p>}
-      {data.availability?.message && <p role="status" className="rounded-lg border bg-muted/40 p-3 text-sm">{data.availability.message}</p>}
+      {unavailableCount > 0 && <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={showAll} onChange={event => {
+        setShowAll(event.currentTarget.checked)
+        navigate({ includeUnavailable: event.currentTarget.checked, offset: 0 })
+      }}/>Incluir equipamentos indisponíveis ({unavailableCount})</label>}
+      {data.availability?.message && <div className="rounded-lg border bg-muted/40 p-3 text-sm">
+        <p role="status">{data.availability.message}</p>
+        {table.value?.canManage && (data.availability.status === "rulesMissing"
+          ? <Link className="text-primary underline" href="/preferencias/aprovacao-comercial">Configurar regras de aprovação</Link>
+          : <Link className="text-primary underline" href={`/preferencias/tabela-precos?linha=${line}`}>Conferir e publicar tabela atualizada</Link>)}
+      </div>}
       <CommercialTableDestinations data={data} destination={destination} taxpayer={query.taxpayer} onSelect={destinationState => navigate({ destinationState, offset: 0 })} />
       <p className="text-xs text-muted-foreground">Valores por unidade · sem frete por nossa conta · entrada conforme a política. Com IE: cliente contribuinte do ICMS.</p>
       <div className="min-w-0 rounded-lg border">
@@ -88,14 +101,14 @@ export function CommercialTable() {
             const canAdd = !!table.value?.canCreateOrder && item.available === true
             const selected = query.items.find(selected => selected.productId === item.productId)?.quantity || 0
             const reason = item.unavailableReason || (!table.value?.canCreateOrder ? "Seu acesso permite consultar e simular." : "Equipamento indisponível para negociar.")
-            const actions = <><Button className="h-9 px-3 text-xs" variant="outline" disabled={!canAdd} title={canAdd ? `Adicionar ${item.name} ao pedido` : reason} onClick={() => select(item.productId, 1)}>+ Pedido</Button><Link className="inline-flex min-h-9 items-center text-xs text-primary underline underline-offset-4" href={commercialSimulationHref(query, item.productId)}>Simular pedido</Link></>
+            const actions = <><Button className="h-9 px-3 text-xs" variant="outline" disabled={!canAdd} title={canAdd ? `Adicionar ${item.name} ao pedido` : reason} onClick={() => select(item.productId, 1)}>+ Pedido</Button><>{item.available === false ? <Button type="button" variant="ghost" disabled title={reason}>Simular pedido</Button> : <Link className="inline-flex min-h-9 items-center text-xs text-primary underline underline-offset-4" href={commercialSimulationHref(query, item.productId)}>Simular pedido</Link>}</></>
             return <tr key={item.productId}>
-              <th scope="row" className="text-left font-normal align-top [overflow-wrap:anywhere]"><Link className="font-medium text-primary underline underline-offset-4" href={`/cadastros/produtos/${item.productId}`}>{item.name}</Link><div className="mt-1 text-xs font-normal text-muted-foreground">SKU {item.sku} · {item.unit}{selected > 0 && <span className="block font-medium text-foreground">{selected} un. selecionadas</span>}</div>{item.unavailableReason && <p className="mt-2 text-xs text-muted-foreground">{item.unavailableReason}</p>}<div className="mt-2 flex flex-col items-start gap-1 lg:hidden">{actions}</div></th>
+              <th scope="row" className="text-left font-normal align-top [overflow-wrap:anywhere]"><Link className="font-medium text-primary underline underline-offset-4" href={`/cadastros/produtos/${item.productId}`}>{item.name}</Link><div className="mt-1 text-xs font-normal text-muted-foreground">SKU {item.sku} · {item.unit}{selected > 0 && <span className="block font-medium text-foreground">{selected} un. selecionadas</span>}</div>{item.unavailableReason && item.unavailableReason !== data.availability?.message && <p className="mt-2 text-xs text-muted-foreground">{item.unavailableReason}</p>}<div className="mt-2 flex flex-col items-start gap-1 lg:hidden">{actions}</div></th>
               <td className="hidden text-right tabular-nums lg:table-cell">{money(item.priceWithoutIpiCents)}</td>
               <td className="text-right align-top tabular-nums [overflow-wrap:anywhere]"><span className="font-semibold">{money(item.priceWithIpiCents)}</span><span className="block text-xs text-muted-foreground">IPI {percent(item.ipiBps)}</span><details className="mt-2 text-xs lg:hidden"><summary className="cursor-pointer py-1 font-medium text-primary">Preços e alçada</summary><dl className="mt-1 space-y-1 text-xs"><div><dt className="text-muted-foreground">Sem IPI</dt><dd>{money(item.priceWithoutIpiCents)}</dd></div><div><dt className="text-muted-foreground">{freeLabel}</dt><dd className="font-medium">{amount(item.freeDiscountPriceWithIpiCents)}</dd></div><div><dt className="text-muted-foreground">Máx. sua alçada</dt><dd>{discount(item.maxOwnDiscountBps)}</dd></div><div><dt className="text-muted-foreground">Menor preço c/IPI</dt><dd className="font-medium">{amount(item.minOwnPriceWithIpiCents)}</dd></div></dl></details></td>
               <td className="hidden text-right tabular-nums lg:table-cell">{amount(item.freeDiscountPriceWithIpiCents)}</td>
               <td className="hidden text-right tabular-nums lg:table-cell">{discount(item.maxOwnDiscountBps)}</td>
-              <td className="hidden text-right font-medium tabular-nums lg:table-cell">{amount(item.minOwnPriceWithIpiCents)}</td>
+              <td className="hidden bg-muted/40 text-right font-semibold tabular-nums lg:table-cell">{amount(item.minOwnPriceWithIpiCents)}</td>
               <td className="hidden lg:table-cell"><div className="flex flex-col items-start gap-1">{actions}</div></td>
             </tr>
           })}</tbody>

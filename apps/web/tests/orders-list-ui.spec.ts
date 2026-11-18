@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test"
 import { createServer } from "node:http"
 import { installFrontendFixture, tenant, record } from "./helpers/frontend-fixture"
-import { commercialMoney, commercialMoneyInput, commercialQuantity, normalizeCommercialMoney, orderNumber } from "../src/features/sales/order-presentation"
+import { commercialMoney, commercialMoneyInput, commercialQuantity, normalizeCommercialMoney, orderNumber, proposalCatalogTotal } from "../src/features/sales/order-presentation"
 
 const order = { id: record, number: "17", customerName: "Cliente da pesquisa", customerTaxId: "52998224725", dueDate: "2026-12-30", amount: "199128.86", status: "draft" }
 
@@ -38,6 +38,8 @@ test("lista de pedidos mantém identificação e valor visíveis sem rolagem lat
 })
 
 test("apresentação comercial preserva precisão e remove somente zeros decimais desnecessários", () => {
+  expect(proposalCatalogTotal([{ basePrice: "R$ 2.468,27", quantity: "2,5" }, { basePrice: "19,99", quantity: "2,5" }])).toBe(622066)
+  expect(proposalCatalogTotal([{ basePrice: "1,00", quantity: "2a" }])).toBeNull()
   expect(orderNumber("1")).toBe("PV-000001")
   expect(orderNumber("1000000")).toBe("PV-1000000")
   expect(commercialMoney("2497.25")).toBe("R$ 2.497,25")
@@ -135,7 +137,7 @@ test("pedidos usam tabela e pesquisa no servidor, preservando filtro ao paginar"
   await expect(page.getByRole("navigation", { name: "Caminho de navegação" })).toHaveCount(0)
   await expect(page.getByRole("link", { name: "Novo pedido", exact: true })).toHaveAttribute("href", "/vendas/pedidos/novo")
   const table = page.getByRole("table", { name: "Pedidos de venda" })
-  await expect(table.getByRole("columnheader")).toHaveText(["Pedido e cliente", "Situação", "Vencimento", "Valor"])
+  await expect(table.getByRole("columnheader")).toHaveText(["Pedido e cliente", "Situação", "Vencimento financeiro", "Valor"])
   await expect(table.getByRole("link", { name: "PV-000017", exact: true })).toHaveAttribute("href", `/vendas/pedidos/${record}`)
   await expect(table.getByText(order.customerName, { exact: true })).toBeVisible()
   await expect(table.getByRole("link", { name: order.customerName, exact: true })).toHaveCount(0)

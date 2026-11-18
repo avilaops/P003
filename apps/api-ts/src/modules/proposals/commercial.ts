@@ -1,4 +1,5 @@
 import type { AuthorizedContext } from "../../platform/access.js"
+import { checkPriceCustomer } from "../commercial/price-origin.js"
 import { canonicalJson } from "../../platform/json.js"
 import { Problem } from "../../platform/problem.js"
 import { prepareMixed } from "../commercial/mixed-prepare.js"
@@ -14,6 +15,7 @@ export async function prepareProposalCommercial(context: AuthorizedContext, inpu
     if (published) conflict("Use a cotação comercial atualizada para os equipamentos da tabela publicada")
     return null
   }
+  await checkPriceCustomer(context,input.commercial.simulation,input.customerId)
   const prepared = await prepareMixed(context, input.commercial.simulation)
   if (prepared.digest !== input.commercial.digest) throw new Problem(412, "revision_conflict", "A cotação mudou. Recalcule antes de salvar a proposta")
   const customer = (await client.query<{ data: Record<string, unknown> }>(customerSnapshotSql, [tenantId, input.customerId])).rows[0]?.data

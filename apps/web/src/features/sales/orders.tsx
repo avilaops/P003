@@ -26,6 +26,7 @@ import { CatalogColorPicker } from "@/features/catalog/catalog-color-picker"
 import { catalogPaletteFor, type CatalogPalette } from "@/features/catalog/catalog-color-photo-model"
 import type { CatalogFinishPart } from "@/features/catalog/catalog-finish-palettes"
 import { quantity, useCommand, useResource } from "../../hooks/use-operation"
+import { OrderFiscalLots } from "../fiscal/order-lots"
 import { CommercialReturn } from "../returns/commercial-return"
 import { OrderCommissionTerms } from "@/features/finance/commissions-workspace"
 import { OrderNegotiation } from "./order-negotiation"
@@ -248,13 +249,14 @@ function OrderDetail({ id }: { id: string }) {
       {result.loading ? <p role="status">Carregando pedido…</p> : result.error ? <p role="alert"><RequestError message={result.error} status={result.status} /></p> : value && <>
         <div className="flex min-w-0 flex-wrap items-start justify-between gap-4 border-b pb-4">
           <div className="min-w-0"><div className="flex flex-wrap items-center gap-3"><span className="rounded-md bg-muted px-2 py-1 text-xs font-medium">{labels[value.data.status]}</span></div><p className="mt-1 break-words">{value.data.customerName}</p></div>
-          <dl className="flex flex-wrap gap-x-8 gap-y-2 text-sm"><div><dt className="text-xs text-muted-foreground">Total do pedido</dt><dd className="font-semibold tabular-nums">{commercialMoney(value.data.amount)}</dd></div><div><dt className="text-xs text-muted-foreground">Vencimento</dt><dd className="tabular-nums">{value.data.dueDate.split("-").reverse().join("/")}</dd></div></dl>
+          <dl className="flex flex-wrap gap-x-8 gap-y-2 text-sm"><div><dt className="text-xs text-muted-foreground">Total do pedido</dt><dd className="font-semibold tabular-nums">{commercialMoney(value.data.amount)}</dd></div><div><dt className="text-xs text-muted-foreground">Vencimento financeiro do pedido</dt><dd className="tabular-nums">{value.data.dueDate.split("-").reverse().join("/")}</dd></div></dl>
         </div>
         {["completed", "cancelled"].includes(value.data.status) && <p className="rounded-lg border bg-muted/35 px-3 py-2 text-sm">Pedido {value.data.status === "completed" ? "concluído" : "cancelado"}: os dados comerciais estão disponíveis para consulta.</p>}
         <div className="space-y-2 print:hidden" role="group" aria-label="Documentos do pedido">
           <p className="text-xs font-medium text-muted-foreground">Documentos</p>
           <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap [&>button]:w-full sm:[&>button]:w-auto">
           <OrderPdfDownload id={id} number={value.data.number} tenantId={value.tenantId} etag={result.etag} onReload={result.reload} />
+          {access.value?.tenant.id===value.tenantId && access.value.permissions.includes("service.warranties.manage") && access.value.permissions.includes("service.warranties.read") && <Link className={buttonVariants({variant:"outline"})} href={`/vendas/garantias/novo?orderId=${id}`}>Abrir garantia</Link>}
           <OrderEmail id={id} number={value.data.number} tenantId={value.tenantId} etag={result.etag} onReload={result.reload} />
           <Link className={buttonVariants({ variant: "outline", className: "col-span-2 h-9 px-3" })} href={`/vendas/pedidos/${id}/contratos`}>Pedido e contratos</Link>
           </div>
@@ -271,6 +273,7 @@ function OrderDetail({ id }: { id: string }) {
           {value.data.status === "draft" && !value.pricingOrigin && !command.busy && !command.stale && <Link className={buttonVariants({ variant: "outline", className: "h-9 flex-1 px-3 sm:flex-none" })} href={`/vendas/pedidos/${id}/editar`}>Editar rascunho</Link>}
           <Button variant="outline" className="h-9 flex-1 px-3 sm:flex-none" disabled={boundary.locked || command.busy || command.stale || !result.etag} onClick={() => { if (window.confirm("Cancelar o pedido e liberar sua reserva, se houver?")) void act("cancel") }}>Cancelar pedido</Button>
         </div></div>}
+        {["confirmed","completed"].includes(value.data.status) && access.value?.tenant.id===value.tenantId && access.value.permissions.includes("fiscal.nfe.read") && <OrderFiscalLots id={id} tenant={value.tenantId} permissions={access.value.permissions} disabled={boundary.locked || command.busy || command.uncertain || command.stale} onChange={result.reload} />}
         <OrderDetailCommercial order={value} permissions={access.value?.tenant.id === value.tenantId ? access.value.permissions : []} />
         <OrderFinancePanel key={`${value.data.id}:${value.data.revision}`} orderId={id} onLockChange={boundary.setPrimaryLocked} parentBusy={command.busy || command.uncertain || command.stale || result.loading} />
         <div className="divide-y border-y">

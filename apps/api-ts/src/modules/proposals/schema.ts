@@ -9,6 +9,7 @@ const nullable = z.string().nullable().default(null)
 export const proposalInputSchema = z.strictObject({
   customerId: z.guid().transform(value => value.toLowerCase()), validUntil: z.string(), paymentTerms: z.string(), deliveryTerms: z.string(), notes: z.string(),
   commercial: z.strictObject({ simulation: mixedInputSchema, digest: z.string() }).optional(),
+  opportunity: z.strictObject({id:z.guid(),revision:z.number().int().positive().safe()}).optional(),
   checkout: checkoutInputSchema.optional(),
   items: z.array(z.strictObject({
     productId: normalizedDatabaseId, quantity: z.string(), unitPrice: nullable, structureColor: nullable, upholsteryColor: nullable,

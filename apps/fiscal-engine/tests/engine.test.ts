@@ -40,6 +40,44 @@ test("prepare maps exact draft amounts, uses IBGE name, signs and passes the pin
   assert.doesNotMatch(JSON.stringify(result), /PRIVATE KEY|senha-de-teste|pkcs12Base64/);
 });
 
+test("NFC-e de SP • prepara, assina e usa os serviços do modelo 65 nos dois ambientes com transporte local", async () => {
+  // Catálogo público de endereços da SEFAZ-SP https://portal.fazenda.sp.gov.br/servicos/nfce/Paginas/WebServices.aspx
+  for (const environment of ["homologation", "production"]) {
+    const base=preparation(), tpAmb=environment==="production"?"1":"2";
+    const host=(environment==="production"?"":"homologacao.")+"nfce.fazenda.sp.gov.br";
+    const input={...base,environment,issuer:{...base.issuer,profile:{...base.issuer.profile,environment}},
+      draft:{...base.draft,environment,model:65},nfce:{version:"2",csc:{id:"000001",secret:"CSC-SINTETICO-SEM-VALOR"}}};
+    assert.equal(mapDraft(input).presenceIndicator,1);
+    const prepared=await dispatch("prepare",input);
+    const signedXml=String(prepared.signedXml), accessKey=String(prepared.accessKey);
+    assert.equal(accessKey.slice(20,22),"65");
+    assert.ok(signedXml.includes("https://www."+host+"/qrcode?p="+accessKey));
+    const digest=/<DigestValue>([^<]+)<\/DigestValue>/.exec(signedXml)![1];
+    const receipt='<protNFe versao="4.00"><infProt><tpAmb>'+tpAmb+'</tpAmb><verAplic>test</verAplic><chNFe>'+accessKey+
+      '</chNFe><dhRecbto>2026-10-17T10:00:01-03:00</dhRecbto><nProt>135260000000001</nProt><digVal>'+digest+
+      '</digVal><cStat>100</cStat><xMotivo>Autorizado</xMotivo></infProt></protNFe>';
+    const payload={environment,certificate,accessKey,signedXml};
+    const authorized=await dispatch("authorize",payload,async(url,_action,envelope)=>{
+      assert.equal(url,"https://"+host+"/ws/NFeAutorizacao4.asmx");assert.ok(envelope.includes(accessKey));
+      return "<retEnviNFe><cStat>104</cStat>"+receipt+"</retEnviNFe>";
+    });
+    assert.equal(authorized.status,"authorized");
+    const consulted=await dispatch("consult",payload,async(url)=>{
+      assert.equal(url,"https://"+host+"/ws/NFeConsultaProtocolo4.asmx");
+      return "<retConsSitNFe><tpAmb>"+tpAmb+"</tpAmb><cStat>100</cStat><chNFe>"+accessKey+"</chNFe>"+receipt+"</retConsSitNFe>";
+    });
+    assert.equal(consulted.status,"authorized");
+    const event={...payload,issuerTaxId:base.issuer.taxId,issuedAt:input.issuedAt,sequence:1,protocol:"135260000000001",text:"Cancelamento de teste do cupom"};
+    await assert.rejects(dispatch("event",{...event,kind:"correcao"},async()=>{throw Error("transmissão inesperada")}),/modelo 65/);
+    const cancellation=await dispatch("event",{...event,kind:"cancelamento"},async(url,_action,envelope)=>{
+      assert.equal(url,"https://"+host+"/ws/NFeRecepcaoEvento4.asmx");assert.ok(envelope.includes(event.text));
+      return "<retEnvEvento><cStat>128</cStat><retEvento><infEvento><tpAmb>"+tpAmb+"</tpAmb><cStat>135</cStat><chNFe>"+accessKey+
+        "</chNFe><tpEvento>110111</tpEvento><nSeqEvento>1</nSeqEvento><nProt>135260000000002</nProt></infEvento></retEvento></retEnvEvento>";
+    });
+    assert.equal(cancellation.registered,true);
+  }
+});
+
 test("return preparation emits finNFe 4, incoming tpNF and explicit NFref", async () => {
   const base = preparation();
   const input = {
@@ -61,6 +99,22 @@ test("return preparation emits finNFe 4, incoming tpNF and explicit NFref", asyn
   assert.match(signed, /<finNFe>4<\/finNFe>/);
   assert.match(signed, new RegExp(`<NFref><refNFe>${key}<\/refNFe><\/NFref>`));
   assert.match(signed, /<CFOP>1102<\/CFOP>/);
+});
+
+test("V5 • assina entrada de consumidor com CPF e referência à venda nos dois ambientes", async () => {
+  for (const environment of ["homologation","production"]) {
+    const base=preparation();
+    const input={...base,environment,number:124,issuer:{...base.issuer,profile:{...base.issuer.profile,environment}},
+      draft:{...base.draft,environment,operationNature:"Devolução de venda",purpose:4,returnDirection:"incoming",referencedAccessKeys:[key],finalConsumer:true,
+        recipient:{...base.draft.recipient,taxId:"52998224725",legalName:"Pessoa consumidora"},
+        items:[{...base.draft.items[0],cfop:"1202",quantity:"2.0000",grossTotal:"200.00"}],productsTotal:"200.00",payments:[{code:"90",amount:"0.00"}]}};
+    const result=await dispatch("prepare",input,async()=>assert.fail("Preparar entrada não deve transmitir"));
+    const signed=String(result.signedXml);
+    assert.notEqual(result.accessKey,key);
+    for (const fragment of ["<mod>55</mod>","<tpNF>0</tpNF>","<finNFe>4</finNFe>","<CPF>52998224725</CPF>",
+      "<CFOP>1202</CFOP>","<NFref><refNFe>"+key+"</refNFe></NFref>","<vNF>200.00</vNF>","<tPag>90</tPag>",
+      "<tpAmb>"+(environment==="production"?"1":"2")+"</tpAmb>","<Signature "]) assert.ok(signed.includes(fragment),fragment);
+  }
 });
 
 test("prepare refuses missing tax rules, changed totals, incompatible item rules and production", () => {
@@ -106,6 +160,32 @@ test("distribution uses fixed national endpoint and preserves the returned NSU b
   assert.equal(result.code, "137");
   assert.equal(result.lastNsu, "000000000000000");
   assert.deepEqual(result.documents, []);
+});
+
+test("recipient production distribution requires opt-in and uses the tenant state in the signed transport request", async () => {
+  const original = process.env.SEFAZ_MONITOR_ENABLED;
+  const input = {environment:"production",certificate,issuerTaxId:"12345678000195",lastNsu:"0",authorState:"MG"};
+  const calls: string[]=[];
+  const fake = async (url:string, _action:string, envelope:string) => {
+    calls.push(url);
+    assert.match(envelope, /<cUFAutor>31<\/cUFAutor>/);
+    assert.match(envelope, /<tpAmb>1<\/tpAmb>/);
+    return '<retDistDFeInt xmlns="http://www.portalfiscal.inf.br/nfe"><cStat>137</cStat><xMotivo>Sem documentos</xMotivo><ultNSU>0</ultNSU><maxNSU>0</maxNSU></retDistDFeInt>';
+  };
+  try {
+    delete process.env.SEFAZ_MONITOR_ENABLED;
+    await assert.rejects(dispatch("distribute",input,fake),/desativada/);
+    await assert.rejects(dispatch("manifest",input,fake),/desativada/);
+    assert.equal(calls.length,0);
+    process.env.SEFAZ_MONITOR_ENABLED="true";
+    await assert.rejects(dispatch("distribute",{...input,authorState:"XX"},fake),/UF/);
+    const result=await dispatch("distribute",input,fake);
+    assert.equal(result.code,"137");
+    assert.deepEqual(calls,["https://www1.nfe.fazenda.gov.br/NFeDistribuicaoDFe/NFeDistribuicaoDFe.asmx"]);
+  } finally {
+    if(original===undefined) delete process.env.SEFAZ_MONITOR_ENABLED;
+    else process.env.SEFAZ_MONITOR_ENABLED=original;
+  }
 });
 
 test("production prepares and signs the declared environment and uses only its fixed SP endpoints", async () => {

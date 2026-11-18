@@ -69,7 +69,7 @@ for (const width of [320, 390, 768, 1280]) test(`lista de propostas usa tabela e
   await page.route(/\/api\/erp\/proposals\?/, route => {
     const params = new URL(route.request().url()).searchParams
     requests.push(params)
-    return route.fulfill({ json: { tenantId: tenant, canEdit: width === 1280, total: 26, data: [{ ...summary, customerName, amount: "199128.86", expired: params.get("offset") === "25" }] } })
+    return route.fulfill({ json: { tenantId: tenant, canEdit: width === 1280, total: 26, data: [{ ...summary, customerName, amount: "199128.86", status:params.get("offset")==="25" ? "sent" : "draft", expired: params.get("offset") === "25" }] } })
   })
   await page.setViewportSize({ width, height: 844 })
   await page.goto("/vendas/propostas")
@@ -88,7 +88,7 @@ for (const width of [320, 390, 768, 1280]) test(`lista de propostas usa tabela e
   const amountBounds = await row.getByRole("cell").last().boundingBox()
   expect(amountBounds!.x + amountBounds!.width).toBeLessThanOrEqual(width)
   if (width < 640) expect(await customerLink.evaluate(element => element.getBoundingClientRect().height <= Number.parseFloat(getComputedStyle(element).lineHeight) * 2 + 1)).toBe(true)
-  await expect(page.getByRole("link", { name: "Novo orçamento", exact: true })).toHaveCount(width === 1280 ? 1 : 0)
+  await expect(page.getByRole("link", { name: "Nova proposta", exact: true })).toHaveCount(width === 1280 ? 1 : 0)
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
   await testInfo.attach(`proposals-table-${width}`, { body: await page.screenshot({ fullPage: true }), contentType: "image/png" })
   await page.getByRole("button", { name: "Próxima", exact: true }).click()
@@ -225,7 +225,7 @@ test("central de vendas consulta dados reais e preserva pedidos quando propostas
   const proposals = page.getByRole("region", { name: "Propostas", exact: true })
   await proposals.getByRole("button", { name: "Tentar consultar propostas novamente", exact: true }).click()
   await expect(proposals.getByText("Nenhuma proposta nesta empresa.")).toBeVisible()
-  await expect(proposals.getByRole("link", { name: "Novo orçamento", exact: true })).toHaveAttribute("href", "/vendas/propostas/novo")
+  await expect(proposals.getByRole("link", { name: "Nova proposta", exact: true })).toHaveAttribute("href", "/vendas/propostas/novo")
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
 })
 
@@ -312,7 +312,7 @@ for (const width of [320, 390]) test(`criação compacta exige condições expl�
   await page.getByRole("button", { name: "Salvar proposta", exact: true }).click()
   await expect.poll(() => saved).toBeDefined()
   await expect(page).toHaveURL(new RegExp(`/vendas/propostas/${record}$`), { timeout: process.env.ERP_BROWSER_DEV === "1" ? 30_000 : 5_000 })
-  expect(saved).toEqual({ customerId: customer, validUntil: "2100-01-01", paymentTerms: "À vista", deliveryTerms: "Retirada pelo cliente", notes: "", items: [{ productId: product, quantity: "2.500000", unitPrice: "19.99", structureColor: null, swingArmColor: null, upholsteryColor: null, plateHolderColor: null, plateHolderType: null }] })
+  expect(saved).toEqual({ customerId: customer, validUntil: "2100-01-01", paymentTerms: "À vista", deliveryTerms: "Retirada pelo cliente", notes: "", items: [{ productId: product, quantity: "2.500000", unitPrice: null, structureColor: null, swingArmColor: null, upholsteryColor: null, plateHolderColor: null, plateHolderType: null }] })
   await page.reload()
   await expect(page.getByText("Total: R$ 49,98", { exact: true })).toBeVisible()
   await page.screenshot({ path: test.info().outputPath("proposal-mobile.png"), fullPage: true })

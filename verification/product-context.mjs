@@ -15,6 +15,7 @@ export function stableJson(value) {
   return JSON.stringify(ordered(value), null, 2) + '\n';
 }
 export const sha256 = value => createHash('sha256').update(value).digest('hex');
+export const actionDefinitions = catalogue => [...catalogue.actions, ...(catalogue.actionsAppendix || [])];
 const sorted = values => [...new Set(values)].sort();
 
 export function validateProductContext(value) {
@@ -28,9 +29,10 @@ export function validateProductFlows(catalogue) {
   if (!validateDefinitions(definitions)) return (validateDefinitions.errors || []).map(error => ({ code: 'invalid_product_flow_schema', path: error.instancePath, detail: error.message }));
   const findings = [];
   const fail = (code, flow, detail) => findings.push({ code, path: flow, detail });
-  const groups = new Set(catalogue.actions.map(action => action.flow));
+  const allActions = actionDefinitions(catalogue);
+  const groups = new Set(allActions.map(action => action.flow));
   const ids = new Set(), owners = new Map();
-  const actions = new Map(catalogue.actions.map(action => [action.id, action]));
+  const actions = new Map(allActions.map(action => [action.id, action]));
   const auth = new Set(catalogue.authActions.map(action => `${action.method} ${action.path}`));
   for (const flow of definitions.flows) {
     if (ids.has(flow.id)) fail('duplicate_product_flow', flow.id, 'Identidade de funcionalidade repetida.');
@@ -89,7 +91,7 @@ export function selectProductFlows(catalogue, target) {
 
 export function contextSourcePaths(catalogue, inventory, definitions) {
   const groups = new Set(definitions.flatMap(flow => flow.actionGroups));
-  const actions = catalogue.actions.filter(action => groups.has(action.flow));
+  const actions = actionDefinitions(catalogue).filter(action => groups.has(action.flow));
   const paths = new Set([
     'verification/contracts.json', 'verification/product-context.mjs', 'verification/product-context-cli.mjs', 'verification/product-context-mcp.mjs',
     'verification/schemas/product-flow-definitions.schema.json', 'verification/schemas/product-context.schema.json',
@@ -120,7 +122,7 @@ export function contextSourcePaths(catalogue, inventory, definitions) {
 export function buildProductContext(catalogue, inventory, source, target = null) {
   const definitions = selectProductFlows(catalogue, target);
   const groups = new Set(definitions.flatMap(flow => flow.actionGroups));
-  const actions = catalogue.actions.filter(action => groups.has(action.flow)).sort((a, b) => a.id.localeCompare(b.id, 'en'));
+  const actions = actionDefinitions(catalogue).filter(action => groups.has(action.flow)).sort((a, b) => a.id.localeCompare(b.id, 'en'));
   const flows = definitions.map(definition => {
     const owned = actions.filter(action => definition.actionGroups.includes(action.flow));
     const pages = sorted(owned.flatMap(action => action.ui.pages));

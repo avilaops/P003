@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation"
 import { PreferencesCommand } from "@/features/preferences/search/preferences-command"
 import { MenuButton, MenuNavigation } from "@/components/shell/menu-navigation"
 import { HeaderTools } from "@/components/shell/header-tools"
+import { PosVisibilityProvider, PosRoute } from "./pos-visibility"
 import { DemonstrationPreview } from "@/components/feedback/demonstration-preview"
 
 export function AppShell({ children }: { children: React.ReactNode }) {
@@ -21,13 +22,13 @@ function WorkspaceFrame({ children }: { children: React.ReactNode }) {
 }
 
 function WorkspaceNavigation({ children }: { children: React.ReactNode }) {
-  return <NavigationGuardProvider><MenuNavigation>
+  return <NavigationGuardProvider><PosVisibilityProvider><MenuNavigation>
     <header className="erp-header">
       <MenuButton />
       <Link href="/" className="erp-header-brand" aria-label="Visão geral do ERP"><img src="/brand/avila-erp-symbol.svg" alt="" width="28" height="28" /><strong>ERP</strong></Link>
       <PreferencesCommand />
       <HeaderTools />
     </header>
-    <main id="conteudo-principal" className="erp-content">{children}</main>
-  </MenuNavigation></NavigationGuardProvider>
+    <main id="conteudo-principal" className="erp-content"><PosRoute>{children}</PosRoute></main>
+  </MenuNavigation></PosVisibilityProvider></NavigationGuardProvider>
 }

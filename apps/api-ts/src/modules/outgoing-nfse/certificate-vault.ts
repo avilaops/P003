@@ -1,4 +1,4 @@
-import { createDecipheriv, createHash } from "node:crypto"
+import { createCipheriv,createDecipheriv, createHash,randomBytes } from "node:crypto"
 import { z } from "zod"
 
 import type { AuthorizedContext } from "../../platform/access.js"
@@ -23,22 +23,46 @@ type Metadata = {
   revocationChecked: boolean
 }
 
-const metadataSchema = z.object({
+export const metadataSchema = z.object({
   subject: z.string(), issuer: z.string(), taxId: z.string().regex(/^\d{14}$/), fingerprint: z.string(), serialNumber: z.string(),
   validFrom: z.number().int(), validUntil: z.number().int(), validatedAt: z.number().int(), chainVerified: z.literal(true), revocationChecked: z.boolean(),
 }).strict()
 
 export class FiscalCertificateVault {
+  private readonly active:string
   private readonly keys: ReadonlyMap<string, Buffer>
 
   constructor(keyringJson: string) {
     const keyring = keyringSchema.parse(JSON.parse(keyringJson))
+    this.active=keyring.active
     this.keys = new Map(Object.entries(keyring.keys).map(([id, encoded]) => {
       const key = Buffer.from(encoded, "base64")
       if (key.length !== 32) throw new Error("Fiscal A1 encryption keys require 32 bytes")
       return [id, key]
     }))
     if (!this.keys.has(keyring.active)) throw new Error("Active fiscal A1 key is missing")
+  }
+
+  seal(context:string,plaintext:Buffer) {
+    const nonce=randomBytes(12),cipher=createCipheriv("aes-256-gcm",this.keys.get(this.active)!,nonce)
+    cipher.setAAD(Buffer.from(context))
+    return {keyId:this.active,nonce,ciphertext:Buffer.concat([cipher.update(plaintext),cipher.final(),cipher.getAuthTag()])}
+  }
+
+  async nfceSecret(context:AuthorizedContext, environment:string) {
+    const row=(await context.client.query<{data:{cscId:string;environment:string;cscConfigured:boolean;state:string};tax_id:string;secret_key_id:string;secret_context:string;secret_nonce:Buffer;secret_ciphertext:Buffer}>(`SELECT p.data,t.tax_id,p.secret_key_id,p.secret_context,p.secret_nonce,p.secret_ciphertext
+      FROM fiscal_preferences p JOIN tenants t ON t.id=p.tenant_id WHERE p.tenant_id=$1 AND p.section='nfce'`,[context.tenantId])).rows[0]
+    const invalid=()=>new Problem(409,"nfce_csc_unavailable","O CSC da NFC-e está indisponível no ambiente da empresa")
+    if (!row || row.data.environment!==environment || row.data.state!=="SP" || row.data.cscConfigured!==true || !row.secret_context?.startsWith(`avila-erp:nfce-csc:v1:${context.tenantId}:${row.tax_id}:${environment}:${row.data.cscId}:`)) throw invalid()
+    const key=this.keys.get(row.secret_key_id)
+    if (!key || row.secret_nonce?.length!==12 || !row.secret_ciphertext || row.secret_ciphertext.length<=16) throw invalid()
+    try {
+      const cipher=createDecipheriv("aes-256-gcm",key,row.secret_nonce)
+      cipher.setAAD(Buffer.from(row.secret_context))
+      cipher.setAuthTag(row.secret_ciphertext.subarray(-16))
+      const value=Buffer.concat([cipher.update(row.secret_ciphertext.subarray(0,-16)),cipher.final()])
+      try { return {version:"2",csc:{id:row.data.cscId,secret:value.toString("utf8")}} } finally {value.fill(0)}
+    } catch {throw invalid()}
   }
 
   async material(context: AuthorizedContext): Promise<{ issuerTaxId: string; certificate: CertificateMaterial }> {

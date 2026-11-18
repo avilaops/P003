@@ -1,5 +1,7 @@
 # AVL-319, garantias e assistência técnica
 
+**Registro histórico de 06/11/2026.** A implementação posterior de 18/11 acrescentou rastreabilidade, laudos, evidências, termos, movimentos de estoque, liquidações e indicadores. Os limites descritos neste registro se referem àquela versão. Consulte a [operação atual de Garantias](../README.md) e a [implementação de Vendas](../../IMPLEMENTACAO.md).
+
 O backend registra políticas por empresa, protocolos vinculáveis a cliente, pedido,
 produto, série e lote, timeline append-only, transições de atendimento e uma ordem
 de serviço por protocolo. Todas as gravações usam RLS, revisão, Idempotency-Key,

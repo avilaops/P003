@@ -12,10 +12,10 @@ import { Button } from "@/components/ui/button"
 import { fetchReceivedDocument, saveDocument } from "./received-documents"
 import { ReceivedActions } from "./incoming-actions"
 
-type Detail = Schema<"ReceivedDetail">
+type Detail = Schema<"ReceivedDetail"> & {canManage?:boolean}
 const money = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" })
 
-export function ReceivedDocumentDetail({ id }: { id: string }) {
+export function ReceivedDocumentDetail({ id, origin="fiscal" }: { id: string; origin?:"compras"|"vendas"|"fiscal" }) {
   const [detail, setDetail] = useState<Detail | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
@@ -54,17 +54,18 @@ export function ReceivedDocumentDetail({ id }: { id: string }) {
 
   const note = detail?.data
   return <main className="mx-auto max-w-6xl space-y-6 px-4 pb-24 pt-8 lg:px-6">
-    <Link className="inline-flex items-center gap-2 text-sm text-primary" href="/fiscal/monitor"><ArrowLeft className="size-4" />Voltar ao monitor</Link>
-    <header className="border-b pb-6"><p className="text-sm text-primary">Fiscal / NF-e recebida</p><PageTitle className="mt-2 text-3xl font-semibold">{note ? `NF-e ${note.number} · Série ${note.series}` : "Documento fiscal"}</PageTitle><p className="mt-2 text-muted-foreground">Consulte o XML armazenado e visualize seu DANFE em PDF.</p></header>
+    <Link className="inline-flex items-center gap-2 text-sm text-primary" href={origin==="fiscal" ? "/fiscal/monitor" : "/compras/notas-entrada"+(origin==="vendas" ? "?origem=vendas" : "")}><ArrowLeft className="size-4" />{origin==="fiscal" ? "Voltar ao monitor" : "Voltar às notas de entrada"}</Link>
+    <header className="border-b pb-6"><p className="text-sm text-primary">{origin==="fiscal" ? "Fiscal" : origin==="compras" ? "Compras" : "Vendas"} • NF-e recebida</p><PageTitle className="mt-2 text-3xl font-semibold">{note ? `NF-e ${note.number} · Série ${note.series}` : "Documento fiscal"}</PageTitle><p className="mt-2 text-muted-foreground">Consulte o XML armazenado e visualize seu DANFE em PDF.</p></header>
     {loading && <p role="status">Carregando documento da empresa…</p>}
     {error && <p role="alert" className="rounded-xl border border-destructive/30 p-4 text-sm text-destructive">{error}</p>}
     {note && <>
       <section className="form-section space-y-4" aria-labelledby="document-title">
         <h2 id="document-title" className="flex items-center gap-2 text-lg font-semibold"><FileText className="size-5" />Dados da nota</h2>
         <dl className="grid gap-4 text-sm sm:grid-cols-2">
+          <div><dt className="text-muted-foreground">Registro da entrada</dt><dd>{note.id}</dd></div>
           <div><dt className="text-muted-foreground">Emitente</dt><dd>{note.issuerName} · {note.issuerDocument}</dd></div>
           <div><dt className="text-muted-foreground">CNPJ do destinatário</dt><dd>{note.recipientDocument}</dd></div>
-          <div><dt className="text-muted-foreground">Emissão</dt><dd>{new Date(note.issuedAt).toLocaleString("pt-BR")}</dd></div>
+          <div><dt className="text-muted-foreground">Emissão</dt><dd>{new Date(note.issuedAt).toLocaleString("pt-BR",{timeZone:"America/Sao_Paulo"})}</dd></div>
           <div><dt className="text-muted-foreground">Valor total</dt><dd>{money.format(note.totalCents / 100)} · {note.itemCount} item(ns)</dd></div>
           <div className="sm:col-span-2"><dt className="text-muted-foreground">Chave de acesso</dt><dd className="break-all">{note.accessKey}</dd></div>
         </dl>
@@ -79,9 +80,9 @@ export function ReceivedDocumentDetail({ id }: { id: string }) {
           {preview && <a className="inline-flex items-center gap-2 text-sm text-primary underline" href={preview.url} download={preview.filename}>Baixar DANFE em PDF</a>}
         </div>
         {preview && <div className="space-y-3"><p role="status" className="text-sm">DANFE gerado a partir do XML armazenado. Se a prévia não abrir no seu navegador, baixe o PDF.</p><iframe title="Visualização do DANFE" src={preview.url} className="h-[75vh] min-h-96 w-full rounded-xl border" /></div>}
-        <details className="text-xs text-muted-foreground"><summary className="cursor-pointer">Integridade do XML</summary><p className="mt-2 break-all">SHA-256: {note.xmlSha256}</p><p className="mt-1">Importado em {new Date(note.createdAt).toLocaleString("pt-BR")}.</p></details>
+        <details className="text-xs text-muted-foreground"><summary className="cursor-pointer">Integridade do XML</summary><p className="mt-2 break-all">SHA-256: {note.xmlSha256}</p><p className="mt-1">Importado em {new Date(note.createdAt).toLocaleString("pt-BR",{timeZone:"America/Sao_Paulo"})}.</p></details>
       </section>
-      {detail && <ReceivedActions key={`${detail.tenantId}:${note.id}`} note={note} tenantId={detail.tenantId} />}
+      {detail && detail.canManage !== false && <ReceivedActions key={`${detail.tenantId}:${note.id}`} note={note} tenantId={detail.tenantId} />}
     </>}
   </main>
 }

@@ -1,4 +1,7 @@
+import { advanceLinkedProposal } from "../opportunities/documents.js"
 import { randomUUID } from "node:crypto"
+import {saveCheckout} from "../orders/checkout-save.js"
+import {paymentSchedule,type FrozenTerm} from "../commercial/payment-term.js"
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
 import type { AppDependencies } from "../../app.js"
@@ -19,8 +22,8 @@ async function revise(context: AuthorizedContext, id: string, version: number, n
   await client.query("INSERT INTO sales_proposal_lines(tenant_id,proposal_id,version,line_number,product_id,sku,name,unit,quantity_micros,catalog_price_cents,price_cents,amount_cents,structure_color,upholstery_color,plate_holder_color,plate_holder_type,swing_arm_color) SELECT tenant_id,proposal_id,$4,line_number,product_id,sku,name,unit,quantity_micros,catalog_price_cents,price_cents,amount_cents,structure_color,upholstery_color,plate_holder_color,plate_holder_type,swing_arm_color FROM sales_proposal_lines WHERE tenant_id=$1 AND proposal_id=$2 AND version=$3", [tenantId, id, version, nextVersion])
   await client.query("UPDATE sales_proposal_versions SET status='superseded' WHERE tenant_id=$1 AND proposal_id=$2 AND version=$3", [tenantId, id, version])
   await client.query("UPDATE sales_proposals SET current_version=$3,revision=$4,updated_at=now() WHERE tenant_id=$1 AND id=$2", [tenantId, id, nextVersion, next])
-  await client.query("UPDATE sales_proposal_versions target SET commercial_public=source.commercial_public,commercial_private=source.commercial_private,customer_snapshot=source.customer_snapshot,checkout_snapshot=source.checkout_snapshot FROM sales_proposal_versions source WHERE target.tenant_id=$1 AND target.proposal_id=$2 AND target.version=$4 AND source.tenant_id=target.tenant_id AND source.proposal_id=target.proposal_id AND source.version=$3", [tenantId, id, version, nextVersion])
-  await client.query("UPDATE sales_proposal_lines target SET technical_snapshot=source.technical_snapshot FROM sales_proposal_lines source WHERE target.tenant_id=$1 AND target.proposal_id=$2 AND target.version=$4 AND source.tenant_id=target.tenant_id AND source.proposal_id=target.proposal_id AND source.version=$3 AND source.line_number=target.line_number", [tenantId, id, version, nextVersion])
+  await client.query("UPDATE sales_proposal_versions target SET payment_term_snapshot=source.payment_term_snapshot,commercial_public=source.commercial_public,commercial_private=source.commercial_private,customer_snapshot=source.customer_snapshot,checkout_snapshot=source.checkout_snapshot FROM sales_proposal_versions source WHERE target.tenant_id=$1 AND target.proposal_id=$2 AND target.version=$4 AND source.tenant_id=target.tenant_id AND source.proposal_id=target.proposal_id AND source.version=$3", [tenantId, id, version, nextVersion])
+  await client.query("UPDATE sales_proposal_lines target SET price_origin=source.price_origin,technical_snapshot=source.technical_snapshot FROM sales_proposal_lines source WHERE target.tenant_id=$1 AND target.proposal_id=$2 AND target.version=$4 AND source.tenant_id=target.tenant_id AND source.proposal_id=target.proposal_id AND source.version=$3 AND source.line_number=target.line_number", [tenantId, id, version, nextVersion])
   return { version: nextVersion, revision: next, previousVersion: version }
 }
 
@@ -36,13 +39,22 @@ async function convert(context: AuthorizedContext, headers: CommandHeaders, curr
   }
   const order = randomUUID()
   await client.query("INSERT INTO sales_orders(id,tenant_id,customer_id,customer_name,customer_tax_id,due_date,amount_cents,status) SELECT $4,tenant_id,customer_id,customer_name,customer_tax_id,$5,amount_cents,'draft' FROM sales_proposal_versions WHERE tenant_id=$1 AND proposal_id=$2 AND version=$3", [tenantId, id, version, order, due])
-  await client.query("INSERT INTO sales_order_lines(tenant_id,order_id,line_number,product_id,sku,name,unit,quantity_micros,price_cents,amount_cents,structure_color,upholstery_color,plate_holder_color,plate_holder_type,swing_arm_color) SELECT tenant_id,$4,line_number,product_id,sku,name,unit,quantity_micros,price_cents,amount_cents,structure_color,upholstery_color,plate_holder_color,plate_holder_type,swing_arm_color FROM sales_proposal_lines WHERE tenant_id=$1 AND proposal_id=$2 AND version=$3", [tenantId, id, version, order])
+  await client.query("INSERT INTO sales_order_lines(tenant_id,order_id,line_number,product_id,sku,name,unit,quantity_micros,price_cents,amount_cents,structure_color,upholstery_color,plate_holder_color,plate_holder_type,swing_arm_color,price_origin) SELECT tenant_id,$4,line_number,product_id,sku,name,unit,quantity_micros,price_cents,amount_cents,structure_color,upholstery_color,plate_holder_color,plate_holder_type,swing_arm_color,price_origin FROM sales_proposal_lines WHERE tenant_id=$1 AND proposal_id=$2 AND version=$3", [tenantId, id, version, order])
   await client.query("UPDATE sales_proposals SET order_id=$3,revision=$4,updated_at=now() WHERE tenant_id=$1 AND id=$2", [tenantId, id, order, next])
   if (commercial) {
     await transferProposalAgreement(context, order, commercial)
-    await client.query("UPDATE sales_order_lines target SET technical_snapshot=COALESCE(source.technical_snapshot,'{}'::jsonb) FROM sales_proposal_lines source WHERE target.tenant_id=$1 AND target.order_id=$4 AND source.tenant_id=target.tenant_id AND source.proposal_id=$2 AND source.version=$3 AND source.line_number=target.line_number", [tenantId, id, version, order])
+    await client.query("UPDATE sales_order_lines target SET price_origin=source.price_origin,technical_snapshot=COALESCE(source.technical_snapshot,'{}'::jsonb) FROM sales_proposal_lines source WHERE target.tenant_id=$1 AND target.order_id=$4 AND source.tenant_id=target.tenant_id AND source.proposal_id=$2 AND source.version=$3 AND source.line_number=target.line_number", [tenantId, id, version, order])
+  }
+  if(!commercial){
+    const agreed=(await client.query("SELECT customer_id,amount_cents,checkout_snapshot,payment_term_snapshot FROM sales_proposal_versions WHERE tenant_id=$1 AND proposal_id=$2 AND version=$3",[tenantId,id,version])).rows[0]
+    if(agreed?.payment_term_snapshot && agreed.checkout_snapshot){
+      const frozen=agreed.payment_term_snapshot as FrozenTerm
+      const entry=paymentSchedule(BigInt(String(agreed.amount_cents)),frozen).entryCents
+      await saveCheckout(context,order,String(agreed.customer_id),BigInt(String(agreed.amount_cents)),BigInt(entry),agreed.checkout_snapshot as Parameters<typeof saveCheckout>[5],frozen)
+    }
   }
   await record(context, headers, "sales_order", order, "order.created", { proposalId: id, proposalVersion: version, revision: 1 })
+  await advanceLinkedProposal(context,headers,String(id),"won",order)
   return { version, revision: next, orderId: order }
 }
 
@@ -77,6 +89,7 @@ export function registerProposalTransitions(app: FastifyInstance, dependencies: 
       const current = await loadProposal(context, id)
       if (current.data.revision !== expected) throw new Problem(412, "revision_conflict", "Outra pessoa alterou o cadastro. Sua edição foi preservada")
       const today = String((await context.client.query("SELECT (CURRENT_TIMESTAMP AT TIME ZONE 'America/Sao_Paulo')::date::text AS today")).rows[0]!.today)
+      if (action === "send") await advanceLinkedProposal(context,request.headers,id,"proposed")
       const status = proposalTransition(String(current.data.status), action, validateDate(String(current.data.validUntil)), today, current.data.orderId !== null), next = nextRevision(expected)
       if (action === "send" || action === "accept") await formalizeProposal(context, id, current.data.version)
       let details: unknown

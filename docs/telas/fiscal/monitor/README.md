@@ -8,8 +8,9 @@ Consultar documentos recebidos pela empresa e importar XML individual.
 
 ## O que aparece na tela
 
-- Ambiente e situação da distribuição
-- Último NSU, maior NSU e retorno
+- Lista paginada da empresa por emissão no horário de Brasília, manifestação e compra vinculada
+- Vínculo com devoluções de pedidos ao acessar por Vendas
+- Ambiente da distribuição, NSU e retorno em detalhes técnicos
 - Arquivo XML
 - Busca por fornecedor, CNPJ, nota ou chave
 - Período e documentos armazenados
@@ -23,7 +24,7 @@ Consultar documentos recebidos pela empresa e importar XML individual.
 
 ## Regras e limites
 
-Falha de consulta não comprova ausência de documentos. Importar uma NF-e não recebe mercadoria nem gera pagamento automaticamente. O detalhe canônico fica no Monitor; o endereço antigo de detalhe em Compras informa indisponibilidade.
+Falha de consulta não comprova ausência de documentos. Importar uma NF-e não recebe mercadoria nem gera pagamento automaticamente. O detalhe canônico fica no Monitor. O endereço de Compras abre o mesmo registro e o caminho de volta preserva a origem.
 
 ## Referências para manutenção
 

@@ -1,4 +1,5 @@
-import { WarrantyList } from "@/features/sales/warranty-workspace"
-export default function Page() { return <WarrantyList /> }
+import { Suspense } from "react"
+import { WarrantyList } from "@/features/sales/warranty-list"
+export default function Page() { return <Suspense fallback={<p role="status">Carregando garantias…</p>}><WarrantyList initiallyOpen/></Suspense> }
 
 export const metadata = { title: "Nova garantia" }

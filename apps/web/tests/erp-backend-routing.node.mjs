@@ -16,6 +16,18 @@ test("migrated methods permanently select TypeScript, including with legacy flag
   assert.throws(() => selectErpBackend("PUT", "/preferences", rust, {}));
 });
 
+test("pricing inputs, approval, publication and simulation share the TypeScript API", () => {
+  for (const line of ["imported", "national"]) {
+    for (const [method, path] of [
+      ["GET", "/commercial-settings/" + line], ["PUT", "/commercial-settings/" + line], ["POST", "/commercial-settings/" + line + "/preview"],
+      ["GET", "/price-tables/" + line], ["GET", "/price-tables/" + line + "/preview"], ["POST", "/price-tables/" + line + "/publish"],
+      ["GET", "/product-costs/" + id], ["PUT", "/product-costs/" + id], ["GET", "/financial-categories"], ["GET", "/fixed-expenses"],
+      ["POST", "/fixed-expenses"], ["PUT", "/fixed-expenses/" + id], ["GET", "/commercial/approval-settings"], ["PUT", "/commercial/approval-settings"],
+      ["GET", "/commercial/tables/" + line], ["POST", "/commercial/simulate"],
+    ]) assert.equal(selectErpBackend(method, path, rust, { ERP_TYPESCRIPT_API_URL: typescript }).origin, typescript, method + " " + path);
+  }
+});
+
 test("saved legacy pricing and its approval use the migrated sales backend", () => {
   for (const [method, resource] of [["GET", `/orders/${id}/pricing`], ["POST", `/orders/${id}/pricing/approve`]]) assert.equal(selectErpBackend(method, resource, rust, environment).origin, typescript);
 });
@@ -27,8 +39,17 @@ test("document previews and email dispatch use the TypeScript backend", () => {
   assert.equal(selectErpBackend("POST", `/commercial-contracts/${id}/send-package`, rust, environment).origin, typescript);
 });
 
+test("the eleven complementary order methods, title and proposal origins route to TypeScript", () => {
+  for(const [method, suffix] of [["GET","document"],["GET","finance"],["GET","documents"],["POST","documents"],["GET","documents/"+id],["GET","commission"],["PUT","commission"],["GET","cancellations"],["POST","cancel-completed"],["GET","email"],["POST","email"]]) {
+    assert.equal(selectErpBackend(method,"/orders/"+id+"/"+suffix,rust,environment).origin,typescript,suffix);
+  }
+  for(const [method,resource] of [["GET","/receivables/"+id],["POST","/receivables/"+id+"/payments"],["POST","/receivables/"+id+"/reverse-payment"],["GET","/orders/"+id],["GET","/proposals/"+id]]) {
+    assert.equal(selectErpBackend(method,resource,rust,environment).origin,typescript,resource);
+  }
+});
+
 test("unmigrated routes and unsupported methods stay on their explicit Rust origin", () => {
-  for (const [method, resource] of [["GET", `/orders/${id}/document`], ["POST", "/fiscal/nfe"], ["GET", "/receivables"], ["GET", `/products/${id}/catalog`], ["GET", "/products/export"], ["POST", "/preferences"], ["DELETE", `/products/${id}`], ["GET", `/system/custom-reports/${id}`], ["GET", "/commercial/tables/unknown"], ["POST", `/orders/${id}/cancel-completed`]]) {
+  for (const [method, resource] of [["PUT", `/orders/${id}/document`], ["POST", "/fiscal/nfe"], ["GET", "/receivables"], ["GET", `/products/${id}/catalog`], ["GET", "/products/export"], ["POST", "/preferences"], ["DELETE", `/products/${id}`], ["GET", `/system/custom-reports/${id}`], ["GET", "/commercial/tables/unknown"], ["GET", `/orders/${id}/cancel-completed`]]) {
     assert.equal(selectErpBackend(method, resource, rust, environment).origin, rust, resource);
   }
 });

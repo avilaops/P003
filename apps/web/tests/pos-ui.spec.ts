@@ -104,3 +104,47 @@ test("comprovante do PDV não renderiza antes de conferir o emitente", async ({ 
   await expect(page.getByRole("button", { name: "Imprimir comprovante", exact: true })).toBeDisabled()
   await expect(page.locator("[data-pos-receipt]")).toHaveCount(0)
 })
+
+test("PDV sem conta apresenta o cadastro de Caixa e o histórico vazio dispensa grade", async ({ page,context })=>{
+  await installFrontendFixture(context)
+  await page.route("**/api/erp/company", route=>route.fulfill({json:{tenantId:tenant,data:{state:"SP"}}}))
+  await page.route("**/api/erp/financial-accounts?**", route=>route.fulfill({json:{tenantId:tenant,data:[],total:0}}))
+  await page.route("**/api/erp/pos/sessions/current?**", route=>route.fulfill({json:{tenantId:tenant,canEdit:true,data:null}}))
+  await page.goto("/vendas/pdv")
+  await expect(page.getByRole("link",{name:"Cadastrar conta do tipo Caixa"})).toHaveAttribute("href","/cadastros/contas-financeiras/novo?tipo=cash")
+  await page.route("**/api/erp/pos/sessions?**", route=>route.fulfill({json:{tenantId:tenant,data:[],total:0}}))
+  await page.goto("/vendas/pdv/historico")
+  await expect(page.getByText("Nenhum caixa registrado nesta empresa.")).toBeVisible()
+  await expect(page.getByRole("table",{name:"Histórico dos caixas"})).toHaveCount(0)
+})
+
+test("seleciona o segundo caixa e recupera a consulta filtrada com a mesma data", async({page,context})=>{
+  await installFrontendFixture(context)
+  const second={...session,register:"Balcão lateral"}
+  let filtered=0
+  await page.route("**/api/erp/pos/sessions?**", route=>{
+    const query=new URL(route.request().url()).searchParams
+    if(query.get("startDate")==="2026-11-15") {
+      if (++filtered===1) return route.fulfill({status:500,headers:{"x-request-id":"consulta-pdv"},json:{title:"Consulta de caixa indisponível"}})
+      return route.fulfill({json:{tenantId:tenant,data:[],total:0}})
+    }
+    return route.fulfill({json:{tenantId:tenant,data:[second],total:1}})
+  })
+  await page.route(`**/api/erp/pos/sessions/${sessionId}`,route=>route.fulfill({json:{tenantId:tenant,canEdit:false,canClose:false,data:second}}))
+  await page.goto("/vendas/pdv/fechamento")
+  await page.getByRole("link",{name:/Balcão lateral/}).click()
+  await expect(page.getByRole("heading",{name:"Caixa Balcão lateral"})).toBeVisible()
+  await page.getByRole("link",{name:"Histórico dos caixas",exact:true}).click()
+  await page.getByLabel("Abertura de").fill("2026-11-15")
+  await page.getByLabel("Abertura até").fill("2026-11-14")
+  await expect(page.getByRole("button",{name:"Pesquisar caixas"})).toBeDisabled()
+  await page.getByLabel("Abertura até").fill("2026-11-18")
+  await page.getByRole("button",{name:"Pesquisar caixas"}).click()
+  await page.getByText("Detalhes técnicos").click()
+  await expect(page.getByText(/consulta-pdv/)).toBeVisible()
+  await page.getByRole("button",{name:"Consultar novamente"}).click()
+  await expect(page.getByText("Nenhum caixa corresponde aos filtros.")).toBeVisible()
+  await expect(page.getByLabel("Abertura de")).toHaveValue("2026-11-15")
+  await page.getByRole("button",{name:"Limpar filtros"}).click()
+  await expect(page.getByRole("table",{name:"Histórico dos caixas"})).toBeVisible()
+})

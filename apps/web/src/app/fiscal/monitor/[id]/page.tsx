@@ -1,9 +1,9 @@
 import { Suspense } from "react"
 import { ReceivedDocumentDetail } from "@/features/fiscal/received-document-detail"
 
-async function ResolvedPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params
-  return <ReceivedDocumentDetail id={id} />
+async function ResolvedPage({ params,searchParams }: { params: Promise<{ id: string }>; searchParams:Promise<{origem?:string}> }) {
+  const [{id},{origem}] = await Promise.all([params,searchParams])
+  return <ReceivedDocumentDetail id={id} origin={origem==="compras" || origem==="vendas" ? origem : "fiscal"}/>
 }
 
 export const metadata = { title: "Documento fiscal recebido" }

@@ -92,7 +92,7 @@ async function simulate(page: Page) {
 async function openCheckout(page: Page) {
   await page.goto(`/vendas/simulador?produto=${product}`)
   await simulate(page)
-  await page.getByRole("button", { name: "Continuar pedido", exact: true }).click()
+  await page.getByRole("navigation",{name:"Etapas da simulação"}).getByRole("link",{name:"Cliente",exact:true}).click()
 }
 
 async function preparedCheckout(page: Page) {
@@ -263,7 +263,7 @@ test("consulta comercial mantém a entrada ajustável sem acesso à criação", 
   await expect(page.getByLabel(/Entrada negociada/)).toBeVisible()
   await page.getByLabel(/Entrada negociada/).fill("10000,00")
   await simulate(page)
-  await expect(page.getByRole("button", { name: "Continuar pedido", exact: true })).toHaveCount(0)
+  await expect(page.getByRole("button", { name: "Continuar no novo pedido", exact: true })).toHaveCount(0)
   await expect(page.getByRole("button", { name: "Criar pedido com estas condições", exact: true })).toHaveCount(0)
 })
 
@@ -281,7 +281,7 @@ test("entrada continua corrigível quando uma redução dos produtos invalida o 
   await page.getByLabel(`Quantidade de ${name}`, { exact: true }).fill("2")
   await page.getByRole("button", { name: "Simular", exact: true }).click()
   await expect(page.getByRole("region", { name: "Resultado da simulação", exact: true })).toContainText("R$ 43.402,42")
-  await page.getByRole("button", { name: "Continuar pedido", exact: true }).click()
+  await page.getByRole("navigation",{name:"Etapas da simulação"}).getByRole("link",{name:"Cliente",exact:true}).click()
   await page.getByLabel("Entrada (R$)", { exact: true }).fill("35000,00")
   await page.getByRole("button", { name: "Simular", exact: true }).click()
   await expect(page.getByRole("region", { name: "Resultado da simulação", exact: true })).toContainText("R$ 35.000,00")
@@ -446,7 +446,7 @@ for (const width of [390, 1366]) test(`negociação preserva cliente, entrada e 
   await page.setViewportSize({ width, height: width < 500 ? 844 : 900 })
   await page.goto(`/vendas/simulador?produto=${product}`)
   await simulate(page)
-  await page.getByRole("button", { name: "Continuar pedido", exact: true }).click()
+  await page.getByRole("navigation",{name:"Etapas da simulação"}).getByRole("link",{name:"Cliente",exact:true}).click()
   await page.getByLabel("Buscar cliente", { exact: true }).fill("Horizonte")
   await page.getByRole("button", { name: "Pesquisar cliente", exact: true }).click()
   await page.getByRole("button", { name: `Selecionar ${originalCustomer.legalName}`, exact: true }).click()
@@ -476,7 +476,7 @@ for (const width of [390, 1366]) test(`negociação preserva cliente, entrada e 
   await page.getByLabel("Entrada (%)", { exact: true }).focus()
   await page.getByLabel("Entrada (%)", { exact: true }).press("Tab")
   await expect(page.getByLabel("Entrada (R$)", { exact: true })).toHaveValue("15190,86")
-  await expect(page.getByRole("button", { name: "Continuar pedido", exact: true })).toBeVisible()
+  await expect(page.getByRole("button", { name: "Continuar no novo pedido", exact: true })).toBeVisible()
   await page.getByLabel("Forma da entrada", { exact: true }).selectOption(pix)
   await page.getByLabel("Data da entrada", { exact: true }).fill("2026-11-30")
   await page.getByLabel("Forma do saldo", { exact: true }).selectOption(boleto)

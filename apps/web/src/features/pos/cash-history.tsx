@@ -12,17 +12,30 @@ import { money, when, type CashSession, type Envelope, type Listing, type Sale }
 
 export function CashHistory() {
   const selected = useSearchParams().get("caixa")
-  const [query, setQuery] = useState({ status: "", register: "", startDate: "", endDate: "", offset: 0 })
+  const empty = { status: "", register: "", startDate: "", endDate: "" }
+  const [draft, setDraft] = useState(empty)
+  const [query, setQuery] = useState({ ...empty, offset: 0 })
   const params = new URLSearchParams({ offset: String(query.offset), limit: "20" })
-  for (const key of ["status", "register", "startDate", "endDate"] as const) if (query[key]) params.set(key, query[key])
+  for (const key of ["status","register","startDate","endDate"] as const) if (query[key]) params.set(key,query[key])
   const history = useResource<Listing<CashSession>>(`/api/erp/pos/sessions?${params}`)
-  return <div className="space-y-5"><CashNav /><form className="grid items-end gap-3 sm:grid-cols-2 lg:grid-cols-5" onSubmit={e => { e.preventDefault(); const data = new FormData(e.currentTarget); setQuery({ status: String(data.get("status") || ""), register: String(data.get("register") || ""), startDate: String(data.get("startDate") || ""), endDate: String(data.get("endDate") || ""), offset: 0 }) }}>
-    <label className="grid gap-1.5 text-xs font-medium">Caixa do histórico<Input name="register" maxLength={80} /></label><label className="grid gap-1.5 text-xs font-medium">Situação<select name="status" className={controlClass}><option value="">Todas</option><option value="open">Aberto</option><option value="closed">Fechado</option></select></label><label className="grid gap-1.5 text-xs font-medium">Abertura de<Input type="date" name="startDate" /></label><label className="grid gap-1.5 text-xs font-medium">Abertura até<Input type="date" name="endDate" /></label><Button type="submit">Pesquisar caixas</Button>
-  </form>{history.loading ? <p role="status">Consultando histórico…</p> : history.error || !history.value ? <Failure message={history.error || "Histórico indisponível"} status={history.status} retry={history.reload} /> : <>
-    <p role="status" className="text-xs text-muted-foreground">{history.value.total} caixa(s)</p>
+  const filtered = Boolean(query.status || query.register || query.startDate || query.endDate)
+  const badDates = Boolean(draft.startDate && draft.endDate && draft.startDate > draft.endDate)
+  function clear() { setDraft(empty); setQuery({ ...empty, offset: 0 }) }
+  const hasRows = Boolean(history.value?.data.length)
+  return <div className="space-y-5"><CashNav />
+    {(filtered || hasRows) && <form className="grid items-end gap-3 sm:grid-cols-2 lg:grid-cols-5" onSubmit={e => { e.preventDefault(); if (!badDates) setQuery({ ...draft, register:draft.register.trim(), offset:0 }) }}>
+      <label className="grid gap-1.5 text-xs font-medium">Caixa do histórico<Input maxLength={80} value={draft.register} onChange={e=>setDraft({...draft,register:e.target.value})}/></label>
+      <label className="grid gap-1.5 text-xs font-medium">Situação<select className={controlClass} value={draft.status} onChange={e=>setDraft({...draft,status:e.target.value})}><option value="">Todas</option><option value="open">Aberto</option><option value="closed">Fechado</option></select></label>
+      <label className="grid gap-1.5 text-xs font-medium">Abertura de<Input type="date" value={draft.startDate} onChange={e=>setDraft({...draft,startDate:e.target.value})}/></label>
+      <label className="grid gap-1.5 text-xs font-medium">Abertura até<Input type="date" value={draft.endDate} onChange={e=>setDraft({...draft,endDate:e.target.value})}/></label>
+      <Button type="submit" disabled={badDates}>Pesquisar caixas</Button>
+      {badDates && <p role="alert">A data final deve ser igual ou posterior à inicial.</p>}
+      {filtered && <Button type="button" variant="outline" onClick={clear}>Limpar filtros</Button>}
+    </form>}
+    {history.loading ? <p role="status">Consultando histórico…</p> : history.error || !history.value ? <Failure message={history.error || "Histórico indisponível"} status={history.status} requestId={history.requestId} retry={history.reload} /> : !hasRows ? <p role="status">{filtered ? "Nenhum caixa corresponde aos filtros." : "Nenhum caixa registrado nesta empresa."}</p> : <>
+    <p role="status" className="text-xs text-muted-foreground">{history.value.total} {history.value.total===1 ? "caixa" : "caixas"}</p>
     <div className="max-w-full overflow-x-auto rounded-lg border"><DataTable aria-label="Histórico dos caixas"><thead><tr><th>Caixa</th><th>Abertura</th><th>Situação</th><th className="hidden sm:table-cell">Fechamento</th><th><span className="sr-only">Consultar</span></th></tr></thead><tbody>{history.value.data.map(session => <tr key={session.id}><td><span className="font-medium">{session.register}</span><span className="block text-xs text-muted-foreground">Saldo inicial: {money(session.openingAmount)}</span></td><td className="text-xs">{when(session.openedAt)}</td><td>{session.status === "closed" ? "Fechado" : "Aberto"}</td><td className="hidden text-xs sm:table-cell">{when(session.closedAt)}</td><td><Link className="text-sm text-primary underline" href={`/vendas/pdv/fechamento?caixa=${session.id}`}>Conferir</Link></td></tr>)}</tbody></DataTable></div>
-    {!history.value.data.length && <p>Nenhum caixa encontrado neste período.</p>}
-    <nav aria-label="Paginação do histórico" className="flex items-center justify-between gap-3"><Button variant="outline" disabled={!query.offset} onClick={() => setQuery(value => ({ ...value, offset: Math.max(0, value.offset - 20) }))}>Anterior</Button><span className="text-xs">Página {Math.floor(query.offset / 20) + 1}</span><Button variant="outline" disabled={query.offset + 20 >= history.value.total} onClick={() => setQuery(value => ({ ...value, offset: value.offset + 20 }))}>Próxima</Button></nav>
+    {history.value.total > 20 && <nav aria-label="Paginação do histórico" className="flex items-center justify-between gap-3"><Button variant="outline" disabled={!query.offset} onClick={() => setQuery(value => ({ ...value, offset: Math.max(0, value.offset - 20) }))}>Anterior</Button><span className="text-xs">Página {Math.floor(query.offset / 20) + 1}</span><Button variant="outline" disabled={query.offset + 20 >= history.value.total} onClick={() => setQuery(value => ({ ...value, offset: value.offset + 20 }))}>Próxima</Button></nav>}
     {selected && <SessionSales id={selected} tenant={history.value.tenantId} onChanged={history.reload} />}
   </>}</div>
 }

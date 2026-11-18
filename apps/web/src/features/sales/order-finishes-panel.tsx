@@ -53,7 +53,7 @@ export function OrderFinishesPanel({ rows, activeIndex, products, disabled, fina
   }
 
   const palette = catalogPaletteFor(row?.product?.finishingPalette)
-  const choices = row?.product && row.item.line !== "national" ? orderColorParts.map(color => ({
+  const choices = row?.product ? orderColorParts.map(color => ({
     color, options: orderFinishOptions(row.item, row.product, color), value: row.item[color.field],
   })).filter(({ options, value }) => options.length || value) : []
   const canApplyColors = rows.length > 1 && choices.some(({ value }) => value)

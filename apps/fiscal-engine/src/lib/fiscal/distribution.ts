@@ -1,6 +1,6 @@
 import { gunzipSync } from "node:zlib";
 import { DOMParser } from "@xmldom/xmldom";
-import { ACCESS_KEY_PATTERN } from "@/lib/fiscal/nfe";
+import { ACCESS_KEY_PATTERN, UF_CODES } from "@/lib/fiscal/nfe";
 import { SefazError } from "@/lib/fiscal/sefaz";
 
 const NFE_NS = "http://www.portalfiscal.inf.br/nfe";
@@ -60,9 +60,9 @@ export function parseDistributedNfeEvent(xml: string): DistributedNfeEvent {
 }
 
 /** SOAP 1.2 request for the next sequential DF-e batch. */
-export function distributionEnvelope(cnpj: string, lastNsu: string, environment: "homologacao" | "producao"): string {
+export function distributionEnvelope(cnpj: string, lastNsu: string, environment: "homologacao" | "producao", authorState?:string): string {
   if (!/^[0-9A-Z]{14}$/.test(cnpj)) throw new Error("CNPJ inválido para distribuição DF-e.");
-  return `<?xml version="1.0" encoding="UTF-8"?><soap12:Envelope xmlns:soap12="http://www.w3.org/2003/05/soap-envelope"><soap12:Body><nfeDadosMsg xmlns="${WSDL}"><distDFeInt xmlns="${NFE_NS}" versao="1.01"><tpAmb>${environment === "producao" ? "1" : "2"}</tpAmb><cUFAutor>91</cUFAutor><CNPJ>${cnpj}</CNPJ><distNSU><ultNSU>${paddedNsu(lastNsu)}</ultNSU></distNSU></distDFeInt></nfeDadosMsg></soap12:Body></soap12:Envelope>`;
+  return `<?xml version="1.0" encoding="UTF-8"?><soap12:Envelope xmlns:soap12="http://www.w3.org/2003/05/soap-envelope"><soap12:Body><nfeDadosMsg xmlns="${WSDL}"><distDFeInt xmlns="${NFE_NS}" versao="1.01"><tpAmb>${environment === "producao" ? "1" : "2"}</tpAmb><cUFAutor>${authorState && Object.hasOwn(UF_CODES, authorState) ? UF_CODES[authorState] : "91"}</cUFAutor><CNPJ>${cnpj}</CNPJ><distNSU><ultNSU>${paddedNsu(lastNsu)}</ultNSU></distNSU></distDFeInt></nfeDadosMsg></soap12:Body></soap12:Envelope>`;
 }
 
 function unpack(value: string): string {
@@ -94,7 +94,7 @@ export function parseDistributionResponse(response: string): DistributionResult 
     const nsu = /\bNSU="(\d{15})"/.exec(attributes)?.[1] ?? "";
     const schema = /\bschema="([A-Za-z0-9_.-]{1,100})"/.exec(attributes)?.[1] ?? "";
     if (!nsu || !schema) throw new SefazError("Documento da distribuição sem NSU ou schema válido.");
-    const kind = schema.startsWith("procNFe") ? "full" : schema.startsWith("procEventoNFe") ? "event" : "summary";
+    const kind = schema.startsWith("procNFe") ? "full" : (schema.startsWith("procEventoNFe") || schema.startsWith("resEvento")) ? "event" : "summary";
     return { nsu, schema, kind, xml: unpack(packed) } satisfies DistributedDocument;
   });
   if (code === "137" && documents.length) throw new SefazError("A SEFAZ informou ausência de documentos, mas devolveu conteúdo.");

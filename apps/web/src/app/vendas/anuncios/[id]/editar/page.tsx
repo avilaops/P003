@@ -1,5 +1,12 @@
-import { SalesCapabilityUnavailable } from "@/features/sales/sales-capability-unavailable"
+import { Suspense } from "react"
+import { ChannelWorkspace } from "@/features/sales/channel-workspace"
 
-export const metadata = { title: "Editar anúncio" }
-
-export default function Page() { return <SalesCapabilityUnavailable title="Editar anúncio" description="Alteração e republicação de anúncios por canal." backHref="/vendas/anuncios" /> }
+export const metadata = {title:"Editar anúncio"}
+type Props={params:Promise<{id:string}>}
+export default function Page(props:Props){
+ return <Suspense fallback={<p role="status">Consultando anúncio…</p>}><Detail {...props}/></Suspense>
+}
+async function Detail({params}:Props) {
+ const {id}=await params
+ return <ChannelWorkspace mode="edit" id={id}/>
+}

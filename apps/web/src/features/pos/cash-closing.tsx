@@ -2,6 +2,7 @@
 
 import { useState } from "react"
 import { useSearchParams } from "next/navigation"
+import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { DataTable } from "@/components/workspace/data-table"
@@ -12,8 +13,27 @@ import { SessionSales } from "./cash-history"
 
 export function CashClosing() {
   const id = useSearchParams().get("caixa")
-  const resource = useResource<Envelope<CashSession | null>>(id ? `/api/erp/pos/sessions/${encodeURIComponent(id)}` : "/api/erp/pos/sessions/current?register=Principal")
-  return <div className="space-y-5"><CashNav id={resource.value?.data?.id} />{resource.loading ? <p role="status">Consultando fechamento…</p> : resource.error || !resource.value ? <Failure message={resource.error || "Caixa indisponível"} status={resource.status} retry={resource.reload} /> : resource.value.data ? <ClosingEditor key={`${resource.value.tenantId}:${resource.value.data.id}:${resource.value.data.revision}`} snapshot={resource.value as Envelope<CashSession>} reload={resource.reload} /> : <p>Não há caixa aberto. Consulte o histórico para conferir fechamentos anteriores.</p>}</div>
+  if (!id) return <ChooseCashSession />
+  return <SelectedSession key={id} id={id} />
+}
+
+function ChooseCashSession() {
+  const [offset,setOffset]=useState(0)
+  const open=useResource<Listing<CashSession>>(`/api/erp/pos/sessions?status=open&limit=20&offset=${offset}`)
+  return <div className="space-y-5"><CashNav /><h2 className="font-semibold">Selecione o caixa para conferência</h2>
+    {open.loading ? <p role="status">Consultando caixas abertos…</p> : open.error || !open.value ? <Failure message={open.error || "Caixas indisponíveis"} status={open.status} requestId={open.requestId} retry={open.reload} /> : <>
+      {open.value.data.length ? <ul className="divide-y rounded-lg border">{open.value.data.map(s=><li key={s.id}><Link className="block p-3 hover:bg-muted" href={`/vendas/pdv/fechamento?caixa=${s.id}`}><strong>{s.register}</strong><span className="ml-3 text-sm text-muted-foreground">Aberto em {when(s.openedAt)}</span></Link></li>)}</ul> : <p>Nenhum caixa aberto.</p>}
+      {open.value.total>20 && <nav aria-label="Paginação dos caixas abertos" className="flex gap-3"><Button variant="outline" disabled={!offset} onClick={()=>setOffset(offset-20)}>Anterior</Button><Button variant="outline" disabled={offset+20>=open.value!.total} onClick={()=>setOffset(offset+20)}>Próxima</Button></nav>}
+      <Link className="text-primary underline" href="/vendas/pdv/historico">Consultar fechamentos anteriores</Link>
+    </>}
+  </div>
+}
+
+function SelectedSession({id}:{id:string}) {
+  const resource=useResource<Envelope<CashSession>>(`/api/erp/pos/sessions/${encodeURIComponent(id)}`)
+  return <div className="space-y-5"><CashNav id={id}/><Link className="inline-flex min-h-11 items-center text-primary underline" href="/vendas/pdv/fechamento">Selecionar outro caixa</Link>
+    {resource.loading ? <p role="status">Consultando fechamento…</p> : resource.error || !resource.value ? <Failure message={resource.error || "Caixa indisponível"} status={resource.status} requestId={resource.requestId} retry={resource.reload}/> : <ClosingEditor key={`${resource.value.tenantId}:${resource.value.data.id}:${resource.value.data.revision}`} snapshot={resource.value} reload={resource.reload}/>}
+  </div>
 }
 
 function ClosingEditor({ snapshot, reload }: { snapshot: Envelope<CashSession>; reload: () => void }) {
@@ -33,7 +53,7 @@ function ClosingEditor({ snapshot, reload }: { snapshot: Envelope<CashSession>; 
     {session.status === "open" && <>
       {snapshot.canEdit && <CashMovement session={session} tenant={snapshot.tenantId} reload={reload} />}
       <form className="max-w-xl space-y-4 rounded-lg border bg-muted/20 p-4" onSubmit={async e => { e.preventDefault(); const value = amount(counted); if (!value || difference !== 0 && reason.trim().length < 3) return; const result = await command.send<Envelope<CashSession>>(`/api/erp/pos/sessions/${session.id}/close`, snapshot.tenantId, { countedCash: value, reason: reason.trim() || null }, `"${session.revision}"`); if (result?.tenantId === snapshot.tenantId && result.data.id === session.id) { setClosed(result.data) } }}>
-        <h2 className="font-semibold">Conferência do dinheiro</h2><fieldset disabled={frozen || !canClose} className="space-y-3"><label className="grid gap-1.5 text-xs font-medium">Dinheiro contado (R$)<Input required inputMode="decimal" value={counted} onChange={e => setCounted(e.target.value)} /></label><p role="status" className="text-sm">Diferença: <strong>{money(difference)}</strong></p><label className="grid gap-1.5 text-xs font-medium">Justificativa da diferença<Input required={difference !== null && difference !== 0} minLength={difference !== null && difference !== 0 ? 3 : undefined} maxLength={1000} value={reason} onChange={e => setReason(e.target.value)} placeholder="Obrigatória quando houver diferença" /></label></fieldset>
+        <h2 className="font-semibold">Conferência do dinheiro</h2><p>Esperado no caixa • <strong>{money(session.totals.expectedCash)}</strong></p><fieldset disabled={frozen || !canClose} className="space-y-3"><label className="grid gap-1.5 text-xs font-medium">Dinheiro contado (R$)<Input required inputMode="decimal" value={counted} onChange={e => setCounted(e.target.value)} /></label><p role="status" className="text-sm">Diferença: <strong>{money(difference)}</strong></p><label className="grid gap-1.5 text-xs font-medium">Justificativa da diferença<Input required={difference !== null && difference !== 0} minLength={difference !== null && difference !== 0 ? 3 : undefined} maxLength={500} value={reason} onChange={e => setReason(e.target.value)} placeholder="Obrigatória quando houver diferença" /></label></fieldset>
         <p className="text-xs text-muted-foreground">O fechamento registra o dinheiro contado e a diferença para conferência. Nenhum ajuste de saldo é criado automaticamente.</p>
         {!canClose && <p role="status" className="text-sm">A conclusão exige permissão para fechar o PDV.</p>}
         {command.error && <Failure message={command.error} status={command.status} retry={command.stale ? reload : undefined} />}

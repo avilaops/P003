@@ -68,7 +68,7 @@ for (const kind of ["financeiro", "servicos"]) {
   })
 }
 
-for (const kind of ["executivo", "vendas"]) {
+for (const kind of ["executivo"]) {
   test(`relatório ${kind} inclui o período e preserva indicadores sem permissão`, async ({ page }) => {
     await page.route("**/api/erp/dashboard?*", route => route.fulfill({ json: { tenantId: tenant, startDate: "2026-06-01", endDate: "2026-11-15", products: null, customers: null, receivables: null, purchasePayables: null, sales: { orders: 2, amount: "500.00", average: "250.00", cancelled: 1 }, salesSeries: [{ month: "2026-11", orders: 2, amount: "500.00", average: "250.00" }] } }))
     await page.goto(`/relatorios/${kind}`)
@@ -109,3 +109,40 @@ for (const kind of ["produtos", "clientes"]) {
     await expect(page.getByRole("button", { name: "Imprimir / salvar PDF" })).toBeEnabled()
   })
 }
+
+test("relatório de vendas conserva filtros, concilia as três datas e protege as exportações de margem",async({page})=>{
+ const seller="33333333-3333-4333-8333-333333333333",id="22222222-2222-4222-8222-222222222222"
+ const report="/relatorios/vendas?from=2026-06-01&to=2026-11-15&seller="+seller+"&channel=loja&origin=invoiced"
+ let authorized=false
+ await page.route("**/api/erp/commercial/policies/performance?*",route=>{
+  const q=new URL(route.request().url()).searchParams
+  expect(q.get("from")).toBe("2026-06-01");expect(q.get("to")).toBe("2026-11-15");expect(q.get("seller")).toBe(seller);expect(q.get("channel")).toBe("loja")
+  return route.fulfill({json:{tenantId:tenant,manage:authorized,channels:["loja"],sellers:[{id:seller,name:"Ana"}],goals:[],totals:{orders:0,cancelled:0,orderedCents:"0",averageCents:"0",invoicedCents:"11501",returnedCents:"0",receivedCents:"3000"},
+   orders:[{id,number:"45",customer:"Cliente conciliado",date:"2026-01-02",status:"confirmed",createdInPeriod:false,seller:"Ana",channel:"loja",cents:"0",invoicedCents:"11501",returnedCents:"0",receivedCents:"3000"}],
+   abc:[{id,sku:"SKU-1",name:"Equipamento",quantityMicros:"1000000",cents:"11501",accumulatedBps:10000,class:"A"}],margins:authorized?[{id,number:"45",customer:"Cliente conciliado",forecastGrossCents:"4100",forecastNetCents:"3500",actualRevenueCents:"10001",actualCostCents:"6000",actualGrossCents:"4001"}]:null}})
+ })
+ await page.goto(report)
+ const order=page.getByRole("table",{name:"Pedidos"})
+ await expect(order.getByRole("row",{name:/Cliente conciliado/})).toContainText("115,01")
+ await expect(order).toContainText("30,00")
+ await expect(page.getByRole("button",{name:"Margem por pedido"})).toHaveCount(0)
+ await order.getByRole("link",{name:"45",exact:true}).click()
+ const back=page.getByRole("link",{name:"Voltar ao relatório com os filtros"})
+ await expect(back).toHaveAttribute("href",/channel=loja/,{timeout:45000})
+ await back.click()
+ await page.getByRole("button",{name:"Curva ABC",exact:true}).click()
+ await expect(page.getByRole("table",{name:"Curva ABC"})).toContainText("SKU-1")
+ await page.getByRole("button",{name:"Visualizar impressão/PDF"}).click()
+ await expect(page.locator("[data-report-document]")).toContainText("01/06/2026 a 15/11/2026")
+ await expect(page.locator("[data-report-document]")).toContainText("loja • Ana")
+ await page.goto(report+"&view=margins")
+ await expect(page.getByRole("button",{name:"Exportar CSV"})).toHaveCount(0)
+ authorized=true
+ await page.getByRole("button",{name:"Atualizar",exact:true}).click()
+ await expect(page.getByRole("table",{name:"Margem por pedido"})).toContainText("40,01")
+ const download=page.waitForEvent("download");await page.getByRole("button",{name:"Exportar CSV"}).click()
+ const stream=await (await download).createReadStream(),chunks=[]
+ for await(const chunk of stream!)chunks.push(Buffer.from(chunk))
+ const csv=Buffer.concat(chunks).toString("utf8")
+ expect(csv).toContain("Margem bruta realizada");expect(csv).toContain("40,01");expect(csv).toContain("Ana")
+})

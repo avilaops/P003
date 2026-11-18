@@ -1,5 +1,5 @@
 import Link from "next/link"
-import { NfeDrafts } from "./nfe-drafts"
+import { OutgoingNfes } from "./outgoing-nfes"
 import { PageHeader } from "@/components/page-header"
 
 type Kind = "overview" | "nfce" | "guides"
@@ -37,7 +37,7 @@ const fiscalGroups = [
 ] as const
 
 export function FiscalScreen({ kind }: { kind: Kind }) {
-  if (kind === "nfce") return <NfeDrafts model={65} />
+  if (kind === "nfce") return <OutgoingNfes model={65} />
   if (kind === "guides") return <FiscalCapabilityUnavailable />
   return <FiscalOverview />
 }

@@ -11,10 +11,10 @@ const trustDirectory = process.env.DANFE_TRUST_DIR ?? fileURLToPath(new URL("../
 const normalizePem = (value: string) => value.replace(/\r\n/g, "\n").trim();
 
 /** Only the shipped ICP roots are anchors. Intermediate CAs remain untrusted candidates. */
-function verifyChain(leaf: string, roots: string, intermediates: string): Promise<boolean> {
+export function verifyChain(leaf: string, roots: string, intermediates: string,purpose?:"sslclient"): Promise<boolean> {
   return new Promise((resolve, reject) => {
     const process = execFile("openssl", [
-      "verify", "-no-CApath", "-no-CAstore", "-CAfile", roots, "-untrusted", intermediates,
+      "verify", "-no-CApath", "-no-CAstore", ...(purpose?["-purpose",purpose]:[]), "-CAfile", roots, "-untrusted", intermediates,
     ], { timeout: 5_000, maxBuffer: 16_384, windowsHide: true }, error => {
       if (!error) resolve(true);
       else if (error.code === 2) resolve(false);

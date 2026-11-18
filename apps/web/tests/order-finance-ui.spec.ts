@@ -2,7 +2,7 @@ import { expect as baseExpect, test } from "@playwright/test"
 import { createCipheriv, createHash, randomBytes, randomUUID } from "node:crypto"
 import { createServer } from "node:http"
 
-const origin = "http://127.0.0.1:33118"
+import { origin } from "../playwright.danfe.config"
 const expect = baseExpect.configure({ timeout: 30_000 })
 const tenant = "11111111-1111-4111-8111-111111111111"
 const order = "22222222-2222-4222-8222-222222222222"

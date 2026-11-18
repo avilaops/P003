@@ -6,7 +6,7 @@ import { conflict, type OrderSnapshot } from "./acceptance.js"
 import type { CommandHeaders } from "./receivables.js"
 
 export async function heldQuantity(context: AuthorizedContext, product: unknown) {
-  const result = await context.client.query("SELECT COALESCE(sum(l.quantity_micros),0)::bigint AS quantity FROM sales_order_lines l JOIN sales_orders o ON o.tenant_id=l.tenant_id AND o.id=l.order_id WHERE l.tenant_id=$1 AND l.product_id=$2 AND o.status='confirmed'", [context.tenantId, product])
+  const result = await context.client.query("SELECT COALESCE(sum(l.quantity_micros-order_line_delivered(l.tenant_id,l.order_id,l.line_number)),0)::bigint AS quantity FROM sales_order_lines l JOIN sales_orders o ON o.tenant_id=l.tenant_id AND o.id=l.order_id WHERE l.tenant_id=$1 AND l.product_id=$2 AND o.status='confirmed'", [context.tenantId, product])
   return BigInt(String(result.rows[0]!.quantity))
 }
 
@@ -21,7 +21,8 @@ export async function reserveOrder(context: AuthorizedContext, order: OrderSnaps
 export async function issueOrder(context: AuthorizedContext, headers: CommandHeaders, order: OrderSnapshot) {
   for (const item of order.items) {
     const { client, tenantId } = context
-    const line = (await client.query("SELECT l.quantity_micros,l.unit FROM sales_order_lines l JOIN sales_orders o ON o.tenant_id=l.tenant_id AND o.id=l.order_id WHERE l.tenant_id=$1 AND l.order_id=$2 AND l.product_id=$3 AND o.status='confirmed'", [tenantId, order.data.id, item.productId])).rows[0]
+    const line = (await client.query("SELECT l.quantity_micros-order_line_delivered(l.tenant_id,l.order_id,l.line_number) AS quantity_micros,l.unit FROM sales_order_lines l JOIN sales_orders o ON o.tenant_id=l.tenant_id AND o.id=l.order_id WHERE l.tenant_id=$1 AND l.order_id=$2 AND l.product_id=$3 AND o.status='confirmed'", [tenantId, order.data.id, item.productId])).rows[0]
+    if (line && BigInt(String(line.quantity_micros)) === 0n) continue
     if (!line) conflict("A saída exige uma reserva confirmada deste pedido e produto")
     const product = (await client.query("SELECT status,unit FROM products WHERE tenant_id=$1 AND id=$2", [tenantId, item.productId])).rows[0]
     if (!product || product.status !== "active" || product.unit !== line.unit) conflict("O produto precisa estar ativo e conservar a unidade do pedido")
@@ -39,5 +40,12 @@ export async function issueOrder(context: AuthorizedContext, headers: CommandHea
 
 export async function validateFiscalCompletion(context: AuthorizedContext, id: unknown) {
   const fiscal = await context.client.query("SELECT (EXISTS(SELECT 1 FROM fiscal_nfe_drafts WHERE tenant_id=$1 AND environment='production' AND details->>'sourceOrderId'=$2::uuid::text) OR EXISTS(SELECT 1 FROM fiscal_nfe_documents WHERE tenant_id=$1 AND source_order_id=$2 AND environment='production')) AND NOT EXISTS(SELECT 1 FROM fiscal_nfe_documents WHERE tenant_id=$1 AND source_order_id=$2 AND environment='production' AND status='authorized') AS pending", [context.tenantId, id])
+  const lots = await context.client.query(`SELECT EXISTS(SELECT FROM sales_invoice_lots WHERE tenant_id=$1 AND order_id=$2 AND environment='production' AND NOT withdrawn)
+    AND EXISTS(SELECT FROM sales_order_lines s WHERE s.tenant_id=$1 AND s.order_id=$2 AND
+      (order_line_delivered(s.tenant_id,s.order_id,s.line_number)<>s.quantity_micros OR
+       (SELECT coalesce(sum(i.quantity_micros),0) FROM sales_invoice_lot_items i JOIN sales_invoice_lots l ON l.tenant_id=i.tenant_id AND l.id=i.lot_id
+        JOIN fiscal_nfe_documents d ON d.tenant_id=l.tenant_id AND d.id=l.draft_id WHERE i.tenant_id=s.tenant_id AND i.order_id=s.order_id AND i.line_number=s.line_number
+        AND NOT l.withdrawn AND d.environment='production' AND d.status='authorized')<>s.quantity_micros)) AS pending`,[context.tenantId,id])
+  if (lots.rows[0]?.pending) conflict("Autorize e entregue o saldo dos lotes de produção antes de concluir o pedido")
   if (fiscal.rows[0]?.pending) conflict("Autorize a NF-e de produção vinculada antes de concluir o pedido")
 }

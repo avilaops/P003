@@ -24,10 +24,11 @@ export type OrderCustomerHandle = {
   focus: (field: string) => void
 }
 type Props = {
+  initialCustomerId?: string
   ref?: Ref<OrderCustomerHandle>; tenantId: string; disabled: boolean; canManage: boolean; onDirty: () => void
   onDestinationChange: (state: string) => void; onTaxpayerChange: (value: boolean) => void
   onBusyChange: (value: boolean) => void; onUncertainChange: (value: boolean) => void
-  onProgressChange?: (value: { issues: OrderIssue[]; addressState: string }) => void
+  onProgressChange?: (value: { issues: OrderIssue[]; addressState: string; customerId?:string }) => void
   onProposalNameChange?: (name: string) => void
 }
 type ConfirmedCustomer = { id: string; tenantId: string; etag: string; party: OrderCustomerParty }
@@ -35,7 +36,7 @@ const selectClass = "h-9 min-h-9 w-full min-w-0 rounded-lg border bg-background 
 const addressFields: OrderCustomerField[] = ["postalCode", "state", "city", "street", "number", "district", "complement", "municipalityCode"]
 const required = <span aria-hidden="true"> *</span>
 
-export function OrderCustomerForm({ ref, tenantId, disabled, canManage, onDirty, onDestinationChange, onTaxpayerChange, onBusyChange, onUncertainChange, onProgressChange, onProposalNameChange }: Props) {
+export function OrderCustomerForm({ initialCustomerId, ref, tenantId, disabled, canManage, onDirty, onDestinationChange, onTaxpayerChange, onBusyChange, onUncertainChange, onProgressChange, onProposalNameChange }: Props) {
   const region = useRef<HTMLElement>(null)
   const searchRegion = useRef<HTMLDivElement>(null)
   const issueId = useId()
@@ -69,7 +70,7 @@ export function OrderCustomerForm({ ref, tenantId, disabled, canManage, onDirty,
   const frozen = disabled || loading || busy || uncertain || conflict
   const editable = canManage && !frozen
   const issues = !canManage && !selectedName ? [{ field: "selection", message: "Selecione um cliente cadastrado. Seu acesso não permite criar clientes." }] : orderCustomerIssues(draft)
-  const progressSignature = JSON.stringify({ issues: issues.map(issue => ({ ...issue, field: `customer.${issue.field}`, section: "customer" })), addressState: draft.state })
+  const progressSignature = JSON.stringify({ issues: issues.map(issue => ({ ...issue, field: `customer.${issue.field}`, section: "customer" })), addressState: draft.state,customerId:requestedId??undefined })
   useEffect(() => { progressCallback.current = onProgressChange }, [onProgressChange])
   useEffect(() => { progressCallback.current?.(JSON.parse(progressSignature)) }, [progressSignature])
 
@@ -188,6 +189,11 @@ export function OrderCustomerForm({ ref, tenantId, disabled, canManage, onDirty,
     return () => { clearTimeout(timer); controller.abort(); setCepPending(false) }
   }, [draft.postalCode, draft.taxId, cepRevision, cepRetry, editable, tenantId, onDirty, onDestinationChange])
 
+  useEffect(() => {
+    if (initialCustomerId) void selectCustomer({id: initialCustomerId, legalName: "Cliente da negociação"})
+    // The parent remounts the form when the scoped transfer changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialCustomerId, tenantId])
   async function selectCustomer(value: Choice) {
     if (disabled || busy || uncertain || running.current) return
     activeSelection.current?.abort()

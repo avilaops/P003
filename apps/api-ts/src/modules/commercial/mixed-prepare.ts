@@ -1,3 +1,4 @@
+import { applyPriceLists } from "./price-origin.js"
 import { createHash } from "node:crypto"
 import type { AuthorizedContext } from "../../platform/access.js"
 import { canonicalJson } from "../../platform/json.js"
@@ -24,6 +25,7 @@ export async function prepareMixed(context: AuthorizedContext, input: MixedInput
     if (!row) throw new Problem(409, "domain_conflict", "Produto ou custo alterado, indisponível ou fora da tabela. Atualize e publique a tabela")
     sources.push(sourceItem(row))
   }
+  await applyPriceLists(context,sources,input.customerId,input.channel)
   const { revision: rulesRevision, rules } = await loadApprovalRules(context), { sale, director } = calculateMixed(input, policies, sources, rules)
   const raw = { tenantId: context.tenantId, input, rulesRevision, rules, policies, sources, sale, director }
   return { kind: "mixed" as const, sale, director, rules, policies, sources, digest: createHash("sha256").update(canonicalJson(raw)).digest("hex") }

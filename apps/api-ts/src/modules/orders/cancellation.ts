@@ -44,22 +44,26 @@ async function cancelProduction(context: AuthorizedContext, headers: CommandHead
   return { status: ids.length ? "applied" : "not_required", applied: ids.length > 0, cancelledCount: ids.length, orderIds: ids, stockMovementIds: movements }
 }
 
-export async function reconcileUnshipped(context: AuthorizedContext, headers: CommandHeaders, order: string, next: Revision) {
+export async function reconcileCancellation(context: AuthorizedContext, headers: CommandHeaders, order: string, next: Revision, completed?: {
+  reason:string; occurred:string; receivableIds:string[]; paymentReversalIds:string[]; stockMovementIds:string[]
+}) {
   const { client, tenantId } = context
   const pending = await client.query("SELECT EXISTS(SELECT 1 FROM fiscal_nfe_documents WHERE tenant_id=$1 AND source_order_id=$2 AND (status IN ('preparing','prepared','unknown') OR lease_until>clock_timestamp())) AS present", [tenantId, order])
   if (pending.rows[0]?.present) conflict("Concilie a emissão fiscal em andamento antes de cancelar a venda")
   const required = Boolean((await client.query("SELECT EXISTS(SELECT 1 FROM fiscal_nfe_documents WHERE tenant_id=$1 AND source_order_id=$2 AND status='authorized') AS present", [tenantId, order])).rows[0]?.present)
-  const id = randomUUID(), reason = "Cancelamento do pedido antes da expedição", occurred = new Date().toISOString().slice(0, 10)
+  const id = randomUUID(), reason = completed?.reason ?? "Cancelamento do pedido antes da expedição", occurred = completed?.occurred ?? new Date().toISOString().slice(0, 10)
   const production = await cancelProduction(context, headers, order, id, reason)
   const commissions = (await client.query("SELECT count(*) AS count,count(*) FILTER (WHERE NOT EXISTS(SELECT 1 FROM commission_entries reversed WHERE reversed.tenant_id=e.tenant_id AND reversed.reverses_entry_id=e.id)) AS unreversed FROM commission_entries e WHERE e.tenant_id=$1 AND e.order_id=$2 AND e.kind='receipt'", [tenantId, order])).rows[0]!
   if (BigInt(String(commissions.unreversed)) > 0n) conflict("Há comissões de recebimentos sem estorno; concilie antes de cancelar")
   const count = revisionValue(commissions.count), applied = BigInt(count) > 0n
   const commission = { status: applied ? "applied" : "not_required", applied, reversedEntries: count, paymentsPreserved: true }
-  const summary = { id, kind: "sale_cancellation", sourceId: order, orderId: order, cancellationId: id, revision: next, reason, occurredOn: occurred, receivableId: null, stockMovementIds: [], paymentReversalIds: [], beforeShipment: true, fiscalCancellation: { requested: required, status: required ? "pending" : "not_required" }, reconciliation: { commission, production } }
+  const summary = { id, kind: "sale_cancellation", sourceId: order, orderId: order, cancellationId: id, revision: next, reason, occurredOn: occurred, receivableId: completed?.receivableIds.length===1 ? completed.receivableIds[0] : null, stockMovementIds: completed?.stockMovementIds ?? [], paymentReversalIds: completed?.paymentReversalIds ?? [],
+    ...(completed ? {receivableIds:completed.receivableIds} : {beforeShipment:true}), fiscalCancellation: { requested: required, status: required ? "pending" : "not_required" }, reconciliation: { commission, production } }
   await client.query("INSERT INTO sales_order_cancellations(id,tenant_id,order_id,reason,occurred_on,order_revision,summary) VALUES($1,$2,$3,$4,$5,$6,$7)", [id, tenantId, order, reason, occurred, next, summary])
   const contracts = await client.query("SELECT id,status FROM commercial_contracts WHERE tenant_id=$1 AND order_id=$2 ORDER BY id", [tenantId, order])
   for (const contract of contracts.rows) {
     if (!["completed", "declined", "expired"].includes(String(contract.status))) await record(context, headers, "commercial_contract", String(contract.id), "contract.withdrawal_requested", { orderId: order, cancellationId: id, reason, status: "pending", filesPreserved: true })
   }
   await record(context, headers, "sales_order", order, "sales.order.reconciliation_requested", summary)
+  return summary
 }

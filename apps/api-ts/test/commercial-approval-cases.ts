@@ -22,13 +22,16 @@ export async function verifyCommercialApprovals(app: FastifyInstance, seed: Pool
   const managerHeaders = { ...headers, authorization: "Bearer commercial-manager" }
   assert.equal((await app.inject({ method: "GET", url: settings, headers: managerHeaders })).statusCode, 403)
   const version = (await seed.query("SELECT active_price_version_id FROM commercial_settings WHERE tenant_id=$1 AND product_line='imported'", [tenant])).rows[0].active_price_version_id
+  const issuer = (await seed.query("SELECT id FROM identities WHERE auth_subject='operator'")).rows[0].id
   const create = async (director: boolean) => {
     const id = randomUUID()
     await seed.query("INSERT INTO sales_orders(id,tenant_id,customer_id,customer_name,customer_tax_id,due_date,amount_cents,status) VALUES($1,$2,$2,'Cliente','52998224725',CURRENT_DATE,10000,'draft')", [id, tenant])
-    await seed.query("INSERT INTO commercial_order_quotes(tenant_id,order_id,price_version_id,public_snapshot,private_snapshot,approval_rules,approval_status,requires_director,created_by) VALUES($1,$2,$3,'{\"totalCents\":10000}','{\"director\":{\"netProfitCents\":1000}}','{}','pending',$4,$5)", [tenant, id, version, director, identity])
+    await seed.query("INSERT INTO commercial_order_quotes(tenant_id,order_id,price_version_id,public_snapshot,private_snapshot,approval_rules,approval_status,requires_director,created_by) VALUES($1,$2,$3,'{\"totalCents\":10000}','{\"director\":{\"netProfitCents\":1000}}','{}','pending',$4,$5)", [tenant, id, version, director, issuer])
     return id
   }
   const order = await create(false), url = `/api/v1/commercial/orders/${order}`
+  const own = await app.inject({ method: "POST", url: url+"/decision", headers: { ...headers, "if-match": '"1"', "idempotency-key": randomUUID() }, payload: { approved: true, reason: "Própria solicitação" } })
+  assert.equal(own.statusCode, 403)
   const snapshot = await app.inject({ method: "GET", url, headers: managerHeaders })
   assert.equal(snapshot.statusCode, 200, snapshot.body)
   assert.equal(snapshot.json().canApprove, true)

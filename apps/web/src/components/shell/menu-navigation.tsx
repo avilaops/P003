@@ -5,6 +5,7 @@ import { usePathname, useSearchParams } from "next/navigation"
 import { BarChart3, Boxes, BriefcaseBusiness, ChevronsUpDown, ChevronRight, History, House, LayoutGrid, Menu, PanelLeftClose, PanelLeftOpen, ShoppingCart, Truck, Users, Wallet, Search, X, PackageCheck, ReceiptText, Settings2, Wrench, type LucideIcon } from "lucide-react"
 import { GuardedLink as Link } from "./navigation-guard"
 import { CategoryButton } from "./category-button"
+import { isPosDestination, usePosVisibility } from "./pos-visibility"
 import { desktopMenus, moduleLinks, navigationDestinations } from "./navigation-catalog"
 import { isDemonstrationRoute } from "@/lib/demonstration-routes"
 import { Sheet, SheetClose, SheetContent, SheetTitle } from "@/components/ui/sheet"
@@ -59,10 +60,12 @@ function currentArea(pathname: string) {
 }
 
 function Options({ index, pathname, onNavigate }: { index: number; pathname: string; onNavigate: () => void }) {
-  const active = menus[index].columns.flatMap(group => group.items).filter(item => matches(pathname, item.href))
+  const enabled = usePosVisibility()
+  const columns = menus[index].columns.map(group => ({...group,items:group.items.filter(item=>enabled || !isPosDestination(item.href))})).filter(group=>group.items.length)
+  const active = columns.flatMap(group => group.items).filter(item => matches(pathname, item.href))
     .sort((a, b) => b.href.length - a.href.length)[0]?.href
   return <div className="erp-module-groups">
-    {menus[index].columns.map(group => <section key={group.title || group.items[0]?.href}>
+    {columns.map(group => <section key={group.title || group.items[0]?.href}>
       {group.title && <h3>{group.title}</h3>}
       <ul>{group.items.map(item => <li key={item.href}>
         <Link href={item.href} onNavigate={onNavigate} className="erp-option" aria-current={item.href === active ? "page" : undefined}><span className="min-w-0">{item.label}</span></Link>
@@ -72,6 +75,8 @@ function Options({ index, pathname, onNavigate }: { index: number; pathname: str
 }
 
 export function MenuNavigation({ children }: { children: ReactNode }) {
+  const posEnabled = usePosVisibility()
+  const destinations = searchableDestinations.filter(item => posEnabled || !isPosDestination(item.href))
   const routePathname = usePathname()
   const preferences = routePathname === "/preferencias" || routePathname.startsWith("/preferencias/")
   const category = useSearchParams().get("categoria")
@@ -126,11 +131,11 @@ export function MenuNavigation({ children }: { children: ReactNode }) {
   }, [pathname])
 
   const terms = normalizeSearch(search).split(/\s+/).filter(Boolean)
-  const results = terms.length ? searchableDestinations.filter(item => {
+  const results = terms.length ? destinations.filter(item => {
     const keywords = normalizeSearch(item.keywords)
     return terms.every(term => keywords.includes(term))
   }).slice(0, 12) : []
-  const recentDestinations = recent.flatMap(href => searchableDestinations.filter(item => item.href === href))
+  const recentDestinations = recent.flatMap(href => destinations.filter(item => item.href === href))
 
   const homeLinks = <ul className="erp-home-links">
     {([{ label: "Visão geral", href: "/", Icon: House }, { label: "Histórico importado", href: "/historico", Icon: History }]).map(({ label, href, Icon }) => {

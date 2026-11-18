@@ -62,19 +62,39 @@ export function CommercialReturn({ kind, id, tenantId, etag, canManage, reversed
   </section>
 }
 
-function ReconciliationDetails({ entry }: { entry: ReturnEntry }) {
+function FiscalCancellation({id,tenant}:{id:string;tenant:string}) {
+  const path="/api/erp/fiscal/order-cancellations/"+id+"/process"
+  const state=useResource<{tenantId:string;documentId:string;environment:string;number:number;series:number;status:string;pending:boolean;canProcess:boolean}>(path),command=useCommand()
+  const note=state.value?.tenantId===tenant?state.value:null
+  if(!note)return <div className="space-y-1"><p>Solicitação de cancelamento fiscal registrada.</p>
+    {state.error ? <div role="alert"><RequestError message={state.error} status={state.status}/>{state.status!==403 && <Button type="button" variant="outline" onClick={state.reload}>Consultar nota novamente</Button>}</div>
+      : <p role="status">Consultando a nota vinculada…</p>}
+  </div>
+  const environment=note.environment==="production"?"produção":"homologação"
+  async function processCancellation(){
+    if(!note || !state.etag || !command.uncertain && !window.confirm("Processar o cancelamento fiscal da nota "+note.number+" em "+environment+" com o motivo registrado na venda?"))return
+    const result=await command.send(path,tenant,{},state.etag)
+    if(result)state.reload()
+  }
+  return <div className="space-y-2 text-sm"><a className="text-primary underline" href={"/fiscal/notas-saida/"+note.documentId}>NF-e {note.number} • série {note.series} • {environment}</a>
+    {note.status==="cancelled" && !note.pending?<p>Cancelamento fiscal confirmado.</p>:(note.status==="authorized" || note.pending) && note.canProcess?<Button variant="outline" disabled={command.busy || command.stale} onClick={()=>void processCancellation()}>{command.uncertain || note.pending?"Consultar cancelamento pendente":"Processar cancelamento fiscal"}</Button>:<p>Confira a situação da emissão vinculada.</p>}
+    {command.error && <p role="alert">{command.error}</p>}{command.stale && <Button variant="outline" onClick={()=>{command.reset();state.reload()}}>Atualizar revisão fiscal</Button>}
+  </div>
+}
+
+function ReconciliationDetails({ entry,tenant }: { entry: ReturnEntry;tenant:string }) {
   const commission = entry.reconciliation?.commission
   const production = entry.reconciliation?.production
   return <>
     {commission && <p className="text-sm">{typeof commission === "string" ? "Este registro anterior não confirma a reconciliação de comissões." : commission.status === "applied" ? "Comissões de recebimentos estornadas. Pagamentos anteriores preservados." : "Sem comissões de recebimentos para estornar."}</p>}
     {production && <p className="text-sm">{typeof production === "string" ? "Este registro anterior não confirma a reconciliação de produção." : production.status === "applied" ? `Produção: ${production.cancelledCount ?? 0} ordem(ns) cancelada(s) e ${production.stockMovementIds?.length ?? 0} consumo(s) estornado(s).` : "Sem ordens de produção para cancelar."}</p>}
-    {entry.fiscalCancellation?.requested && <p className="text-sm">Solicitação de cancelamento fiscal registrada. Confira a situação da NF-e.</p>}
+    {entry.fiscalCancellation?.requested && <FiscalCancellation id={entry.id} tenant={tenant}/>}
   </>
 }
 
 function ReturnHistory({ url, tenantId }: { url: string; tenantId: string }) {
   const result = useResource<{ tenantId: string; data: ReturnEntry[] }>(url)
   return <div className="min-w-0 space-y-3" aria-label="Histórico de devoluções">
-    {result.loading ? <p role="status">Carregando histórico…</p> : result.error ? <div role="alert"><p><RequestError message={result.error} status={result.status} /></p><Button onClick={result.reload}>Consultar histórico novamente</Button></div> : result.value?.tenantId !== tenantId ? <p role="alert">A empresa consultada mudou. Recarregue a página.</p> : result.value.data.length ? <ul className="space-y-3">{result.value.data.map(entry => <li className="min-w-0 space-y-2 rounded-xl border p-4" key={entry.id}><p className="break-words font-medium">{entry.reason}</p><p>Data: {entry.occurredOn} · Revisão {entry.revision}</p><ReconciliationDetails entry={entry} /></li>)}</ul> : <p>Nenhuma devolução registrada.</p>}
+    {result.loading ? <p role="status">Carregando histórico…</p> : result.error ? <div role="alert"><p><RequestError message={result.error} status={result.status} /></p><Button onClick={result.reload}>Consultar histórico novamente</Button></div> : result.value?.tenantId !== tenantId ? <p role="alert">A empresa consultada mudou. Recarregue a página.</p> : result.value.data.length ? <ul className="space-y-3">{result.value.data.map(entry => <li className="min-w-0 space-y-2 rounded-xl border p-4" key={entry.id}><p className="break-words font-medium">{entry.reason}</p><p>Data: {entry.occurredOn} · Revisão {entry.revision}</p><ReconciliationDetails entry={entry} tenant={tenantId} /></li>)}</ul> : <p>Nenhuma devolução registrada.</p>}
   </div>
 }

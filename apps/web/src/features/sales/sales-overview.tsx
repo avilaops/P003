@@ -1,17 +1,17 @@
 "use client"
 
-import { ChevronDown } from "lucide-react"
+import { NewOrderActions } from "./new-order-actions"
 import { GuardedLink as Link } from "@/components/shell/navigation-guard"
 import { PageHeader } from "@/components/page-header"
 import { RequestError } from "@/components/feedback/session-recovery"
 import { DataTable } from "@/components/workspace/data-table"
 import { Button, buttonVariants } from "@/components/ui/button"
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { useResource } from "@/hooks/use-operation"
 import type { Schema } from "@/lib/api/types"
 import { commercialMoney, orderNumber, orderStatusLabels } from "./order-presentation"
 import { CommercialStatus, commercialRecordAction } from "./commercial-status"
 import "./sales-workspace.css"
+import { SalesIndicators } from "./sales-indicators"
 
 type Listing = Schema<"OrderList"> | Schema<"ProposalList">
 type ReadState = { value: Listing | null; loading: boolean; error: string; status: number; reload: () => void }
@@ -37,7 +37,7 @@ function RecentRecords({ kind, title, resource }: { kind: Kind; title: string; r
   const id = `sales-${kind}-title`
   return <section className="sales-recent-panel" aria-labelledby={id}>
     <div className="sales-panel-heading"><h2 id={id}>{title}</h2><Link className={`${linkClass} text-sm`} href={`/vendas/${kind}`}>Ver {orders ? "todos os pedidos" : "todas as propostas"}</Link></div>
-    {resource.loading ? <div className="sales-recent-loading" role="status">Carregando {kind}…</div> : resource.error ? <div className="sales-panel-state" role="alert"><RequestError message={resource.error} status={resource.status} /><Button variant="outline" onClick={resource.reload}>Tentar consultar {kind} novamente</Button></div> : resource.value && (resource.value.data.length === 0 ? <div className="sales-panel-state"><p>Nenhum{orders ? " pedido" : "a proposta"} nesta empresa.</p>{resource.value.canEdit && <Link className={buttonVariants({ variant: "outline", size: "sm" })} href={`/vendas/${kind}/novo`}>{orders ? "Novo pedido" : "Novo orçamento"}</Link>}</div> : <div className="sales-recent-table-wrap"><DataTable className="sales-recent-table">
+    {resource.loading ? <div className="sales-recent-loading" role="status">Carregando {kind}…</div> : resource.error ? <div className="sales-panel-state" role="alert"><RequestError message={resource.error} status={resource.status} /><Button variant="outline" onClick={resource.reload}>Tentar consultar {kind} novamente</Button></div> : resource.value && (resource.value.data.length === 0 ? <div className="sales-panel-state"><p>Nenhum{orders ? " pedido" : "a proposta"} nesta empresa.</p>{resource.value.canEdit && <Link className={buttonVariants({ variant: "outline", size: "sm" })} href={`/vendas/${kind}/novo`}>{orders ? "Novo pedido" : "Nova proposta"}</Link>}</div> : <div className="sales-recent-table-wrap"><DataTable className="sales-recent-table">
       <caption className="sr-only">{title} recentes • até cinco registros por última atualização</caption>
       <thead><tr><th scope="col">{orders ? "Pedido" : "Proposta"}</th><th scope="col" className="sales-customer-column">Cliente</th><th scope="col" className="sales-status-column">Situação</th><th scope="col" className="sales-date-column">Última atualização</th><th scope="col" className="sales-value-column">Valor</th><th scope="col" className="sales-action-column"><span className="sr-only">Ação</span></th></tr></thead>
       <tbody>{resource.value.data.map(record => {
@@ -65,13 +65,14 @@ export function SalesWorkspace() {
   return <div className="sales-overview">
     <PageHeader title="Vendas" breadcrumbs={[{ label: "Vendas", href: "/vendas" }, { label: "Visão geral" }]} actions={<>
       {orders.value && <Link className={buttonVariants({ variant: "outline", className: "h-10 px-3" })} href="/vendas/tabela-precos">Tabela de preços</Link>}
-      {proposals.value?.canEdit && <Link className={buttonVariants({ variant: "outline", className: "h-10 px-3" })} href="/vendas/propostas/novo">Novo orçamento</Link>}
-      {orders.value?.canEdit && <div className="sales-create-order"><Link className={buttonVariants({ className: "h-10 rounded-r-none px-3" })} href="/vendas/pedidos/novo">Novo pedido</Link><DropdownMenu><DropdownMenuTrigger render={<Button className="h-10 rounded-l-none border-l border-primary-foreground/30 px-2" aria-label="Mais opções de novo pedido" />}><ChevronDown aria-hidden="true" className="size-4" /></DropdownMenuTrigger><DropdownMenuContent align="end"><DropdownMenuItem render={<Link href="/vendas/pedidos/novo?modo=catalogo" />}>Pedido pelo catálogo</DropdownMenuItem></DropdownMenuContent></DropdownMenu></div>}
+      {proposals.value?.canEdit && <Link className={buttonVariants({ variant: "outline", className: "h-10 px-3" })} href="/vendas/propostas/novo">Nova proposta</Link>}
+      {orders.value?.canEdit && <NewOrderActions />}
     </>} />
     <section className="sales-summary" aria-label="Resumo de vendas">
       <DraftSummary title="Pedidos em rascunho" href="/vendas/pedidos?status=draft" resource={draftOrders} />
       <DraftSummary title="Propostas em rascunho" href="/vendas/propostas?status=draft" resource={draftProposals} />
     </section>
+    <SalesIndicators/>
     <div className="sales-recent-panels"><RecentRecords kind="pedidos" title="Pedidos de venda" resource={orders} /><RecentRecords kind="propostas" title="Propostas" resource={proposals} /></div>
   </div>
 }

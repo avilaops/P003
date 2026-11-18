@@ -11,9 +11,10 @@ import { Pagination } from "@/components/workspace/pagination"
 import { RequestError } from "@/components/feedback/session-recovery"
 import { useResource } from "@/hooks/use-operation"
 import type { Opportunity } from "./opportunities"
-import { pipelineMoney as money, pipelineHref, pipelinePageSize, pipelineStages, pipelineSummary, readPipelineQuery, type PipelineQuery, type PipelineTotal } from "./opportunity-pipeline-model"
+import { PipelineBoard, PipelineConversion, type Conversion, type StageSummary } from "./pipeline-board"
+import { defaultStages, type StageOption, type SalesMember, pipelineMoney as money, pipelineHref, pipelinePageSize, pipelineStages, pipelineSummary, readPipelineQuery, type PipelineQuery, type PipelineTotal } from "./opportunity-pipeline-model"
 
-type Listing = { tenantId: string; canEdit: boolean; data: Opportunity[]; total: number; totals: PipelineTotal[] }
+type Listing = { tenantId: string; canEdit: boolean; data: Opportunity[]; total: number; totals: PipelineTotal[]; stages?:StageOption[]; members?:SalesMember[]; canConfigure?:boolean; filteredTotals?:StageSummary[]; conversion?:Conversion[] }
 
 export function SalesPipeline() {
   return <Suspense fallback={<main className="p-4"><p role="status">Carregando oportunidades…</p></main>}><PipelineRoute /></Suspense>
@@ -28,33 +29,39 @@ function PipelineRoute() {
 function PipelineResults({ query }: { query: PipelineQuery }) {
   const router = useRouter()
   const [search, setSearch] = useState(query.q)
+  const [start,setStart]=useState(query.start||""),[end,setEnd]=useState(query.end||"")
   const params = new URLSearchParams({ q: query.q, stage: query.stage, offset: String(query.offset), limit: String(pipelinePageSize) })
+  if(query.start) params.set("start",query.start)
+  if(query.end) params.set("end",query.end)
   const result = useResource<Listing>(`/api/erp/opportunities?${params}`)
   const summary = pipelineSummary(result.value?.totals)
-  const filtered = Boolean(query.q || query.stage)
+  const stages=result.value?.stages??defaultStages
+  const filtered = Boolean(query.q || query.stage || query.start || query.end)
   const emptyPage = query.offset > 0 && result.value?.data.length === 0
   function navigate(next: PipelineQuery) {
-    const normalized = readPipelineQuery(new URLSearchParams({ q: next.q, stage: next.stage, offset: String(next.offset) }))
+    const normalized = readPipelineQuery(new URLSearchParams({ q: next.q, stage: next.stage, offset: String(next.offset), start:next.start||"",end:next.end||"" }))
     const href = pipelineHref(normalized)
     if (href === pipelineHref(query)) result.reload()
     else router.push(href, { scroll: false })
   }
   return <main className="mx-auto min-w-0 max-w-7xl space-y-3 px-4 pb-6 pt-4 [--workspace-control-height:44px] sm:[--workspace-control-height:36px]">
-    <div className="flex flex-wrap items-start justify-between gap-2"><PageHeader title="Funil comercial" /><div>{!result.loading && result.value?.canEdit && <Link className="inline-flex min-h-11 items-center rounded-lg bg-primary px-3 text-sm font-medium text-primary-foreground" href="/vendas/funil/nova">Nova oportunidade</Link>}</div></div>
-    <form role="search" aria-label="Pesquisar oportunidades" className="grid min-w-0 gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(150px,auto)_auto_auto] sm:items-end" onSubmit={event => { event.preventDefault(); navigate({ ...query, q: search, offset: 0 }) }}>
+    <div className="flex flex-wrap items-start justify-between gap-2"><PageHeader title="Funil comercial" /><div className="flex items-center gap-3">{result.value?.canConfigure && <Link className="underline" href="/vendas/funil/configuracao">Configurar etapas</Link>}{!result.loading && result.value?.canEdit && <Link className="inline-flex min-h-11 items-center rounded-lg bg-primary px-3 text-sm font-medium text-primary-foreground" href="/vendas/funil/nova">Nova oportunidade</Link>}</div></div>
+    <form role="search" aria-label="Pesquisar oportunidades" className="grid min-w-0 gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(150px,auto)_auto_auto] sm:items-end" onSubmit={event => { event.preventDefault(); navigate({ ...query, q: search, start,end, offset: 0 }) }}>
       <label className="grid min-w-0 gap-1 text-sm">Buscar oportunidade, empresa ou contato<Input type="search" maxLength={160} value={search} onChange={event => setSearch(event.target.value)} /></label>
-      <label className="grid min-w-0 gap-1 text-sm">Etapa<select aria-label="Etapa" className="min-h-9 min-w-0 rounded-lg border bg-background px-2" value={query.stage} onChange={event => navigate({ q: search, stage: event.target.value as PipelineQuery["stage"], offset: 0 })}><option value="">Todas as etapas</option>{Object.entries(pipelineStages).map(([stage, label]) => <option value={stage} key={stage}>{label}</option>)}</select></label>
+      <label className="grid min-w-0 gap-1 text-sm">Etapa<select aria-label="Etapa" className="min-h-9 min-w-0 rounded-lg border bg-background px-2" value={query.stage} onChange={event => navigate({ ...query, q: search, stage: event.target.value as PipelineQuery["stage"], offset: 0 })}><option value="">Todas as etapas</option>{stages.map(s=><option value={s.code} key={s.code}>{s.label}</option>)}</select></label>
+      {result.value?.stages && <><label className="grid gap-1 text-sm">Criadas a partir de<Input type="date" max={end||undefined} value={start} onChange={e=>setStart(e.target.value)}/></label><label className="grid gap-1 text-sm">Criadas até<Input type="date" min={start||undefined} value={end} onChange={e=>setEnd(e.target.value)}/></label></>}
       <Button type="submit" disabled={result.loading}>Buscar</Button>
-      {(filtered || search) && <Button type="button" variant="outline" onClick={() => { setSearch(""); navigate({ q: "", stage: "", offset: 0 }) }}>Limpar filtros</Button>}
+      {(filtered || search) && <Button type="button" variant="outline" onClick={() => { setSearch(""); setStart("");setEnd(""); navigate({ q: "", stage: "", offset: 0 }) }}>Limpar filtros</Button>}
     </form>
     {result.loading ? <p role="status">Carregando oportunidades…</p> : result.error || !result.value ? <div className="space-y-2 rounded-lg border bg-background p-3"><p role="alert"><RequestError message={result.error || "Lista de oportunidades indisponível."} status={result.status} /></p><Button type="button" variant="outline" onClick={result.reload}>Tentar novamente</Button></div> : <>
-      {summary ? <details className="rounded-lg border bg-background p-3">
-        <summary className="min-h-11 cursor-pointer text-sm focus-visible:outline-2 focus-visible:outline-ring"><span className="font-medium">Resumo da empresa</span><span className="mt-1 block pl-4 text-xs text-muted-foreground">{summary.open.count} em andamento · {money(summary.open.estimatedCents)}</span></summary>
+      {summary ? <details open={result.value.stages?true:undefined} className="rounded-lg border bg-background p-3">
+        <summary className="min-h-11 cursor-pointer text-sm focus-visible:outline-2 focus-visible:outline-ring"><span className="font-medium">Resumo da empresa</span><span className="mt-1 block pl-4 text-xs text-muted-foreground">{summary.open.count} em andamento • {money(summary.open.estimatedCents)}</span></summary>
         <p className="mt-2 text-xs text-muted-foreground">Valores de todas as oportunidades da empresa, antes dos filtros.</p>
-        <dl className="mt-3 grid gap-3 sm:grid-cols-3">{([["Em andamento", summary.open], ["Ganho", summary.won], ["Perdido", summary.lost]] as const).map(([label, value]) => <div key={label}><dt className="text-xs text-muted-foreground">{label}</dt><dd className="text-sm font-medium">{value.count} · {money(value.estimatedCents)}</dd></div>)}</dl>
+        <dl className="mt-3 grid gap-3 sm:grid-cols-3">{([["Em andamento", summary.open], ["Ganho", summary.won], ["Perdido", summary.lost]] as const).map(([label, value]) => <div key={label}><dt className="text-xs text-muted-foreground">{label}</dt><dd className="text-sm font-medium">{value.count} • {money(value.estimatedCents)}</dd></div>)}</dl>
       </details> : <p className="text-sm text-muted-foreground">Resumo da empresa indisponível.</p>}
-      <p role="status" className="text-xs text-muted-foreground">{result.value.total} oportunidade(s) no filtro · {result.value.data.length} nesta página</p>
-      {result.value.data.length ? <div className="min-w-0 overflow-hidden rounded-lg border bg-background"><DataTable className="w-full table-fixed text-sm">
+      {result.value.conversion && <PipelineConversion stages={stages} rows={result.value.conversion}/>}
+      <p role="status" className="text-xs text-muted-foreground">{result.value.total} oportunidade(s) no filtro • {result.value.data.length} nesta página</p>
+      {result.value.data.length && result.value.stages ? <PipelineBoard stages={stages} items={result.value.data} totals={result.value.filteredTotals??result.value.totals} members={result.value.members??[]} selected={query.stage}/> : result.value.data.length ? <div className="min-w-0 overflow-hidden rounded-lg border bg-background"><DataTable className="w-full table-fixed text-sm">
         <caption className="sr-only">Oportunidades do funil</caption>
         <thead className="bg-muted/50 text-xs"><tr><th scope="col" className="w-[62%] p-2 text-left sm:w-auto">Oportunidade</th><th scope="col" className="hidden p-2 text-left md:table-cell">Empresa</th><th scope="col" className="hidden p-2 text-left sm:table-cell">Etapa</th><th scope="col" className="w-[38%] p-2 text-right sm:w-auto">Valor estimado</th></tr></thead>
         <tbody>{result.value.data.map(item => <tr className="border-t hover:bg-muted/20" key={item.id}>
@@ -64,7 +71,7 @@ function PipelineResults({ query }: { query: PipelineQuery }) {
           <td className="break-words p-2 text-right align-top font-medium tabular-nums [overflow-wrap:anywhere]">{Number.isSafeInteger(item.estimatedCents) && item.estimatedCents >= 0 ? money(item.estimatedCents) : "Valor indisponível"}</td>
         </tr>)}</tbody>
       </DataTable></div> : <div className="space-y-2 rounded-lg border bg-background p-4"><p>{emptyPage ? "Nenhuma oportunidade nesta página." : filtered ? "Nenhuma oportunidade encontrada para estes filtros." : "Nenhuma oportunidade cadastrada."}</p><p className="text-sm text-muted-foreground">{emptyPage ? "Volte à primeira página para consultar as oportunidades." : filtered ? "Ajuste a busca ou limpe os filtros para consultar outras oportunidades." : result.value.canEdit ? "Use Nova oportunidade para registrar o primeiro contato." : "As oportunidades cadastradas pela equipe aparecerão aqui."}</p>{emptyPage && <Button type="button" variant="outline" onClick={() => navigate({ ...query, offset: 0 })}>Voltar à primeira página</Button>}</div>}
-      {!emptyPage && <Pagination offset={query.offset} pageSize={pipelinePageSize} total={result.value.total} maxOffset={100000} onOffsetChange={offset => navigate({ ...query, offset })} />}
+      {!emptyPage && result.value.total>pipelinePageSize && <Pagination offset={query.offset} pageSize={pipelinePageSize} total={result.value.total} maxOffset={100000} onOffsetChange={offset => navigate({ ...query, offset })} />}
     </>}
   </main>
 }

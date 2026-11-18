@@ -5,6 +5,15 @@
     "product": "erp",
     "flows": [
       {
+        "id": "platform-mail-settings",
+        "title": "Remetente de documentos da empresa",
+        "goal": "Consultar ou configurar o remetente usado na entrega de propostas, pedidos, contratos e documentos fiscais.",
+        "kind": "product",
+        "actionGroups": ["system-configuration"],
+        "dependencies": ["me"],
+        "nextStep": "Conferir o remetente da empresa e reconciliar a confirmação do provedor de e-mail."
+      },
+      {
         "id": "sales-simulator",
         "title": "Simulador de preços e criação de pedidos",
         "goal": "Simular condições a partir de versões publicadas, preservar preços no rascunho e aprovar exceções sem expor custos à equipe.",
@@ -1592,7 +1601,9 @@
       "method": "POST",
       "actions": [
         "preview",
-        "match"
+        "match",
+        "confirm",
+        "receive"
       ]
     },
     {
@@ -1734,7 +1745,8 @@
         "emission",
         "xml",
         "events",
-        "email"
+        "email",
+        "danfe"
       ]
     },
     {
@@ -1757,6 +1769,37 @@
       "formats": [
         "xml",
         "danfe"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/erp/commercial/policies/[...path]",
+      "resources": [
+        "queue",
+        "catalog",
+        "catalog/{customer}",
+        "performance",
+        "store",
+        "store/{id}"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/erp/commercial/policies/[...path]",
+      "resources": [
+        "settings",
+        "decisions",
+        "plan",
+        "goals",
+        "store"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/erp/fiscal/received-nfes/[id]/purchase/[action]",
+      "actions": [
+        "progress",
+        "options"
       ]
     }
   ],
@@ -2457,6 +2500,7 @@
         "gap": null
       },
       "sources": [
+        "apps/api-ts/src/modules/commercial/pricing-expenses.ts",
         "apps/api/src/domains/fixed_expenses.rs",
         "apps/web/src/features/commercial-settings/fixed-expenses.tsx"
       ],
@@ -2551,6 +2595,7 @@
         "gap": null
       },
       "sources": [
+        "apps/api-ts/src/modules/commercial/pricing-expenses.ts",
         "apps/api/src/domains/fixed_expenses.rs",
         "apps/web/src/features/commercial-settings/fixed-expenses.tsx"
       ],
@@ -2648,6 +2693,7 @@
         "gap": null
       },
       "sources": [
+        "apps/api-ts/src/modules/commercial/pricing-expenses.ts",
         "apps/api/src/domains/fixed_expenses.rs",
         "apps/web/src/features/commercial-settings/fixed-expenses.tsx"
       ],
@@ -2737,6 +2783,7 @@
         "gap": null
       },
       "sources": [
+        "apps/api-ts/src/modules/commercial/pricing-inputs.ts",
         "apps/api/src/platform/product_costs.rs",
         "apps/web/src/features/catalog/product-costs.tsx"
       ],
@@ -2833,6 +2880,7 @@
         "gap": null
       },
       "sources": [
+        "apps/api-ts/src/modules/commercial/pricing-inputs.ts",
         "apps/api/src/platform/product_costs.rs",
         "apps/web/src/features/catalog/product-costs.tsx"
       ],
@@ -2922,6 +2970,7 @@
         "gap": null
       },
       "sources": [
+        "apps/api-ts/src/modules/commercial/publication.ts",
         "apps/api/src/platform/price_tables.rs",
         "apps/web/src/features/commercial-settings/price-tables.tsx"
       ],
@@ -3011,6 +3060,7 @@
         "gap": null
       },
       "sources": [
+        "apps/api-ts/src/modules/commercial/publication.ts",
         "apps/api/src/platform/price_tables.rs",
         "apps/web/src/features/commercial-settings/price-tables.tsx"
       ],
@@ -3108,6 +3158,7 @@
         "gap": null
       },
       "sources": [
+        "apps/api-ts/src/modules/commercial/publication.ts",
         "apps/api/src/platform/price_tables.rs",
         "apps/web/src/features/commercial-settings/price-tables.tsx"
       ],
@@ -3196,6 +3247,7 @@
         "gap": null
       },
       "sources": [
+        "apps/api-ts/src/modules/commercial/pricing-inputs.ts",
         "apps/api/src/platform/commercial_settings.rs",
         "apps/api/src/platform/commercial_settings_model.rs",
         "migrations/202611042101_commercial_settings.sql",
@@ -3294,6 +3346,7 @@
         "gap": null
       },
       "sources": [
+        "apps/api-ts/src/modules/commercial/pricing-inputs.ts",
         "apps/api/src/platform/commercial_settings.rs",
         "apps/api/src/platform/commercial_settings_model.rs",
         "migrations/202611042101_commercial_settings.sql",
@@ -3388,6 +3441,7 @@
         "gap": null
       },
       "sources": [
+        "apps/api-ts/src/modules/commercial/pricing-inputs.ts",
         "apps/api/src/platform/commercial_settings.rs",
         "apps/api/src/platform/commercial_settings_model.rs",
         "migrations/202611042101_commercial_settings.sql",
@@ -8783,6 +8837,7 @@
         "gap": "Catálogo não comprova implantação, certificado autorizado ou aceite externo da SEFAZ."
       },
       "sources": [
+        "apps/api-ts/src/modules/fiscal-workspace/emission-events.ts",
         "apps/api/src/domains/fiscal/emission_events.rs",
         "migrations/202611010002_fiscal_operations.sql",
         "apps/web/src/server/bff/erp-fiscal-proxy.ts"
@@ -10914,6 +10969,7 @@
         "gap": null
       },
       "sources": [
+        "apps/api-ts/src/modules/orders/commercial-documents.ts",
         "apps/api/src/domains/commissions.rs",
         "migrations/202611010004_commissions.sql",
         "apps/web/src/server/bff/erp-proxy.ts"
@@ -11000,6 +11056,7 @@
         "gap": null
       },
       "sources": [
+        "apps/api-ts/src/modules/orders/commercial-documents.ts",
         "apps/api/src/domains/commissions.rs",
         "migrations/202611010004_commissions.sql",
         "apps/web/src/server/bff/erp-proxy.ts"
@@ -11276,6 +11333,7 @@
         "gap": null
       },
       "sources": [
+        "apps/api-ts/src/modules/orders/completed-cancellation.ts",
         "apps/api/src/domains/returns.rs",
         "migrations/202611010001_returns.sql",
         "apps/web/src/server/bff/erp-proxy.ts"
@@ -11382,6 +11440,7 @@
         "gap": null
       },
       "sources": [
+        "apps/api-ts/src/modules/orders/completed-cancellation.ts",
         "apps/api/src/domains/returns.rs",
         "migrations/202611010001_returns.sql",
         "apps/web/src/server/bff/erp-proxy.ts"
@@ -16332,6 +16391,7 @@
         "gap": null
       },
       "sources": [
+        "apps/api-ts/src/modules/commercial/pricing-expenses.ts",
         "apps/api/src/domains/reference_data.rs"
       ],
       "verification": {
@@ -20236,6 +20296,7 @@
         "gap": null
       },
       "sources": [
+        "apps/api-ts/src/modules/orders/settlements.ts",
         "apps/api/src/http/mod.rs",
         "apps/api/src/domains/finance.rs"
       ],
@@ -20339,6 +20400,7 @@
         "gap": null
       },
       "sources": [
+        "apps/api-ts/src/modules/orders/settlements.ts",
         "apps/api/src/http/mod.rs",
         "apps/api/src/domains/finance.rs",
         "apps/api/src/domains/settlements.rs",
@@ -20444,6 +20506,7 @@
         "gap": null
       },
       "sources": [
+        "apps/api-ts/src/modules/orders/settlements.ts",
         "apps/api/src/http/mod.rs",
         "apps/api/src/domains/finance.rs",
         "apps/api/src/domains/settlements.rs",
@@ -28943,29 +29006,179 @@
   ,
     {
       "id": "get-api-v1-warranty-policies",
-      "flow": "warranties", "status": "implemented",
-      "operation": {"method": "GET", "path": "/api/v1/warranty-policies"},
-      "actor": "company_member", "permissions": ["service.warranties.read"],
-      "input": {"headers": ["Authorization", "X-Tenant-Id"], "pathParameters": [], "body": null, "query": null},
-      "preconditions": ["Empresa ativa e vínculo autorizado."], "transition": {"from": "Atual", "to": "Sem alteração"},
-      "effects": {"writes": [], "external": [], "excludes": ["Não altera políticas ou casos."]},
-      "concurrency": {"revision": false, "idempotency": false, "rule": "Consulta isolada por empresa."},
-      "response": {"successStatuses": [200], "errorStatuses": [401, 403, 500], "action": "get-api-v1-warranty-policies"},
-      "recovery": "Repetir a consulta após renovar a sessão.", "ui": {"pages": [], "bff": null, "gap": "backend_only"},
-      "sources": ["apps/api/src/domains/warranties.rs"], "verification": {"status": "not_verified_by_catalog", "criteria": ["interface", "request", "authorization", "domain", "persistence", "effects", "failure", "response"]}
+      "flow": "warranties",
+      "status": "implemented",
+      "operation": {
+        "method": "GET",
+        "path": "/api/v1/warranty-policies"
+      },
+      "actor": "company_member",
+      "permissions": [
+        "service.warranties.read"
+      ],
+      "input": {
+        "headers": [
+          "Authorization",
+          "X-Tenant-Id"
+        ],
+        "pathParameters": [],
+        "body": null,
+        "query": null
+      },
+      "preconditions": [
+        "Empresa ativa e vínculo autorizado."
+      ],
+      "transition": {
+        "from": "Atual",
+        "to": "Sem alteração"
+      },
+      "effects": {
+        "writes": [],
+        "external": [],
+        "excludes": [
+          "Não altera políticas ou casos."
+        ]
+      },
+      "concurrency": {
+        "revision": false,
+        "idempotency": false,
+        "rule": "Consulta isolada por empresa."
+      },
+      "response": {
+        "successStatuses": [
+          200
+        ],
+        "errorStatuses": [
+          401,
+          403,
+          500
+        ],
+        "action": "get-api-v1-warranty-policies"
+      },
+      "recovery": "Repetir a consulta após renovar a sessão.",
+      "ui": {
+        "pages": [
+          "/vendas/garantias/novo"
+        ],
+        "bff": {
+          "method": "GET",
+          "path": "/api/erp/warranty-policies"
+        },
+        "gap": null
+      },
+      "sources": [
+        "apps/api/src/domains/warranties.rs",
+        "apps/api-ts/src/modules/warranties/service.ts",
+        "apps/web/src/app/api/erp/warranty-policies/route.ts"
+      ],
+      "verification": {
+        "status": "not_verified_by_catalog",
+        "criteria": [
+          "interface",
+          "request",
+          "authorization",
+          "domain",
+          "persistence",
+          "effects",
+          "failure",
+          "response"
+        ]
+      }
     },
     {
       "id": "post-api-v1-warranty-policies",
-      "flow": "warranties", "status": "implemented",
-      "operation": {"method": "POST", "path": "/api/v1/warranty-policies"},
-      "actor": "company_manager", "permissions": ["service.warranties.manage"],
-      "input": {"headers": ["Authorization", "X-Tenant-Id", "Idempotency-Key"], "pathParameters": [], "body": {"source": "apps/api/src/domains/warranties.rs", "type": "PolicyInput"}, "query": null},
-      "preconditions": ["Chave UUID e política válida."], "transition": {"from": "Ausente", "to": "Política ativa"},
-      "effects": {"writes": ["warranty_policies", "audit_log", "outbox_events", "domain_commands"], "external": [], "excludes": ["Não altera casos existentes automaticamente."]},
-      "concurrency": {"revision": false, "idempotency": true, "rule": "Repetição devolve o mesmo resultado."},
-      "response": {"successStatuses": [200, 201], "errorStatuses": [400, 401, 403, 409, 422, 428, 500], "action": "post-api-v1-warranty-policies"},
-      "recovery": "Repetir a mesma chave após resposta incerta.", "ui": {"pages": [], "bff": null, "gap": "backend_only"},
-      "sources": ["apps/api/src/domains/warranties.rs"], "verification": {"status": "not_verified_by_catalog", "criteria": ["interface", "request", "authorization", "domain", "persistence", "effects", "failure", "response"]}
+      "flow": "warranties",
+      "status": "implemented",
+      "operation": {
+        "method": "POST",
+        "path": "/api/v1/warranty-policies"
+      },
+      "actor": "company_manager",
+      "permissions": [
+        "service.warranties.manage"
+      ],
+      "input": {
+        "headers": [
+          "Authorization",
+          "X-Tenant-Id",
+          "Idempotency-Key"
+        ],
+        "pathParameters": [],
+        "body": {
+          "source": "apps/api/src/domains/warranties.rs",
+          "type": "PolicyInput"
+        },
+        "query": null
+      },
+      "preconditions": [
+        "Chave UUID e política válida."
+      ],
+      "transition": {
+        "from": "Ausente",
+        "to": "Política ativa"
+      },
+      "effects": {
+        "writes": [
+          "warranty_policies",
+          "audit_log",
+          "outbox_events",
+          "domain_commands"
+        ],
+        "external": [],
+        "excludes": [
+          "Não altera casos existentes automaticamente."
+        ]
+      },
+      "concurrency": {
+        "revision": false,
+        "idempotency": true,
+        "rule": "Repetição devolve o mesmo resultado."
+      },
+      "response": {
+        "successStatuses": [
+          200,
+          201
+        ],
+        "errorStatuses": [
+          400,
+          401,
+          403,
+          409,
+          422,
+          428,
+          500
+        ],
+        "action": "post-api-v1-warranty-policies"
+      },
+      "recovery": "Repetir a mesma chave após resposta incerta.",
+      "ui": {
+        "pages": [
+          "/vendas/garantias/novo"
+        ],
+        "bff": {
+          "method": "POST",
+          "path": "/api/erp/warranty-policies"
+        },
+        "gap": null
+      },
+      "sources": [
+        "apps/api/src/domains/warranties.rs",
+        "apps/api-ts/src/modules/warranties/service.ts",
+        "apps/web/src/app/api/erp/warranty-policies/route.ts"
+      ],
+      "verification": {
+        "status": "not_verified_by_catalog",
+        "criteria": [
+          "interface",
+          "request",
+          "authorization",
+          "domain",
+          "persistence",
+          "effects",
+          "failure",
+          "response"
+        ]
+      }
     },
     {
       "id": "get-api-v1-warranty-cases",
@@ -31900,7 +32113,7 @@
       "response": { "successStatuses": [200], "errorStatuses": [400, 401, 403, 404, 500, 503], "action": "Consultar financeiro agregado do pedido" },
       "recovery": "Conferir acesso e consultar novamente; distinguir títulos não originados, inconsistentes e pedidos cancelados de recebimento integral.",
       "ui": { "pages": ["/vendas/pedidos/[id]", "/servicos/contratos/[id]", "/financeiro/contas-receber/[id]"], "bff": { "method": "GET", "path": "/api/erp/orders/[id]/finance" }, "gap": null },
-      "sources": ["apps/api/src/domains/order_finance.rs", "apps/web/src/app/api/erp/orders/[id]/finance/route.ts", "apps/web/src/features/finance/order-finance.tsx"],
+      "sources": ["apps/api-ts/src/modules/orders/settlements.ts", "apps/api/src/domains/order_finance.rs", "apps/web/src/app/api/erp/orders/[id]/finance/route.ts", "apps/web/src/features/finance/order-finance.tsx"],
       "verification": { "status": "not_verified_by_catalog", "criteria": ["interface", "request", "authorization", "domain", "persistence", "effects", "failure", "response"] }
     },
     {
@@ -31918,7 +32131,7 @@
       "response": { "successStatuses": [200], "errorStatuses": [400, 401, 403, 404, 500, 503], "action": "Consultar outros documentos do pedido" },
       "recovery": "Conferir empresa e permissão antes de repetir a consulta; ausência de acesso não significa ausência de documentos.",
       "ui": { "pages": ["/vendas/pedidos/[id]", "/servicos/contratos/[id]", "/financeiro/contas-receber/[id]"], "bff": { "method": "GET", "path": "/api/erp/orders/[id]/documents" }, "gap": null },
-      "sources": ["apps/api/src/domains/supporting_documents.rs", "apps/web/src/app/api/erp/orders/[id]/documents/route.ts", "apps/web/src/features/finance/supporting-documents.tsx"],
+      "sources": ["apps/api-ts/src/modules/orders/supporting-documents.ts", "apps/api/src/domains/supporting_documents.rs", "apps/web/src/app/api/erp/orders/[id]/documents/route.ts", "apps/web/src/features/finance/supporting-documents.tsx"],
       "verification": { "status": "not_verified_by_catalog", "criteria": ["interface", "request", "authorization", "domain", "persistence", "effects", "failure", "response"] }
     },
     {
@@ -31936,7 +32149,7 @@
       "response": { "successStatuses": [201], "errorStatuses": [400, 401, 403, 404, 409, 413, 415, 422, 428, 500, 503], "action": "Adicionar documento ou comprovante posterior ao pedido" },
       "recovery": "Após resposta perdida, repetir exatamente a mesma chave e corpo. Manter o comando montado enquanto incerto; adiar atualizações do pai até a confirmação.",
       "ui": { "pages": ["/vendas/pedidos/[id]", "/servicos/contratos/[id]", "/financeiro/contas-receber/[id]"], "bff": { "method": "POST", "path": "/api/erp/orders/[id]/documents" }, "gap": null },
-      "sources": ["apps/api/src/domains/supporting_documents.rs", "migrations/202611130003_order_supporting_documents.sql", "apps/web/src/app/api/erp/orders/[id]/documents/route.ts", "apps/web/src/features/finance/supporting-documents.tsx", "apps/web/src/features/finance/use-protected-reload.ts"],
+      "sources": ["apps/api-ts/src/modules/orders/supporting-documents.ts", "apps/api/src/domains/supporting_documents.rs", "migrations/202611130003_order_supporting_documents.sql", "apps/web/src/app/api/erp/orders/[id]/documents/route.ts", "apps/web/src/features/finance/supporting-documents.tsx", "apps/web/src/features/finance/use-protected-reload.ts"],
       "verification": { "status": "not_verified_by_catalog", "criteria": ["interface", "request", "authorization", "domain", "persistence", "effects", "failure", "response"] }
     },
     {
@@ -31954,7 +32167,7 @@
       "response": { "successStatuses": [200], "errorStatuses": [400, 401, 403, 404, 500, 503], "action": "Baixar documento original privado do pedido" },
       "recovery": "Conferir acesso e consultar novamente; API usa private/no-store, BFF no-store/no-transform; preservar nosniff, MIME e nome de download.",
       "ui": { "pages": ["/vendas/pedidos/[id]", "/servicos/contratos/[id]", "/financeiro/contas-receber/[id]"], "bff": { "method": "GET", "path": "/api/erp/orders/[id]/documents/[documentId]" }, "gap": null },
-      "sources": ["apps/api/src/domains/supporting_documents.rs", "apps/web/src/app/api/erp/orders/[id]/documents/[documentId]/route.ts", "apps/web/src/features/finance/supporting-documents.tsx"],
+      "sources": ["apps/api-ts/src/modules/orders/supporting-documents.ts", "apps/api/src/domains/supporting_documents.rs", "apps/web/src/app/api/erp/orders/[id]/documents/[documentId]/route.ts", "apps/web/src/features/finance/supporting-documents.tsx"],
       "verification": { "status": "not_verified_by_catalog", "criteria": ["interface", "request", "authorization", "domain", "persistence", "effects", "failure", "response"] }
     },
     {
@@ -32756,6 +32969,177 @@
   ],
   "actionsAppendix": [
     {
+      "id": "get-sales-ts-fiscal-sales-returns",
+      "flow": "orders",
+      "status": "implemented",
+      "operation": {
+        "method": "GET",
+        "path": "/api/v1/fiscal/sales-returns"
+      },
+      "actor": "active_tenant_member",
+      "permissions": [
+        "sales.orders.read",
+        "fiscal.nfe.read"
+      ],
+      "input": {
+        "headers": [
+          "Authorization",
+          "X-Tenant-Id"
+        ],
+        "pathParameters": [],
+        "body": null,
+        "query": {
+          "type": "q, environment, status, offset",
+          "source": "apps/api-ts/src/modules/fiscal-workspace/returns-list.ts"
+        }
+      },
+      "preconditions": [
+        "A empresa e as permissões de leitura comercial e fiscal estão ativas."
+      ],
+      "transition": {
+        "from": "Estado atual da empresa selecionada",
+        "to": "Consultar pedido, documento de origem, ambiente e situação da devolução"
+      },
+      "effects": {
+        "writes": [],
+        "external": [],
+        "excludes": []
+      },
+      "concurrency": {
+        "revision": false,
+        "idempotency": false,
+        "rule": "A requisição lê o estado atual da empresa."
+      },
+      "response": {
+        "successStatuses": [
+          200
+        ],
+        "errorStatuses": [
+          400,
+          401,
+          403,
+          404,
+          422,
+          500,
+          503
+        ],
+        "action": "Pesquisar devoluções com nota recebida ou entrada própria"
+      },
+      "recovery": "Conferir empresa, acesso e filtros antes de repetir a consulta.",
+      "ui": {
+        "pages": [
+          "/vendas/devolucoes"
+        ],
+        "bff": {
+          "method": "GET",
+          "path": "/api/erp/fiscal/sales-returns"
+        },
+        "gap": null
+      },
+      "sources": [
+        "apps/api-ts/src/modules/fiscal-workspace/returns-list.ts",
+        "apps/web/src/app/api/erp/fiscal/sales-returns/route.ts"
+      ],
+      "verification": {
+        "status": "not_verified_by_catalog",
+        "criteria": [
+          "interface",
+          "request",
+          "authorization",
+          "domain",
+          "persistence",
+          "effects",
+          "failure",
+          "response"
+        ]
+      }
+    },
+    {
+      "id": "get-sales-ts-fiscal-order-cancellations-process",
+      "flow": "fiscal-emission",
+      "status": "implemented",
+      "operation": {
+        "method": "GET",
+        "path": "/api/v1/fiscal/order-cancellations/{id}/process"
+      },
+      "actor": "active_tenant_member",
+      "permissions": [
+        "fiscal.nfe.read"
+      ],
+      "input": {
+        "headers": [
+          "Authorization",
+          "X-Tenant-Id"
+        ],
+        "pathParameters": [
+          "id"
+        ],
+        "body": null,
+        "query": null
+      },
+      "preconditions": [
+        "Cancelamento comercial da empresa com uma única nota no ambiente identificado."
+      ],
+      "transition": {
+        "from": "Estado atual da empresa selecionada",
+        "to": "Identificar a nota, a revisão e o evento pendente"
+      },
+      "effects": {
+        "writes": [],
+        "external": [],
+        "excludes": []
+      },
+      "concurrency": {
+        "revision": false,
+        "idempotency": false,
+        "rule": "A requisição lê o estado atual da empresa."
+      },
+      "response": {
+        "successStatuses": [
+          200
+        ],
+        "errorStatuses": [
+          400,
+          401,
+          403,
+          404,
+          409,
+          422,
+          500,
+          503
+        ],
+        "action": "Consultar a nota do cancelamento comercial"
+      },
+      "recovery": "Verificar a origem e a quantidade de notas vinculadas antes de solicitar o cancelamento.",
+      "ui": {
+        "pages": [
+          "/vendas/pedidos/[id]"
+        ],
+        "bff": {
+          "method": "GET",
+          "path": "/api/erp/fiscal/order-cancellations/[id]/process"
+        },
+        "gap": null
+      },
+      "sources": [
+        "apps/api-ts/src/modules/fiscal-workspace/emission-events.ts",
+        "apps/web/src/app/api/erp/fiscal/order-cancellations/[id]/process/route.ts"
+      ],
+      "verification": {
+        "status": "not_verified_by_catalog",
+        "criteria": [
+          "interface",
+          "request",
+          "authorization",
+          "domain",
+          "persistence",
+          "effects",
+          "failure",
+          "response"
+        ]
+      }
+    },
+    {
       "id": "get-api-v1-orders-id-document",
       "flow": "orders",
       "status": "implemented",
@@ -32770,7 +33154,7 @@
       "response": { "successStatuses": [200], "errorStatuses": [400, 401, 403, 404, 412, 428, 500], "action": "Baixar PDF do pedido" },
       "recovery": "Atualizar o pedido após revisão divergente e solicitar novamente o PDF.",
       "ui": { "pages": ["/vendas/pedidos/[id]"], "bff": { "method": "GET", "path": "/api/erp/orders/[id]/document" }, "gap": null },
-      "sources": ["apps/api/src/domains/sales/order_document.rs", "apps/web/src/app/api/erp/orders/[id]/document/route.ts", "apps/web/src/features/sales/order-pdf-download.tsx"],
+      "sources": ["apps/api-ts/src/modules/orders/commercial-documents.ts", "apps/api/src/domains/sales/order_document.rs", "apps/web/src/app/api/erp/orders/[id]/document/route.ts", "apps/web/src/features/sales/order-pdf-download.tsx"],
       "verification": { "status": "not_verified_by_catalog", "criteria": ["interface", "request", "authorization", "domain", "persistence", "effects", "failure", "response"] }
     },
     {
@@ -32885,6 +33269,4246 @@
       "ui": { "pages": ["/preferencias/dados/exportacao"], "bff": { "method": "GET", "path": "/api/erp/products/export" }, "gap": null },
       "sources": ["apps/api/src/domains/data_transfer.rs", "apps/api/src/http/mod.rs", "apps/web/src/app/api/erp/products/export/route.ts", "apps/web/src/features/data/export/data-export.tsx"],
       "verification": { "status": "not_verified_by_catalog", "criteria": ["interface", "request", "authorization", "domain", "persistence", "effects", "failure", "response"] }
+    },
+    {
+      "id": "get-sales-ts-sales-overview",
+      "flow": "orders",
+      "status": "implemented",
+      "operation": {
+        "method": "GET",
+        "path": "/api/v1/sales/overview"
+      },
+      "actor": "active_tenant_member",
+      "permissions": [],
+      "input": {
+        "headers": [
+          "Authorization",
+          "X-Tenant-Id"
+        ],
+        "pathParameters": [],
+        "body": null,
+        "query": {
+          "type": "query • group, offset, limit",
+          "source": "apps/api-ts/src/modules/sales/overview.ts"
+        }
+      },
+      "preconditions": [
+        "Cada grupo usa a permissão de leitura da origem e as aprovações visíveis ao usuário."
+      ],
+      "transition": {
+        "from": "Estado atual da empresa selecionada",
+        "to": "Estado de negócio preservado"
+      },
+      "effects": {
+        "writes": [],
+        "external": [],
+        "excludes": []
+      },
+      "concurrency": {
+        "revision": false,
+        "idempotency": false,
+        "rule": "A requisição lê o estado atual da empresa."
+      },
+      "response": {
+        "successStatuses": [
+          200
+        ],
+        "errorStatuses": [
+          400,
+          401,
+          403,
+          404,
+          422,
+          500,
+          503
+        ],
+        "action": "Consultar indicadores e registros que compõem cada valor"
+      },
+      "recovery": "Conferir empresa, acesso e filtros antes de repetir a consulta.",
+      "ui": {
+        "pages": [
+          "/vendas",
+          "/vendas/indicadores/[group]"
+        ],
+        "bff": {
+          "method": "GET",
+          "path": "/api/erp/sales/overview"
+        },
+        "gap": null
+      },
+      "sources": [
+        "apps/api-ts/src/modules/sales/overview.ts",
+        "apps/web/src/app/api/erp/sales/overview/route.ts"
+      ],
+      "verification": {
+        "status": "not_verified_by_catalog",
+        "criteria": [
+          "interface",
+          "request",
+          "authorization",
+          "domain",
+          "persistence",
+          "effects",
+          "failure",
+          "response"
+        ]
+      }
+    },
+    {
+      "id": "get-sales-ts-opportunities-settings",
+      "flow": "sales-opportunities",
+      "status": "implemented",
+      "operation": {
+        "method": "GET",
+        "path": "/api/v1/opportunities/settings"
+      },
+      "actor": "active_tenant_member",
+      "permissions": [
+        "sales.orders.read"
+      ],
+      "input": {
+        "headers": [
+          "Authorization",
+          "X-Tenant-Id"
+        ],
+        "pathParameters": [],
+        "body": null,
+        "query": null
+      },
+      "preconditions": [
+        "Empresa ativa e vínculo com as permissões da operação."
+      ],
+      "transition": {
+        "from": "Estado atual da empresa selecionada",
+        "to": "Estado de negócio preservado"
+      },
+      "effects": {
+        "writes": [],
+        "external": [],
+        "excludes": []
+      },
+      "concurrency": {
+        "revision": false,
+        "idempotency": false,
+        "rule": "A requisição lê o estado atual da empresa."
+      },
+      "response": {
+        "successStatuses": [
+          200
+        ],
+        "errorStatuses": [
+          400,
+          401,
+          403,
+          404,
+          422,
+          500,
+          503
+        ],
+        "action": "Ler etapas do funil"
+      },
+      "recovery": "Conferir empresa, acesso e filtros antes de repetir a consulta.",
+      "ui": {
+        "pages": [
+          "/vendas/funil/configuracao",
+          "/vendas/funil"
+        ],
+        "bff": {
+          "method": "GET",
+          "path": "/api/erp/opportunities/settings"
+        },
+        "gap": null
+      },
+      "sources": [
+        "apps/api-ts/src/modules/opportunities/workspace.ts",
+        "apps/web/src/app/api/erp/opportunities/settings/route.ts"
+      ],
+      "verification": {
+        "status": "not_verified_by_catalog",
+        "criteria": [
+          "interface",
+          "request",
+          "authorization",
+          "domain",
+          "persistence",
+          "effects",
+          "failure",
+          "response"
+        ]
+      }
+    },
+    {
+      "id": "put-sales-ts-opportunities-settings",
+      "flow": "sales-opportunities",
+      "status": "implemented",
+      "operation": {
+        "method": "PUT",
+        "path": "/api/v1/opportunities/settings"
+      },
+      "actor": "active_tenant_member",
+      "permissions": [
+        "platform.company.manage"
+      ],
+      "input": {
+        "headers": [
+          "Authorization",
+          "X-Tenant-Id",
+          "If-Match",
+          "Idempotency-Key"
+        ],
+        "pathParameters": [],
+        "body": {
+          "type": "stageSchema[]",
+          "source": "apps/api-ts/src/modules/opportunities/workspace.ts"
+        },
+        "query": null
+      },
+      "preconditions": [
+        "Os códigos das etapas históricas e a revisão do quadro são preservados."
+      ],
+      "transition": {
+        "from": "Estado atual da empresa selecionada",
+        "to": "Salvar etapas do funil"
+      },
+      "effects": {
+        "writes": [
+          "sales_pipeline_settings"
+        ],
+        "external": [],
+        "excludes": []
+      },
+      "concurrency": {
+        "revision": true,
+        "idempotency": true,
+        "rule": "Validar If-Match e recuperar a operação original pela chave de idempotência."
+      },
+      "response": {
+        "successStatuses": [
+          200
+        ],
+        "errorStatuses": [
+          400,
+          401,
+          403,
+          404,
+          409,
+          412,
+          422,
+          428,
+          500,
+          503
+        ],
+        "action": "Salvar etapas do funil"
+      },
+      "recovery": "Após resposta incerta, repetir o conteúdo com a mesma chave. Recarregar o recurso se a revisão divergir.",
+      "ui": {
+        "pages": [
+          "/vendas/funil/configuracao",
+          "/vendas/funil"
+        ],
+        "bff": {
+          "method": "PUT",
+          "path": "/api/erp/opportunities/settings"
+        },
+        "gap": null
+      },
+      "sources": [
+        "apps/api-ts/src/modules/opportunities/workspace.ts",
+        "apps/web/src/app/api/erp/opportunities/settings/route.ts"
+      ],
+      "verification": {
+        "status": "not_verified_by_catalog",
+        "criteria": [
+          "interface",
+          "request",
+          "authorization",
+          "domain",
+          "persistence",
+          "effects",
+          "failure",
+          "response"
+        ]
+      }
+    },
+    {
+      "id": "post-sales-ts-opportunities-id-activities",
+      "flow": "sales-opportunities",
+      "status": "implemented",
+      "operation": {
+        "method": "POST",
+        "path": "/api/v1/opportunities/{id}/activities"
+      },
+      "actor": "active_tenant_member",
+      "permissions": [
+        "sales.orders.read",
+        "sales.orders.manage"
+      ],
+      "input": {
+        "headers": [
+          "Authorization",
+          "X-Tenant-Id",
+          "If-Match",
+          "Idempotency-Key"
+        ],
+        "pathParameters": [
+          "id"
+        ],
+        "body": {
+          "type": "activitySchema",
+          "source": "apps/api-ts/src/modules/opportunities/workspace.ts"
+        },
+        "query": null
+      },
+      "preconditions": [
+        "O responsável deve ter vínculo ativo."
+      ],
+      "transition": {
+        "from": "Estado atual da empresa selecionada",
+        "to": "Agendar atividade"
+      },
+      "effects": {
+        "writes": [
+          "sales_pipeline_activities",
+          "sales_opportunities"
+        ],
+        "external": [],
+        "excludes": []
+      },
+      "concurrency": {
+        "revision": true,
+        "idempotency": true,
+        "rule": "Validar If-Match e recuperar a operação original pela chave de idempotência."
+      },
+      "response": {
+        "successStatuses": [
+          201
+        ],
+        "errorStatuses": [
+          400,
+          401,
+          403,
+          404,
+          409,
+          412,
+          422,
+          428,
+          500,
+          503
+        ],
+        "action": "Agendar atividade"
+      },
+      "recovery": "Após resposta incerta, repetir o conteúdo com a mesma chave. Recarregar o recurso se a revisão divergir.",
+      "ui": {
+        "pages": [
+          "/vendas/funil/[id]"
+        ],
+        "bff": {
+          "method": "POST",
+          "path": "/api/erp/opportunities/[id]/activities"
+        },
+        "gap": null
+      },
+      "sources": [
+        "apps/api-ts/src/modules/opportunities/workspace.ts",
+        "apps/web/src/app/api/erp/opportunities/[id]/activities/route.ts"
+      ],
+      "verification": {
+        "status": "not_verified_by_catalog",
+        "criteria": [
+          "interface",
+          "request",
+          "authorization",
+          "domain",
+          "persistence",
+          "effects",
+          "failure",
+          "response"
+        ]
+      }
+    },
+    {
+      "id": "post-sales-ts-opportunities-id-activities-activityId-complete",
+      "flow": "sales-opportunities",
+      "status": "implemented",
+      "operation": {
+        "method": "POST",
+        "path": "/api/v1/opportunities/{id}/activities/{activityId}/complete"
+      },
+      "actor": "active_tenant_member",
+      "permissions": [
+        "sales.orders.read",
+        "sales.orders.manage"
+      ],
+      "input": {
+        "headers": [
+          "Authorization",
+          "X-Tenant-Id",
+          "If-Match",
+          "Idempotency-Key"
+        ],
+        "pathParameters": [
+          "id",
+          "activityId"
+        ],
+        "body": {
+          "type": "objeto vazio",
+          "source": "apps/api-ts/src/modules/opportunities/workspace.ts"
+        },
+        "query": null
+      },
+      "preconditions": [
+        "A atividade precisa pertencer à oportunidade."
+      ],
+      "transition": {
+        "from": "Estado atual da empresa selecionada",
+        "to": "Concluir atividade"
+      },
+      "effects": {
+        "writes": [
+          "sales_pipeline_activities",
+          "sales_opportunities"
+        ],
+        "external": [],
+        "excludes": []
+      },
+      "concurrency": {
+        "revision": true,
+        "idempotency": true,
+        "rule": "Validar If-Match e recuperar a operação original pela chave de idempotência."
+      },
+      "response": {
+        "successStatuses": [
+          200
+        ],
+        "errorStatuses": [
+          400,
+          401,
+          403,
+          404,
+          409,
+          412,
+          422,
+          428,
+          500,
+          503
+        ],
+        "action": "Concluir atividade"
+      },
+      "recovery": "Após resposta incerta, repetir o conteúdo com a mesma chave. Recarregar o recurso se a revisão divergir.",
+      "ui": {
+        "pages": [
+          "/vendas/funil/[id]"
+        ],
+        "bff": {
+          "method": "POST",
+          "path": "/api/erp/opportunities/[id]/activities/[activityId]/complete"
+        },
+        "gap": null
+      },
+      "sources": [
+        "apps/api-ts/src/modules/opportunities/workspace.ts",
+        "apps/web/src/app/api/erp/opportunities/[id]/activities/[activityId]/complete/route.ts"
+      ],
+      "verification": {
+        "status": "not_verified_by_catalog",
+        "criteria": [
+          "interface",
+          "request",
+          "authorization",
+          "domain",
+          "persistence",
+          "effects",
+          "failure",
+          "response"
+        ]
+      }
+    },
+    {
+      "id": "get-sales-ts-pos-settings",
+      "flow": "pos",
+      "status": "implemented",
+      "operation": {
+        "method": "GET",
+        "path": "/api/v1/pos/settings"
+      },
+      "actor": "active_tenant_member",
+      "permissions": [],
+      "input": {
+        "headers": [
+          "Authorization",
+          "X-Tenant-Id"
+        ],
+        "pathParameters": [],
+        "body": null,
+        "query": null
+      },
+      "preconditions": [
+        "Empresa ativa e vínculo com as permissões da operação."
+      ],
+      "transition": {
+        "from": "Estado atual da empresa selecionada",
+        "to": "Estado de negócio preservado"
+      },
+      "effects": {
+        "writes": [],
+        "external": [],
+        "excludes": []
+      },
+      "concurrency": {
+        "revision": false,
+        "idempotency": false,
+        "rule": "A requisição lê o estado atual da empresa."
+      },
+      "response": {
+        "successStatuses": [
+          200
+        ],
+        "errorStatuses": [
+          400,
+          401,
+          403,
+          404,
+          422,
+          500,
+          503
+        ],
+        "action": "Ler preferência de caixa da empresa"
+      },
+      "recovery": "Conferir empresa, acesso e filtros antes de repetir a consulta.",
+      "ui": {
+        "pages": [
+          "/preferencias/pdv",
+          "/vendas/pdv"
+        ],
+        "bff": {
+          "method": "GET",
+          "path": "/api/erp/pos/settings"
+        },
+        "gap": null
+      },
+      "sources": [
+        "apps/api-ts/src/modules/pos/settings.ts",
+        "apps/web/src/app/api/erp/pos/settings/route.ts"
+      ],
+      "verification": {
+        "status": "not_verified_by_catalog",
+        "criteria": [
+          "interface",
+          "request",
+          "authorization",
+          "domain",
+          "persistence",
+          "effects",
+          "failure",
+          "response"
+        ]
+      }
+    },
+    {
+      "id": "put-sales-ts-pos-settings",
+      "flow": "pos",
+      "status": "implemented",
+      "operation": {
+        "method": "PUT",
+        "path": "/api/v1/pos/settings"
+      },
+      "actor": "active_tenant_member",
+      "permissions": [
+        "platform.company.manage"
+      ],
+      "input": {
+        "headers": [
+          "Authorization",
+          "X-Tenant-Id",
+          "If-Match",
+          "Idempotency-Key"
+        ],
+        "pathParameters": [],
+        "body": {
+          "type": "schema • enabled",
+          "source": "apps/api-ts/src/modules/pos/settings.ts"
+        },
+        "query": null
+      },
+      "preconditions": [
+        "A primeira gravação compara a revisão zero."
+      ],
+      "transition": {
+        "from": "Estado atual da empresa selecionada",
+        "to": "Ativar ou desativar o PDV"
+      },
+      "effects": {
+        "writes": [
+          "pos_settings"
+        ],
+        "external": [],
+        "excludes": []
+      },
+      "concurrency": {
+        "revision": true,
+        "idempotency": true,
+        "rule": "Validar If-Match e recuperar a operação original pela chave de idempotência."
+      },
+      "response": {
+        "successStatuses": [
+          200
+        ],
+        "errorStatuses": [
+          400,
+          401,
+          403,
+          404,
+          409,
+          412,
+          422,
+          428,
+          500,
+          503
+        ],
+        "action": "Ativar ou desativar o PDV"
+      },
+      "recovery": "Após resposta incerta, repetir o conteúdo com a mesma chave. Recarregar o recurso se a revisão divergir.",
+      "ui": {
+        "pages": [
+          "/preferencias/pdv",
+          "/vendas/pdv"
+        ],
+        "bff": {
+          "method": "PUT",
+          "path": "/api/erp/pos/settings"
+        },
+        "gap": null
+      },
+      "sources": [
+        "apps/api-ts/src/modules/pos/settings.ts",
+        "apps/web/src/app/api/erp/pos/settings/route.ts"
+      ],
+      "verification": {
+        "status": "not_verified_by_catalog",
+        "criteria": [
+          "interface",
+          "request",
+          "authorization",
+          "domain",
+          "persistence",
+          "effects",
+          "failure",
+          "response"
+        ]
+      }
+    },
+    {
+      "id": "get-sales-ts-sales-imports",
+      "flow": "orders",
+      "status": "implemented",
+      "operation": {
+        "method": "GET",
+        "path": "/api/v1/sales-imports"
+      },
+      "actor": "active_tenant_member",
+      "permissions": [
+        "sales.orders.read"
+      ],
+      "input": {
+        "headers": [
+          "Authorization",
+          "X-Tenant-Id"
+        ],
+        "pathParameters": [],
+        "body": null,
+        "query": null
+      },
+      "preconditions": [
+        "Empresa ativa e vínculo com as permissões da operação."
+      ],
+      "transition": {
+        "from": "Estado atual da empresa selecionada",
+        "to": "Estado de negócio preservado"
+      },
+      "effects": {
+        "writes": [],
+        "external": [],
+        "excludes": []
+      },
+      "concurrency": {
+        "revision": false,
+        "idempotency": false,
+        "rule": "A requisição lê o estado atual da empresa."
+      },
+      "response": {
+        "successStatuses": [
+          200
+        ],
+        "errorStatuses": [
+          400,
+          401,
+          403,
+          404,
+          422,
+          500,
+          503
+        ],
+        "action": "Consultar importações recentes"
+      },
+      "recovery": "Conferir empresa, acesso e filtros antes de repetir a consulta.",
+      "ui": {
+        "pages": [
+          "/vendas/importacao"
+        ],
+        "bff": {
+          "method": "GET",
+          "path": "/api/erp/sales-imports"
+        },
+        "gap": null
+      },
+      "sources": [
+        "apps/api-ts/src/modules/order-imports/routes.ts",
+        "apps/web/src/app/api/erp/sales-imports/route.ts"
+      ],
+      "verification": {
+        "status": "not_verified_by_catalog",
+        "criteria": [
+          "interface",
+          "request",
+          "authorization",
+          "domain",
+          "persistence",
+          "effects",
+          "failure",
+          "response"
+        ]
+      }
+    },
+    {
+      "id": "get-sales-ts-sales-imports-id",
+      "flow": "orders",
+      "status": "implemented",
+      "operation": {
+        "method": "GET",
+        "path": "/api/v1/sales-imports/{id}"
+      },
+      "actor": "active_tenant_member",
+      "permissions": [
+        "sales.orders.read"
+      ],
+      "input": {
+        "headers": [
+          "Authorization",
+          "X-Tenant-Id"
+        ],
+        "pathParameters": [
+          "id"
+        ],
+        "body": null,
+        "query": null
+      },
+      "preconditions": [
+        "Empresa ativa e vínculo com as permissões da operação."
+      ],
+      "transition": {
+        "from": "Estado atual da empresa selecionada",
+        "to": "Estado de negócio preservado"
+      },
+      "effects": {
+        "writes": [],
+        "external": [],
+        "excludes": []
+      },
+      "concurrency": {
+        "revision": false,
+        "idempotency": false,
+        "rule": "A requisição lê o estado atual da empresa."
+      },
+      "response": {
+        "successStatuses": [
+          200
+        ],
+        "errorStatuses": [
+          400,
+          401,
+          403,
+          404,
+          422,
+          500,
+          503
+        ],
+        "action": "Conferir linhas e resultado da importação"
+      },
+      "recovery": "Conferir empresa, acesso e filtros antes de repetir a consulta.",
+      "ui": {
+        "pages": [
+          "/vendas/importacao"
+        ],
+        "bff": {
+          "method": "GET",
+          "path": "/api/erp/sales-imports/[id]"
+        },
+        "gap": null
+      },
+      "sources": [
+        "apps/api-ts/src/modules/order-imports/routes.ts",
+        "apps/web/src/app/api/erp/sales-imports/[id]/route.ts"
+      ],
+      "verification": {
+        "status": "not_verified_by_catalog",
+        "criteria": [
+          "interface",
+          "request",
+          "authorization",
+          "domain",
+          "persistence",
+          "effects",
+          "failure",
+          "response"
+        ]
+      }
+    },
+    {
+      "id": "post-sales-ts-sales-imports-preview",
+      "flow": "orders",
+      "status": "implemented",
+      "operation": {
+        "method": "POST",
+        "path": "/api/v1/sales-imports/preview"
+      },
+      "actor": "active_tenant_member",
+      "permissions": [
+        "sales.orders.read",
+        "sales.orders.manage"
+      ],
+      "input": {
+        "headers": [
+          "Authorization",
+          "X-Tenant-Id",
+          "Idempotency-Key"
+        ],
+        "pathParameters": [],
+        "body": {
+          "type": "previewSchema",
+          "source": "apps/api-ts/src/modules/order-imports/routes.ts"
+        },
+        "query": null
+      },
+      "preconditions": [
+        "Validar por número externo antes de gerar pedido."
+      ],
+      "transition": {
+        "from": "Estado atual da empresa selecionada",
+        "to": "Validar arquivo e gravar prévia"
+      },
+      "effects": {
+        "writes": [
+          "sales_order_imports"
+        ],
+        "external": [],
+        "excludes": []
+      },
+      "concurrency": {
+        "revision": false,
+        "idempotency": true,
+        "rule": "A chave e o conteúdo identificam a operação dentro da empresa."
+      },
+      "response": {
+        "successStatuses": [
+          201
+        ],
+        "errorStatuses": [
+          400,
+          401,
+          403,
+          404,
+          409,
+          422,
+          428,
+          500,
+          503
+        ],
+        "action": "Validar arquivo e gravar prévia"
+      },
+      "recovery": "Após resposta incerta, repetir o conteúdo com a mesma chave. Recarregar o recurso se a revisão divergir.",
+      "ui": {
+        "pages": [
+          "/vendas/importacao"
+        ],
+        "bff": {
+          "method": "POST",
+          "path": "/api/erp/sales-imports/preview"
+        },
+        "gap": null
+      },
+      "sources": [
+        "apps/api-ts/src/modules/order-imports/routes.ts",
+        "apps/web/src/app/api/erp/sales-imports/preview/route.ts"
+      ],
+      "verification": {
+        "status": "not_verified_by_catalog",
+        "criteria": [
+          "interface",
+          "request",
+          "authorization",
+          "domain",
+          "persistence",
+          "effects",
+          "failure",
+          "response"
+        ]
+      }
+    },
+    {
+      "id": "post-sales-ts-sales-imports-id-confirm",
+      "flow": "orders",
+      "status": "implemented",
+      "operation": {
+        "method": "POST",
+        "path": "/api/v1/sales-imports/{id}/confirm"
+      },
+      "actor": "active_tenant_member",
+      "permissions": [
+        "sales.orders.read",
+        "sales.orders.manage"
+      ],
+      "input": {
+        "headers": [
+          "Authorization",
+          "X-Tenant-Id",
+          "If-Match",
+          "Idempotency-Key"
+        ],
+        "pathParameters": [
+          "id"
+        ],
+        "body": {
+          "type": "objeto vazio",
+          "source": "apps/api-ts/src/modules/order-imports/routes.ts"
+        },
+        "query": null
+      },
+      "preconditions": [
+        "Cada pedido conserva o mapeamento do resultado por linha."
+      ],
+      "transition": {
+        "from": "Estado atual da empresa selecionada",
+        "to": "Confirmar pedidos da prévia"
+      },
+      "effects": {
+        "writes": [
+          "sales_order_imports",
+          "sales_channel_orders",
+          "sales_orders",
+          "sales_order_lines"
+        ],
+        "external": [],
+        "excludes": []
+      },
+      "concurrency": {
+        "revision": true,
+        "idempotency": true,
+        "rule": "Validar If-Match e recuperar a operação original pela chave de idempotência."
+      },
+      "response": {
+        "successStatuses": [
+          200
+        ],
+        "errorStatuses": [
+          400,
+          401,
+          403,
+          404,
+          409,
+          412,
+          422,
+          428,
+          500,
+          503
+        ],
+        "action": "Confirmar pedidos da prévia"
+      },
+      "recovery": "Após resposta incerta, repetir o conteúdo com a mesma chave. Recarregar o recurso se a revisão divergir.",
+      "ui": {
+        "pages": [
+          "/vendas/importacao"
+        ],
+        "bff": {
+          "method": "POST",
+          "path": "/api/erp/sales-imports/[id]/confirm"
+        },
+        "gap": null
+      },
+      "sources": [
+        "apps/api-ts/src/modules/order-imports/routes.ts",
+        "apps/web/src/app/api/erp/sales-imports/[id]/confirm/route.ts"
+      ],
+      "verification": {
+        "status": "not_verified_by_catalog",
+        "criteria": [
+          "interface",
+          "request",
+          "authorization",
+          "domain",
+          "persistence",
+          "effects",
+          "failure",
+          "response"
+        ]
+      }
+    },
+    {
+      "id": "get-sales-ts-sales-channels-channel-orders",
+      "flow": "orders",
+      "status": "implemented",
+      "operation": {
+        "method": "GET",
+        "path": "/api/v1/sales-channels/{channel}/orders"
+      },
+      "actor": "active_tenant_member",
+      "permissions": [
+        "sales.orders.read"
+      ],
+      "input": {
+        "headers": [
+          "Authorization",
+          "X-Tenant-Id"
+        ],
+        "pathParameters": [
+          "channel"
+        ],
+        "body": null,
+        "query": {
+          "type": "external",
+          "source": "apps/api-ts/src/modules/order-imports/routes.ts"
+        }
+      },
+      "preconditions": [
+        "Consultar o número externo no canal da empresa."
+      ],
+      "transition": {
+        "from": "Estado atual da empresa selecionada",
+        "to": "Estado de negócio preservado"
+      },
+      "effects": {
+        "writes": [],
+        "external": [],
+        "excludes": []
+      },
+      "concurrency": {
+        "revision": false,
+        "idempotency": false,
+        "rule": "A requisição lê o estado atual da empresa."
+      },
+      "response": {
+        "successStatuses": [
+          200
+        ],
+        "errorStatuses": [
+          400,
+          401,
+          403,
+          404,
+          422,
+          500,
+          503
+        ],
+        "action": "Conciliar pedido externo com pedido de venda"
+      },
+      "recovery": "Conferir empresa, acesso e filtros antes de repetir a consulta.",
+      "ui": {
+        "pages": [
+          "/vendas/importacao"
+        ],
+        "bff": {
+          "method": "GET",
+          "path": "/api/erp/sales-channels/[channel]/orders"
+        },
+        "gap": null
+      },
+      "sources": [
+        "apps/api-ts/src/modules/order-imports/routes.ts",
+        "apps/web/src/app/api/erp/sales-channels/[channel]/orders/route.ts"
+      ],
+      "verification": {
+        "status": "not_verified_by_catalog",
+        "criteria": [
+          "interface",
+          "request",
+          "authorization",
+          "domain",
+          "persistence",
+          "effects",
+          "failure",
+          "response"
+        ]
+      }
+    },
+    {
+      "id": "get-sales-ts-fiscal-outgoing-documents",
+      "flow": "fiscal-emission",
+      "status": "implemented",
+      "operation": {
+        "method": "GET",
+        "path": "/api/v1/fiscal/outgoing-documents"
+      },
+      "actor": "active_tenant_member",
+      "permissions": [
+        "fiscal.nfe.read"
+      ],
+      "input": {
+        "headers": [
+          "Authorization",
+          "X-Tenant-Id"
+        ],
+        "pathParameters": [],
+        "body": null,
+        "query": {
+          "type": "filters",
+          "source": "apps/api-ts/src/modules/fiscal-workspace/outgoing.ts"
+        }
+      },
+      "preconditions": [
+        "Escopo fiscal e período definidos na consulta."
+      ],
+      "transition": {
+        "from": "Estado atual da empresa selecionada",
+        "to": "Estado de negócio preservado"
+      },
+      "effects": {
+        "writes": [],
+        "external": [],
+        "excludes": []
+      },
+      "concurrency": {
+        "revision": false,
+        "idempotency": false,
+        "rule": "A requisição lê o estado atual da empresa."
+      },
+      "response": {
+        "successStatuses": [
+          200
+        ],
+        "errorStatuses": [
+          400,
+          401,
+          403,
+          404,
+          422,
+          500,
+          503
+        ],
+        "action": "Listar notas de saída por modelo e ambiente"
+      },
+      "recovery": "Conferir empresa, acesso e filtros antes de repetir a consulta.",
+      "ui": {
+        "pages": [
+          "/fiscal/notas-saida",
+          "/fiscal/nfce"
+        ],
+        "bff": {
+          "method": "GET",
+          "path": "/api/erp/fiscal/outgoing-documents"
+        },
+        "gap": null
+      },
+      "sources": [
+        "apps/api-ts/src/modules/fiscal-workspace/outgoing.ts",
+        "apps/web/src/app/api/erp/fiscal/outgoing-documents/route.ts"
+      ],
+      "verification": {
+        "status": "not_verified_by_catalog",
+        "criteria": [
+          "interface",
+          "request",
+          "authorization",
+          "domain",
+          "persistence",
+          "effects",
+          "failure",
+          "response"
+        ]
+      }
+    },
+    {
+      "id": "get-sales-ts-fiscal-nfce-readiness",
+      "flow": "fiscal-emission",
+      "status": "implemented",
+      "operation": {
+        "method": "GET",
+        "path": "/api/v1/fiscal/nfce-readiness"
+      },
+      "actor": "active_tenant_member",
+      "permissions": [
+        "fiscal.nfe.read"
+      ],
+      "input": {
+        "headers": [
+          "Authorization",
+          "X-Tenant-Id"
+        ],
+        "pathParameters": [],
+        "body": null,
+        "query": {
+          "type": "environment",
+          "source": "apps/api-ts/src/modules/fiscal-workspace/outgoing.ts"
+        }
+      },
+      "preconditions": [
+        "Consulta série, certificado e configuração do modelo 65."
+      ],
+      "transition": {
+        "from": "Estado atual da empresa selecionada",
+        "to": "Estado de negócio preservado"
+      },
+      "effects": {
+        "writes": [],
+        "external": [],
+        "excludes": []
+      },
+      "concurrency": {
+        "revision": false,
+        "idempotency": false,
+        "rule": "A requisição lê o estado atual da empresa."
+      },
+      "response": {
+        "successStatuses": [
+          200
+        ],
+        "errorStatuses": [
+          400,
+          401,
+          403,
+          404,
+          422,
+          500,
+          503
+        ],
+        "action": "Consultar pré-requisitos de NFC-e no ambiente"
+      },
+      "recovery": "Conferir empresa, acesso e filtros antes de repetir a consulta.",
+      "ui": {
+        "pages": [
+          "/fiscal/notas-saida",
+          "/fiscal/nfce"
+        ],
+        "bff": {
+          "method": "GET",
+          "path": "/api/erp/fiscal/nfce-readiness"
+        },
+        "gap": null
+      },
+      "sources": [
+        "apps/api-ts/src/modules/fiscal-workspace/outgoing.ts",
+        "apps/web/src/app/api/erp/fiscal/nfce-readiness/route.ts"
+      ],
+      "verification": {
+        "status": "not_verified_by_catalog",
+        "criteria": [
+          "interface",
+          "request",
+          "authorization",
+          "domain",
+          "persistence",
+          "effects",
+          "failure",
+          "response"
+        ]
+      }
+    },
+    {
+      "id": "get-sales-ts-fiscal-order-lots-id",
+      "flow": "orders",
+      "status": "implemented",
+      "operation": {
+        "method": "GET",
+        "path": "/api/v1/fiscal/order-lots/{id}"
+      },
+      "actor": "active_tenant_member",
+      "permissions": [
+        "sales.orders.read",
+        "fiscal.nfe.read"
+      ],
+      "input": {
+        "headers": [
+          "Authorization",
+          "X-Tenant-Id"
+        ],
+        "pathParameters": [
+          "id"
+        ],
+        "body": null,
+        "query": {
+          "type": "environment, creditOffset",
+          "source": "apps/api-ts/src/modules/fiscal-workspace/order-lots.ts"
+        }
+      },
+      "preconditions": [
+        "Pedido e ambiente pertencem à empresa."
+      ],
+      "transition": {
+        "from": "Estado atual da empresa selecionada",
+        "to": "Estado de negócio preservado"
+      },
+      "effects": {
+        "writes": [],
+        "external": [],
+        "excludes": []
+      },
+      "concurrency": {
+        "revision": false,
+        "idempotency": false,
+        "rule": "A requisição lê o estado atual da empresa."
+      },
+      "response": {
+        "successStatuses": [
+          200
+        ],
+        "errorStatuses": [
+          400,
+          401,
+          403,
+          404,
+          422,
+          500,
+          503
+        ],
+        "action": "Conferir saldo faturado, entregue e devolvido"
+      },
+      "recovery": "Conferir empresa, acesso e filtros antes de repetir a consulta.",
+      "ui": {
+        "pages": [
+          "/vendas/pedidos/[id]"
+        ],
+        "bff": {
+          "method": "GET",
+          "path": "/api/erp/fiscal/order-lots/[id]"
+        },
+        "gap": null
+      },
+      "sources": [
+        "apps/api-ts/src/modules/fiscal-workspace/order-lots.ts",
+        "apps/web/src/app/api/erp/fiscal/order-lots/[id]/route.ts"
+      ],
+      "verification": {
+        "status": "not_verified_by_catalog",
+        "criteria": [
+          "interface",
+          "request",
+          "authorization",
+          "domain",
+          "persistence",
+          "effects",
+          "failure",
+          "response"
+        ]
+      }
+    },
+    {
+      "id": "post-sales-ts-fiscal-order-lots-id",
+      "flow": "orders",
+      "status": "implemented",
+      "operation": {
+        "method": "POST",
+        "path": "/api/v1/fiscal/order-lots/{id}"
+      },
+      "actor": "active_tenant_member",
+      "permissions": [
+        "sales.orders.read",
+        "sales.orders.manage",
+        "fiscal.nfe.read"
+      ],
+      "input": {
+        "headers": [
+          "Authorization",
+          "X-Tenant-Id",
+          "If-Match",
+          "Idempotency-Key"
+        ],
+        "pathParameters": [
+          "id"
+        ],
+        "body": {
+          "type": "input • ação discriminada",
+          "source": "apps/api-ts/src/modules/fiscal-workspace/order-lots.ts"
+        },
+        "query": null
+      },
+      "preconditions": [
+        "Preparação e retirada exigem gestão fiscal. Entrega exige gestão de estoque. Devolução exige também gestão de contas a receber e entradas fiscais. A verificação documental antecede a transação.",
+        "Aplicação de crédito exige título em aberto do mesmo cliente, autorização financeira e saldo confirmado. A emissão de entrada própria exige autorização sobre a nota de origem e alçada quando configurada."
+      ],
+      "transition": {
+        "from": "Estado atual da empresa selecionada",
+        "to": "Preparar, retirar, entregar ou devolver lote do pedido"
+      },
+      "effects": {
+        "writes": [
+          "sales_invoice_lots",
+          "sales_invoice_lot_items",
+          "sales_partial_returns",
+          "sales_return_credit_applications",
+          "sales_self_return_plans"
+        ],
+        "external": [
+          "A escrita comercial depende da conferência do XML autorizado. A emissão de entrada própria usa o executor fiscal e sua reconciliação."
+        ],
+        "excludes": []
+      },
+      "concurrency": {
+        "revision": true,
+        "idempotency": true,
+        "rule": "Validar If-Match e recuperar a operação original pela chave de idempotência."
+      },
+      "response": {
+        "successStatuses": [
+          200
+        ],
+        "errorStatuses": [
+          400,
+          401,
+          403,
+          404,
+          409,
+          412,
+          422,
+          428,
+          500,
+          503
+        ],
+        "action": "Preparar, entregar ou devolver lote, emitir entrada própria e aplicar crédito residual"
+      },
+      "recovery": "Após resposta incerta, repetir o conteúdo com a mesma chave. Recarregar o recurso se a revisão divergir.",
+      "ui": {
+        "pages": [
+          "/vendas/pedidos/[id]"
+        ],
+        "bff": {
+          "method": "POST",
+          "path": "/api/erp/fiscal/order-lots/[id]"
+        },
+        "gap": null
+      },
+      "sources": [
+        "apps/api-ts/src/modules/fiscal-workspace/self-returns.ts",
+        "apps/api-ts/src/modules/fiscal-workspace/order-lots.ts",
+        "apps/web/src/app/api/erp/fiscal/order-lots/[id]/route.ts"
+      ],
+      "verification": {
+        "status": "not_verified_by_catalog",
+        "criteria": [
+          "interface",
+          "request",
+          "authorization",
+          "domain",
+          "persistence",
+          "effects",
+          "failure",
+          "response"
+        ]
+      }
+    },
+    {
+      "id": "get-sales-ts-warranty-equipment",
+      "flow": "warranties",
+      "status": "implemented",
+      "operation": {
+        "method": "GET",
+        "path": "/api/v1/warranty-equipment"
+      },
+      "actor": "active_tenant_member",
+      "permissions": [
+        "service.warranties.read"
+      ],
+      "input": {
+        "headers": [
+          "Authorization",
+          "X-Tenant-Id"
+        ],
+        "pathParameters": [],
+        "body": null,
+        "query": {
+          "type": "serialNumber",
+          "source": "apps/api-ts/src/modules/warranties/equipment.ts"
+        }
+      },
+      "preconditions": [
+        "Considerar vigência congelada e situação da nota de origem."
+      ],
+      "transition": {
+        "from": "Estado atual da empresa selecionada",
+        "to": "Estado de negócio preservado"
+      },
+      "effects": {
+        "writes": [],
+        "external": [],
+        "excludes": []
+      },
+      "concurrency": {
+        "revision": false,
+        "idempotency": false,
+        "rule": "A requisição lê o estado atual da empresa."
+      },
+      "response": {
+        "successStatuses": [
+          200
+        ],
+        "errorStatuses": [
+          400,
+          401,
+          403,
+          404,
+          422,
+          500,
+          503
+        ],
+        "action": "Conferir cobertura pela série"
+      },
+      "recovery": "Conferir empresa, acesso e filtros antes de repetir a consulta.",
+      "ui": {
+        "pages": [
+          "/vendas/garantias/novo"
+        ],
+        "bff": {
+          "method": "GET",
+          "path": "/api/erp/warranty-equipment"
+        },
+        "gap": null
+      },
+      "sources": [
+        "apps/api-ts/src/modules/warranties/equipment.ts",
+        "apps/web/src/app/api/erp/warranty-equipment/route.ts"
+      ],
+      "verification": {
+        "status": "not_verified_by_catalog",
+        "criteria": [
+          "interface",
+          "request",
+          "authorization",
+          "domain",
+          "persistence",
+          "effects",
+          "failure",
+          "response"
+        ]
+      }
+    },
+    {
+      "id": "post-sales-ts-warranty-equipment",
+      "flow": "warranties",
+      "status": "implemented",
+      "operation": {
+        "method": "POST",
+        "path": "/api/v1/warranty-equipment"
+      },
+      "actor": "active_tenant_member",
+      "permissions": [
+        "service.warranties.read",
+        "service.warranties.manage"
+      ],
+      "input": {
+        "headers": [
+          "Authorization",
+          "X-Tenant-Id",
+          "Idempotency-Key"
+        ],
+        "pathParameters": [],
+        "body": {
+          "type": "serialNumber, documentId, lineNumber, policyId",
+          "source": "apps/api-ts/src/modules/warranties/equipment.ts"
+        },
+        "query": null
+      },
+      "preconditions": [
+        "A nota deve estar autorizada em produção e ter unidade disponível."
+      ],
+      "transition": {
+        "from": "Estado atual da empresa selecionada",
+        "to": "Vincular série ao item fiscal"
+      },
+      "effects": {
+        "writes": [
+          "warranty_sold_equipment"
+        ],
+        "external": [],
+        "excludes": []
+      },
+      "concurrency": {
+        "revision": false,
+        "idempotency": true,
+        "rule": "A chave e o conteúdo identificam a operação dentro da empresa."
+      },
+      "response": {
+        "successStatuses": [
+          200,
+          201
+        ],
+        "errorStatuses": [
+          400,
+          401,
+          403,
+          404,
+          409,
+          422,
+          428,
+          500,
+          503
+        ],
+        "action": "Vincular série ao item fiscal"
+      },
+      "recovery": "Após resposta incerta, repetir o conteúdo com a mesma chave. Recarregar o recurso se a revisão divergir.",
+      "ui": {
+        "pages": [
+          "/vendas/garantias/novo"
+        ],
+        "bff": {
+          "method": "POST",
+          "path": "/api/erp/warranty-equipment"
+        },
+        "gap": null
+      },
+      "sources": [
+        "apps/api-ts/src/modules/warranties/equipment.ts",
+        "apps/web/src/app/api/erp/warranty-equipment/route.ts"
+      ],
+      "verification": {
+        "status": "not_verified_by_catalog",
+        "criteria": [
+          "interface",
+          "request",
+          "authorization",
+          "domain",
+          "persistence",
+          "effects",
+          "failure",
+          "response"
+        ]
+      }
+    },
+    {
+      "id": "get-sales-ts-warranty-origins",
+      "flow": "warranties",
+      "status": "implemented",
+      "operation": {
+        "method": "GET",
+        "path": "/api/v1/warranty-origins"
+      },
+      "actor": "active_tenant_member",
+      "permissions": [
+        "service.warranties.read"
+      ],
+      "input": {
+        "headers": [
+          "Authorization",
+          "X-Tenant-Id"
+        ],
+        "pathParameters": [],
+        "body": null,
+        "query": {
+          "type": "orderId ou documentId",
+          "source": "apps/api-ts/src/modules/warranties/equipment.ts"
+        }
+      },
+      "preconditions": [
+        "Buscar por pedido ou documento fiscal."
+      ],
+      "transition": {
+        "from": "Estado atual da empresa selecionada",
+        "to": "Estado de negócio preservado"
+      },
+      "effects": {
+        "writes": [],
+        "external": [],
+        "excludes": []
+      },
+      "concurrency": {
+        "revision": false,
+        "idempotency": false,
+        "rule": "A requisição lê o estado atual da empresa."
+      },
+      "response": {
+        "successStatuses": [
+          200
+        ],
+        "errorStatuses": [
+          400,
+          401,
+          403,
+          404,
+          422,
+          500,
+          503
+        ],
+        "action": "Listar itens fiscais de origem"
+      },
+      "recovery": "Conferir empresa, acesso e filtros antes de repetir a consulta.",
+      "ui": {
+        "pages": [
+          "/vendas/garantias/novo"
+        ],
+        "bff": {
+          "method": "GET",
+          "path": "/api/erp/warranty-origins"
+        },
+        "gap": null
+      },
+      "sources": [
+        "apps/api-ts/src/modules/warranties/equipment.ts",
+        "apps/web/src/app/api/erp/warranty-origins/route.ts"
+      ],
+      "verification": {
+        "status": "not_verified_by_catalog",
+        "criteria": [
+          "interface",
+          "request",
+          "authorization",
+          "domain",
+          "persistence",
+          "effects",
+          "failure",
+          "response"
+        ]
+      }
+    },
+    {
+      "id": "get-sales-ts-warranty-staff",
+      "flow": "warranties",
+      "status": "implemented",
+      "operation": {
+        "method": "GET",
+        "path": "/api/v1/warranty-staff"
+      },
+      "actor": "active_tenant_member",
+      "permissions": [
+        "service.warranties.read"
+      ],
+      "input": {
+        "headers": [
+          "Authorization",
+          "X-Tenant-Id"
+        ],
+        "pathParameters": [],
+        "body": null,
+        "query": {
+          "type": "q",
+          "source": "apps/api-ts/src/modules/warranties/service.ts"
+        }
+      },
+      "preconditions": [
+        "Somente funcionários ativos desta empresa."
+      ],
+      "transition": {
+        "from": "Estado atual da empresa selecionada",
+        "to": "Estado de negócio preservado"
+      },
+      "effects": {
+        "writes": [],
+        "external": [],
+        "excludes": []
+      },
+      "concurrency": {
+        "revision": false,
+        "idempotency": false,
+        "rule": "A requisição lê o estado atual da empresa."
+      },
+      "response": {
+        "successStatuses": [
+          200
+        ],
+        "errorStatuses": [
+          400,
+          401,
+          403,
+          404,
+          422,
+          500,
+          503
+        ],
+        "action": "Listar responsáveis ativos pela assistência"
+      },
+      "recovery": "Conferir empresa, acesso e filtros antes de repetir a consulta.",
+      "ui": {
+        "pages": [
+          "/vendas/garantias/[id]"
+        ],
+        "bff": {
+          "method": "GET",
+          "path": "/api/erp/warranty-staff"
+        },
+        "gap": null
+      },
+      "sources": [
+        "apps/api-ts/src/modules/warranties/service.ts",
+        "apps/web/src/app/api/erp/warranty-staff/route.ts"
+      ],
+      "verification": {
+        "status": "not_verified_by_catalog",
+        "criteria": [
+          "interface",
+          "request",
+          "authorization",
+          "domain",
+          "persistence",
+          "effects",
+          "failure",
+          "response"
+        ]
+      }
+    },
+    {
+      "id": "get-sales-ts-commercial-policies-queue",
+      "flow": "commercial-negotiation",
+      "status": "implemented",
+      "operation": {
+        "method": "GET",
+        "path": "/api/v1/commercial/policies/queue"
+      },
+      "actor": "active_tenant_member",
+      "permissions": [],
+      "input": {
+        "headers": [
+          "Authorization",
+          "X-Tenant-Id"
+        ],
+        "pathParameters": [],
+        "body": null,
+        "query": null
+      },
+      "preconditions": [
+        "Vínculo ativo. Cada solicitação é filtrada pela leitura do documento e pela alçada ou substituição."
+      ],
+      "transition": {
+        "from": "Estado atual da empresa selecionada",
+        "to": "Estado de negócio preservado"
+      },
+      "effects": {
+        "writes": [],
+        "external": [],
+        "excludes": []
+      },
+      "concurrency": {
+        "revision": false,
+        "idempotency": false,
+        "rule": "A requisição lê o estado atual da empresa."
+      },
+      "response": {
+        "successStatuses": [
+          200
+        ],
+        "errorStatuses": [
+          400,
+          401,
+          403,
+          404,
+          422,
+          500,
+          503
+        ],
+        "action": "Consultar aprovações e notificações da alçada"
+      },
+      "recovery": "Conferir empresa, acesso e filtros antes de repetir a consulta.",
+      "ui": {
+        "pages": [
+          "/preferencias/politicas-vendas",
+          "/vendas/aprovacoes"
+        ],
+        "bff": {
+          "method": "GET",
+          "path": "/api/erp/commercial/policies/[...path]",
+          "resource": "queue"
+        },
+        "gap": null
+      },
+      "sources": [
+        "apps/api-ts/src/modules/commercial/policy-routes.ts",
+        "apps/web/src/app/api/erp/commercial/policies/[...path]/route.ts"
+      ],
+      "verification": {
+        "status": "not_verified_by_catalog",
+        "criteria": [
+          "interface",
+          "request",
+          "authorization",
+          "domain",
+          "persistence",
+          "effects",
+          "failure",
+          "response"
+        ]
+      }
+    },
+    {
+      "id": "get-sales-ts-commercial-policies-catalog",
+      "flow": "commercial-negotiation",
+      "status": "implemented",
+      "operation": {
+        "method": "GET",
+        "path": "/api/v1/commercial/policies/catalog"
+      },
+      "actor": "active_tenant_member",
+      "permissions": [],
+      "input": {
+        "headers": [
+          "Authorization",
+          "X-Tenant-Id"
+        ],
+        "pathParameters": [],
+        "body": null,
+        "query": null
+      },
+      "preconditions": [
+        "Exige leitura de pedidos ou de propostas. Parâmetros administrativos dependem de gestão da empresa."
+      ],
+      "transition": {
+        "from": "Estado atual da empresa selecionada",
+        "to": "Estado de negócio preservado"
+      },
+      "effects": {
+        "writes": [],
+        "external": [],
+        "excludes": []
+      },
+      "concurrency": {
+        "revision": false,
+        "idempotency": false,
+        "rule": "A requisição lê o estado atual da empresa."
+      },
+      "response": {
+        "successStatuses": [
+          200
+        ],
+        "errorStatuses": [
+          400,
+          401,
+          403,
+          404,
+          422,
+          500,
+          503
+        ],
+        "action": "Consultar condições e tabelas comerciais"
+      },
+      "recovery": "Conferir empresa, acesso e filtros antes de repetir a consulta.",
+      "ui": {
+        "pages": [
+          "/preferencias/politicas-vendas",
+          "/vendas/aprovacoes"
+        ],
+        "bff": {
+          "method": "GET",
+          "path": "/api/erp/commercial/policies/[...path]",
+          "resource": "catalog"
+        },
+        "gap": null
+      },
+      "sources": [
+        "apps/api-ts/src/modules/commercial/policy-routes.ts",
+        "apps/web/src/app/api/erp/commercial/policies/[...path]/route.ts"
+      ],
+      "verification": {
+        "status": "not_verified_by_catalog",
+        "criteria": [
+          "interface",
+          "request",
+          "authorization",
+          "domain",
+          "persistence",
+          "effects",
+          "failure",
+          "response"
+        ]
+      }
+    },
+    {
+      "id": "get-sales-ts-commercial-policies-catalog-customer",
+      "flow": "commercial-negotiation",
+      "status": "implemented",
+      "operation": {
+        "method": "GET",
+        "path": "/api/v1/commercial/policies/catalog/{customer}"
+      },
+      "actor": "active_tenant_member",
+      "permissions": [],
+      "input": {
+        "headers": [
+          "Authorization",
+          "X-Tenant-Id"
+        ],
+        "pathParameters": [
+          "customer"
+        ],
+        "body": null,
+        "query": null
+      },
+      "preconditions": [
+        "Exige leitura de pedidos ou de propostas. Limite e regras internas disponíveis apenas à gestão."
+      ],
+      "transition": {
+        "from": "Estado atual da empresa selecionada",
+        "to": "Estado de negócio preservado"
+      },
+      "effects": {
+        "writes": [],
+        "external": [],
+        "excludes": []
+      },
+      "concurrency": {
+        "revision": false,
+        "idempotency": false,
+        "rule": "A requisição lê o estado atual da empresa."
+      },
+      "response": {
+        "successStatuses": [
+          200
+        ],
+        "errorStatuses": [
+          400,
+          401,
+          403,
+          404,
+          422,
+          500,
+          503
+        ],
+        "action": "Consultar condição aplicável ao cliente"
+      },
+      "recovery": "Conferir empresa, acesso e filtros antes de repetir a consulta.",
+      "ui": {
+        "pages": [
+          "/preferencias/politicas-vendas",
+          "/vendas/aprovacoes"
+        ],
+        "bff": {
+          "method": "GET",
+          "path": "/api/erp/commercial/policies/[...path]",
+          "resource": "catalog/{customer}"
+        },
+        "gap": null
+      },
+      "sources": [
+        "apps/api-ts/src/modules/commercial/policy-routes.ts",
+        "apps/web/src/app/api/erp/commercial/policies/[...path]/route.ts"
+      ],
+      "verification": {
+        "status": "not_verified_by_catalog",
+        "criteria": [
+          "interface",
+          "request",
+          "authorization",
+          "domain",
+          "persistence",
+          "effects",
+          "failure",
+          "response"
+        ]
+      }
+    },
+    {
+      "id": "post-sales-ts-commercial-policies-settings",
+      "flow": "commercial-negotiation",
+      "status": "implemented",
+      "operation": {
+        "method": "POST",
+        "path": "/api/v1/commercial/policies/settings"
+      },
+      "actor": "active_tenant_member",
+      "permissions": [
+        "platform.company.manage"
+      ],
+      "input": {
+        "headers": [
+          "Authorization",
+          "X-Tenant-Id",
+          "Idempotency-Key"
+        ],
+        "pathParameters": [],
+        "body": {
+          "type": "settings",
+          "source": "apps/api-ts/src/modules/commercial/policy-routes.ts"
+        },
+        "query": null
+      },
+      "preconditions": [
+        "A revisão no corpo controla alterações concorrentes da configuração."
+      ],
+      "transition": {
+        "from": "Estado atual da empresa selecionada",
+        "to": "Salvar condições, crédito, canal ou alçada"
+      },
+      "effects": {
+        "writes": [
+          "sales_payment_terms",
+          "sales_customer_policies",
+          "sales_channel_prices",
+          "sales_approval_routing"
+        ],
+        "external": [],
+        "excludes": []
+      },
+      "concurrency": {
+        "revision": false,
+        "idempotency": true,
+        "rule": "A chave e o conteúdo identificam a operação dentro da empresa."
+      },
+      "response": {
+        "successStatuses": [
+          200
+        ],
+        "errorStatuses": [
+          400,
+          401,
+          403,
+          404,
+          409,
+          422,
+          428,
+          500,
+          503
+        ],
+        "action": "Salvar condições, crédito, canal ou alçada"
+      },
+      "recovery": "Após resposta incerta, repetir o conteúdo com a mesma chave. Recarregar o recurso se a revisão divergir.",
+      "ui": {
+        "pages": [
+          "/preferencias/politicas-vendas",
+          "/vendas/aprovacoes"
+        ],
+        "bff": {
+          "method": "POST",
+          "path": "/api/erp/commercial/policies/[...path]",
+          "resource": "settings"
+        },
+        "gap": null
+      },
+      "sources": [
+        "apps/api-ts/src/modules/commercial/policy-routes.ts",
+        "apps/web/src/app/api/erp/commercial/policies/[...path]/route.ts"
+      ],
+      "verification": {
+        "status": "not_verified_by_catalog",
+        "criteria": [
+          "interface",
+          "request",
+          "authorization",
+          "domain",
+          "persistence",
+          "effects",
+          "failure",
+          "response"
+        ]
+      }
+    },
+    {
+      "id": "post-sales-ts-commercial-policies-decisions",
+      "flow": "commercial-negotiation",
+      "status": "implemented",
+      "operation": {
+        "method": "POST",
+        "path": "/api/v1/commercial/policies/decisions"
+      },
+      "actor": "active_tenant_member",
+      "permissions": [],
+      "input": {
+        "headers": [
+          "Authorization",
+          "X-Tenant-Id",
+          "Idempotency-Key"
+        ],
+        "pathParameters": [],
+        "body": {
+          "type": "decisions",
+          "source": "apps/api-ts/src/modules/commercial/policy-routes.ts"
+        },
+        "query": null
+      },
+      "preconditions": [
+        "Exige leitura e alçada de cada solicitação. Confere revisão individual no corpo."
+      ],
+      "transition": {
+        "from": "Estado atual da empresa selecionada",
+        "to": "Decidir solicitações de aprovação em lote"
+      },
+      "effects": {
+        "writes": [
+          "sales_orders",
+          "sales_proposal_versions",
+          "sales_credit_reviews"
+        ],
+        "external": [],
+        "excludes": []
+      },
+      "concurrency": {
+        "revision": false,
+        "idempotency": true,
+        "rule": "A chave e o conteúdo identificam a operação dentro da empresa."
+      },
+      "response": {
+        "successStatuses": [
+          200
+        ],
+        "errorStatuses": [
+          400,
+          401,
+          403,
+          404,
+          409,
+          422,
+          428,
+          500,
+          503
+        ],
+        "action": "Decidir solicitações de aprovação em lote"
+      },
+      "recovery": "Após resposta incerta, repetir o conteúdo com a mesma chave. Recarregar o recurso se a revisão divergir.",
+      "ui": {
+        "pages": [
+          "/preferencias/politicas-vendas",
+          "/vendas/aprovacoes"
+        ],
+        "bff": {
+          "method": "POST",
+          "path": "/api/erp/commercial/policies/[...path]",
+          "resource": "decisions"
+        },
+        "gap": null
+      },
+      "sources": [
+        "apps/api-ts/src/modules/commercial/policy-routes.ts",
+        "apps/web/src/app/api/erp/commercial/policies/[...path]/route.ts"
+      ],
+      "verification": {
+        "status": "not_verified_by_catalog",
+        "criteria": [
+          "interface",
+          "request",
+          "authorization",
+          "domain",
+          "persistence",
+          "effects",
+          "failure",
+          "response"
+        ]
+      }
+    },
+    {
+      "id": "post-sales-ts-commercial-policies-plan",
+      "flow": "commercial-negotiation",
+      "status": "implemented",
+      "operation": {
+        "method": "POST",
+        "path": "/api/v1/commercial/policies/plan"
+      },
+      "actor": "active_tenant_member",
+      "permissions": [],
+      "input": {
+        "headers": [
+          "Authorization",
+          "X-Tenant-Id"
+        ],
+        "pathParameters": [],
+        "body": {
+          "type": "term e totalCents",
+          "source": "apps/api-ts/src/modules/commercial/policy-routes.ts"
+        },
+        "query": null
+      },
+      "preconditions": [
+        "Requer leitura de pedidos ou propostas, mais condição válida da empresa."
+      ],
+      "transition": {
+        "from": "Estado atual da empresa selecionada",
+        "to": "Estado de negócio preservado"
+      },
+      "effects": {
+        "writes": [],
+        "external": [],
+        "excludes": []
+      },
+      "concurrency": {
+        "revision": false,
+        "idempotency": false,
+        "rule": "A requisição lê o estado atual da empresa."
+      },
+      "response": {
+        "successStatuses": [
+          200
+        ],
+        "errorStatuses": [
+          400,
+          401,
+          403,
+          404,
+          409,
+          422,
+          500,
+          503
+        ],
+        "action": "Calcular entrada e vencimentos"
+      },
+      "recovery": "Conferir empresa, acesso e filtros antes de repetir a consulta.",
+      "ui": {
+        "pages": [
+          "/preferencias/politicas-vendas",
+          "/vendas/aprovacoes"
+        ],
+        "bff": {
+          "method": "POST",
+          "path": "/api/erp/commercial/policies/[...path]",
+          "resource": "plan"
+        },
+        "gap": null
+      },
+      "sources": [
+        "apps/api-ts/src/modules/commercial/policy-routes.ts",
+        "apps/web/src/app/api/erp/commercial/policies/[...path]/route.ts"
+      ],
+      "verification": {
+        "status": "not_verified_by_catalog",
+        "criteria": [
+          "interface",
+          "request",
+          "authorization",
+          "domain",
+          "persistence",
+          "effects",
+          "failure",
+          "response"
+        ]
+      }
+    },
+    {
+      "id": "get-sales-ts-commercial-policies-performance",
+      "flow": "commercial-negotiation",
+      "status": "implemented",
+      "operation": {
+        "method": "GET",
+        "path": "/api/v1/commercial/policies/performance"
+      },
+      "actor": "active_tenant_member",
+      "permissions": [
+        "sales.orders.read"
+      ],
+      "input": {
+        "headers": [
+          "Authorization",
+          "X-Tenant-Id"
+        ],
+        "pathParameters": [],
+        "body": null,
+        "query": {
+          "type": "filters",
+          "source": "apps/api-ts/src/modules/commercial/performance.ts"
+        }
+      },
+      "preconditions": [
+        "A visualização da margem respeita as permissões da empresa."
+      ],
+      "transition": {
+        "from": "Estado atual da empresa selecionada",
+        "to": "Estado de negócio preservado"
+      },
+      "effects": {
+        "writes": [],
+        "external": [],
+        "excludes": []
+      },
+      "concurrency": {
+        "revision": false,
+        "idempotency": false,
+        "rule": "A requisição lê o estado atual da empresa."
+      },
+      "response": {
+        "successStatuses": [
+          200
+        ],
+        "errorStatuses": [
+          400,
+          401,
+          403,
+          404,
+          422,
+          500,
+          503
+        ],
+        "action": "Consultar metas, realização e margens"
+      },
+      "recovery": "Conferir empresa, acesso e filtros antes de repetir a consulta.",
+      "ui": {
+        "pages": [
+          "/vendas/relatorios"
+        ],
+        "bff": {
+          "method": "GET",
+          "path": "/api/erp/commercial/policies/[...path]",
+          "resource": "performance"
+        },
+        "gap": null
+      },
+      "sources": [
+        "apps/api-ts/src/modules/commercial/performance.ts",
+        "apps/web/src/app/api/erp/commercial/policies/[...path]/route.ts"
+      ],
+      "verification": {
+        "status": "not_verified_by_catalog",
+        "criteria": [
+          "interface",
+          "request",
+          "authorization",
+          "domain",
+          "persistence",
+          "effects",
+          "failure",
+          "response"
+        ]
+      }
+    },
+    {
+      "id": "post-sales-ts-commercial-policies-goals",
+      "flow": "commercial-negotiation",
+      "status": "implemented",
+      "operation": {
+        "method": "POST",
+        "path": "/api/v1/commercial/policies/goals"
+      },
+      "actor": "active_tenant_member",
+      "permissions": [
+        "sales.orders.read",
+        "platform.company.manage"
+      ],
+      "input": {
+        "headers": [
+          "Authorization",
+          "X-Tenant-Id",
+          "Idempotency-Key"
+        ],
+        "pathParameters": [],
+        "body": {
+          "type": "goal",
+          "source": "apps/api-ts/src/modules/commercial/performance.ts"
+        },
+        "query": null
+      },
+      "preconditions": [
+        "Verificar revisão da meta no corpo."
+      ],
+      "transition": {
+        "from": "Estado atual da empresa selecionada",
+        "to": "Salvar meta do período e responsável"
+      },
+      "effects": {
+        "writes": [
+          "sales_targets"
+        ],
+        "external": [],
+        "excludes": []
+      },
+      "concurrency": {
+        "revision": false,
+        "idempotency": true,
+        "rule": "A chave e o conteúdo identificam a operação dentro da empresa."
+      },
+      "response": {
+        "successStatuses": [
+          200
+        ],
+        "errorStatuses": [
+          400,
+          401,
+          403,
+          404,
+          409,
+          422,
+          428,
+          500,
+          503
+        ],
+        "action": "Salvar meta do período e responsável"
+      },
+      "recovery": "Após resposta incerta, repetir o conteúdo com a mesma chave. Recarregar o recurso se a revisão divergir.",
+      "ui": {
+        "pages": [
+          "/vendas/relatorios"
+        ],
+        "bff": {
+          "method": "POST",
+          "path": "/api/erp/commercial/policies/[...path]",
+          "resource": "goals"
+        },
+        "gap": null
+      },
+      "sources": [
+        "apps/api-ts/src/modules/commercial/performance.ts",
+        "apps/web/src/app/api/erp/commercial/policies/[...path]/route.ts"
+      ],
+      "verification": {
+        "status": "not_verified_by_catalog",
+        "criteria": [
+          "interface",
+          "request",
+          "authorization",
+          "domain",
+          "persistence",
+          "effects",
+          "failure",
+          "response"
+        ]
+      }
+    },
+    {
+      "id": "get-sales-ts-commercial-policies-store",
+      "flow": "orders",
+      "status": "implemented",
+      "operation": {
+        "method": "GET",
+        "path": "/api/v1/commercial/policies/store"
+      },
+      "actor": "active_tenant_member",
+      "permissions": [
+        "sales.orders.read"
+      ],
+      "input": {
+        "headers": [
+          "Authorization",
+          "X-Tenant-Id"
+        ],
+        "pathParameters": [],
+        "body": null,
+        "query": {
+          "type": "channel, offset",
+          "source": "apps/api-ts/src/modules/commercial/channels.ts"
+        }
+      },
+      "preconditions": [
+        "Filtrar canal e paginar anúncios da empresa."
+      ],
+      "transition": {
+        "from": "Estado atual da empresa selecionada",
+        "to": "Estado de negócio preservado"
+      },
+      "effects": {
+        "writes": [],
+        "external": [],
+        "excludes": []
+      },
+      "concurrency": {
+        "revision": false,
+        "idempotency": false,
+        "rule": "A requisição lê o estado atual da empresa."
+      },
+      "response": {
+        "successStatuses": [
+          200
+        ],
+        "errorStatuses": [
+          400,
+          401,
+          403,
+          404,
+          422,
+          500,
+          503
+        ],
+        "action": "Consultar conectores, anúncios e ocorrências"
+      },
+      "recovery": "Conferir empresa, acesso e filtros antes de repetir a consulta.",
+      "ui": {
+        "pages": [
+          "/vendas/loja-virtual",
+          "/vendas/anuncios"
+        ],
+        "bff": {
+          "method": "GET",
+          "path": "/api/erp/commercial/policies/[...path]",
+          "resource": "store"
+        },
+        "gap": null
+      },
+      "sources": [
+        "apps/api-ts/src/modules/commercial/channels.ts",
+        "apps/web/src/app/api/erp/commercial/policies/[...path]/route.ts"
+      ],
+      "verification": {
+        "status": "not_verified_by_catalog",
+        "criteria": [
+          "interface",
+          "request",
+          "authorization",
+          "domain",
+          "persistence",
+          "effects",
+          "failure",
+          "response"
+        ]
+      }
+    },
+    {
+      "id": "get-sales-ts-commercial-policies-store-id",
+      "flow": "orders",
+      "status": "implemented",
+      "operation": {
+        "method": "GET",
+        "path": "/api/v1/commercial/policies/store/{id}"
+      },
+      "actor": "active_tenant_member",
+      "permissions": [
+        "sales.orders.read"
+      ],
+      "input": {
+        "headers": [
+          "Authorization",
+          "X-Tenant-Id"
+        ],
+        "pathParameters": [
+          "id"
+        ],
+        "body": null,
+        "query": null
+      },
+      "preconditions": [
+        "Vínculo ativo com a empresa do anúncio."
+      ],
+      "transition": {
+        "from": "Estado atual da empresa selecionada",
+        "to": "Estado de negócio preservado"
+      },
+      "effects": {
+        "writes": [],
+        "external": [],
+        "excludes": []
+      },
+      "concurrency": {
+        "revision": false,
+        "idempotency": false,
+        "rule": "A requisição lê o estado atual da empresa."
+      },
+      "response": {
+        "successStatuses": [
+          200
+        ],
+        "errorStatuses": [
+          400,
+          401,
+          403,
+          404,
+          422,
+          500,
+          503
+        ],
+        "action": "Consultar anúncio do canal"
+      },
+      "recovery": "Conferir empresa, acesso e filtros antes de repetir a consulta.",
+      "ui": {
+        "pages": [
+          "/vendas/loja-virtual",
+          "/vendas/anuncios"
+        ],
+        "bff": {
+          "method": "GET",
+          "path": "/api/erp/commercial/policies/[...path]",
+          "resource": "store/{id}"
+        },
+        "gap": null
+      },
+      "sources": [
+        "apps/api-ts/src/modules/commercial/channels.ts",
+        "apps/web/src/app/api/erp/commercial/policies/[...path]/route.ts"
+      ],
+      "verification": {
+        "status": "not_verified_by_catalog",
+        "criteria": [
+          "interface",
+          "request",
+          "authorization",
+          "domain",
+          "persistence",
+          "effects",
+          "failure",
+          "response"
+        ]
+      }
+    },
+    {
+      "id": "post-sales-ts-commercial-policies-store",
+      "flow": "orders",
+      "status": "implemented",
+      "operation": {
+        "method": "POST",
+        "path": "/api/v1/commercial/policies/store"
+      },
+      "actor": "active_tenant_member",
+      "permissions": [
+        "sales.orders.read"
+      ],
+      "input": {
+        "headers": [
+          "Authorization",
+          "X-Tenant-Id",
+          "Idempotency-Key"
+        ],
+        "pathParameters": [],
+        "body": {
+          "type": "settings",
+          "source": "apps/api-ts/src/modules/commercial/channels.ts"
+        },
+        "query": null
+      },
+      "preconditions": [
+        "Gestão de integrações para o conector. Gestão de pedidos para anúncios e conciliações. Publicação aguarda confirmação do canal."
+      ],
+      "transition": {
+        "from": "Estado atual da empresa selecionada",
+        "to": "Configurar conector, anúncio, entrega ou conciliação"
+      },
+      "effects": {
+        "writes": [
+          "sales_connectors",
+          "sales_channel_listings",
+          "sales_channel_deliveries",
+          "sales_channel_inbox"
+        ],
+        "external": [],
+        "excludes": []
+      },
+      "concurrency": {
+        "revision": false,
+        "idempotency": true,
+        "rule": "A chave e o conteúdo identificam a operação dentro da empresa."
+      },
+      "response": {
+        "successStatuses": [
+          200
+        ],
+        "errorStatuses": [
+          400,
+          401,
+          403,
+          404,
+          409,
+          422,
+          428,
+          500,
+          503
+        ],
+        "action": "Configurar conector, anúncio, entrega ou conciliação"
+      },
+      "recovery": "Após resposta incerta, repetir o conteúdo com a mesma chave. Recarregar o recurso se a revisão divergir.",
+      "ui": {
+        "pages": [
+          "/vendas/loja-virtual",
+          "/vendas/anuncios"
+        ],
+        "bff": {
+          "method": "POST",
+          "path": "/api/erp/commercial/policies/[...path]",
+          "resource": "store"
+        },
+        "gap": null
+      },
+      "sources": [
+        "apps/api-ts/src/modules/commercial/channels.ts",
+        "apps/web/src/app/api/erp/commercial/policies/[...path]/route.ts"
+      ],
+      "verification": {
+        "status": "not_verified_by_catalog",
+        "criteria": [
+          "interface",
+          "request",
+          "authorization",
+          "domain",
+          "persistence",
+          "effects",
+          "failure",
+          "response"
+        ]
+      }
+    },
+    {
+      "id": "get-sales-ts-integrations-sales-channels-channel-deliveries",
+      "flow": "orders",
+      "status": "implemented",
+      "operation": {
+        "method": "GET",
+        "path": "/api/v1/integrations/sales-channels/{channel}/deliveries"
+      },
+      "actor": "sales_channel_service",
+      "permissions": [],
+      "input": {
+        "headers": [
+          "Authorization"
+        ],
+        "pathParameters": [
+          "channel"
+        ],
+        "body": null,
+        "query": null
+      },
+      "preconditions": [
+        "Chave de serviço ativa vinculada ao canal e à empresa."
+      ],
+      "transition": {
+        "from": "Operação do canal na empresa vinculada",
+        "to": "Estado de negócio preservado"
+      },
+      "effects": {
+        "writes": [
+          "service_api_keys.last_used_at"
+        ],
+        "external": [],
+        "excludes": []
+      },
+      "concurrency": {
+        "revision": false,
+        "idempotency": false,
+        "rule": "A requisição lê o estado atual da empresa."
+      },
+      "response": {
+        "successStatuses": [
+          200
+        ],
+        "errorStatuses": [
+          400,
+          401,
+          404,
+          422,
+          500,
+          503
+        ],
+        "action": "Consultar operações pendentes de publicação"
+      },
+      "recovery": "Chave de serviço ativa vinculada ao canal e à empresa.",
+      "ui": {
+        "pages": [],
+        "bff": null,
+        "gap": "service_integration"
+      },
+      "sources": [
+        "apps/api-ts/src/modules/commercial/channel-service.ts"
+      ],
+      "verification": {
+        "status": "not_verified_by_catalog",
+        "criteria": [
+          "interface",
+          "request",
+          "authorization",
+          "domain",
+          "persistence",
+          "effects",
+          "failure",
+          "response"
+        ]
+      }
+    },
+    {
+      "id": "post-sales-ts-integrations-sales-channels-channel-deliveries-id-confirmation",
+      "flow": "orders",
+      "status": "implemented",
+      "operation": {
+        "method": "POST",
+        "path": "/api/v1/integrations/sales-channels/{channel}/deliveries/{id}/confirmation"
+      },
+      "actor": "sales_channel_service",
+      "permissions": [],
+      "input": {
+        "headers": [
+          "Authorization"
+        ],
+        "pathParameters": [
+          "channel",
+          "id"
+        ],
+        "body": {
+          "type": "status e reference",
+          "source": "apps/api-ts/src/modules/commercial/channel-service.ts"
+        },
+        "query": null
+      },
+      "preconditions": [
+        "Repetição idêntica conserva a confirmação. Um resultado divergente é recusado."
+      ],
+      "transition": {
+        "from": "Operação do canal na empresa vinculada",
+        "to": "Registrar confirmação do canal"
+      },
+      "effects": {
+        "writes": [
+          "sales_channel_deliveries",
+          "sales_channel_listings"
+        ],
+        "external": [],
+        "excludes": []
+      },
+      "concurrency": {
+        "revision": false,
+        "idempotency": false,
+        "rule": "Repetição idêntica conserva a confirmação. Um resultado divergente é recusado."
+      },
+      "response": {
+        "successStatuses": [
+          200
+        ],
+        "errorStatuses": [
+          400,
+          401,
+          404,
+          409,
+          422,
+          500,
+          503
+        ],
+        "action": "Registrar confirmação do canal"
+      },
+      "recovery": "Repetição idêntica conserva a confirmação. Um resultado divergente é recusado.",
+      "ui": {
+        "pages": [],
+        "bff": null,
+        "gap": "service_integration"
+      },
+      "sources": [
+        "apps/api-ts/src/modules/commercial/channel-service.ts"
+      ],
+      "verification": {
+        "status": "not_verified_by_catalog",
+        "criteria": [
+          "interface",
+          "request",
+          "authorization",
+          "domain",
+          "persistence",
+          "effects",
+          "failure",
+          "response"
+        ]
+      }
+    },
+    {
+      "id": "post-sales-ts-integrations-sales-channels-channel-events",
+      "flow": "orders",
+      "status": "implemented",
+      "operation": {
+        "method": "POST",
+        "path": "/api/v1/integrations/sales-channels/{channel}/events"
+      },
+      "actor": "sales_channel_service",
+      "permissions": [],
+      "input": {
+        "headers": [
+          "Authorization"
+        ],
+        "pathParameters": [
+          "channel"
+        ],
+        "body": {
+          "type": "eventSchema",
+          "source": "apps/api-ts/src/modules/commercial/channel-service.ts"
+        },
+        "query": null
+      },
+      "preconditions": [
+        "O identificador do evento e seu conteúdo determinam o replay. Conciliar o pedido pelo canal e número externo."
+      ],
+      "transition": {
+        "from": "Operação do canal na empresa vinculada",
+        "to": "Receber pedido, cancelamento ou devolução do canal"
+      },
+      "effects": {
+        "writes": [
+          "sales_channel_inbox",
+          "sales_order_imports"
+        ],
+        "external": [],
+        "excludes": []
+      },
+      "concurrency": {
+        "revision": false,
+        "idempotency": false,
+        "rule": "O identificador do evento e seu conteúdo determinam o replay. Conciliar o pedido pelo canal e número externo."
+      },
+      "response": {
+        "successStatuses": [
+          200
+        ],
+        "errorStatuses": [
+          400,
+          401,
+          404,
+          409,
+          422,
+          500,
+          503
+        ],
+        "action": "Receber pedido, cancelamento ou devolução do canal"
+      },
+      "recovery": "O identificador do evento e seu conteúdo determinam o replay. Conciliar o pedido pelo canal e número externo.",
+      "ui": {
+        "pages": [],
+        "bff": null,
+        "gap": "service_integration"
+      },
+      "sources": [
+        "apps/api-ts/src/modules/commercial/channel-service.ts"
+      ],
+      "verification": {
+        "status": "not_verified_by_catalog",
+        "criteria": [
+          "interface",
+          "request",
+          "authorization",
+          "domain",
+          "persistence",
+          "effects",
+          "failure",
+          "response"
+        ]
+      }
+    },
+    {
+      "id": "get-sales-ts-warranty-metrics",
+      "flow": "warranties",
+      "status": "implemented",
+      "operation": {
+        "method": "GET",
+        "path": "/api/v1/warranty-metrics"
+      },
+      "actor": "active_tenant_member",
+      "permissions": [
+        "service.warranties.read"
+      ],
+      "input": {
+        "headers": [
+          "Authorization",
+          "X-Tenant-Id"
+        ],
+        "pathParameters": [],
+        "body": null,
+        "query": {
+          "type": "from, to, offset",
+          "source": "apps/api-ts/src/modules/warranties/metrics.ts"
+        }
+      },
+      "preconditions": [
+        "Usar dias de São Paulo, custo da OS, causa do último laudo, encerramento na linha do tempo e recuperações efetivadas."
+      ],
+      "transition": {
+        "from": "Empresa e origem identificadas",
+        "to": "Estado de negócio preservado"
+      },
+      "effects": {
+        "writes": [],
+        "external": [],
+        "excludes": []
+      },
+      "concurrency": {
+        "revision": false,
+        "idempotency": false,
+        "rule": "Consulta por empresa."
+      },
+      "response": {
+        "successStatuses": [
+          200
+        ],
+        "errorStatuses": [
+          400,
+          401,
+          403,
+          404,
+          422,
+          500,
+          503
+        ],
+        "action": "Medir assistência no período de abertura"
+      },
+      "recovery": "Verificar os filtros, o vínculo e o acesso antes de repetir.",
+      "ui": {
+        "pages": [
+          "/vendas/garantias/indicadores"
+        ],
+        "bff": {
+          "method": "GET",
+          "path": "/api/erp/warranty-metrics"
+        },
+        "gap": null
+      },
+      "sources": [
+        "apps/api-ts/src/modules/warranties/metrics.ts",
+        "apps/web/src/app/api/erp/warranty-metrics/route.ts"
+      ],
+      "verification": {
+        "status": "not_verified_by_catalog",
+        "criteria": [
+          "interface",
+          "request",
+          "authorization",
+          "domain",
+          "persistence",
+          "effects",
+          "failure",
+          "response"
+        ]
+      }
+    },
+    {
+      "id": "get-sales-ts-warranty-cases-id-records",
+      "flow": "warranties",
+      "status": "implemented",
+      "operation": {
+        "method": "GET",
+        "path": "/api/v1/warranty-cases/{id}/records"
+      },
+      "actor": "active_tenant_member",
+      "permissions": [
+        "service.warranties.read"
+      ],
+      "input": {
+        "headers": [
+          "Authorization",
+          "X-Tenant-Id"
+        ],
+        "pathParameters": [
+          "id"
+        ],
+        "body": null,
+        "query": null
+      },
+      "preconditions": [
+        "Acesso aos termos também exige leitura comercial."
+      ],
+      "transition": {
+        "from": "Empresa e origem identificadas",
+        "to": "Estado de negócio preservado"
+      },
+      "effects": {
+        "writes": [],
+        "external": [],
+        "excludes": []
+      },
+      "concurrency": {
+        "revision": false,
+        "idempotency": false,
+        "rule": "Consulta por empresa."
+      },
+      "response": {
+        "successStatuses": [
+          200
+        ],
+        "errorStatuses": [
+          400,
+          401,
+          403,
+          404,
+          422,
+          500,
+          503
+        ],
+        "action": "Consultar evidências, laudos e termos"
+      },
+      "recovery": "Verificar os filtros, o vínculo e o acesso antes de repetir.",
+      "ui": {
+        "pages": [
+          "/vendas/garantias/[id]"
+        ],
+        "bff": {
+          "method": "GET",
+          "path": "/api/erp/warranty-cases/[id]/records"
+        },
+        "gap": null
+      },
+      "sources": [
+        "apps/api-ts/src/modules/warranties/records.ts",
+        "apps/web/src/app/api/erp/warranty-cases/[id]/records/route.ts"
+      ],
+      "verification": {
+        "status": "not_verified_by_catalog",
+        "criteria": [
+          "interface",
+          "request",
+          "authorization",
+          "domain",
+          "persistence",
+          "effects",
+          "failure",
+          "response"
+        ]
+      }
+    },
+    {
+      "id": "post-sales-ts-warranty-cases-id-records",
+      "flow": "warranties",
+      "status": "implemented",
+      "operation": {
+        "method": "POST",
+        "path": "/api/v1/warranty-cases/{id}/records"
+      },
+      "actor": "active_tenant_member",
+      "permissions": [
+        "service.warranties.read",
+        "service.warranties.manage"
+      ],
+      "input": {
+        "headers": [
+          "Authorization",
+          "X-Tenant-Id",
+          "If-Match",
+          "Idempotency-Key"
+        ],
+        "pathParameters": [
+          "id"
+        ],
+        "body": {
+          "type": "schema • evidence, report, term",
+          "source": "apps/api-ts/src/modules/warranties/records.ts"
+        },
+        "query": null
+      },
+      "preconditions": [
+        "Protocolo ativo. O termo deve pertencer ao pedido e cliente. O laudo usa uma OS ativa. O arquivo é limitado a 10 MB e identificado pelo SHA-256."
+      ],
+      "transition": {
+        "from": "Empresa e origem identificadas",
+        "to": "Registrar evidência, laudo ou termo de assistência"
+      },
+      "effects": {
+        "writes": [
+          "warranty_case_records",
+          "warranty_cases",
+          "warranty_service_orders",
+          "warranty_case_events"
+        ],
+        "external": [],
+        "excludes": []
+      },
+      "concurrency": {
+        "revision": true,
+        "idempotency": true,
+        "rule": "Comparar If-Match e recuperar o resultado da mesma chave e conteúdo."
+      },
+      "response": {
+        "successStatuses": [
+          200
+        ],
+        "errorStatuses": [
+          400,
+          401,
+          403,
+          404,
+          409,
+          412,
+          422,
+          428,
+          500,
+          503
+        ],
+        "action": "Registrar evidência, laudo ou termo de assistência"
+      },
+      "recovery": "Conferir o estado da origem. Após resposta incerta, repetir a mesma chave e conteúdo.",
+      "ui": {
+        "pages": [
+          "/vendas/garantias/[id]"
+        ],
+        "bff": {
+          "method": "POST",
+          "path": "/api/erp/warranty-cases/[id]/records"
+        },
+        "gap": null
+      },
+      "sources": [
+        "apps/api-ts/src/modules/warranties/records.ts",
+        "apps/web/src/app/api/erp/warranty-cases/[id]/records/route.ts"
+      ],
+      "verification": {
+        "status": "not_verified_by_catalog",
+        "criteria": [
+          "interface",
+          "request",
+          "authorization",
+          "domain",
+          "persistence",
+          "effects",
+          "failure",
+          "response"
+        ]
+      }
+    },
+    {
+      "id": "get-sales-ts-warranty-evidence-id-file",
+      "flow": "warranties",
+      "status": "implemented",
+      "operation": {
+        "method": "GET",
+        "path": "/api/v1/warranty-evidence/{id}/file"
+      },
+      "actor": "active_tenant_member",
+      "permissions": [
+        "service.warranties.read"
+      ],
+      "input": {
+        "headers": [
+          "Authorization",
+          "X-Tenant-Id"
+        ],
+        "pathParameters": [
+          "id"
+        ],
+        "body": null,
+        "query": null
+      },
+      "preconditions": [
+        "O arquivo pertence à empresa do protocolo. A resposta usa anexo para download."
+      ],
+      "transition": {
+        "from": "Empresa e origem identificadas",
+        "to": "Estado de negócio preservado"
+      },
+      "effects": {
+        "writes": [],
+        "external": [],
+        "excludes": []
+      },
+      "concurrency": {
+        "revision": false,
+        "idempotency": false,
+        "rule": "Consulta por empresa."
+      },
+      "response": {
+        "successStatuses": [
+          200
+        ],
+        "errorStatuses": [
+          400,
+          401,
+          403,
+          404,
+          422,
+          500,
+          503
+        ],
+        "action": "Baixar arquivo de evidência"
+      },
+      "recovery": "Verificar os filtros, o vínculo e o acesso antes de repetir.",
+      "ui": {
+        "pages": [
+          "/vendas/garantias/[id]"
+        ],
+        "bff": {
+          "method": "GET",
+          "path": "/api/erp/warranty-evidence/[id]/file"
+        },
+        "gap": null
+      },
+      "sources": [
+        "apps/api-ts/src/modules/warranties/records.ts",
+        "apps/web/src/app/api/erp/warranty-evidence/[id]/file/route.ts"
+      ],
+      "verification": {
+        "status": "not_verified_by_catalog",
+        "criteria": [
+          "interface",
+          "request",
+          "authorization",
+          "domain",
+          "persistence",
+          "effects",
+          "failure",
+          "response"
+        ]
+      }
+    },
+    {
+      "id": "get-sales-ts-warranty-cases-id-settlements",
+      "flow": "warranties",
+      "status": "implemented",
+      "operation": {
+        "method": "GET",
+        "path": "/api/v1/warranty-cases/{id}/settlements"
+      },
+      "actor": "active_tenant_member",
+      "permissions": [
+        "service.warranties.read"
+      ],
+      "input": {
+        "headers": [
+          "Authorization",
+          "X-Tenant-Id"
+        ],
+        "pathParameters": [
+          "id"
+        ],
+        "body": null,
+        "query": {
+          "type": "offset",
+          "source": "apps/api-ts/src/modules/warranties/settlement.ts"
+        }
+      },
+      "preconditions": [
+        "Consultar origem, permissões por operação e movimentos vinculados ao protocolo."
+      ],
+      "transition": {
+        "from": "Empresa e origem identificadas",
+        "to": "Estado de negócio preservado"
+      },
+      "effects": {
+        "writes": [],
+        "external": [],
+        "excludes": []
+      },
+      "concurrency": {
+        "revision": false,
+        "idempotency": false,
+        "rule": "Consulta por empresa."
+      },
+      "response": {
+        "successStatuses": [
+          200
+        ],
+        "errorStatuses": [
+          400,
+          401,
+          403,
+          404,
+          422,
+          500,
+          503
+        ],
+        "action": "Conferir aprovações, saldo e lançamentos da garantia"
+      },
+      "recovery": "Verificar os filtros, o vínculo e o acesso antes de repetir.",
+      "ui": {
+        "pages": [
+          "/vendas/garantias/[id]"
+        ],
+        "bff": {
+          "method": "GET",
+          "path": "/api/erp/warranty-cases/[id]/settlements"
+        },
+        "gap": null
+      },
+      "sources": [
+        "apps/api-ts/src/modules/warranties/settlement.ts",
+        "apps/web/src/app/api/erp/warranty-cases/[id]/settlements/route.ts"
+      ],
+      "verification": {
+        "status": "not_verified_by_catalog",
+        "criteria": [
+          "interface",
+          "request",
+          "authorization",
+          "domain",
+          "persistence",
+          "effects",
+          "failure",
+          "response"
+        ]
+      }
+    },
+    {
+      "id": "post-sales-ts-warranty-cases-id-settlements",
+      "flow": "warranties",
+      "status": "implemented",
+      "operation": {
+        "method": "POST",
+        "path": "/api/v1/warranty-cases/{id}/settlements"
+      },
+      "actor": "active_tenant_member",
+      "permissions": [
+        "service.warranties.read"
+      ],
+      "input": {
+        "headers": [
+          "Authorization",
+          "X-Tenant-Id",
+          "If-Match",
+          "Idempotency-Key"
+        ],
+        "pathParameters": [
+          "id"
+        ],
+        "body": {
+          "type": "command • decisão, custódia, crédito, reembolso ou recuperação",
+          "source": "apps/api-ts/src/modules/warranties/settlement.ts"
+        },
+        "query": null
+      },
+      "preconditions": [
+        "Verificar alçada por ação, segregação de funções, origem e saldo antes de registrar títulos, estoque ou conta financeira."
+      ],
+      "transition": {
+        "from": "Empresa e origem identificadas",
+        "to": "Efetivar resolução de garantia e recuperação do fornecedor"
+      },
+      "effects": {
+        "writes": [
+          "warranty_settlements",
+          "warranty_cases",
+          "stock_movements",
+          "financial_account_entries"
+        ],
+        "external": [],
+        "excludes": []
+      },
+      "concurrency": {
+        "revision": true,
+        "idempotency": true,
+        "rule": "Comparar If-Match e recuperar o resultado da mesma chave e conteúdo."
+      },
+      "response": {
+        "successStatuses": [
+          200
+        ],
+        "errorStatuses": [
+          400,
+          401,
+          403,
+          404,
+          409,
+          412,
+          422,
+          428,
+          500,
+          503
+        ],
+        "action": "Efetivar resolução de garantia e recuperação do fornecedor"
+      },
+      "recovery": "Conferir o estado da origem. Após resposta incerta, repetir a mesma chave e conteúdo.",
+      "ui": {
+        "pages": [
+          "/vendas/garantias/[id]"
+        ],
+        "bff": {
+          "method": "POST",
+          "path": "/api/erp/warranty-cases/[id]/settlements"
+        },
+        "gap": null
+      },
+      "sources": [
+        "apps/api-ts/src/modules/warranties/settlement.ts",
+        "apps/web/src/app/api/erp/warranty-cases/[id]/settlements/route.ts"
+      ],
+      "verification": {
+        "status": "not_verified_by_catalog",
+        "criteria": [
+          "interface",
+          "request",
+          "authorization",
+          "domain",
+          "persistence",
+          "effects",
+          "failure",
+          "response"
+        ]
+      }
+    },
+    {
+      "id": "get-sales-ts-fiscal-return-policy",
+      "flow": "commercial-returns",
+      "status": "implemented",
+      "operation": {
+        "method": "GET",
+        "path": "/api/v1/fiscal/return-policy"
+      },
+      "actor": "active_tenant_member",
+      "permissions": [
+        "sales.orders.read"
+      ],
+      "input": {
+        "headers": [
+          "Authorization",
+          "X-Tenant-Id"
+        ],
+        "pathParameters": [],
+        "body": null,
+        "query": null
+      },
+      "preconditions": [
+        "Devolver a política vigente da empresa."
+      ],
+      "transition": {
+        "from": "Empresa e origem identificadas",
+        "to": "Estado de negócio preservado"
+      },
+      "effects": {
+        "writes": [],
+        "external": [],
+        "excludes": []
+      },
+      "concurrency": {
+        "revision": false,
+        "idempotency": false,
+        "rule": "Consulta por empresa."
+      },
+      "response": {
+        "successStatuses": [
+          200
+        ],
+        "errorStatuses": [
+          400,
+          401,
+          403,
+          404,
+          422,
+          500,
+          503
+        ],
+        "action": "Ler prazo e alçada para devolução"
+      },
+      "recovery": "Verificar os filtros, o vínculo e o acesso antes de repetir.",
+      "ui": {
+        "pages": [
+          "/preferencias/politicas-vendas"
+        ],
+        "bff": {
+          "method": "GET",
+          "path": "/api/erp/fiscal/return-policy"
+        },
+        "gap": null
+      },
+      "sources": [
+        "apps/api-ts/src/modules/fiscal-workspace/return-policy.ts",
+        "apps/web/src/app/api/erp/fiscal/return-policy/route.ts"
+      ],
+      "verification": {
+        "status": "not_verified_by_catalog",
+        "criteria": [
+          "interface",
+          "request",
+          "authorization",
+          "domain",
+          "persistence",
+          "effects",
+          "failure",
+          "response"
+        ]
+      }
+    },
+    {
+      "id": "put-sales-ts-fiscal-return-policy",
+      "flow": "commercial-returns",
+      "status": "implemented",
+      "operation": {
+        "method": "PUT",
+        "path": "/api/v1/fiscal/return-policy"
+      },
+      "actor": "active_tenant_member",
+      "permissions": [
+        "sales.orders.read",
+        "sales.approvals.director"
+      ],
+      "input": {
+        "headers": [
+          "Authorization",
+          "X-Tenant-Id",
+          "If-Match",
+          "Idempotency-Key"
+        ],
+        "pathParameters": [],
+        "body": {
+          "type": "windowDays, approvalAboveCents",
+          "source": "apps/api-ts/src/modules/fiscal-workspace/return-policy.ts"
+        },
+        "query": null
+      },
+      "preconditions": [
+        "A atualização compara a revisão da política da empresa."
+      ],
+      "transition": {
+        "from": "Empresa e origem identificadas",
+        "to": "Configurar prazo e alçada para devolução"
+      },
+      "effects": {
+        "writes": [
+          "sales_return_policies"
+        ],
+        "external": [],
+        "excludes": []
+      },
+      "concurrency": {
+        "revision": true,
+        "idempotency": true,
+        "rule": "Comparar If-Match e recuperar o resultado da mesma chave e conteúdo."
+      },
+      "response": {
+        "successStatuses": [
+          200
+        ],
+        "errorStatuses": [
+          400,
+          401,
+          403,
+          404,
+          409,
+          412,
+          422,
+          428,
+          500,
+          503
+        ],
+        "action": "Configurar prazo e alçada para devolução"
+      },
+      "recovery": "Conferir o estado da origem. Após resposta incerta, repetir a mesma chave e conteúdo.",
+      "ui": {
+        "pages": [
+          "/preferencias/politicas-vendas"
+        ],
+        "bff": {
+          "method": "PUT",
+          "path": "/api/erp/fiscal/return-policy"
+        },
+        "gap": null
+      },
+      "sources": [
+        "apps/api-ts/src/modules/fiscal-workspace/return-policy.ts",
+        "apps/web/src/app/api/erp/fiscal/return-policy/route.ts"
+      ],
+      "verification": {
+        "status": "not_verified_by_catalog",
+        "criteria": [
+          "interface",
+          "request",
+          "authorization",
+          "domain",
+          "persistence",
+          "effects",
+          "failure",
+          "response"
+        ]
+      }
+    },
+    {
+      "id": "get-sales-ts-fiscal-received-nfes-id-purchase-progress",
+      "flow": "fiscal-incoming",
+      "status": "implemented",
+      "operation": {
+        "method": "GET",
+        "path": "/api/v1/fiscal/received-nfes/{id}/purchase/progress"
+      },
+      "actor": "active_tenant_member",
+      "permissions": [
+        "purchasing.orders.read"
+      ],
+      "input": {
+        "headers": [
+          "Authorization",
+          "X-Tenant-Id"
+        ],
+        "pathParameters": [
+          "id"
+        ],
+        "body": null,
+        "query": null
+      },
+      "preconditions": [
+        "Vínculo ativo e acesso ao monitor fiscal ou à gestão de notas de entrada. A compra e a nota devem pertencer à mesma empresa."
+      ],
+      "transition": {
+        "from": "Empresa e origem identificadas",
+        "to": "Estado de negócio preservado"
+      },
+      "effects": {
+        "writes": [],
+        "external": [],
+        "excludes": []
+      },
+      "concurrency": {
+        "revision": false,
+        "idempotency": false,
+        "rule": "Consulta por empresa."
+      },
+      "response": {
+        "successStatuses": [
+          200
+        ],
+        "errorStatuses": [
+          400,
+          401,
+          403,
+          404,
+          422,
+          500,
+          503
+        ],
+        "action": "Consultar recebimento físico e financeiro"
+      },
+      "recovery": "Verificar os filtros, o vínculo e o acesso antes de repetir.",
+      "ui": {
+        "pages": [
+          "/compras/notas-entrada/[id]"
+        ],
+        "bff": {
+          "method": "GET",
+          "path": "/api/erp/fiscal/received-nfes/[id]/purchase/[action]",
+          "action": "progress"
+        },
+        "gap": null
+      },
+      "sources": [
+        "apps/api-ts/src/modules/fiscal-incoming/receipt.ts",
+        "apps/web/src/app/api/erp/fiscal/received-nfes/[id]/purchase/[action]/route.ts"
+      ],
+      "verification": {
+        "status": "not_verified_by_catalog",
+        "criteria": [
+          "interface",
+          "request",
+          "authorization",
+          "domain",
+          "persistence",
+          "effects",
+          "failure",
+          "response"
+        ]
+      }
+    },
+    {
+      "id": "get-sales-ts-fiscal-received-nfes-id-purchase-options",
+      "flow": "fiscal-incoming",
+      "status": "implemented",
+      "operation": {
+        "method": "GET",
+        "path": "/api/v1/fiscal/received-nfes/{id}/purchase/options"
+      },
+      "actor": "active_tenant_member",
+      "permissions": [
+        "purchasing.orders.read"
+      ],
+      "input": {
+        "headers": [
+          "Authorization",
+          "X-Tenant-Id"
+        ],
+        "pathParameters": [
+          "id"
+        ],
+        "body": null,
+        "query": {
+          "type": "optionsPage",
+          "source": "apps/api-ts/src/modules/fiscal-incoming/receipt.ts"
+        }
+      },
+      "preconditions": [
+        "Vínculo ativo e acesso ao monitor fiscal ou à gestão de notas de entrada. A compra e a nota devem pertencer à mesma empresa."
+      ],
+      "transition": {
+        "from": "Empresa e origem identificadas",
+        "to": "Estado de negócio preservado"
+      },
+      "effects": {
+        "writes": [],
+        "external": [],
+        "excludes": []
+      },
+      "concurrency": {
+        "revision": false,
+        "idempotency": false,
+        "rule": "Consulta por empresa."
+      },
+      "response": {
+        "successStatuses": [
+          200
+        ],
+        "errorStatuses": [
+          400,
+          401,
+          403,
+          404,
+          422,
+          500,
+          503
+        ],
+        "action": "Listar pedidos de compra compatíveis com a nota"
+      },
+      "recovery": "Verificar os filtros, o vínculo e o acesso antes de repetir.",
+      "ui": {
+        "pages": [
+          "/compras/notas-entrada/[id]"
+        ],
+        "bff": {
+          "method": "GET",
+          "path": "/api/erp/fiscal/received-nfes/[id]/purchase/[action]",
+          "action": "options"
+        },
+        "gap": null
+      },
+      "sources": [
+        "apps/api-ts/src/modules/fiscal-incoming/receipt.ts",
+        "apps/web/src/app/api/erp/fiscal/received-nfes/[id]/purchase/[action]/route.ts"
+      ],
+      "verification": {
+        "status": "not_verified_by_catalog",
+        "criteria": [
+          "interface",
+          "request",
+          "authorization",
+          "domain",
+          "persistence",
+          "effects",
+          "failure",
+          "response"
+        ]
+      }
+    },
+    {
+      "id": "post-sales-ts-fiscal-received-nfes-id-purchase-confirm",
+      "flow": "fiscal-incoming",
+      "status": "implemented",
+      "operation": {
+        "method": "POST",
+        "path": "/api/v1/fiscal/received-nfes/{id}/purchase/confirm"
+      },
+      "actor": "active_tenant_member",
+      "permissions": [
+        "purchasing.orders.read",
+        "purchasing.orders.manage"
+      ],
+      "input": {
+        "headers": [
+          "Authorization",
+          "X-Tenant-Id",
+          "If-Match",
+          "Idempotency-Key"
+        ],
+        "pathParameters": [
+          "id"
+        ],
+        "body": {
+          "type": "confirmation",
+          "source": "apps/api-ts/src/modules/fiscal-incoming/receipt.ts"
+        },
+        "query": null
+      },
+      "preconditions": [
+        "Vínculo ativo e acesso ao monitor fiscal ou à gestão de notas de entrada. A compra e a nota devem pertencer à mesma empresa."
+      ],
+      "transition": {
+        "from": "Empresa e origem identificadas",
+        "to": "Confirmar a compra conciliada"
+      },
+      "effects": {
+        "writes": [
+          "purchase_orders"
+        ],
+        "external": [],
+        "excludes": []
+      },
+      "concurrency": {
+        "revision": true,
+        "idempotency": true,
+        "rule": "Comparar If-Match e recuperar o resultado da mesma chave e conteúdo."
+      },
+      "response": {
+        "successStatuses": [
+          200
+        ],
+        "errorStatuses": [
+          400,
+          401,
+          403,
+          404,
+          409,
+          412,
+          422,
+          428,
+          500,
+          503
+        ],
+        "action": "Confirmar a compra conciliada"
+      },
+      "recovery": "Conferir o estado da origem. Após resposta incerta, repetir a mesma chave e conteúdo.",
+      "ui": {
+        "pages": [
+          "/compras/notas-entrada/[id]"
+        ],
+        "bff": {
+          "method": "POST",
+          "path": "/api/erp/fiscal/received-nfes/[id]/purchase/[action]",
+          "action": "confirm"
+        },
+        "gap": null
+      },
+      "sources": [
+        "apps/api-ts/src/modules/fiscal-incoming/receipt.ts",
+        "apps/web/src/app/api/erp/fiscal/received-nfes/[id]/purchase/[action]/route.ts"
+      ],
+      "verification": {
+        "status": "not_verified_by_catalog",
+        "criteria": [
+          "interface",
+          "request",
+          "authorization",
+          "domain",
+          "persistence",
+          "effects",
+          "failure",
+          "response"
+        ]
+      }
+    },
+    {
+      "id": "post-sales-ts-fiscal-received-nfes-id-purchase-receive",
+      "flow": "fiscal-incoming",
+      "status": "implemented",
+      "operation": {
+        "method": "POST",
+        "path": "/api/v1/fiscal/received-nfes/{id}/purchase/receive"
+      },
+      "actor": "active_tenant_member",
+      "permissions": [
+        "purchasing.orders.read",
+        "purchasing.receipts.create",
+        "inventory.stock.manage",
+        "finance.payables.originate"
+      ],
+      "input": {
+        "headers": [
+          "Authorization",
+          "X-Tenant-Id",
+          "If-Match",
+          "Idempotency-Key"
+        ],
+        "pathParameters": [
+          "id"
+        ],
+        "body": {
+          "type": "receipt",
+          "source": "apps/api-ts/src/modules/fiscal-incoming/receipt.ts"
+        },
+        "query": null
+      },
+      "preconditions": [
+        "Vínculo ativo e acesso ao monitor fiscal ou à gestão de notas de entrada. A compra e a nota devem pertencer à mesma empresa."
+      ],
+      "transition": {
+        "from": "Empresa e origem identificadas",
+        "to": "Confirmar recebimento físico da compra"
+      },
+      "effects": {
+        "writes": [
+          "purchase_receipts",
+          "stock_movements",
+          "payables"
+        ],
+        "external": [],
+        "excludes": []
+      },
+      "concurrency": {
+        "revision": true,
+        "idempotency": true,
+        "rule": "Comparar If-Match e recuperar o resultado da mesma chave e conteúdo."
+      },
+      "response": {
+        "successStatuses": [
+          201
+        ],
+        "errorStatuses": [
+          400,
+          401,
+          403,
+          404,
+          409,
+          412,
+          422,
+          428,
+          500,
+          503
+        ],
+        "action": "Confirmar recebimento físico da compra"
+      },
+      "recovery": "Conferir o estado da origem. Após resposta incerta, repetir a mesma chave e conteúdo.",
+      "ui": {
+        "pages": [
+          "/compras/notas-entrada/[id]"
+        ],
+        "bff": {
+          "method": "POST",
+          "path": "/api/erp/fiscal/received-nfes/[id]/purchase/[action]",
+          "action": "receive"
+        },
+        "gap": null
+      },
+      "sources": [
+        "apps/api-ts/src/modules/fiscal-incoming/receipt.ts",
+        "apps/web/src/app/api/erp/fiscal/received-nfes/[id]/purchase/[action]/route.ts"
+      ],
+      "verification": {
+        "status": "not_verified_by_catalog",
+        "criteria": [
+          "interface",
+          "request",
+          "authorization",
+          "domain",
+          "persistence",
+          "effects",
+          "failure",
+          "response"
+        ]
+      }
+    },
+    {
+      "id": "fiscal-nfce-offline-receipt",
+      "flow": "fiscal-emission",
+      "status": "implemented",
+      "operation": {
+        "method": "GET",
+        "path": "/api/v1/fiscal/nfe/{id}/danfe"
+      },
+      "actor": "active_tenant_member",
+      "permissions": [
+        "fiscal.nfe.read"
+      ],
+      "input": {
+        "headers": [
+          "Authorization",
+          "X-Tenant-Id"
+        ],
+        "pathParameters": [
+          "id"
+        ],
+        "body": null,
+        "query": null
+      },
+      "preconditions": [
+        "Documento 65 preparado ou com resultado incerto e XML assinado com emissão em contingência."
+      ],
+      "transition": {
+        "from": "Estado atual da empresa selecionada",
+        "to": "Estado de negócio preservado"
+      },
+      "effects": {
+        "writes": [],
+        "external": [
+          "Renderização privada do cupom com verificação dos hashes do XML e do PDF."
+        ],
+        "excludes": []
+      },
+      "concurrency": {
+        "revision": false,
+        "idempotency": false,
+        "rule": "A requisição lê o estado atual da empresa."
+      },
+      "response": {
+        "successStatuses": [
+          200
+        ],
+        "errorStatuses": [
+          400,
+          401,
+          403,
+          404,
+          409,
+          422,
+          502,
+          503
+        ],
+        "action": "Imprimir cupom de NFC-e emitido em contingência"
+      },
+      "recovery": "Conferir empresa, acesso e filtros antes de repetir a consulta.",
+      "ui": {
+        "pages": [
+          "/fiscal/nfce/[id]"
+        ],
+        "bff": {
+          "method": "GET",
+          "path": "/api/erp/fiscal/nfe/[id]/[action]",
+          "action": "danfe"
+        },
+        "gap": null
+      },
+      "sources": [
+        "apps/api-ts/src/modules/fiscal-workspace/emission.ts",
+        "apps/web/src/app/api/erp/fiscal/nfe/[id]/[action]/route.ts"
+      ],
+      "verification": {
+        "status": "not_verified_by_catalog",
+        "criteria": [
+          "interface",
+          "request",
+          "authorization",
+          "domain",
+          "persistence",
+          "effects",
+          "failure",
+          "response"
+        ]
+      }
+    },
+    {
+      "id": "product-finishes-for-sale",
+      "flow": "products",
+      "status": "implemented",
+      "operation": {
+        "method": "GET",
+        "path": "/api/v1/products/finishes"
+      },
+      "actor": "active_tenant_member",
+      "permissions": [
+        "catalog.products.read"
+      ],
+      "input": {
+        "headers": [
+          "Authorization",
+          "X-Tenant-Id"
+        ],
+        "pathParameters": [],
+        "body": null,
+        "query": {
+          "type": "querySchema",
+          "source": "apps/api-ts/src/modules/products/finishes.ts"
+        }
+      },
+      "preconditions": [
+        "Produtos da empresa e opções identificadas pelo catálogo técnico."
+      ],
+      "transition": {
+        "from": "Estado atual da empresa selecionada",
+        "to": "Estado de negócio preservado"
+      },
+      "effects": {
+        "writes": [],
+        "external": [],
+        "excludes": []
+      },
+      "concurrency": {
+        "revision": false,
+        "idempotency": false,
+        "rule": "A requisição lê o estado atual da empresa."
+      },
+      "response": {
+        "successStatuses": [
+          200
+        ],
+        "errorStatuses": [
+          400,
+          401,
+          403,
+          404,
+          409,
+          422,
+          502,
+          503
+        ],
+        "action": "Consultar acabamentos dos produtos selecionados"
+      },
+      "recovery": "Conferir empresa, acesso e filtros antes de repetir a consulta.",
+      "ui": {
+        "pages": [
+          "/vendas/simulador",
+          "/vendas/pedidos/novo"
+        ],
+        "bff": {
+          "method": "GET",
+          "path": "/api/erp/products/finishes"
+        },
+        "gap": null
+      },
+      "sources": [
+        "apps/api-ts/src/modules/products/finishes.ts",
+        "apps/web/src/app/api/erp/products/finishes/route.ts"
+      ],
+      "verification": {
+        "status": "not_verified_by_catalog",
+        "criteria": [
+          "interface",
+          "request",
+          "authorization",
+          "domain",
+          "persistence",
+          "effects",
+          "failure",
+          "response"
+        ]
+      }
     }
   ],
   "pendingFlows": [

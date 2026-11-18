@@ -135,3 +135,14 @@ test('catch-all resources do not alias a scalar parameter and declared methods r
   catalogue.actions.pop();
   assert.deepEqual(analyze(inventory, catalogue).map(finding => finding.code), ['bff_dispatch_method_unmapped']);
 });
+
+test('partial migration retains both methods while duplicates inside one service remain detectable', () => {
+  const route = '/api/v1/categories';
+  const original = { path: route, methods: ['GET','POST'], file: 'apps/api/src/finance.rs' };
+  const migrated = { path: route, methods: ['GET'], file: 'apps/api-ts/src/modules/sales-endpoints.json' };
+  const handler = { path: '/api/erp/categories', methods: ['GET','POST'], forwards: [{path: route}], file: 'handler' };
+  const inventory = { pages: [], bff: [handler], api: [original, migrated] };
+  assert.deepEqual(analyze(inventory), []);
+  inventory.api.push({ ...migrated, file: 'apps/api-ts/src/modules/document-endpoints.json' });
+  assert.deepEqual(analyze(inventory).map(item => item.code), ['duplicate_route']);
+});
