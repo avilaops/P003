@@ -134,7 +134,7 @@ test("Chromium • agrupamento, cobrança Pix, webhook, retorno e conciliação 
       compact +
       "<STMTTRN><TRNTYPE>CREDIT<DTPOSTED>" +
       compact +
-      "<TRNAMT>98.00<FITID>LOTE-98<NAME>Liquidação Pix agrupada</STMTTRN></BANKTRANLIST><LEDGERBAL><BALAMT>98.00<DTASOF>" +
+      "<TRNAMT>98.00<FITID>LOTE-98<REFNUM>PIX-00098<NAME>Liquidação Pix agrupada</STMTTRN></BANKTRANLIST><LEDGERBAL><BALAMT>98.00<DTASOF>" +
       compact +
       "</LEDGERBAL></STMTRS></OFX>"
     await page.goto("/financeiro/caixas-bancos?accountId=" + ready.account)
@@ -146,6 +146,7 @@ test("Chromium • agrupamento, cobrança Pix, webhook, retorno e conciliação 
     await page.getByRole("button", { name: "Importar extrato" }).click()
     const ofx = await imported
     expect(ofx.ok(), await ofx.text()).toBeTruthy()
+    await expect(page.getByText("Documento bancário • PIX-00098", { exact: true })).toBeVisible()
     await page.getByRole("radio", { name: /Liquidação Pix agrupada/ }).check()
     const entries = page.getByRole("region", { name: "Movimentos do ERP disponíveis" }).getByRole("checkbox")
     await expect(entries).toHaveCount(3)

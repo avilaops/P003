@@ -54,6 +54,7 @@ export function parseEfiStatement(content: string) {
     seen.set(fingerprint, ordinal)
     return {
       fitId: "EFI-" + fingerprint + "-" + ordinal,
+      documentReferences: document ? [document] : [],
       bookedOn,
       signedCents,
       description: [memo, document].filter(Boolean).join(" • ") || r.slice(172, 176),

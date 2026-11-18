@@ -40,15 +40,17 @@ export function parseOfx(raw: string) {
       signedCents = cents(field(block, "TRNAMT"))
     const description =
       [field(block, "NAME", false), field(block, "MEMO", false)].filter(Boolean).join(" • ") || field(block, "TRNTYPE")
+    const documentReferences = [...new Set([field(block, "REFNUM", false), field(block, "CHECKNUM", false)].filter(Boolean))]
     if (
       fitId.length > 255 ||
       description.length > 1500 ||
+      documentReferences.some((reference) => reference.length > 255) ||
       !signedCents ||
       bookedOn > end ||
       field(block, "CORRECTFITID", false)
     )
       throw invalid("Lançamento OFX inválido ou retificação que exige conferência")
-    return { fitId, bookedOn, signedCents, description }
+    return { fitId, bookedOn, signedCents, description, documentReferences }
   })
   if ((statement.match(/<STMTTRN\s*>/gi) || []).length !== lines.length || lines.length > 5000)
     throw invalid("Quantidade ou estrutura de lançamentos OFX inválida")

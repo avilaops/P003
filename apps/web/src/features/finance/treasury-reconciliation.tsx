@@ -27,6 +27,8 @@ type Line = {
   state: string
   reason: string | null
   suggestions: string[]
+  documentReferences?: string[]
+  suggestedEntries?: (Entry & { documentMatch: boolean })[]
   entryIds: string[]
 }
 type Entry = { id: string; description: string; occurredOn: string; cents: string; reference: string | null }
@@ -71,6 +73,10 @@ export function TreasuryReconciliation({ accountId, tenantId, type }: { accountI
     data = result?.data
   const disabled = command.busy || command.stale || command.uncertain
   const line = data?.lines.find((l) => l.id === selected)
+  const recommended = line?.suggestedEntries ?? []
+  const suggestedIds = new Set(recommended.map((entry) => entry.id))
+  const documentMatches = new Set(recommended.filter((entry) => entry.documentMatch).map((entry) => entry.id))
+  const visibleEntries = [...recommended, ...(data?.entries ?? []).filter((entry) => !suggestedIds.has(entry.id))]
   const natures = useResource<{ data: { id: string; name: string; direction: string }[] }>(
     line ? "/api/erp/financial-categories?status=active&limit=100" : "",
   )
@@ -162,6 +168,7 @@ export function TreasuryReconciliation({ accountId, tenantId, type }: { accountI
                   />
                   <span>
                     {l.bookedOn} • {brl(l.cents)} • {l.description}
+                    {!!l.documentReferences?.length && <small className="block">Documento bancário • {l.documentReferences.join(" • ")}</small>}
                     <small className="block text-muted-foreground">
                       {l.fitId} •{" "}
                       {l.state === "matched" ? "Conciliado" : l.state === "exception" ? "Exceção justificada" : "Pendente"}
@@ -186,8 +193,8 @@ export function TreasuryReconciliation({ accountId, tenantId, type }: { accountI
             </section>
             <section className="space-y-2" aria-labelledby="treasury-available-entries">
               <h3 id="treasury-available-entries" className="text-sm font-semibold">Movimentos do ERP disponíveis</h3>
-              {!data.entries.length && <p className="text-sm text-muted-foreground">Nenhum movimento disponível nesta página.</p>}
-              {data.entries.map((entry) => (
+              {!visibleEntries.length && <p className="text-sm text-muted-foreground">Nenhum movimento disponível nesta página.</p>}
+              {visibleEntries.map((entry) => (
                 <label key={entry.id} className="flex items-start gap-2 rounded-md border p-2 text-sm">
                   <input
                     type="checkbox"
@@ -199,7 +206,9 @@ export function TreasuryReconciliation({ accountId, tenantId, type }: { accountI
                     {entry.occurredOn} • {brl(entry.cents)} • {entry.description}
                     {entry.reference && <small className="block">{entry.reference}</small>}
                     {line?.suggestions.includes(entry.id) && (
-                      <small className="block text-muted-foreground">Sugestão • mesma data e valor</small>
+                      <small className="block text-muted-foreground">
+                        {documentMatches.has(entry.id) ? "Sugestão • mesmo documento, data e valor" : "Sugestão • mesma data e valor"}
+                      </small>
                     )}
                   </span>
                 </label>

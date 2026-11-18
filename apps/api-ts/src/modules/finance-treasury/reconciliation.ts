@@ -38,6 +38,9 @@ const envelope = (context: AuthorizedContext, id: string, data: Record<string, u
 })
 const unmatched = "NOT EXISTS(SELECT 1 FROM finance_bank_matches m WHERE m.tenant_id=e.tenant_id AND m.entry_id=e.id)"
 const signed = "(CASE WHEN e.direction='credit' THEN e.amount_cents ELSE -e.amount_cents END)"
+const sameDocument = `EXISTS (
+  SELECT 1 FROM unnest(l.document_references) AS doc(ref) WHERE lower(doc.ref)=lower(btrim(e.reference))
+)`
 const accountNumber = (value: string) =>
   value
     .replace(/[^a-z0-9]/gi, "")
@@ -96,8 +99,9 @@ export async function importStatement(
   let imported = 0
   for (const line of parsed.lines) {
     const previous = (
-      await context.client.query<{ booked: string; amount: string; description: string }>(
-        "SELECT booked_on::text booked,signed_cents::text amount,description FROM finance_bank_lines WHERE tenant_id=$1 AND account_id=$2 AND fit_id=$3",
+      await context.client.query<{ booked: string; amount: string; description: string; documents: string[] | null }>(
+        `SELECT booked_on::text booked,signed_cents::text amount,description,document_references AS documents
+        FROM finance_bank_lines WHERE tenant_id=$1 AND account_id=$2 AND fit_id=$3`,
         [...params, line.fitId],
       )
     ).rows[0]
@@ -105,16 +109,17 @@ export async function importStatement(
       if (
         previous.booked !== line.bookedOn ||
         previous.amount !== String(line.signedCents) ||
-        previous.description !== line.description
+        previous.description !== line.description ||
+        (previous.documents !== null && JSON.stringify(previous.documents) !== JSON.stringify(line.documentReferences))
       )
         throw conflict("O banco reapresentou o mesmo FITID com dados diferentes • " + line.fitId)
       continue
     }
     await assertOpenAccountPeriod(context, input.accountId, line.bookedOn)
     await context.client.query(
-      `INSERT INTO finance_bank_lines(tenant_id,account_id,id,statement_id,fit_id,booked_on,signed_cents,description)
-      VALUES($1,$2,$3,$4,$5,$6,$7,$8)`,
-      [...params, randomUUID(), statementId, line.fitId, line.bookedOn, line.signedCents, line.description],
+      `INSERT INTO finance_bank_lines(tenant_id,account_id,id,statement_id,fit_id,booked_on,signed_cents,description,document_references)
+      VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+      [...params, randomUUID(), statementId, line.fitId, line.bookedOn, line.signedCents, line.description, line.documentReferences],
     )
     imported++
   }
@@ -123,13 +128,14 @@ export async function importStatement(
     const pairs = await context.client.query<{ line_id: string; entry_id: string }>(
       `
       WITH pending AS (
-        SELECT id,statement_id,booked_on,signed_cents,count(*) OVER(PARTITION BY booked_on,signed_cents) AS alternatives
+        SELECT id,statement_id,booked_on,signed_cents,document_references,count(*) OVER(PARTITION BY booked_on,signed_cents) AS alternatives
         FROM finance_bank_lines WHERE tenant_id=$1 AND account_id=$2 AND state='pending' AND booked_on BETWEEN $4 AND $5
       ), entries AS (
-        SELECT e.id,e.occurred_on,${signed} AS amount,count(*) OVER(PARTITION BY occurred_on,${signed}) AS alternatives
+        SELECT e.id,e.occurred_on,e.reference,${signed} AS amount,count(*) OVER(PARTITION BY occurred_on,${signed}) AS alternatives
         FROM financial_account_entries e WHERE e.tenant_id=$1 AND e.account_id=$2 AND e.occurred_on BETWEEN $4 AND $5 AND ${unmatched}
-      ) SELECT p.id AS line_id,e.id AS entry_id FROM pending p JOIN entries e ON p.booked_on=e.occurred_on AND p.signed_cents=e.amount
-        WHERE p.statement_id=$3 AND p.alternatives=1 AND e.alternatives=1`,
+      ) SELECT l.id AS line_id,e.id AS entry_id FROM pending l JOIN entries e ON l.booked_on=e.occurred_on AND l.signed_cents=e.amount
+        WHERE l.statement_id=$3 AND l.alternatives=1 AND e.alternatives=1
+          AND (COALESCE(cardinality(l.document_references),0)=0 OR NULLIF(btrim(e.reference),'') IS NULL OR ${sameDocument})`,
       [...params, statementId, parsed.start, parsed.end],
     )
     if (pairs.rows.length) {
@@ -158,11 +164,16 @@ export async function reconciliation(context: AuthorizedContext, input: z.infer<
   await account(context, input.accountId)
   const params = [context.tenantId, input.accountId, input.throughDate ?? "2100-12-31"]
   const lines = (
-    await context.client.query(
+    await context.client.query<{ id: string; suggestedEntries: { id: string }[] }>(
       `SELECT l.id,l.fit_id AS "fitId",l.booked_on::text AS "bookedOn",l.signed_cents::text AS cents,l.description,l.state,l.reason,
+    COALESCE(l.document_references,'{}') AS "documentReferences",
     ARRAY(SELECT m.entry_id FROM finance_bank_matches m WHERE m.tenant_id=l.tenant_id AND m.line_id=l.id) AS "entryIds",
-    ARRAY(SELECT e.id FROM financial_account_entries e WHERE l.state='pending' AND e.tenant_id=l.tenant_id AND e.account_id=l.account_id
-      AND e.occurred_on=l.booked_on AND ${signed}=l.signed_cents AND ${unmatched} ORDER BY e.id LIMIT 10) AS suggestions
+    (SELECT COALESCE(jsonb_agg(candidate ORDER BY candidate."documentMatch" DESC,candidate.id),'[]'::jsonb)
+     FROM (SELECT e.id,e.occurred_on::text AS "occurredOn",${signed}::text AS cents,e.description,e.reference,
+             ${sameDocument} AS "documentMatch"
+           FROM financial_account_entries e WHERE l.state='pending' AND e.tenant_id=l.tenant_id AND e.account_id=l.account_id
+             AND e.occurred_on=l.booked_on AND ${signed}=l.signed_cents AND ${unmatched}
+           ORDER BY "documentMatch" DESC,e.id LIMIT 10) candidate) AS "suggestedEntries"
     FROM finance_bank_lines l WHERE l.tenant_id=$1 AND l.account_id=$2 AND l.booked_on<=$3 ORDER BY (l.state='pending') DESC,l.booked_on DESC,l.id LIMIT 50 OFFSET $4`,
       [...params, input.offset],
     )
@@ -197,7 +208,7 @@ export async function reconciliation(context: AuthorizedContext, input: z.infer<
     )
   ).rows
   return {
-    lines,
+    lines: lines.map((line) => ({ ...line, suggestions: line.suggestedEntries.map((entry) => entry.id) })),
     entries,
     periods,
     bank,

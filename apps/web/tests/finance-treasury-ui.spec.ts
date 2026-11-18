@@ -89,7 +89,10 @@ test("conta do indicador abre o extrato e permite seleção de vários movimento
         description: "Crédito bancário",
         cents: "10000",
         state: "pending",
-        suggestions: [],
+        documentReferences: ["DOC-805"],
+        suggestions: [record],
+        suggestedEntries: [{ id: record, occurredOn: "2026-10-05", description: "Reembolso integral",
+          cents: "10000", reference: "DOC-805", documentMatch: true }],
         entryIds: [],
       },
     ],
@@ -114,6 +117,9 @@ test("conta do indicador abre o extrato e permite seleção de vários movimento
   await page.goto("/financeiro/caixas-bancos?accountId=" + record)
   await expect(page.getByRole("combobox", { name: "Conta financeira", exact: true })).toHaveValue(record)
   await page.getByRole("radio", { name: /Crédito bancário/ }).check()
+  const choices = page.getByRole("region", { name: "Movimentos do ERP disponíveis" }).getByRole("checkbox")
+  await expect(choices.first()).toHaveAccessibleName(/Reembolso integral.*mesmo documento, data e valor/)
+  await expect(choices.first()).not.toBeChecked()
   await page.getByRole("checkbox", { name: /Primeira parcela/ }).check()
   await page.getByRole("checkbox", { name: /Segunda parcela/ }).check()
   await page.getByRole("button", { name: "Conciliar 2 movimento(s)" }).click()

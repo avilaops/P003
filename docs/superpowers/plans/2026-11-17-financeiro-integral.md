@@ -50,6 +50,8 @@ O catálogo da revisão `d2770c2a` inclui as rotas financeiras e seus destinos n
 
 Com o [fluxo n8n de extrato Efí](../../integrations/n8n-financeiro-extrato-efi.json), os 116 testes da API passaram, sem falhas ou testes pulados. O verificador do n8n aceitou os 13 nós. O [teste de importação](../../../apps/api-ts/test/efi-workflow-cases.ts) executou a lógica do fluxo contra a API do ERP com PostgreSQL e um extrato de exemplo. Duas importações do mesmo arquivo devolveram o mesmo protocolo e uma única linha de R$ 100,00. O ERP rejeitou o arquivo endereçado à conta incorreta.
 
+Na conciliação por documento (FI4), passaram os 117 testes da API e os nove cenários de tesouraria e gestão no Chromium. Entre 13 movimentos com a mesma data e valor, a referência exata apareceu primeiro e a linha continuou pendente até a revisão. Quando as duas fontes informaram documentos divergentes, a importação preservou a pendência mesmo com um único candidato.
+
 ## Pendências externas
 
 A empresa confirmou em 18 de novembro de 2026 que ainda não configurou uma conta de teste do Mercado Pago ou da Efí. O piloto usa a API do Mercado Pago. O aceite externo deve registrar a emissão de Pix e boleto, a consulta de cada identificador e a recepção de uma notificação de teste. Os relatórios oficiais de teste do Mercado Pago vêm sem movimentações. O exemplo com tarifa e líquido pode ser repetido com a instituição local, e a conferência de um extrato real depende de habilitação posterior. [Configuração e homologação](../../telas/financeiro/caixas-bancos/OPERACAO-BANCARIA.md) • [Relatórios de teste do Mercado Pago](https://www.mercadopago.com.br/developers/pt/docs/reports/account-money/introduction)

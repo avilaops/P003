@@ -152,6 +152,9 @@ test("OFX, Efí CNAB 240 and signed Mercado Pago notifications validate fixed fi
   assert.equal(parseOfx(ofx).lines[0]!.signedCents, 10000n)
   assert.throws(() => parseOfx(ofx.replace("20260130", "20260231")))
   const cnab = efiFixture()
+  assert.deepEqual(parseEfiStatement(cnab).lines[0]!.documentReferences, ["2026-1"])
+  const withDocument = ofx.replace("<NAME>", "<REFNUM>ABC-007<CHECKNUM>0007<NAME>")
+  assert.deepEqual(parseOfx(withDocument).lines[0]!.documentReferences, ["ABC-007", "0007"])
   assert.deepEqual(
     parseEfiStatement(cnab).lines.map((v) => v.signedCents),
     [10000n],
@@ -430,6 +433,32 @@ test(
       await post("financial-account-entries",{...later,amount:"65.00"})
       const ambiguous=await post("finance-treasury/import-ofx",{accountId:account,content:bankFile("AUTO2","65.00"),autoMatch:true})
       assert.equal(ambiguous.data.matched,0)
+      await t.test("conciliação por documento • prioridade na lista e revisão de divergências", async () => {
+        await seed.query(`INSERT INTO financial_account_entries
+          (id,tenant_id,account_id,direction,amount_cents,occurred_on,description,reference)
+          SELECT gen_random_uuid(),$1,$2,'credit',6600,'2028-03-30','Outro movimento',i::text FROM generate_series(1,12) i`,
+          [tenant, account])
+        const exact = await post("financial-account-entries", { ...later, amount: "66.00", reference: "nF-0007" })
+        const file = bankFile("WITH-DOC", "66.00").replace("<NAME>", "<REFNUM>NF-0007<NAME>")
+        const response = await post("finance-treasury/import-ofx", { accountId: account, content: file, autoMatch: true })
+        assert.equal(response.data.matched, 0)
+        const view = await app.inject({ method: "GET", url: "/api/v1/finance-treasury/reconciliation?accountId=" + account, headers })
+        assert.equal(view.statusCode, 200, view.body)
+        const line = view.json().data.lines.find((row: { fitId: string }) => row.fitId === "WITH-DOC")
+        assert.deepEqual(line.documentReferences, ["NF-0007"])
+        assert.equal(line.suggestions[0], exact.data.id)
+        assert.equal(line.suggestedEntries.length, 10)
+        assert.deepEqual(line.suggestedEntries.filter((e: { documentMatch: boolean }) => e.documentMatch).map((e: { id: string }) => e.id), [exact.data.id])
+        await post("finance-treasury/import-ofx", { accountId: account, content: file.replace("NF-0007", "NF-0077") }, 409)
+        await post("financial-account-entries", { ...later, amount: "67.00", reference: "7" })
+        const strict = await post("finance-treasury/import-ofx", { accountId: account, autoMatch: true,
+          content: bankFile("DIFFERENT-DOC", "67.00").replace("<NAME>", "<CHECKNUM>0007<NAME>") })
+        assert.equal(strict.data.matched, 0)
+        await post("financial-account-entries", { ...later, amount: "68.00", reference: "0007" })
+        const agreed = await post("finance-treasury/import-ofx", { accountId: account, autoMatch: true,
+          content: bankFile("SAME-DOC", "68.00").replace("<NAME>", "<CHECKNUM>0007<NAME>") })
+        assert.equal(agreed.data.matched, 1)
+      })
       await post("finance-treasury/import-ofx",{accountId:account,content:bankFile("TARIFA","-3.00"),autoMatch:true})
       const unclassified=(await seed.query("SELECT id FROM finance_bank_lines WHERE tenant_id=$1 AND fit_id='TARIFA'",[tenant])).rows[0]!
       const key=randomUUID(), detail={accountId:account,lineId:unclassified.id,reason:"Tarifa identificada"}
