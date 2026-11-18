@@ -251,7 +251,7 @@ function AccountingForms({ config, etag, refresh }: { config: Config; etag: stri
                 Recarregar contabilidade
               </Button>
             )}
-            <Button disabled={command.busy || command.stale}>
+            <Button type="submit" disabled={command.busy || command.stale || !etag}>
               {command.uncertain ? "Repetir confirmação" : "Confirmar operação"}
             </Button>
           </form>

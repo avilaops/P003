@@ -55,7 +55,7 @@ export function CommissionPolicyForm({
                   : p.productLine === "imported"
                     ? "Linha importada"
                     : "Vendedor")}{" "}
-              • {p.commissionRate}% • {p.trigger === "invoice" ? "NF-e autorizada" : "Recebimento"}
+              • {p.commissionRate.replace(".", ",")}% • {p.trigger === "invoice" ? "NF-e autorizada" : "Recebimento"}
             </li>
           ))}
         </ul>
@@ -147,7 +147,7 @@ export function CommissionPolicyForm({
               Recarregar políticas
             </Button>
           )}
-          <Button className="mt-3" disabled={command.busy || command.stale || !etag}>
+          <Button type="submit" className="mt-3" disabled={command.busy || command.stale || !etag}>
             {command.uncertain ? "Repetir confirmação" : "Salvar política"}
           </Button>
         </form>

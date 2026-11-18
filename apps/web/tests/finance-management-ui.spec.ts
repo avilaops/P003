@@ -50,7 +50,14 @@ test("contador • cadastra regra, consulta o diário e exporta a competência",
       },
     }),
   )
-  await page.goto("/financeiro/contador")
+  const [configuration] = await Promise.all([
+    page.waitForResponse(
+      (response) => new URL(response.url()).pathname === "/api/erp/accounting" && response.request().method() === "GET",
+      { timeout: 60000 },
+    ),
+    page.goto("/financeiro/contador"),
+  ])
+  expect(configuration.status()).toBe(200)
   await expect(page.getByRole("heading", { name: "Plano de contas e regras" })).toBeVisible()
   await page.getByLabel("Operação contábil").selectOption("rules")
   await page.getByLabel("Conta de débito").selectOption(accounts[0].id)
@@ -67,4 +74,59 @@ test("contador • cadastra regra, consulta o diário e exporta a competência",
     "href",
     "/financeiro/contas-receber/" + record,
   )
+})
+
+test("comissões • salva a política de faturamento da linha e atualiza a revisão", async ({ context, page }) => {
+  await installFrontendFixture(context)
+  const balance = { sellerStaffId: record, sellerName: "Maria", revision: 1, openAmount: "0.00", paidAmount: "0.00" }
+  const policies: { id: string; productId: null; productLine: string; trigger: string; commissionRate: string }[] = []
+  const book = () => ({
+    tenantId: tenant,
+    canEdit: true,
+    canClose: true,
+    data: balance,
+    entries: [],
+    payments: [],
+    closings: [],
+    policies,
+  })
+  await page.route("**/api/erp/commissions?*", (route) =>
+    route.fulfill({
+      json: {
+        tenantId: tenant,
+        canEdit: true,
+        data: [balance],
+        total: 1,
+        totals: { openAmount: "0.00", paidAmount: "0.00" },
+      },
+    }),
+  )
+  await page.route("**/api/erp/commissions/" + record, (route) =>
+    route.fulfill({ headers: { ETag: '"' + balance.revision + '"' }, json: book() }),
+  )
+  await page.route("**/api/erp/commissions/" + record + "/policies", (route) => {
+    const headers = route.request().headers()
+    expect(headers["if-match"]).toBe('"1"')
+    expect(headers["x-tenant-id"]).toBe(tenant)
+    expect(headers["idempotency-key"]).toMatch(/^[0-9a-f-]{36}$/i)
+    const input = route.request().postDataJSON()
+    expect(input).toEqual({ productId: null, productLine: "national", trigger: "invoice", commissionRate: "6.2500" })
+    policies.push({ id: record, ...input })
+    balance.revision++
+    return route.fulfill({ headers: { ETag: '"2"' }, json: book() })
+  })
+  await Promise.all([
+    page.waitForResponse(
+      (response) =>
+        new URL(response.url()).pathname === "/api/erp/commissions" && response.request().method() === "GET",
+      { timeout: 60000 },
+    ),
+    page.goto("/financeiro/comissoes"),
+  ])
+  await page.getByRole("button", { name: "Consultar comissões de Maria" }).click()
+  await page.getByLabel("Abrangência da política").selectOption("line")
+  await page.getByLabel("Apurar comissão no").selectOption("invoice")
+  await page.getByLabel("Percentual da política").fill("6,25")
+  await page.getByRole("button", { name: "Salvar política" }).click()
+  await expect(page.getByText("Linha nacional • 6,2500% • NF-e autorizada")).toBeVisible()
 })
