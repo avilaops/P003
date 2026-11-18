@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto"
 import { registerLocationRoutes } from "./modules/inventory/location-routes.js"
 import { registerCountRoutes } from "./modules/inventory/count-routes.js"
 import { registerStockRoutes } from "./modules/inventory/routes.js"
+import { registerProduction } from "./modules/production/routes.js"
 import { registerPartyRoutes } from "./modules/parties/routes.js"
 import { registerDashboardRoutes } from "./modules/dashboard/routes.js"
 import { registerReportRoutes } from "./modules/reports/routes.js"
@@ -79,6 +80,7 @@ export function buildApp(_dependencies: AppDependencies): FastifyInstance {
       .send(problem.toJSON())
   })
   registerStockRoutes(app, _dependencies)
+  registerProduction(app, _dependencies)
   registerLocationRoutes(app, _dependencies)
   registerCountRoutes(app, _dependencies)
   registerPartyRoutes(app, _dependencies)

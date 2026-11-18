@@ -5,6 +5,7 @@ import { nextRevision, revisionValue, type Revision } from "../../platform/revis
 import { decimal } from "../sales/fixed.js"
 import { conflict } from "./acceptance.js"
 import type { CommandHeaders } from "./receivables.js"
+import { reversePostings } from "../production/movements.js"
 
 function inventoryPermission(context: AuthorizedContext) {
   requirePermission(context, "inventory.stock.read"); requirePermission(context, "inventory.stock.manage")
@@ -13,7 +14,7 @@ export async function requireCancellationPermissions(context: AuthorizedContext,
   const exists = await context.client.query("SELECT EXISTS(SELECT 1 FROM production_orders WHERE tenant_id=$1 AND order_id=$2) AS present", [context.tenantId, order])
   if (!exists.rows[0]?.present) return
   requirePermission(context, "production.read"); requirePermission(context, "production.manage")
-  const consumed = await context.client.query("SELECT EXISTS(SELECT 1 FROM production_consumptions c JOIN production_orders o ON o.tenant_id=c.tenant_id AND o.id=c.production_order_id WHERE o.tenant_id=$1 AND o.order_id=$2) AS present", [context.tenantId, order])
+  const consumed = await context.client.query("SELECT EXISTS(SELECT 1 FROM production_orders o WHERE o.tenant_id=$1 AND o.order_id=$2 AND (EXISTS(SELECT 1 FROM production_consumptions c WHERE (c.tenant_id,c.production_order_id)=(o.tenant_id,o.id)) OR EXISTS(SELECT 1 FROM production_postings p WHERE (p.tenant_id,p.production_order_id)=(o.tenant_id,o.id)))) AS present", [context.tenantId, order])
   if (consumed.rows[0]?.present) inventoryPermission(context)
 }
 
@@ -23,6 +24,7 @@ async function cancelProduction(context: AuthorizedContext, headers: CommandHead
   const jobs = await client.query("SELECT id,status,revision FROM production_orders WHERE tenant_id=$1 AND order_id=$2 ORDER BY id FOR UPDATE", [tenantId, order])
   for (const job of jobs.rows) {
     if (job.status === "cancelled") continue
+    movements.push(...await reversePostings(context,headers,String(job.id),reason))
     const active = await client.query("SELECT m.id,m.product_id,m.quantity_micros FROM stock_movements m JOIN production_consumptions c ON c.tenant_id=m.tenant_id AND c.stock_movement_id=m.id WHERE m.tenant_id=$1 AND m.production_order_id=$2 AND m.direction='issue' AND m.reverses_id IS NULL AND NOT EXISTS(SELECT 1 FROM stock_movements r WHERE r.tenant_id=m.tenant_id AND r.reverses_id=m.id) ORDER BY m.product_id,m.id", [tenantId, job.id])
     if (active.rows.length) inventoryPermission(context)
     for (const row of active.rows) {
