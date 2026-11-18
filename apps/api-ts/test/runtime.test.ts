@@ -50,3 +50,10 @@ test("fiscal credentials are complete and can only be sent to the loopback engin
     assert.throws(() => loadConfiguration({ ...environment, ERP_FISCAL_ENGINE_URL: url }))
   }
 })
+
+test("Browser Use stays disabled unless its server-side key is configured", () => {
+  const environment = { DATABASE_URL: "postgres://erp:erp@127.0.0.1:5432/erp", AUTH_ISSUER: "https://auth.example.test" }
+  assert.equal("browserUseApiKey" in loadConfiguration(environment), false)
+  assert.equal("browserUseApiKey" in loadConfiguration({ ...environment, BROWSER_USE_API_KEY: "   " }), false)
+  assert.equal(loadConfiguration({ ...environment, BROWSER_USE_API_KEY: " bu_test_key " }).browserUseApiKey, "bu_test_key")
+})

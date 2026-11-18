@@ -507,7 +507,7 @@ async fn commission_completed_cancellation_reverses_once_and_preserves_paid_amou
     assert_eq!(paid.0, StatusCode::OK, "{}", paid.1);
     let key = Uuid::now_v7();
     let uri = format!("/api/v1/orders/{ORDER}/cancel-completed");
-    let input = json!({"reason":"Cancelamento integral conferido","occurredOn":"2026-11-12"});
+    let input = json!({"reason":"Cancelamento integral conferido","occurredOn":super::returns_tests::business_today()});
     let cancelled = call(
         &router,
         "POST",
