@@ -57,6 +57,14 @@ import { registerFinancialEmails } from "./modules/document-copies/financial-rou
 import { registerContractPackage } from "./modules/document-copies/contract-package-routes.js"
 import { registerQualifiedReissue } from "./modules/contract-signatures/reissue.js"
 import { registerContractTemplateArchive } from "./modules/contract-templates/archive.js"
+import { registerAccessRoutes } from "./modules/access/routes.js"
+import { registerCompanyRoutes } from "./modules/company/routes.js"
+import { registerInvitationRoutes } from "./modules/invitations/routes.js"
+import { registerStaffRoutes } from "./modules/staff/routes.js"
+import { registerRegistryLookupRoutes } from "./modules/registry-lookup/routes.js"
+import { registerPriceListRoutes } from "./modules/price-lists/routes.js"
+import { registerDataTransferRoutes } from "./modules/data-transfer/routes.js"
+import { registerCatalogPublicationRoutes } from "./modules/catalog-publication/routes.js"
 import { registerBrowserUseRoutes, type BrowserUseDependencies } from "./modules/browser-use/routes.js"
 
 export type AppDependencies = AccessDependencies & { fiscalVault?:import("./modules/outgoing-nfse/certificate-vault.js").FiscalCertificateVault; fiscalOperations?:FiscalOperations; outgoingNfse?: OutgoingNfseDependencies; nfeEmail?: NfeEmailIO; documentCopies?: DocumentCopyIO; browserUse?: BrowserUseDependencies }
@@ -166,5 +174,13 @@ export function buildApp(_dependencies: AppDependencies): FastifyInstance {
   registerContractTemplateArchive(app, _dependencies)
   registerParticipantRoutes(app, _dependencies)
   registerBrowserUseRoutes(app, _dependencies, _dependencies.browserUse)
+  registerAccessRoutes(app, _dependencies)
+  registerCompanyRoutes(app, _dependencies)
+  registerInvitationRoutes(app, _dependencies)
+  registerStaffRoutes(app, _dependencies)
+  registerRegistryLookupRoutes(app, _dependencies)
+  registerPriceListRoutes(app, _dependencies)
+  registerDataTransferRoutes(app, _dependencies)
+  registerCatalogPublicationRoutes(app, _dependencies)
   return app
 }
