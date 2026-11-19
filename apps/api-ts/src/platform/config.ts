@@ -13,6 +13,10 @@ const configSchema = z.object({
   FISCAL_A1_KEYRING: z.string().optional(),
   NFSE_ISSUANCE_ENABLED: z.enum(["true", "false"]).default("false"),
   // Blank means not configured: the Browser Use route then answers 503.
+  // Catalog publication is enabled only when the three values are present together.
+  CATALOG_MEDIA_ORIGIN: z.string().url().optional(),
+  CATALOG_MEDIA_TOKEN: z.string().min(32).optional(),
+  CATALOG_MEDIA_TENANT: z.string().uuid().optional(),
   BROWSER_USE_API_KEY: z.preprocess(value => typeof value === "string" && value.trim() === "" ? undefined : value, z.string().trim().min(1).optional()),
 })
 
@@ -25,6 +29,7 @@ export type Configuration = {
   mcpResource: string
   fiscalEngine?: { url: string; token: string; keyring: string; automaticEnabled: boolean }
   browserUseApiKey?: string
+  catalogMedia?: { origin: string; token: string; tenantId: string }
 }
 
 export function loadConfiguration(environment: NodeJS.ProcessEnv = process.env): Configuration {
@@ -39,6 +44,10 @@ export function loadConfiguration(environment: NodeJS.ProcessEnv = process.env):
   if (value.NFSE_ISSUANCE_ENABLED === "true" && !fiscalValues.every(Boolean)) throw Error("NFS-e issuance requires the fiscal engine and A1 keyring")
   const fiscalUrl = value.ERP_FISCAL_ENGINE_URL ? new URL(value.ERP_FISCAL_ENGINE_URL) : undefined
   if (fiscalUrl && (fiscalUrl.protocol !== "http:" || !["localhost", "127.0.0.1", "[::1]"].includes(fiscalUrl.hostname) || fiscalUrl.username || fiscalUrl.password || fiscalUrl.pathname !== "/" || fiscalUrl.search || fiscalUrl.hash)) throw Error("Fiscal engine must use a loopback HTTP origin")
+  const catalogValues = [value.CATALOG_MEDIA_ORIGIN, value.CATALOG_MEDIA_TOKEN, value.CATALOG_MEDIA_TENANT]
+  if (catalogValues.some(Boolean) && !catalogValues.every(Boolean)) throw Error("Incomplete catalog media configuration")
+  const catalogUrl = value.CATALOG_MEDIA_ORIGIN ? new URL(value.CATALOG_MEDIA_ORIGIN) : undefined
+  if (catalogUrl && (catalogUrl.protocol !== "https:" || catalogUrl.hostname !== "ludusequipamentos.com" || catalogUrl.pathname !== "/" || catalogUrl.search || catalogUrl.hash || catalogUrl.username || catalogUrl.password)) throw Error("Invalid catalog origin")
   return {
     databaseUrl: value.DATABASE_URL,
     userinfoUrl: userinfo.toString(),
@@ -47,6 +56,7 @@ export function loadConfiguration(environment: NodeJS.ProcessEnv = process.env):
     maximumConnections: value.DATABASE_MAX_CONNECTIONS,
     mcpResource: `${mcpOrigin.origin}/mcp`,
     ...(fiscalUrl && value.ERP_FISCAL_ENGINE_TOKEN && value.FISCAL_A1_KEYRING ? { fiscalEngine: { url: fiscalUrl.origin, token: value.ERP_FISCAL_ENGINE_TOKEN, keyring: value.FISCAL_A1_KEYRING, automaticEnabled: value.NFSE_ISSUANCE_ENABLED === "true" } } : {}),
+    ...(catalogUrl && value.CATALOG_MEDIA_TOKEN && value.CATALOG_MEDIA_TENANT ? { catalogMedia: { origin: catalogUrl.origin, token: value.CATALOG_MEDIA_TOKEN, tenantId: value.CATALOG_MEDIA_TENANT.toLowerCase() } } : {}),
     ...(value.BROWSER_USE_API_KEY ? { browserUseApiKey: value.BROWSER_USE_API_KEY } : {}),
   }
 }
