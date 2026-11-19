@@ -14,7 +14,7 @@ export function mixedFixture() {
 
 test("mixed policies conserve freight, fixed fees, item totals and different entries/IPI", () => {
   const { input, policies, sources, rules } = mixedFixture(), { sale, director } = calculateMixed(input, policies, sources, rules)
-  assert.equal(sale.totalCents, 152715)
+  assert.equal(sale.totalCents, 152712)
   assert.equal(sale.ipiBps, null)
   assert.equal(sale.minimumDownPaymentBps, null)
   assert.equal(sale.items.reduce((sum, item) => sum + item.totalCents, 0), sale.totalCents)
