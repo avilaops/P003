@@ -14,8 +14,8 @@ segunda execução de CI no push para `main`.
 
 `Full regression` conserva arquitetura, contratos, baseline, builds e browsers
 para execução manual ou semanal (segunda-feira, 04:23 UTC). O auto merge foi
-retirado. `Release` publica somente uma revisão promovida por tag ou execução
-manual na main, depois das validações completas e das proteções do ambiente.
+retirado. `Release` publica cada merge na main, além de tags e execuções
+manuais na main, depois das validações completas e das proteções do ambiente.
 
 ## Publicação aprovada
 
