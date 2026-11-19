@@ -14,21 +14,25 @@ const source = readFileSync(new URL("../src/server/bff/erp-proxy.ts", import.met
   .replace('"@/lib/api/local-fiscal-origin"', JSON.stringify(new URL("../src/lib/api/local-fiscal-origin.ts", import.meta.url).href));
 const { forwardErp } = await import(moduleUrl(ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } }).outputText));
 
-test("product catalog GET and revised PUT reach the existing API route", async () => {
-  const previous = globalThis.fetch;
+test("product catalog GET and revised PUT reach the TypeScript API route", async () => {
+  const previous = globalThis.fetch, previousApi = process.env.ERP_TYPESCRIPT_API_URL;
+  process.env.ERP_TYPESCRIPT_API_URL = "http://127.0.0.1:8081";
   const calls = [];
   globalThis.fetch = async (url, options) => { calls.push({ url: String(url), options }); return Response.json({ tenantId: tenant }, { headers: { etag: '"4"' } }); };
   try {
     const response = await forwardErp(new Request("http://fixture.local/detail"), resource);
     assert.equal(response.status, 200);
-    assert.equal(calls[0].url, `http://backend.local/api/v1${resource}`);
+    assert.equal(calls[0].url, `http://127.0.0.1:8081/api/v1${resource}`);
     assert.equal(calls[0].options.headers.get("x-tenant-id"), tenant);
     assert.equal(response.headers.get("etag"), '"4"');
     const update = new Request("http://fixture.local/detail", { method: "PUT", headers: { origin: "http://fixture.local", "x-tenant-id": tenant, "content-type": "application/json", "if-match": '"3"' }, body: JSON.stringify({ description: "Apresentação", newImage: "A".repeat(70000) }) });
     assert.equal((await forwardErp(update, resource)).status, 200);
     assert.equal(calls[1].options.headers.get("if-match"), '"3"');
     assert.equal(calls[1].options.method, "PUT");
-  } finally { globalThis.fetch = previous; }
+  } finally {
+    globalThis.fetch = previous;
+    if (previousApi === undefined) delete process.env.ERP_TYPESCRIPT_API_URL; else process.env.ERP_TYPESCRIPT_API_URL = previousApi;
+  }
 });
 
 test("catalog routing keeps method, path, origin and tenant restrictions", async () => {

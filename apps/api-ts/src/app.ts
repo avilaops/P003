@@ -45,6 +45,7 @@ import { registerOrderImports } from "./modules/order-imports/routes.js"
 import { registerProposalRoutes } from "./modules/proposals/routes.js"
 import { registerSalesSimulator } from "./modules/sales-simulator/routes.js"
 import { registerCatalogPublication } from "./modules/catalog-publication/routes.js"
+import { registerCatalogProfile } from "./modules/catalog-profile/routes.js"
 import { registerOrderSettings } from "./modules/order-settings/routes.js"
 import { registerReferenceRoutes } from "./modules/reference-data/routes.js"
 import { registerRegistrationSettingsRoutes } from "./modules/registration-settings/routes.js"
@@ -165,6 +166,7 @@ export function buildApp(_dependencies: AppDependencies): FastifyInstance {
   registerSalesSimulator(app, _dependencies)
   registerOrderSettings(app, _dependencies)
   registerCatalogPublication(app, _dependencies)
+  registerCatalogProfile(app, _dependencies)
   registerReferenceRoutes(app, _dependencies)
   registerRegistrationSettingsRoutes(app, _dependencies)
   registerOutgoingNfseRoutes(app, _dependencies)

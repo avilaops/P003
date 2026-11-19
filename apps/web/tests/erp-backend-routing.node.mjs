@@ -60,8 +60,14 @@ test("wallets, stock and production resolve to their TypeScript owners", () => {
   ]) assert.deepEqual(selectErpBackend(method, resource, rust, environment), { origin: typescript, backend: "typescript", module });
 });
 
+test("product catalog sheet, private photos and catalog publication use TypeScript", () => {
+  for (const [method, resource] of [["GET", `/products/${id}/catalog`], ["PUT", `/products/${id}/catalog`], ["GET", `/products/${id}/media/${id}`], ["GET", "/catalog-publication"], ["POST", "/catalog-publication"], ["GET", "/products/catalog-pending"]]) {
+    assert.deepEqual(selectErpBackend(method, resource, rust, environment), { origin: typescript, backend: "typescript", module: "registrations" }, method + " " + resource);
+  }
+});
+
 test("unmigrated routes and unsupported methods stay on their explicit Rust origin", () => {
-  for (const [method, resource] of [["PUT", `/orders/${id}/document`], ["POST", "/fiscal/nfe"], ["DELETE", "/receivables"], ["GET", `/products/${id}/catalog`], ["GET", "/products/export"], ["POST", "/preferences"], ["DELETE", `/products/${id}`], ["GET", `/system/custom-reports/${id}`], ["GET", "/commercial/tables/unknown"], ["GET", `/orders/${id}/cancel-completed`]]) {
+  for (const [method, resource] of [["PUT", `/orders/${id}/document`], ["POST", "/fiscal/nfe"], ["DELETE", "/receivables"], ["DELETE", `/products/${id}/catalog`], ["PUT", `/products/${id}/media/${id}`], ["GET", "/products/export"], ["POST", "/preferences"], ["DELETE", `/products/${id}`], ["GET", `/system/custom-reports/${id}`], ["GET", "/commercial/tables/unknown"], ["GET", `/orders/${id}/cancel-completed`]]) {
     assert.equal(selectErpBackend(method, resource, rust, environment).origin, rust, resource);
   }
 });

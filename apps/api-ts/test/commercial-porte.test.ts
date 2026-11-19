@@ -62,7 +62,8 @@ test("commercial PR 06 routes keep contract, permissions, idempotency and tenant
 
     const published: unknown[] = []
     const gateway = { fail: false }
-    const catalogMedia: CatalogMedia = { tenantId: tenant, async publish(payload) { if (gateway.fail) throw new Problem(409, "domain_conflict", "Publicação pendente. Repita para conferir a mesma versão"); published.push(payload) } }
+    const catalogMedia: CatalogMedia = { tenantId: tenant, async publish(payload) { if (gateway.fail) throw new Problem(409, "domain_conflict", "Publicação pendente. Repita para conferir a mesma versão"); published.push(payload) },
+      async upload() { throw Error("upload not used by this test") }, async readPrivate() { throw Error("readPrivate not used by this test") } }
     const pool: DatabasePool = { async connect() { const client = await connections.connect(); await client.query(`SET ROLE ${role}`); return new PgClientAdapter(client) } }
     app = buildApp({ pool, userinfoUrl: "http://auth.test/userinfo", catalogMedia, fetchAuth: async (_url, init) => { const sub = new Headers(init?.headers).get("authorization")!.slice(7); return Response.json({ sub, email: `${sub}@example.test` }) } })
     const server = app

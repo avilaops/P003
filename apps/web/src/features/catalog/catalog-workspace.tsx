@@ -77,7 +77,7 @@ function CatalogResults({ query, pageSize }: { query: CatalogQuery; pageSize: nu
   }
   return <div className="catalog-workspace">
     <section className="form-section space-y-3 sm:space-y-5">
-      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border pb-2 sm:gap-3 sm:pb-4"><div><h2 className="text-lg font-semibold tracking-tight">Catálogo de produtos</h2><p className="mt-1 hidden text-sm text-muted-foreground sm:block">Localize, consulte e edite os produtos da empresa ativa.</p></div>{result?.canEdit && <Link className={catalogLink} href="/cadastros/produtos/novo">Novo produto</Link>}</div>
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border pb-2 sm:gap-3 sm:pb-4"><div><h2 className="text-lg font-semibold tracking-tight">Catálogo de produtos</h2><p className="mt-1 hidden text-sm text-muted-foreground sm:block">Localize, consulte e edite os produtos da empresa ativa.</p></div><div className="flex flex-wrap gap-x-4 gap-y-2"><Link className={catalogLink} href="/cadastros/produtos/pendencias">Pendências de cadastro</Link>{result?.canEdit && <Link className={catalogLink} href="/cadastros/produtos/novo">Novo produto</Link>}</div></div>
       <form className="grid min-w-0 grid-cols-2 items-end gap-2 sm:gap-3 xl:grid-cols-[minmax(18rem,1fr)_minmax(12rem,0.45fr)_9rem_auto]" onSubmit={event => {
         event.preventDefault(); const form = new FormData(event.currentTarget)
         navigate(parseCatalogQuery(new URLSearchParams({ q: String(form.get("q") || ""), status: String(form.get("status") || ""), category_id: categoryId || "" })))
