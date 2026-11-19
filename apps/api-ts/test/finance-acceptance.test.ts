@@ -19,6 +19,7 @@ const finance = [
   "finance.account_entries.read",
   "finance.account_entries.manage",
   "finance.categories.read",
+  "finance.categories.manage",
   "finance.commissions.read",
   "finance.collections.read",
   "finance.collections.manage",
@@ -53,6 +54,39 @@ async function bankAccount(ctx: TestContext, accountNumber = "12345") {
   await ctx.seed.query(
     "INSERT INTO financial_accounts(id,tenant_id,code,name,status,revision,account_type,account_number) VALUES($1,$2,$3,'Banco piloto','active',1,'bank',$4)",
     [id, ctx.tenant, "BANCO" + accountNumber, accountNumber],
+  )
+  return id
+}
+async function seedPayable(ctx: TestContext, cents: number, dueDate: string) {
+  const purchase = randomUUID(),
+    receipt = randomUUID(),
+    payable = randomUUID()
+  await ctx.seed.query(
+    "INSERT INTO purchase_orders(id,tenant_id,supplier_id,supplier_name,supplier_tax_id,due_date,amount_cents,status) VALUES($1,$2,$3,'Fornecedor','52998224725',$4,$5,'received')",
+    [purchase, ctx.tenant, await customer(ctx), dueDate, cents],
+  )
+  await ctx.seed.query(
+    "INSERT INTO purchase_receipts(id,tenant_id,order_id,reference,occurred_on,amount_cents) VALUES($1,$2,$3,'Recebimento',$4,$5)",
+    [receipt, ctx.tenant, purchase, dueDate, cents],
+  )
+  await ctx.seed.query(
+    "INSERT INTO payables(id,tenant_id,receipt_id,supplier_name,due_date,amount_cents) VALUES($1,$2,$3,'Fornecedor',$4,$5)",
+    [payable, ctx.tenant, receipt, dueDate, cents],
+  )
+  return { purchase, receipt, payable }
+}
+async function nature(ctx: TestContext, id: string | null) {
+  const row = await ctx.seed.query("SELECT code,name,direction FROM financial_categories WHERE tenant_id=$1 AND id=$2", [
+    ctx.tenant,
+    id,
+  ])
+  return row.rows[0] as { code: string; name: string; direction: string } | undefined
+}
+async function newCategory(ctx: TestContext, code: string, name: string, direction: "income" | "expense") {
+  const id = randomUUID()
+  await ctx.seed.query(
+    "INSERT INTO financial_categories(id,tenant_id,code,name,direction,status,revision) VALUES($1,$2,$3,$4,$5,'active',1)",
+    [id, ctx.tenant, code, name, direction],
   )
   return id
 }
@@ -137,6 +171,74 @@ test("Financeiro • aceite do backlog D05", databaseTestOptions, async (t) => {
         assert.equal(after.json().data.balance, "0.00")
       },
     )
+
+    await t.test("FI2 • Nenhum título novo fica sem categoria; o padrão vem da origem e pode ser alterado", async () => {
+      // Padrão pela origem: venda → Receita de vendas; compra → Fornecedores.
+      const { receivable } = await seedReceivable(ctx, 20000, "2026-03-10")
+      const { payable } = await seedPayable(ctx, 30000, "2026-03-10")
+      const titles = async () =>
+        (
+          await ctx.seed.query(
+            "SELECT 'r' AS side,id,category_id FROM receivables WHERE tenant_id=$1 UNION ALL SELECT 'p',id,category_id FROM payables WHERE tenant_id=$1",
+            [ctx.tenant],
+          )
+        ).rows
+      for (const row of await titles()) assert.ok(row.category_id, "título sem natureza: " + row.id)
+      const sale = (await ctx.as("user").get(`/api/v1/receivables/${receivable}`)).json()
+      assert.deepEqual(await nature(ctx, sale.data.natureId), { code: "ERP.VENDAS", name: "Receita de vendas", direction: "income" })
+      const purchase = (await ctx.as("user").get(`/api/v1/payables/${payable}`)).json()
+      assert.deepEqual(await nature(ctx, purchase.data.natureId), {
+        code: "ERP.FORNECEDORES",
+        name: "Fornecedores",
+        direction: "expense",
+      })
+
+      // A empresa pode trocar o padrão de cada origem: o próximo título nasce com a nova natureza.
+      const equipment = await newCategory(ctx, "REC.EQUIP", "Receita de equipamentos", "income")
+      await setCharges(ctx, { salesCategoryId: equipment })
+      const next = await seedReceivable(ctx, 15000, "2026-03-11")
+      assert.equal((await ctx.as("user").get(`/api/v1/receivables/${next.receivable}`)).json().data.natureId, equipment)
+
+      // O operador altera a natureza do título; natureza de despesa num título a receber é recusada.
+      const services = await newCategory(ctx, "REC.SERV", "Receita de serviços", "income")
+      const expense = await newCategory(ctx, "DESP.X", "Despesa qualquer", "expense")
+      const url = `/api/v1/receivables/${receivable}/classification`
+      const input = { natureId: services, costCenterId: null, competenceOn: "2026-03-10" }
+      const revision = Number(sale.data.revision)
+      assert.equal((await ctx.as("anonymous").put(url, { body: input, revision })).statusCode, 401)
+      assert.equal((await ctx.as("denied").put(url, { body: input, revision })).statusCode, 403)
+      assert.equal((await ctx.as("user").put(url, { body: { ...input, natureId: "x" }, revision })).statusCode, 422)
+      assert.equal((await ctx.as("user").put(url, { body: { ...input, natureId: expense }, revision })).statusCode, 422)
+      assert.equal((await ctx.as("user").put(url, { body: input, revision: revision + 5 })).statusCode, 412)
+      const changed = await ctx.as("user").put(url, { body: input, revision })
+      assert.equal(changed.statusCode, 200, changed.body)
+      assert.equal(changed.json().data.natureId, services)
+
+      // Centro de custo obrigatório por parâmetro: o padrão da empresa entra nos títulos novos.
+      const center = await ctx.as("user").post("/api/v1/financial-cost-centers", {
+        body: { code: "ADM", name: "Administrativo", status: "active" },
+      })
+      assert.equal(center.statusCode, 201, center.body)
+      const centerId = center.json().data.id
+      await setCharges(ctx, { defaultCostCenterId: centerId, requireCostCenter: true })
+      const withCenter = await seedReceivable(ctx, 12000, "2026-03-12")
+      const created = (await ctx.as("user").get(`/api/v1/receivables/${withCenter.receivable}`)).json().data
+      assert.equal(created.costCenterId, centerId)
+
+      // Lançamento manual em Caixas e bancos: natureza padrão quando omitida e a escolhida quando informada.
+      const account = await bankAccount(ctx, "777")
+      const manual = { accountId: account, direction: "debit", amount: "12.00", occurredOn: "2026-03-12", description: "Taxa" }
+      const plain = await ctx.as("user").post("/api/v1/financial-account-entries", { body: manual })
+      assert.equal(plain.statusCode, 201, plain.body)
+      assert.ok(plain.json().data.categoryId)
+      assert.equal(plain.json().data.categoryName, "Movimentação de conta • saída")
+      const chosen = await ctx.as("user").post("/api/v1/financial-account-entries", {
+        body: { ...manual, categoryId: expense },
+      })
+      assert.equal(chosen.statusCode, 201, chosen.body)
+      assert.equal(chosen.json().data.categoryId, expense)
+      for (const row of await titles()) assert.ok(row.category_id, "título sem natureza: " + row.id)
+    })
   } finally {
     await ctx.close()
   }
