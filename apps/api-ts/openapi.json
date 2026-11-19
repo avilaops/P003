@@ -397,6 +397,92 @@
         ]
       }
     },
+    "/api/v1/commercial-contracts": {
+      "get": {
+        "operationId": "getApiV1CommercialContracts",
+        "responses": {
+          "200": {
+            "description": "Sucesso"
+          },
+          "default": {
+            "description": "Erro",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": [],
+            "tenantHeader": []
+          }
+        ]
+      },
+      "post": {
+        "operationId": "postApiV1CommercialContracts",
+        "responses": {
+          "200": {
+            "description": "Sucesso"
+          },
+          "default": {
+            "description": "Erro",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": [],
+            "tenantHeader": []
+          }
+        ]
+      }
+    },
+    "/api/v1/commercial-contracts/{id}": {
+      "get": {
+        "operationId": "getApiV1CommercialContractsId",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Sucesso"
+          },
+          "default": {
+            "description": "Erro",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": [],
+            "tenantHeader": []
+          }
+        ]
+      }
+    },
     "/api/v1/commercial-contracts/{id}/email": {
       "get": {
         "operationId": "getApiV1CommercialContractsIdEmail",
@@ -437,6 +523,50 @@
         "parameters": [
           {
             "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Sucesso"
+          },
+          "default": {
+            "description": "Erro",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": [],
+            "tenantHeader": []
+          }
+        ]
+      }
+    },
+    "/api/v1/commercial-contracts/{id}/files/{file}": {
+      "get": {
+        "operationId": "getApiV1CommercialContractsIdFilesFile",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "file",
             "in": "path",
             "required": true,
             "schema": {
@@ -573,6 +703,78 @@
         ]
       }
     },
+    "/api/v1/commercial-contracts/{id}/review": {
+      "post": {
+        "operationId": "postApiV1CommercialContractsIdReview",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Sucesso"
+          },
+          "default": {
+            "description": "Erro",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": [],
+            "tenantHeader": []
+          }
+        ]
+      }
+    },
+    "/api/v1/commercial-contracts/{id}/send": {
+      "post": {
+        "operationId": "postApiV1CommercialContractsIdSend",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Sucesso"
+          },
+          "default": {
+            "description": "Erro",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": [],
+            "tenantHeader": []
+          }
+        ]
+      }
+    },
     "/api/v1/commercial-contracts/{id}/send-package": {
       "get": {
         "operationId": "getApiV1CommercialContractsIdSendPackage",
@@ -610,6 +812,78 @@
       },
       "post": {
         "operationId": "postApiV1CommercialContractsIdSendPackage",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Sucesso"
+          },
+          "default": {
+            "description": "Erro",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": [],
+            "tenantHeader": []
+          }
+        ]
+      }
+    },
+    "/api/v1/commercial-contracts/{id}/sync": {
+      "post": {
+        "operationId": "postApiV1CommercialContractsIdSync",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Sucesso"
+          },
+          "default": {
+            "description": "Erro",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": [],
+            "tenantHeader": []
+          }
+        ]
+      }
+    },
+    "/api/v1/commercial-contracts/options/{id}": {
+      "get": {
+        "operationId": "getApiV1CommercialContractsOptionsId",
         "parameters": [
           {
             "name": "id",
@@ -1917,6 +2191,102 @@
         ]
       }
     },
+    "/api/v1/contract-template-drafts": {
+      "get": {
+        "operationId": "getApiV1ContractTemplateDrafts",
+        "responses": {
+          "200": {
+            "description": "Sucesso"
+          },
+          "default": {
+            "description": "Erro",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": [],
+            "tenantHeader": []
+          }
+        ]
+      }
+    },
+    "/api/v1/contract-template-drafts/{id}": {
+      "get": {
+        "operationId": "getApiV1ContractTemplateDraftsId",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Sucesso"
+          },
+          "default": {
+            "description": "Erro",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": [],
+            "tenantHeader": []
+          }
+        ]
+      },
+      "post": {
+        "operationId": "postApiV1ContractTemplateDraftsId",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Sucesso"
+          },
+          "default": {
+            "description": "Erro",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": [],
+            "tenantHeader": []
+          }
+        ]
+      }
+    },
     "/api/v1/contract-template-drafts/{id}/archive": {
       "post": {
         "operationId": "postApiV1ContractTemplateDraftsIdArchive",
@@ -1930,6 +2300,140 @@
             }
           }
         ],
+        "responses": {
+          "200": {
+            "description": "Sucesso"
+          },
+          "default": {
+            "description": "Erro",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": [],
+            "tenantHeader": []
+          }
+        ]
+      }
+    },
+    "/api/v1/contract-template-drafts/{id}/import": {
+      "post": {
+        "operationId": "postApiV1ContractTemplateDraftsIdImport",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Sucesso"
+          },
+          "default": {
+            "description": "Erro",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": [],
+            "tenantHeader": []
+          }
+        ]
+      }
+    },
+    "/api/v1/contract-template-drafts/{id}/pdf": {
+      "get": {
+        "operationId": "getApiV1ContractTemplateDraftsIdPdf",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Sucesso"
+          },
+          "default": {
+            "description": "Erro",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": [],
+            "tenantHeader": []
+          }
+        ]
+      }
+    },
+    "/api/v1/contract-template-drafts/{id}/publish": {
+      "post": {
+        "operationId": "postApiV1ContractTemplateDraftsIdPublish",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Sucesso"
+          },
+          "default": {
+            "description": "Erro",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": [],
+            "tenantHeader": []
+          }
+        ]
+      }
+    },
+    "/api/v1/contract-template-drafts/catalog": {
+      "get": {
+        "operationId": "getApiV1ContractTemplateDraftsCatalog",
         "responses": {
           "200": {
             "description": "Sucesso"
