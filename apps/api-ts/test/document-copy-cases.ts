@@ -201,7 +201,7 @@ export async function verifyDocumentCopies(seed: Pool, pool: DatabasePool, other
     assert.equal((await getPackage()).checks.find(c => c.label === "Contrato")?.ready, true)
     assert.match((await postPackage()).json().type, /nfe_unavailable$/)
     const invoice = randomUUID()
-    const xml = (await readFile(new URL("../../api/tests/fixtures/nfe-protocol-synthetic.xml", import.meta.url), "utf8"))
+    const xml = (await readFile(new URL("./fixtures/nfe-protocol-synthetic.xml", import.meta.url), "utf8"))
       .replace("<CNPJ>19131243000197</CNPJ>", "<CPF>52998224725</CPF>").replaceAll("04252011000110", "19131243000197")
     const accessKey = xml.match(/Id="NFe(\d{44})"/)![1]!
     await seed.query("INSERT INTO fiscal_nfe_drafts(tenant_id,id,environment,model,profile_revision,company_revision,issuer_snapshot,details,products_total_cents) VALUES($1,$2,'homologation',55,1,1,'{}','{}',1)", [tenant, invoice])

@@ -17,7 +17,7 @@ async function session(context: BrowserContext, reader = false) {
 
 test("monitor importa XML, preserva bytes após recarregar e não duplica a nota", async ({ page, context }) => {
   await session(context)
-  const xml = (await readFile("../api/tests/fixtures/nfe-protocol-synthetic.xml", "utf8")).replaceAll("19131243000197", "04252011000110")
+  const xml = (await readFile("../api-ts/test/fixtures/nfe-protocol-synthetic.xml", "utf8")).replaceAll("19131243000197", "04252011000110")
   await page.goto("/fiscal/monitor")
   const input = page.getByLabel("XML da NF-e", { exact: true })
   await expect(input).toBeEnabled()

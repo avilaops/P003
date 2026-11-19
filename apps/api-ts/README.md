@@ -6,9 +6,7 @@ API de Preferências, Cadastros, Vendas e Relatórios, dentro do [inventário](.
 
 `pnpm --filter api-ts typecheck` verifica os tipos. `pnpm --filter api-ts test` executa as unidades e, quando `API_TS_TEST_ADMIN_URL` está definida, a integração PostgreSQL.
 
-Para executar **a mesma matriz HTTP em TypeScript, Rust de referência e gateway Rust de produção**, defina `API_TS_TEST_ADMIN_URL` e execute `pnpm --filter api-ts test:contracts`. O comando compila dois binários distintos com lockfile e modo offline, compara integralmente o OpenAPI e testa o MCP nativo pelo gateway com PostgreSQL real. `API_TS_TEST_RUST_BINARY` aceita uma referência do checkout compilada com `--features migration-reference`; `API_TS_TEST_GATEWAY_BINARY` aceita a compilação de produção sem essa feature. A referência não deve ser implantada.
-
-A URL de administrador deve apontar para um PostgreSQL de testes. A suíte cria bancos descartáveis, aplica as migrações e cria uma role `NOLOGIN NOSUPERUSER NOBYPASSRLS`. As duas APIs operam com essa mesma role, autenticação local controlada e empresas distintas. Os bancos e as roles pertencentes ao teste são removidos no encerramento. Nenhuma credencial de produção é necessária. O processo Rust recebe apenas as variáveis explicitamente necessárias e mantém os workers desativados.
+A URL de administrador deve apontar para um PostgreSQL de testes. A suíte cria bancos descartáveis, aplica as migrações e cria uma role `NOLOGIN NOSUPERUSER NOBYPASSRLS`. A API opera com essa role, autenticação local controlada e empresas distintas. Os bancos e as roles pertencentes ao teste são removidos no encerramento. Nenhuma credencial de produção é necessária. O processo Rust recebe apenas as variáveis explicitamente necessárias e mantém os workers desativados.
 
 A matriz cobre isolamento por empresa, permissões/revogação, consultas, revisões, replay/concorrência e rollback, além de fluxos comerciais, checkout, transições de pedidos, propostas e relatórios. Isso complementa os testes unitários; a validação de implantação e do BFF continua necessária.
 

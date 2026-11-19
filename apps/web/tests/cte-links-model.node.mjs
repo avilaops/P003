@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { test } from "node:test";
 
 import * as model from "../src/features/fiscal/cte-links-model.ts";
-const facts = JSON.parse(readFileSync(new URL("../../api/src/http/fixtures/cte-received-inspection.json", import.meta.url), "utf8"));
+const facts = JSON.parse(readFileSync(new URL("../../fiscal-engine/tests/fixtures/http/cte-received-inspection.json", import.meta.url), "utf8"));
 const tenant = "11111111-1111-4111-8111-111111111111";
 const doc = "22222222-2222-4222-8222-222222222222";
 const inspectionId = "44444444-4444-4444-8444-444444444444";

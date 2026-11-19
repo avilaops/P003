@@ -26,7 +26,7 @@ from contract_signature_service.bundle import encode_bundle, decode_bundle
 NOW = datetime(2026, 11, 14, 12, 0, 0, tzinfo=timezone.utc)
 KEY = b'SYNTHETIC-TRANSPORT-TEST-KEY-ONLY!!'
 KEY_ID = 'test'
-DESTINATION = ROOT / 'apps/api/tests/fixtures/contract-wire'
+DESTINATION = ROOT / 'apps/api-ts/test/fixtures/contract-wire'
 
 
 def main():

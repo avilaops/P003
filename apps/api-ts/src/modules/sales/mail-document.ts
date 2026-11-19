@@ -9,7 +9,7 @@ type Fields = Record<string, unknown>
 const fields = (value: unknown): Fields => value && typeof value === "object" && !Array.isArray(value) ? value as Fields : {}
 const text = (value: unknown) => value == null ? "" : String(value).trim()
 const escape = (value: unknown) => text(value).replace(/[&<>"']/g, c => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" })[c]!)
-const asset = (path: string) => fileURLToPath(new URL("../../../../api/assets/" + path, import.meta.url))
+const asset = (path: string) => fileURLToPath(new URL("../../../assets/" + path, import.meta.url))
 const date = (value: unknown) => text(value).slice(0,10).replace(/^(\d{4})-(\d{2})-(\d{2})$/, "$3/$2/$1")
 const join = (v: Fields, keys: string[]) => keys.map(k => text(v[k])).filter(Boolean).join(", ")
 const addressFields = ["street","number","complement","district","city","state","postalCode"]

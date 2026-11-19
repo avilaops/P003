@@ -16,9 +16,8 @@ class ScopeTests(unittest.TestCase):
         self.assertFalse(gate.native_api_required(["scripts/architecture/report-model.test.mjs"]))
 
     def test_inventory_contract_catalogue_runs_in_project_validation(self):
-        for path in ("verification/contracts.json", "verification/discovery.mjs", "verification/ts-migration-baseline.json",
-                     "verification/ts-migration-inventory.mjs",
-                     "verification/test/contracts.test.mjs", "verification/test/product-context.test.mjs"):
+        for path in ("verification/contracts.json", "verification/discovery.mjs",
+                                         "verification/test/contracts.test.mjs", "verification/test/product-context.test.mjs"):
             self.assertFalse(gate.native_api_required([path]), path)
 
     def test_private_signature_service_has_mandatory_project_scope(self):

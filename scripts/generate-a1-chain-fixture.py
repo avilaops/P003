@@ -54,7 +54,7 @@ def main():
     fixture = {"password": password.decode(), "rootPem": pem(root), "intermediatePem": pem(ca),
                "expiredIntermediatePem": pem(expired_ca), "leafOnly": export(leaf, None),
                "complete": export(leaf, [ca]), "incompatibleUsage": export(incompatible, None)}
-    destination = Path(__file__).resolve().parents[1] / "apps/api/tests/fixtures/a1-chain-synthetic.json"
+    destination = Path(__file__).resolve().parents[1] / "apps/api-ts/test/fixtures/a1-chain-synthetic.json"
     destination.write_text(json.dumps(fixture, indent=2) + "\n", encoding="utf-8")
 
 
