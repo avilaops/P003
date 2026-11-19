@@ -61,7 +61,9 @@ export async function platformFixture(options: PlatformFixtureOptions) {
       ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT,INSERT,UPDATE,DELETE ON TABLES TO ${role};
       GRANT SELECT,INSERT,UPDATE,DELETE ON ALL TABLES IN SCHEMA public TO ${role};
       GRANT SELECT,INSERT,UPDATE,DELETE ON ALL TABLES IN SCHEMA system_config TO ${role};
-      GRANT USAGE ON ALL SEQUENCES IN SCHEMA public TO ${role}`)
+      GRANT USAGE ON ALL SEQUENCES IN SCHEMA public TO ${role};
+      GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA public TO ${role};
+      GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA system_config TO ${role}`)
     await seed.query("INSERT INTO tenants(id,legal_name,tax_id) VALUES($1,'Empresa A','04252011000110'),($2,'Empresa B','52998224725')", [tenant, otherTenant])
     await seed.query("INSERT INTO identities(auth_subject,email,display_name) VALUES ('admin','admin@example.test','Administrador'),('reader','reader@example.test','Leitor'),('visitor','visitor@example.test','Visitante'),('other','other@example.test','Outra empresa')")
     await seed.query("INSERT INTO tenant_memberships(tenant_id,identity_id) SELECT $1,id FROM identities WHERE auth_subject IN ('admin','reader','visitor')", [tenant])
