@@ -11,8 +11,7 @@
     "migrate": "node dist/migrate.js",
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "tsx --test test/**/*.test.ts",
-    "test:contracts": "node scripts/contract-tests.mjs"
+    "test": "tsx --test test/**/*.test.ts"
   },
   "dependencies": {
     "@xmldom/xmldom": "0.9.12",

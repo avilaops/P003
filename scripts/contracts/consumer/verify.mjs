@@ -1,5 +1,5 @@
 import { readFile, writeFile, copyFile } from 'node:fs/promises';
-import { readOpenApi } from '../gate.mjs';
+import { readOpenApi } from '../openapi-reader.mjs';
 import { checkExamples } from './validate.mjs';
 
 const directory = new URL('../../../artifacts/contracts/', import.meta.url);
