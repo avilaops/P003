@@ -98,7 +98,7 @@ export function contextSourcePaths(catalogue, inventory, definitions) {
     'verification/mcp/central-tools.json', 'verification/mcp/protocol-actions.json',
     'verification/product-context-publish.mjs',
     'package.json', 'pnpm-lock.yaml', 'apps/web/package.json',
-    ...definitions.flatMap(flow => flow.additionalSources || []),
+    ...definitions.flatMap(flow => flow.additionalSources || []).filter(file => !file.endsWith('.rs')),
   ]);
   // Legacy .rs references document where behaviour came from; they are not context sources.
   const readable = file => !file.endsWith('.rs');
