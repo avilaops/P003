@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import { GuardedLink } from "@/components/shell/navigation-guard"
-import { Copy, FileDown, Printer } from "lucide-react"
+import { Copy, FileDown, Mail, Printer } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { PageTitle } from "@/components/workspace/page-title"
 import { DataTable } from "@/components/workspace/data-table"
@@ -29,7 +29,13 @@ export function OrderPageHeading({ tenantId, sale, pending, ...context }: OrderP
         const { text } = commercialProposal(current, context)
         try { await navigator.clipboard.writeText(text); setFallback(""); setNotice("Proposta copiada.") }
         catch { setFallback(text); setNotice("A cópia automática não está disponível. Selecione e copie o texto abaixo.") }
-      }}><Copy aria-hidden="true" />Copiar proposta</Button><Button variant="outline" disabled={!current} aria-expanded={previewOpen} onClick={() => setPreviewOpen(open => !open)}><FileDown aria-hidden="true" />Salvar PDF</Button></div>
+      }}><Copy aria-hidden="true" />Copiar proposta</Button><Button variant="outline" disabled={!current} onClick={() => {
+        if (!current) return
+        const { text } = commercialProposal(current, context)
+        // Opens the user's mail app with the proposal text; the saved order sends the PDF from its own page.
+        window.location.href = `mailto:?subject=${encodeURIComponent(`Proposta comercial${context.customerName ? ` - ${context.customerName}` : ""}`)}&body=${encodeURIComponent(text)}`
+        setNotice("Abrimos seu aplicativo de e-mail com a proposta. Para enviar o PDF por e-mail, salve o pedido e use Enviar por e-mail no detalhe.")
+      }}><Mail aria-hidden="true" />Enviar por e-mail</Button><Button variant="outline" disabled={!current} aria-expanded={previewOpen} onClick={() => setPreviewOpen(open => !open)}><FileDown aria-hidden="true" />Salvar PDF</Button></div>
     </header>
     {notice && <p role="status" className="mt-3 text-sm">{notice}</p>}
     {fallback && <label className="mt-3 grid gap-2 text-sm">Texto da proposta para copiar<textarea readOnly rows={8} className="w-full rounded-lg border bg-background p-3" value={fallback} onFocus={event => event.currentTarget.select()} /></label>}
