@@ -26,12 +26,18 @@ const finance = [
   "platform.company.manage",
 ]
 
-async function seedReceivable(ctx: TestContext, cents: number, dueDate: string, orderStatus = "completed") {
+async function seedReceivable(
+  ctx: TestContext,
+  cents: number,
+  dueDate: string,
+  orderStatus = "completed",
+  partyId?: string,
+) {
   const order = randomUUID(),
     receivable = randomUUID()
   await ctx.seed.query(
     "INSERT INTO sales_orders(id,tenant_id,customer_id,customer_name,customer_tax_id,due_date,amount_cents,status) VALUES($1,$2,$3,'Cliente','52998224725',$4,$5,$6)",
-    [order, ctx.tenant, await customer(ctx), dueDate, cents, orderStatus],
+    [order, ctx.tenant, partyId ?? (await customer(ctx)), dueDate, cents, orderStatus],
   )
   await ctx.seed.query(
     "INSERT INTO receivables(id,tenant_id,order_id,customer_name,due_date,amount_cents,status) VALUES($1,$2,$3,'Cliente',$4,$5,'open')",
@@ -46,6 +52,14 @@ async function customer(ctx: TestContext) {
   await ctx.seed.query(
     "INSERT INTO parties(id,tenant_id,person_type,legal_name,tax_id,is_customer,is_supplier,status) VALUES($1,$2,'fisica','Cliente','52998224725',true,true,'active')",
     [id, ctx.tenant],
+  )
+  return id
+}
+async function newParty(ctx: TestContext, name: string) {
+  const id = randomUUID()
+  await ctx.seed.query(
+    "INSERT INTO parties(id,tenant_id,person_type,legal_name,tax_id,is_customer,is_supplier,status) VALUES($1,$2,'juridica',$3,'04252011000110',true,true,'active')",
+    [id, ctx.tenant, name],
   )
   return id
 }
@@ -238,6 +252,58 @@ test("Financeiro • aceite do backlog D05", databaseTestOptions, async (t) => {
       assert.equal(chosen.statusCode, 201, chosen.body)
       assert.equal(chosen.json().data.categoryId, expense)
       for (const row of await titles()) assert.ok(row.category_id, "título sem natureza: " + row.id)
+    })
+
+    await t.test("FI8 • A ficha do cliente soma exatamente os títulos e pedidos listados", async () => {
+      await setCharges(ctx, { interestMonthlyBps: 0, penaltyBps: 0 })
+      const party = await newParty(ctx, "Cliente da ficha")
+      const account = await bankAccount(ctx, "888")
+      const overdue = await seedReceivable(ctx, 40000, "2026-01-05", "completed", party)
+      const partial = await seedReceivable(ctx, 30000, "2099-01-05", "completed", party)
+      const settled = await seedReceivable(ctx, 10000, "2026-02-05", "completed", party)
+      const pay = async (id: string, amount: string, revision = 1) => {
+        const done = await ctx.as("user").post(`/api/v1/receivables/${id}/payments`, {
+          revision,
+          body: { amount, method: "cash", reference: "Ficha", occurredOn: "2026-02-10", financialAccountId: account },
+        })
+        assert.equal(done.statusCode, 200, done.body)
+      }
+      await pay(partial.receivable, "120.00")
+      await pay(settled.receivable, "100.00")
+      // Dois pedidos aceitos ainda não faturados, sem títulos.
+      for (const cents of [25000, 17550])
+        await ctx.seed.query(
+          "INSERT INTO sales_orders(id,tenant_id,customer_id,customer_name,customer_tax_id,due_date,amount_cents,status) VALUES($1,$2,$3,'Cliente da ficha','04252011000110','2099-03-01',$4,'accepted')",
+          [randomUUID(), ctx.tenant, party, cents],
+        )
+      const url = "/api/v1/finance/partner"
+      assert.equal((await ctx.as("anonymous").get(url, { query: { partyId: party } })).statusCode, 401)
+      assert.equal((await ctx.as("denied").get(url, { query: { partyId: party } })).statusCode, 403)
+      assert.equal((await ctx.as("outsider").get(url, { query: { partyId: party } })).statusCode, 403)
+      assert.equal((await ctx.as("user").get(url, { query: { partyId: "x" } })).statusCode, 422)
+      assert.equal((await ctx.as("user").get(url, { query: { partyId: randomUUID() } })).statusCode, 404)
+      const ficha = await ctx.as("user").get(url, { query: { partyId: party } })
+      assert.equal(ficha.statusCode, 200, ficha.body)
+      const position = ficha.json().position
+      const listed = await ctx.as("user").get("/api/v1/finance/portfolio", { query: { partyId: party, limit: 250 } })
+      assert.equal(listed.statusCode, 200, listed.body)
+      const rows = listed.json().rows as { side: string; outstanding: string; dueDate: string; id: string }[]
+      assert.deepEqual(rows.map((r) => r.id).sort(), [overdue.receivable, partial.receivable, settled.receivable].sort())
+      const cents = (v: string) => BigInt(v.replace(".", ""))
+      const sum = (values: string[]) => values.reduce((a, v) => a + cents(v), 0n)
+      const receivable = sum(rows.filter((r) => r.side === "receivable").map((r) => r.outstanding))
+      assert.equal(cents(position.receivable), receivable, "saldo a receber = soma dos títulos listados")
+      assert.equal(position.receivable, "580.00", "R$ 400 vencidos + R$ 180 restantes")
+      const asOf = position.asOf as string
+      assert.equal(
+        cents(position.overdueReceivable),
+        sum(rows.filter((r) => r.side === "receivable" && r.dueDate < asOf).map((r) => r.outstanding)),
+      )
+      assert.equal(position.overdueReceivable, "400.00")
+      const orders = position.orders as { amount: string }[]
+      assert.equal(orders.length, 2)
+      assert.equal(cents(position.unbilled), sum(orders.map((o) => o.amount)), "não faturado = soma dos pedidos listados")
+      assert.equal(position.unbilled, "425.50")
     })
   } finally {
     await ctx.close()
