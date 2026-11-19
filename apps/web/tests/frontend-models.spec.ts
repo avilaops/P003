@@ -29,7 +29,7 @@ test("inventário de páginas exige título e preserva rotas operacionais nas pr
     "/cadastros/vendedores/[id]": "/cadastros/funcionarios/[id]",
     "/cadastros/vendedores/[id]/editar": "/cadastros/funcionarios/[id]/editar",
   }
-  const titleExport = /export (?:const metadata = \{ title: ".+" \}|async function generateMetadata)/
+  const titleExport = /export (?:const metadata\s*=\s*\{\s*title\s*:\s*".+"\s*\}|async function generateMetadata)/
   const pages = files(root).filter(file => file.endsWith(path.sep + "page.tsx"))
   expect(pages.length).toBeGreaterThanOrEqual(178)
   for (const file of pages) {

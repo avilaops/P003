@@ -36,6 +36,8 @@ for (const { width, theme } of [{ width: 390, theme: "light" }, { width: 640, th
   const errors: string[] = []
   page.on("pageerror", error => errors.push(error.message))
   page.on("console", message => { if (message.type() === "error") errors.push(message.text()) })
+  await page.route("**/api/erp/pos/settings", route => route.fulfill({ json: { tenantId: tenant, data: { enabled: true, revision: 1 } } }))
+  await page.route("**/api/erp/commercial/policies/catalog", route => route.fulfill({ json: { tenantId: tenant, channels: [{ channel: "Loja" }], terms: [] } }))
   page.on("request", request => { if (request.method() !== "GET" && /\/api\/erp\/(parties|orders|commercial\/(?:mixed\/)?orders)(?:\?|$)/.test(request.url())) writes.push(request.url()) })
   await page.goto("/vendas/pedidos/novo")
   await expect(page.getByRole("heading", { name: "Novo pedido", exact: true })).toBeVisible()
