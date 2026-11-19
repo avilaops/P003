@@ -318,9 +318,20 @@ for (const width of [320, 390]) test(`criação compacta exige condições expl�
   await page.screenshot({ path: test.info().outputPath("proposal-mobile.png"), fullPage: true })
 })
 
+test("anilheiro só aparece para produto cadastrado com tipos de anilheiro", async ({ page }) => {
+  const catalog = { id: product, sku: "TEST", name: item.name, unit: "UN", ncm: null, cest: null, basePrice: "22468.09", status: "active", structureColors: ["Preto", "Cinza"], upholsteryConfigurable: false, upholsteryColors: [], plateHolderTypes: [], plateHolderColors: [], hasPhoto: false, revision: 1 }
+  await page.route("**/api/erp/me", route => route.fulfill({ json: { tenant: { id: tenant }, permissions: ["sales.proposals.read", "sales.proposals.manage", "sales.proposals.negotiate"] } }))
+  await page.route(`**/api/erp/proposals/${record}`, route => route.fulfill({ headers: { ETag: '\"1\"' }, json: { ...detail(), items: [{ ...item, unitPrice: "22468.09", structureColor: "Preto" }] } }))
+  await page.route(`**/api/erp/products/${product}`, route => route.fulfill({ headers: { ETag: '"1"' }, json: { tenantId: tenant, canEdit: true, data: catalog } }))
+  await page.goto(`/vendas/propostas/${record}/editar`)
+  await page.locator("details").filter({ has: page.locator("summary").filter({ hasText: "Acabamentos" }) }).locator("summary").click()
+  await expect(page.getByRole("combobox", { name: `Estrutura de ${item.name}`, exact: true })).toContainText("Preto")
+  await expect(page.getByLabel(`Tipo de anilheiro de ${item.name}`, { exact: true })).toHaveCount(0)
+})
+
 test("acabamentos ficam recolhidos e preservam escolhas registradas e preço brasileiro", async ({ page }, info) => {
   let saved: unknown
-  const catalog = { id: product, sku: "TEST", name: item.name, unit: "UN", ncm: null, cest: null, basePrice: "22468.09", status: "active", structureColors: ["Preto", "Cinza"], upholsteryConfigurable: false, upholsteryColors: [], plateHolderTypes: [], plateHolderColors: [], hasPhoto: false, revision: 1 }
+  const catalog = { id: product, sku: "TEST", name: item.name, unit: "UN", ncm: null, cest: null, basePrice: "22468.09", status: "active", structureColors: ["Preto", "Cinza"], upholsteryConfigurable: false, upholsteryColors: [], plateHolderTypes: ["Standard", "Olímpico"], plateHolderColors: [], hasPhoto: false, revision: 1 }
   await page.route("**/api/erp/me", route => route.fulfill({ json: { tenant: { id: tenant }, permissions: ["sales.proposals.read", "sales.proposals.manage", "sales.proposals.negotiate"] } }))
   await page.route(`**/api/erp/proposals/${record}`, route => {
     if (route.request().method() === "PUT") saved = route.request().postDataJSON()

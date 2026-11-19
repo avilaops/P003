@@ -58,7 +58,7 @@ test("Gestão corrige custo e política, republica e recupera a simulação com 
     // Full rational is 1,256,324.955877... cents before rounding upward.
     assert.equal(preview.items[0].priceWithoutIpiCents,1256325)
     assert.notEqual(preview.digest,old.digest)
-    assert.equal(preview.items[0].priceWithIpiCents,1419648)
+    assert.equal(preview.items[0].priceWithIpiCents,1419647)
     const post=()=>request("POST",prices+"/publish",{digest:preview.digest},2,key)
     const [left,right]=await Promise.all([post(),post()])
     const v1=checked(left)

@@ -46,15 +46,15 @@ test("commercial unit rounding and desired caps stay consistent across multiple 
   input.items.push({ ...input.items[0]!, productId: "33333333-3333-4333-8333-333333333333", quantity: 2 })
   sources.push({ ...sources[0]!, productId: input.items[1]!.productId, priceCents: 50003 })
   const full = calculateNegotiation(parameters, rules, input, sources).sale
-  assert.deepEqual(full.items.map(item => item.unitTotalCents), [33902, 56504])
-  assert.equal(full.totalCents, 214714)
-  for (const cap of [214714, 214713, 214710, 193243, 171772, 10]) {
+  assert.deepEqual(full.items.map(item => item.unitTotalCents), [33901, 56503])
+  assert.equal(full.totalCents, 214709)
+  for (const cap of [214709, 214708, 214705, 193243, 171772, 10]) {
     const actual = calculateNegotiation(parameters, rules, { ...input, discount: { kind: "total", value: cap } }, sources).sale
     assert.ok(actual.totalCents <= cap)
     assert.equal(actual.items.reduce((total, item) => total + item.totalCents, 0), actual.totalCents)
     for (const item of actual.items) assert.equal(item.totalCents, item.unitTotalCents * item.quantity)
   }
-  for (const value of [0, 9, 214715]) assert.throws(() => calculateNegotiation(parameters, rules, { ...input, discount: { kind: "total", value } }, sources))
+  for (const value of [0, 4, 214710]) assert.throws(() => calculateNegotiation(parameters, rules, { ...input, discount: { kind: "total", value } }, sources))
 })
 
 test("loss, explicit zero entry and invalid quantities cannot escape commercial guards", () => {

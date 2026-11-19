@@ -1,6 +1,7 @@
 import type { AuthorizedContext } from "../../platform/access.js"
 import { Problem } from "../../platform/problem.js"
 import { fixed } from "../sales/fixed.js"
+import { assertPaymentTermLimit } from "./payment-term-limit.js"
 import type { loadOrder } from "./snapshot.js"
 
 export type OrderSnapshot = Awaited<ReturnType<typeof loadOrder>>
@@ -37,8 +38,7 @@ export async function validateAcceptance(context: AuthorizedContext, order: Orde
   const settings = (await client.query("SELECT minimum_order_amount_cents,maximum_payment_term_days,require_customer_contact FROM sales_settings WHERE tenant_id=$1", [tenantId])).rows[0]
   if (settings) {
     if (fixed(String(order.data.amount), 2) < BigInt(String(settings.minimum_order_amount_cents))) conflict("Pedido abaixo do valor mínimo configurado em Preferências / Vendas")
-    const term = await client.query("SELECT $1::date <= (statement_timestamp() AT TIME ZONE 'America/Sao_Paulo')::date + $2::integer AS valid", [order.data.dueDate, settings.maximum_payment_term_days])
-    if (!term.rows[0]?.valid) conflict("Vencimento excede o prazo máximo configurado em Preferências / Vendas")
+    await assertPaymentTermLimit(context, String(order.data.dueDate))
     if (settings.require_customer_contact) {
       const contact = await client.query("SELECT NULLIF(btrim(email),'') IS NOT NULL OR NULLIF(btrim(phone),'') IS NOT NULL AS present FROM parties WHERE tenant_id=$1 AND id=$2", [tenantId, order.data.customerId])
       if (!contact.rows[0]?.present) conflict("Preencha e-mail ou telefone no cadastro do cliente antes de confirmar o pedido")

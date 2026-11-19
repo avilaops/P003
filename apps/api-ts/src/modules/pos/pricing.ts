@@ -42,7 +42,7 @@ export function publishedPrice(row: Record<string,unknown>, tenantId: string, pr
   const margin=BigInt(p.netMarginBps)
   const meets=(v:bigint,target:boolean)=>profitAt(v)>=(target?v*q*margin*squared:0n)
   if (!meets(price,true)) conflict("Política comercial exige aprovação. Conclua a negociação no fluxo comercial")
-  const gross=(v:bigint)=>up(v*(bps+BigInt(p.ipiBps)),bps)
+  const gross=(v:bigint)=>rounded(v*(bps+BigInt(p.ipiBps)),bps)
   const limit=(target:boolean)=> Number(lastPassing(9999n, discount=>{const v=rounded(price*(bps-discount),bps);return v>0n && meets(v,target)}))
   const minUnit=lastPassing(price, v=>!meets(v,true))+1n
   const qty=Number(q), net=price*q, unit=gross(price), amount=unit*q

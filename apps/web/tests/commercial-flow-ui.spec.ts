@@ -15,7 +15,7 @@ test.beforeEach(async ({ context, page, baseURL }) => {
   await installFrontendFixture(context, baseURL)
   await page.route("**/api/erp/me", route => route.fulfill({ json: { tenant: { id: tenant }, permissions: ["sales.orders.read", "sales.orders.manage", "catalog.parties.read", "catalog.products.read"] } }))
   await page.route(/\/api\/erp\/commercial\/tables\/(imported|national)$/, route => route.fulfill({ json: { tenantId: tenant, line: route.request().url().endsWith("national") ? "national" : "imported", canManage: false, data: table } }))
-  await page.route(`**/api/erp/products/${product}`, route => route.fulfill({ json: { tenantId: tenant, data: { id: product, name, sku: equipment.sku, structureColors: ["Preto"], upholsteryColors: [], upholsteryConfigurable: false, hasPhoto: false } } }))
+  await page.route(`**/api/erp/products/${product}`, route => route.fulfill({ json: { tenantId: tenant, data: { id: product, name, sku: equipment.sku, structureColors: ["Preto"], upholsteryColors: [], upholsteryConfigurable: false, plateHolderTypes: ["Standard", "Olímpico"], hasPhoto: false } } }))
   await page.route(/\/api\/erp\/parties\?/, route => route.fulfill({ json: { tenantId: tenant, total: 1, data: [{ id: customer, legalName: "Academia de teste", taxId: "52998224725" }] } }))
 })
 

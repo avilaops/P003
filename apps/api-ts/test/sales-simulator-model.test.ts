@@ -79,9 +79,9 @@ test("one-cent rounding keeps the composition consistent", () => {
   }
 })
 
-test("zero discount preserves the published IPI ceiling", () => {
+test("zero discount preserves the published IPI with half-up rounding", () => {
   const { sale } = quote(input({ quantity: 1 }), 10001, cost, example())
-  assert.deepEqual([sale.unitWithoutIpiCents, sale.unitWithIpiCents, sale.invoiceTotalCents], [10001, 11302, 11302])
+  assert.deepEqual([sale.unitWithoutIpiCents, sale.unitWithIpiCents, sale.invoiceTotalCents], [10001, 11301, 11301])
 })
 
 test("the free discount boundary does not ask approval for sub-cent rounding", () => {
