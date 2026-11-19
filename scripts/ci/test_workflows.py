@@ -143,11 +143,10 @@ class WorkflowTests(unittest.TestCase):
                 if job.get('uses', '').startswith('./'):
                     self.assertTrue((ROOT / job['uses'][2:]).is_file(), job['uses'])
 
-    def test_contract_consumers_receive_both_rust_exports(self):
+    def test_contract_consumers_receive_both_published_contracts(self):
         api = self.workflows()['_validate-api.yml']['jobs']['api']
-        export = next(step['run'] for step in api['steps'] if step.get('name') == 'Test and export the exact source contract')
-        self.assertIn('ERP_OPENAPI_OUTPUT=', export)
-        self.assertIn('ERP_COMPANY_CONTRACT_OUTPUT=', export)
+        restore = next(step['run'] for step in api['steps'] if step.get('name') == 'Restore and verify the published contract')
+        self.assertIn('published-components.py restore', restore)
         paths = [step['with']['path'] for step in api['steps']
                  if step.get('uses', '').startswith('actions/upload-artifact@')
                  and step['with']['name'].startswith('erp-openapi-')]
@@ -182,8 +181,6 @@ class WorkflowTests(unittest.TestCase):
         for filename, jobname, producer in (
             ('release.yml', 'deploy', 'needs.evidence.outputs.manifest_artifact_name'),
             ('_validate-web.yml', 'web', 'inputs.openapi_artifact_name'),
-            ('_validate-project.yml', 'baseline', 'inputs.openapi_artifact_name'),
-            ('_validate-project.yml', 'contracts', 'needs.baseline.outputs.contract_artifact_name'),
         ):
             steps = files[filename]['jobs'][jobname]['steps']
             names = [step['with']['name'] for step in steps if step.get('uses', '').startswith('actions/download-artifact@')]

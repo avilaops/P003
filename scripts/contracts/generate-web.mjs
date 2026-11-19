@@ -2,7 +2,7 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { readOpenApi } from "./gate.mjs";
+import { readOpenApi } from "./openapi-reader.mjs";
 
 const root = fileURLToPath(new URL("../../", import.meta.url));
 const require = createRequire(new URL("./consumer/package.json", import.meta.url));

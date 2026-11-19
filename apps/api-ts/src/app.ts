@@ -60,12 +60,14 @@ import { registerContractTemplateArchive } from "./modules/contract-templates/ar
 import { registerSystemConfigRoutes, type SystemConfigDependencies } from "./modules/system-config/routes.js"
 import { registerPlatformAdminRoutes, type PlatformAdminDependencies } from "./modules/platform-admin/routes.js"
 import { registerCompanyAccountRoutes, type CompanyAccountDependencies } from "./modules/company-account/routes.js"
+import { trackRoutes } from "./platform/openapi.js"
 import { registerBrowserUseRoutes, type BrowserUseDependencies } from "./modules/browser-use/routes.js"
 
 export type AppDependencies = AccessDependencies & { fiscalVault?:import("./modules/outgoing-nfse/certificate-vault.js").FiscalCertificateVault; fiscalOperations?:FiscalOperations; outgoingNfse?: OutgoingNfseDependencies; nfeEmail?: NfeEmailIO; documentCopies?: DocumentCopyIO; browserUse?: BrowserUseDependencies; systemConfig?: SystemConfigDependencies; platformAdmin?: PlatformAdminDependencies; companyAccount?: CompanyAccountDependencies }
 
 export function buildApp(_dependencies: AppDependencies): FastifyInstance {
   const app = Fastify({ logger: false, bodyLimit: 65_536 })
+  trackRoutes(app)
   const validateJson = app.getDefaultJsonParser("error", "error")
   app.removeContentTypeParser("application/json")
   app.addContentTypeParser("application/json", { parseAs: "string" }, (request, body, done) => {

@@ -5,7 +5,7 @@ import type { AccessDependencies } from "../../platform/access.js"
 import { authorizedDomain, invalid } from "../../platform/domain.js"
 import { registerLegacyRoutes } from "./legacy.js"
 import { registerMailSettingsRoutes, type MailSettingsIO } from "./mail-settings.js"
-import { buildOpenApiDocument, collectRoutes } from "./openapi.js"
+import { buildOpenApiDocument } from "../../platform/openapi.js"
 import { registerServiceKeyRoutes } from "./service-keys.js"
 
 export type PlatformAdminDependencies = { mail?: MailSettingsIO }
@@ -38,7 +38,7 @@ export function registerPlatformAdminRoutes(app: FastifyInstance, dependencies: 
   })
 
   let document: unknown
-  app.get("/openapi.json", async () => document ??= buildOpenApiDocument(collectRoutes(app.printRoutes({ commonPrefix: false }))))
+  app.get("/openapi.json", async () => document ??= buildOpenApiDocument(app))
 
   app.get("/api/v1/permissions", async (request, reply) => {
     reply.header("cache-control", "no-store")

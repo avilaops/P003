@@ -8,6 +8,7 @@
   ],
   "scripts": {
     "check:brand": "node scripts/brand/application-icons.mjs --app erp --check",
+    "test": "pnpm --filter api-ts typecheck && pnpm --filter api-ts test && pnpm run test:verification && pnpm run test:architecture",
     "test:brand": "node --test scripts/brand/*.test.mjs",
     "check:architecture": "node scripts/architecture/check.mjs",
     "test:architecture": "node --test scripts/architecture/*.test.mjs",

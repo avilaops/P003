@@ -11,9 +11,6 @@ name: Validate project
       publish:
         type: boolean
         default: false
-      typescript_only:
-        type: boolean
-        default: false
       check_database:
         type: boolean
         default: false
@@ -328,20 +325,6 @@ jobs:
 
         trap ''rm -f -- "$script_file"'' EXIT
 
-        cat > "$script_file" <<''ERP_TIMED_11809f8ff730b866''
-
-        bash scripts/contracts/install-oasdiff.sh
-
-        ERP_TIMED_11809f8ff730b866
-
-        python3 "$GITHUB_WORKSPACE/scripts/ci/timed.py" --label ''_validate-project/contract-tests: bash scripts/contracts/install-oasdiff.sh'' --output "$GITHUB_WORKSPACE/artifacts/timings/$GITHUB_JOB.jsonl"
-        -- bash --noprofile --norc -e -o pipefail "$script_file"
-
-        '
-    - run: 'script_file=$(mktemp)
-
-        trap ''rm -f -- "$script_file"'' EXIT
-
         cat > "$script_file" <<''ERP_TIMED_f6a1c74c89c47b3a''
 
         node --test scripts/contracts/test/*.test.mjs
@@ -350,20 +333,6 @@ jobs:
 
         python3 "$GITHUB_WORKSPACE/scripts/ci/timed.py" --label ''_validate-project/contract-tests: node --test scripts/contracts/test/*.test.mjs'' --output "$GITHUB_WORKSPACE/artifacts/timings/$GITHUB_JOB.jsonl"
         -- bash --noprofile --norc -e -o pipefail "$script_file"
-
-        '
-    - run: 'script_file=$(mktemp)
-
-        trap ''rm -f -- "$script_file"'' EXIT
-
-        cat > "$script_file" <<''ERP_TIMED_8a02687a9bc601dd''
-
-        python3 -B -m unittest discover -s scripts/contracts -p ''test_capture.py''
-
-        ERP_TIMED_8a02687a9bc601dd
-
-        python3 "$GITHUB_WORKSPACE/scripts/ci/timed.py" --label ''_validate-project/contract-tests: python3 -B -m unittest discover -s scripts/contracts -p ''"''"''test_capture.py''"''"''''
-        --output "$GITHUB_WORKSPACE/artifacts/timings/$GITHUB_JOB.jsonl" -- bash --noprofile --norc -e -o pipefail "$script_file"
 
         '
     - name: Preserve measured script durations
@@ -375,169 +344,6 @@ jobs:
         retention-days: 7
         if-no-files-found: warn
     if: inputs.full
-  baseline:
-    timeout-minutes: 25
-    runs-on: ubuntu-latest
-    steps:
-    - uses: actions/checkout@v4
-      with:
-        fetch-depth: 0
-        ref: ${{ inputs.source_sha }}
-        persist-credentials: false
-    - uses: dtolnay/rust-toolchain@1.99.1
-    - uses: Swatinem/rust-cache@v2
-      with:
-        shared-key: regression-baseline
-    - uses: actions/download-artifact@v4
-      with:
-        name: ${{ inputs.openapi_artifact_name }}
-        path: artifacts/contracts/
-    - name: Capture explicit baseline
-      run: 'script_file=$(mktemp)
-
-        trap ''rm -f -- "$script_file"'' EXIT
-
-        cat > "$script_file" <<''ERP_TIMED_99e6f89dfcc6164b''
-
-        baseline_sha=$(git rev-parse ''HEAD^{commit}~1'')
-
-        timeout 480s python3 -B scripts/contracts/capture.py "$baseline_sha"
-
-        ERP_TIMED_99e6f89dfcc6164b
-
-        python3 "$GITHUB_WORKSPACE/scripts/ci/timed.py" --label ''_validate-project/baseline: Capture explicit baseline'' --output "$GITHUB_WORKSPACE/artifacts/timings/$GITHUB_JOB.jsonl"
-        -- bash --noprofile --norc -e -o pipefail "$script_file"
-
-        '
-    - uses: actions/upload-artifact@v4
-      if: always()
-      with:
-        name: erp-openapi-captured-${{ inputs.source_sha }}-${{ github.run_attempt }}
-        path: artifacts/contracts/
-        if-no-files-found: error
-        retention-days: 7
-    - name: Preserve measured script durations
-      if: always()
-      uses: actions/upload-artifact@v4
-      with:
-        name: timing-_validate-project-baseline-${{ github.run_id }}-${{ github.run_attempt }}
-        path: artifacts/timings/*.jsonl
-        retention-days: 7
-        if-no-files-found: warn
-    if: inputs.full && !inputs.typescript_only
-    outputs:
-      contract_artifact_name: erp-openapi-captured-${{ inputs.source_sha }}-${{ github.run_attempt }}
-  contracts:
-    timeout-minutes: 10
-    runs-on: ubuntu-latest
-    steps:
-    - uses: actions/checkout@v4
-      with:
-        ref: ${{ inputs.source_sha }}
-        persist-credentials: false
-    - uses: actions/setup-node@v4
-      with:
-        node-version: 24
-    - uses: actions/download-artifact@v4
-      with:
-        name: ${{ needs.baseline.outputs.contract_artifact_name }}
-        path: artifacts/contracts/
-    - run: 'script_file=$(mktemp)
-
-        trap ''rm -f -- "$script_file"'' EXIT
-
-        cat > "$script_file" <<''ERP_TIMED_11809f8ff730b866''
-
-        bash scripts/contracts/install-oasdiff.sh
-
-        ERP_TIMED_11809f8ff730b866
-
-        python3 "$GITHUB_WORKSPACE/scripts/ci/timed.py" --label ''_validate-project/contracts: bash scripts/contracts/install-oasdiff.sh'' --output "$GITHUB_WORKSPACE/artifacts/timings/$GITHUB_JOB.jsonl"
-        -- bash --noprofile --norc -e -o pipefail "$script_file"
-
-        '
-    - run: 'script_file=$(mktemp)
-
-        trap ''rm -f -- "$script_file"'' EXIT
-
-        cat > "$script_file" <<''ERP_TIMED_9514b3517c824a01''
-
-        npm ci --ignore-scripts --no-audit --no-fund
-
-        ERP_TIMED_9514b3517c824a01
-
-        python3 "$GITHUB_WORKSPACE/scripts/ci/timed.py" --label ''_validate-project/contracts: npm ci --ignore-scripts --no-audit --no-fund'' --output "$GITHUB_WORKSPACE/artifacts/timings/$GITHUB_JOB.jsonl"
-        -- bash --noprofile --norc -e -o pipefail "$script_file"
-
-        '
-      working-directory: scripts/contracts/consumer
-    - run: 'script_file=$(mktemp)
-
-        trap ''rm -f -- "$script_file"'' EXIT
-
-        cat > "$script_file" <<''ERP_TIMED_9b1ca14de1cd19a8''
-
-        node scripts/contracts/gate.mjs artifacts/contracts/baseline.json artifacts/contracts/candidate.json artifacts/contracts
-
-        ERP_TIMED_9b1ca14de1cd19a8
-
-        python3 "$GITHUB_WORKSPACE/scripts/ci/timed.py" --label ''_validate-project/contracts: node scripts/contracts/gate.mjs artifacts/contracts/baseline.json artifacts/contracts/candidate.json
-        artifacts/contracts'' --output "$GITHUB_WORKSPACE/artifacts/timings/$GITHUB_JOB.jsonl" -- bash --noprofile --norc -e -o pipefail "$script_file"
-
-        '
-    - name: Verify fiscal integration examples against the generated OpenAPI
-      run: 'script_file=$(mktemp)
-
-        trap ''rm -f -- "$script_file"'' EXIT
-
-        cat > "$script_file" <<''ERP_TIMED_ae2d67eb2ae36534''
-
-        node scripts/fiscal/check-contract.mjs artifacts/contracts/candidate.json
-
-        ERP_TIMED_ae2d67eb2ae36534
-
-        python3 "$GITHUB_WORKSPACE/scripts/ci/timed.py" --label ''_validate-project/contracts: Verify fiscal integration examples against the generated OpenAPI''
-        --output "$GITHUB_WORKSPACE/artifacts/timings/$GITHUB_JOB.jsonl" -- bash --noprofile --norc -e -o pipefail "$script_file"
-
-        '
-    - name: Check fixed company consumer
-      working-directory: scripts/contracts/consumer
-      run: 'script_file=$(mktemp)
-
-        trap ''rm -f -- "$script_file"'' EXIT
-
-        cat > "$script_file" <<''ERP_TIMED_dda701a87576d8ac''
-
-        npm run generate
-
-        npm run check
-
-        npm test
-
-        ERP_TIMED_dda701a87576d8ac
-
-        python3 "$GITHUB_WORKSPACE/scripts/ci/timed.py" --label ''_validate-project/contracts: Check fixed company consumer'' --output "$GITHUB_WORKSPACE/artifacts/timings/$GITHUB_JOB.jsonl"
-        -- bash --noprofile --norc -e -o pipefail "$script_file"
-
-        '
-    - uses: actions/upload-artifact@v4
-      if: always()
-      with:
-        name: erp-contract-compatibility-${{ inputs.source_sha }}-${{ github.run_attempt }}
-        path: artifacts/contracts/
-        if-no-files-found: error
-        retention-days: 7
-    - name: Preserve measured script durations
-      if: always()
-      uses: actions/upload-artifact@v4
-      with:
-        name: timing-_validate-project-contracts-${{ github.run_id }}-${{ github.run_attempt }}
-        path: artifacts/timings/*.jsonl
-        retention-days: 7
-        if-no-files-found: warn
-    if: inputs.full && !inputs.typescript_only
-    needs:
-    - baseline
   schema:
     runs-on: ubuntu-latest
     timeout-minutes: 5
