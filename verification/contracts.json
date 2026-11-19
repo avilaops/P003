@@ -1580,6 +1580,32 @@
           "company_onboarding"
         ],
         "nextStep": "Validar a confirmação do destinatário, as permissões, a revisão e a recuperação de envios incertos em cada contexto."
+      },
+      {
+        "id": "report-engine",
+        "title": "Motor de relatórios configuráveis",
+        "goal": "Montar relatórios por fontes declaradas, exportar CSV/XLSX/PDF e enviar por e-mail na periodicidade escolhida com histórico.",
+        "kind": "product",
+        "actionGroups": ["report-engine"],
+        "dependencies": ["company_onboarding"],
+        "nextStep": "Conferir montagem, exportação, agenda idempotente e histórico com isolamento por empresa.",
+        "additionalSources": ["docs/relatorios.md", "migrations/202611190901_report_engine.sql"],
+        "journey": [
+          {
+            "id": "build",
+            "title": "Montar, pré-visualizar e exportar",
+            "actionIds": ["get-reports-sources", "post-reports-preview", "get-reports-definitions-id-run"],
+            "authRefs": [],
+            "externalSystems": []
+          },
+          {
+            "id": "schedule",
+            "title": "Agendar envio e consultar histórico",
+            "actionIds": ["get-reports-definitions-id-schedules", "post-reports-definitions-id-schedules", "put-reports-schedules-id", "get-reports-runs-id-file"],
+            "authRefs": [],
+            "externalSystems": []
+          }
+        ]
       }
     ]
   },
@@ -35144,6 +35170,377 @@
       "ui": {"pages": ["/estoque/ordens-producao"], "bff": {"method": "POST", "path": "/api/erp/production/[...resource]", "resource": "orders/{id}/postings"}, "gap": null},
       "sources": ["apps/api-ts/src/modules/production/routes.ts", "apps/api-ts/src/modules/production/movements.ts"],
       "verification": {"status": "not_verified_by_catalog", "criteria": ["interface", "request", "authorization", "domain", "persistence", "effects", "failure", "response"]}
+    },
+    {
+      "id": "get-reports-sources",
+      "flow": "report-engine",
+      "status": "implemented",
+      "operation": {
+        "method": "GET",
+        "path": "/api/v1/reports/sources"
+      },
+      "actor": "active_tenant_member",
+      "permissions": ["system.reports.read"],
+      "input": {
+        "headers": ["Authorization", "X-Tenant-Id"],
+        "pathParameters": [],
+        "body": null,
+        "query": null
+      },
+      "preconditions": ["Empresa e vínculo ativos; permissão de relatórios. Lista só fontes cujas permissões a pessoa tem."],
+      "transition": {
+        "from": "catálogo de fontes",
+        "to": "sem alteração"
+      },
+      "effects": {
+        "writes": [],
+        "external": [],
+        "excludes": ["Não expõe consultas nem fontes sem permissão."]
+      },
+      "concurrency": {
+        "revision": false,
+        "idempotency": false,
+        "rule": "Leitura sem precondição."
+      },
+      "response": {
+        "successStatuses": [200],
+        "errorStatuses": [400, 401, 403, 500, 503],
+        "action": "get-reports-sources"
+      },
+      "recovery": "Recarregar a consulta.",
+      "ui": {
+        "pages": ["/relatorios/configuraveis"],
+        "bff": {
+          "method": "GET",
+          "path": "/api/erp/reports/sources"
+        },
+        "gap": null
+      },
+      "sources": ["apps/api-ts/src/modules/reports/engine/routes.ts", "apps/api-ts/src/modules/reports/engine/registry.ts", "apps/web/src/features/reports/engine/report-builder.tsx"],
+      "verification": {
+        "status": "not_verified_by_catalog",
+        "criteria": ["interface", "request", "authorization", "domain", "persistence", "effects", "failure", "response"]
+      }
+    },
+    {
+      "id": "post-reports-preview",
+      "flow": "report-engine",
+      "status": "implemented",
+      "operation": {
+        "method": "POST",
+        "path": "/api/v1/reports/preview"
+      },
+      "actor": "active_tenant_member",
+      "permissions": ["system.reports.read"],
+      "input": {
+        "headers": ["Authorization", "X-Tenant-Id"],
+        "pathParameters": [],
+        "body": {
+          "type": "previewInput",
+          "source": "apps/api-ts/src/modules/reports/engine/routes.ts",
+          "validator": "previewInput.safeParse(request.body)"
+        },
+        "query": null
+      },
+      "preconditions": ["Permissões da fonte; colunas, agrupamentos, totais e filtros declarados pela fonte; até 10.000 linhas."],
+      "transition": {
+        "from": "layout não salvo",
+        "to": "resultado calculado sem gravação"
+      },
+      "effects": {
+        "writes": [],
+        "external": [],
+        "excludes": ["Não aceita SQL nem campos fora da fonte; não grava definição."]
+      },
+      "concurrency": {
+        "revision": false,
+        "idempotency": false,
+        "rule": "Consulta sem efeito; repetir é seguro."
+      },
+      "response": {
+        "successStatuses": [200],
+        "errorStatuses": [400, 401, 403, 415, 422, 500, 503],
+        "action": "post-reports-preview"
+      },
+      "recovery": "Ajustar filtros e gerar a prévia de novo.",
+      "ui": {
+        "pages": ["/relatorios/configuraveis"],
+        "bff": {
+          "method": "POST",
+          "path": "/api/erp/reports/preview"
+        },
+        "gap": null
+      },
+      "sources": ["apps/api-ts/src/modules/reports/engine/routes.ts", "apps/api-ts/src/modules/reports/engine/definition.ts", "apps/web/src/features/reports/engine/report-builder.tsx"],
+      "verification": {
+        "status": "not_verified_by_catalog",
+        "criteria": ["interface", "request", "authorization", "domain", "persistence", "effects", "failure", "response"]
+      }
+    },
+    {
+      "id": "get-reports-definitions-id-run",
+      "flow": "report-engine",
+      "status": "implemented",
+      "operation": {
+        "method": "GET",
+        "path": "/api/v1/reports/definitions/{id}/run"
+      },
+      "actor": "active_tenant_member",
+      "permissions": ["system.reports.read"],
+      "input": {
+        "headers": ["Authorization", "X-Tenant-Id"],
+        "pathParameters": ["id"],
+        "body": null,
+        "query": {
+          "format": ["json", "csv", "xlsx", "pdf"]
+        }
+      },
+      "preconditions": ["Definição visível (RLS: dono ou empresa e permissões da fonte); fonte executada pelo motor."],
+      "transition": {
+        "from": "definição salva",
+        "to": "resultado ou arquivo exportado"
+      },
+      "effects": {
+        "writes": [],
+        "external": [],
+        "excludes": ["Não altera a definição; não envia e-mail."]
+      },
+      "concurrency": {
+        "revision": false,
+        "idempotency": false,
+        "rule": "Leitura sem precondição."
+      },
+      "response": {
+        "successStatuses": [200],
+        "errorStatuses": [400, 401, 403, 404, 422, 500, 503],
+        "action": "get-reports-definitions-id-run"
+      },
+      "recovery": "Recarregar ou reduzir o período quando o relatório for grande.",
+      "ui": {
+        "pages": ["/relatorios/configuraveis/[id]"],
+        "bff": {
+          "method": "GET",
+          "path": "/api/erp/reports/definitions/{id}/run"
+        },
+        "gap": null
+      },
+      "sources": ["apps/api-ts/src/modules/reports/engine/routes.ts", "apps/api-ts/src/modules/reports/engine/run.ts", "migrations/202611190901_report_engine.sql", "apps/web/src/features/reports/engine/report-detail.tsx"],
+      "verification": {
+        "status": "not_verified_by_catalog",
+        "criteria": ["interface", "request", "authorization", "domain", "persistence", "effects", "failure", "response"]
+      }
+    },
+    {
+      "id": "get-reports-definitions-id-schedules",
+      "flow": "report-engine",
+      "status": "implemented",
+      "operation": {
+        "method": "GET",
+        "path": "/api/v1/reports/definitions/{id}/schedules"
+      },
+      "actor": "active_tenant_member",
+      "permissions": ["system.reports.read"],
+      "input": {
+        "headers": ["Authorization", "X-Tenant-Id"],
+        "pathParameters": ["id"],
+        "body": null,
+        "query": null
+      },
+      "preconditions": ["Definição visível na empresa."],
+      "transition": {
+        "from": "agendas e histórico",
+        "to": "sem alteração"
+      },
+      "effects": {
+        "writes": [],
+        "external": [],
+        "excludes": ["Não expõe o conteúdo do arquivo; só metadados das execuções."]
+      },
+      "concurrency": {
+        "revision": false,
+        "idempotency": false,
+        "rule": "Leitura sem precondição."
+      },
+      "response": {
+        "successStatuses": [200],
+        "errorStatuses": [400, 401, 403, 404, 422, 500, 503],
+        "action": "get-reports-definitions-id-schedules"
+      },
+      "recovery": "Recarregar a consulta.",
+      "ui": {
+        "pages": ["/relatorios/configuraveis/[id]"],
+        "bff": {
+          "method": "GET",
+          "path": "/api/erp/reports/definitions/{id}/schedules"
+        },
+        "gap": null
+      },
+      "sources": ["apps/api-ts/src/modules/reports/engine/routes.ts", "apps/api-ts/src/modules/reports/engine/run.ts", "migrations/202611190901_report_engine.sql", "apps/web/src/features/reports/engine/report-detail.tsx"],
+      "verification": {
+        "status": "not_verified_by_catalog",
+        "criteria": ["interface", "request", "authorization", "domain", "persistence", "effects", "failure", "response"]
+      }
+    },
+    {
+      "id": "post-reports-definitions-id-schedules",
+      "flow": "report-engine",
+      "status": "implemented",
+      "operation": {
+        "method": "POST",
+        "path": "/api/v1/reports/definitions/{id}/schedules"
+      },
+      "actor": "company_manager",
+      "permissions": ["system.reports.read", "system.reports.manage"],
+      "input": {
+        "headers": ["Authorization", "X-Tenant-Id", "Idempotency-Key"],
+        "pathParameters": ["id"],
+        "body": {
+          "type": "scheduleInput",
+          "source": "apps/api-ts/src/modules/reports/engine/routes.ts",
+          "validator": "scheduleInput.safeParse(body)"
+        },
+        "query": null
+      },
+      "preconditions": ["Definição visível; gestão de relatórios; periodicidade, horário, formato e até 20 e-mails válidos."],
+      "transition": {
+        "from": "sem agenda",
+        "to": "agenda ativa com próxima ocorrência"
+      },
+      "effects": {
+        "writes": ["report_schedules", "domain_commands", "audit_log", "outbox_events"],
+        "external": [],
+        "excludes": ["Não envia e-mail na criação; o envio ocorre no job agendado como o responsável."]
+      },
+      "concurrency": {
+        "revision": false,
+        "idempotency": true,
+        "rule": "Idempotency-Key repete a mesma intenção; chave reutilizada com outros dados responde 409."
+      },
+      "response": {
+        "successStatuses": [201],
+        "errorStatuses": [400, 401, 403, 404, 409, 422, 428, 500, 503],
+        "action": "post-reports-definitions-id-schedules"
+      },
+      "recovery": "Repetir com a mesma chave quando o resultado for incerto.",
+      "ui": {
+        "pages": ["/relatorios/configuraveis/[id]"],
+        "bff": {
+          "method": "POST",
+          "path": "/api/erp/reports/definitions/{id}/schedules"
+        },
+        "gap": null
+      },
+      "sources": ["apps/api-ts/src/modules/reports/engine/routes.ts", "apps/api-ts/src/modules/reports/engine/run.ts", "migrations/202611190901_report_engine.sql", "apps/web/src/features/reports/engine/report-detail.tsx", "apps/api-ts/src/modules/reports/engine/schedule.ts"],
+      "verification": {
+        "status": "not_verified_by_catalog",
+        "criteria": ["interface", "request", "authorization", "domain", "persistence", "effects", "failure", "response"]
+      }
+    },
+    {
+      "id": "put-reports-schedules-id",
+      "flow": "report-engine",
+      "status": "implemented",
+      "operation": {
+        "method": "PUT",
+        "path": "/api/v1/reports/schedules/{id}"
+      },
+      "actor": "company_manager",
+      "permissions": ["system.reports.read", "system.reports.manage"],
+      "input": {
+        "headers": ["Authorization", "X-Tenant-Id", "If-Match"],
+        "pathParameters": ["id"],
+        "body": {
+          "type": "scheduleInput",
+          "source": "apps/api-ts/src/modules/reports/engine/routes.ts",
+          "validator": "scheduleInput.safeParse(body)"
+        },
+        "query": null
+      },
+      "preconditions": ["Agenda e definição visíveis; revisão atual; gestão de relatórios."],
+      "transition": {
+        "from": "agenda na revisão atual",
+        "to": "agenda alterada, pausada ou reativada na próxima revisão"
+      },
+      "effects": {
+        "writes": ["report_schedules", "audit_log", "outbox_events"],
+        "external": [],
+        "excludes": ["Não executa nem reenvia ocorrências passadas."]
+      },
+      "concurrency": {
+        "revision": true,
+        "idempotency": false,
+        "rule": "If-Match exige a revisão persistida."
+      },
+      "response": {
+        "successStatuses": [200],
+        "errorStatuses": [400, 401, 403, 404, 412, 422, 428, 500, 503],
+        "action": "put-reports-schedules-id"
+      },
+      "recovery": "Recarregar a agenda após conflito de revisão.",
+      "ui": {
+        "pages": ["/relatorios/configuraveis/[id]"],
+        "bff": {
+          "method": "PUT",
+          "path": "/api/erp/reports/schedules/{id}"
+        },
+        "gap": null
+      },
+      "sources": ["apps/api-ts/src/modules/reports/engine/routes.ts", "apps/api-ts/src/modules/reports/engine/run.ts", "migrations/202611190901_report_engine.sql", "apps/web/src/features/reports/engine/report-detail.tsx"],
+      "verification": {
+        "status": "not_verified_by_catalog",
+        "criteria": ["interface", "request", "authorization", "domain", "persistence", "effects", "failure", "response"]
+      }
+    },
+    {
+      "id": "get-reports-runs-id-file",
+      "flow": "report-engine",
+      "status": "implemented",
+      "operation": {
+        "method": "GET",
+        "path": "/api/v1/reports/runs/{id}/file"
+      },
+      "actor": "active_tenant_member",
+      "permissions": ["system.reports.read"],
+      "input": {
+        "headers": ["Authorization", "X-Tenant-Id"],
+        "pathParameters": ["id"],
+        "body": null,
+        "query": null
+      },
+      "preconditions": ["Execução da empresa cuja definição é visível para a pessoa."],
+      "transition": {
+        "from": "execução registrada",
+        "to": "arquivo enviado baixado"
+      },
+      "effects": {
+        "writes": [],
+        "external": [],
+        "excludes": ["Não reexecuta o relatório."]
+      },
+      "concurrency": {
+        "revision": false,
+        "idempotency": false,
+        "rule": "Leitura sem precondição."
+      },
+      "response": {
+        "successStatuses": [200],
+        "errorStatuses": [400, 401, 403, 404, 409, 500, 503],
+        "action": "get-reports-runs-id-file"
+      },
+      "recovery": "Execução sem arquivo responde 409; consultar o histórico.",
+      "ui": {
+        "pages": ["/relatorios/configuraveis/[id]"],
+        "bff": {
+          "method": "GET",
+          "path": "/api/erp/reports/runs/{id}/file"
+        },
+        "gap": null
+      },
+      "sources": ["apps/api-ts/src/modules/reports/engine/routes.ts", "apps/api-ts/src/modules/reports/engine/run.ts", "migrations/202611190901_report_engine.sql", "apps/web/src/features/reports/engine/report-detail.tsx"],
+      "verification": {
+        "status": "not_verified_by_catalog",
+        "criteria": ["interface", "request", "authorization", "domain", "persistence", "effects", "failure", "response"]
+      }
     }
   ],
   "actionsAppendix": [

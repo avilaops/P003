@@ -10,6 +10,9 @@ import { createCatalogMedia, type CatalogMedia } from "../src/platform/catalog-m
 import { Problem } from "../src/platform/problem.js"
 import { commercialFixture } from "./commercial-fixture.js"
 
+// Within the 30-day payment term saved by these tests (Brasília date + days).
+const soon = (days: number) => { const d = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Sao_Paulo" })); d.setDate(d.getDate() + days); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}` }
+
 // Routes of PR 06: sales/purchase settings, proposal commands, sales simulator and catalog publication.
 // The shared tenant fixture of #284 is not merged yet; this file seeds only what it needs (see PR description).
 const permissions = {
@@ -162,7 +165,7 @@ test("commercial PR 06 routes keep contract, permissions, idempotency and tenant
       await status(quote(input, "outsider", other), 404)
 
       const order = (payload: unknown, options: { key?: string | null; as?: string | null; tenant?: string; line?: string } = {}) => call("POST", `/api/v1/sales-simulator/${options.line ?? "imported"}/orders`, { as: options.as === undefined ? "admin" : options.as, tenant: options.tenant ?? tenant, payload, headers: options.key === null ? {} : { "idempotency-key": options.key ?? randomUUID() } })
-      const create = { quote: input, digest: full.json().digest, customerId: tenant, dueDate: "2100-01-31" }
+      const create = { quote: input, digest: full.json().digest, customerId: tenant, dueDate: soon(10) }
       await status(order(create, { as: null }), 401)
       await status(order(create, { key: null }), 428)
       await status(order(create, { key: "not-a-uuid" }), 422)
@@ -193,7 +196,7 @@ test("commercial PR 06 routes keep contract, permissions, idempotency and tenant
       // Idempotency: the same key replays the same answer, another payload under it conflicts.
       const replay = await status(order(create, { key }), 201)
       assert.deepEqual(replay.json(), created.json())
-      await status(order({ ...create, dueDate: "2100-02-01" }, { key }), 409)
+      await status(order({ ...create, dueDate: soon(11) }, { key }), 409)
       assert.equal((await seed.query("SELECT count(*)::int AS n FROM sales_orders WHERE tenant_id=$1", [tenant])).rows[0].n, 1)
       // The existing pricing endpoint shows the snapshot to directors only.
       assert.equal((await status(call("GET", `/api/v1/orders/${id}/pricing`), 200)).json().data.snapshot.director.netProfitCents, 5280)
@@ -212,7 +215,7 @@ test("commercial PR 06 routes keep contract, permissions, idempotency and tenant
       }
       const act = (id: string, action: string, revision: string | null, payload: unknown, options: { as?: string; key?: string | null; tenant?: string } = {}) =>
         call("POST", `/api/v1/proposals/${id}/${action}`, { ...header(options.as ?? "admin", revision, options.key), tenant: options.tenant ?? tenant, payload })
-      const due = { dueDate: "2100-02-01" }
+      const due = { dueDate: soon(11) }
 
       // Invalid input, access and missing headers are rejected before any state changes.
       const draft = await createProposal()
@@ -251,7 +254,7 @@ test("commercial PR 06 routes keep contract, permissions, idempotency and tenant
       assert.equal(await orders(), before + 1)
       const replay = await status(act(second, "approve-order", '"1"', due, { key }), 200)
       assert.deepEqual(replay.json(), approved.json())
-      await status(act(second, "approve-order", '"1"', { dueDate: "2100-03-01" }, { key }), 409)
+      await status(act(second, "approve-order", '"1"', { dueDate: soon(12) }, { key }), 409)
       assert.equal(await orders(), before + 1)
       const order = await status(call("GET", `/api/v1/orders/${orderId}`), 200)
       assert.equal(order.json().data.amount, "100.00")
