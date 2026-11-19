@@ -20,10 +20,9 @@ class TypeScriptApiGateTests(unittest.TestCase):
         self.assertTrue(any('docker pull "$reference"' in s.get('run', '') and 'inputs.reuse_mcp_digest' in s.get('if', '') for s in fiscal))
         self.assertTrue(any('scripts/smoke_runtime.py' in s.get('run', '') and s.get('if') == 'inputs.full' for s in fiscal))
         release = jobs('release.yml')
-        self.assertEqual(release['authorize_ssh']['environment'], 'production')
-        self.assertIn('evidence', release['authorize_ssh']['needs'])
-        self.assertEqual(release['authorize_ssh']['if'], 'inputs.package_only')
-        self.assertEqual(release['deploy']['if'], '${{ !inputs.package_only }}')
+        self.assertEqual(release['deploy']['environment'], 'production')
+        self.assertIn('evidence', release['deploy']['needs'])
+        self.assertNotIn('if', release['deploy'])
 
     def test_typescript_checks_always_run_and_native_comparison_respects_scope(self):
         workflow = yaml.safe_load((ROOT / '.github/workflows/_validate-api.yml').read_text())

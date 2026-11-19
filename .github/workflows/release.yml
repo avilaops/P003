@@ -198,22 +198,7 @@ jobs:
         if-no-files-found: warn
     outputs:
       manifest_artifact_name: erp-release-${{ needs.select.outputs.sha }}-${{ github.run_attempt }}
-  authorize_ssh:
-    name: Authorize SSH activation
-    if: inputs.package_only
-    needs:
-    - select
-    - evidence
-    runs-on: ubuntu-latest
-    timeout-minutes: 2
-    environment: production
-    steps:
-    - name: Identify approved release manifest
-      env:
-        MANIFEST: ${{ needs.evidence.outputs.manifest_artifact_name }}
-      run: echo "$MANIFEST" >> "$GITHUB_STEP_SUMMARY"
   deploy:
-    if: ${{ !inputs.package_only }}
     needs:
     - select
     - evidence
@@ -336,10 +321,6 @@ jobs:
         required: true
       typescript_only:
         description: Require reuse of the published native API and fiscal-mcp images
-        type: boolean
-        default: false
-      package_only:
-        description: Produce the validated manifest for a separately authorized SSH deployment
         type: boolean
         default: false
       force_native_rebuild:
