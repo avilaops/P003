@@ -372,6 +372,47 @@ test("Financeiro • aceite do backlog D05", databaseTestOptions, async (t) => {
       assert.deepEqual(pending.map((l) => l.cents), ["7700"], "a linha sem correspondência fica pendente")
       assert.equal(lines.filter((l) => l.state === "matched").length, 2)
     })
+
+    await t.test("FI11 • Comissão por recebimento só nasce quando o título é baixado e é estornada quando a baixa é estornada", async () => {
+      await setCharges(ctx, { interestMonthlyBps: 0, penaltyBps: 0 })
+      const staff = randomUUID()
+      await ctx.seed.query(
+        "INSERT INTO staff(id,tenant_id,code,name,is_employee,is_seller,status) VALUES($1,$2,'V1','Vendedor',true,true,'active')",
+        [staff, ctx.tenant],
+      )
+      const { order, receivable } = await seedReceivable(ctx, 100000, "2026-04-10", "draft")
+      await ctx.seed.query(
+        "INSERT INTO order_commission_terms(tenant_id,order_id,seller_staff_id,seller_name,commission_rate,ipi_rate,payment_day) VALUES($1,$2,$3,'Vendedor',50000,0,5)",
+        [ctx.tenant, order, staff],
+      )
+      const entries = async () =>
+        (
+          await ctx.seed.query(
+            "SELECT kind,amount_cents::text AS cents FROM commission_entries WHERE tenant_id=$1 AND order_id=$2 ORDER BY created_at,id",
+            [ctx.tenant, order],
+          )
+        ).rows
+      assert.deepEqual(await entries(), [], "sem baixa não há comissão")
+      const account = await bankAccount(ctx, "4242")
+      const paid = await ctx.as("user").post(`/api/v1/receivables/${receivable}/payments`, {
+        revision: 1,
+        body: { amount: "400.00", method: "cash", reference: "Comissão", occurredOn: "2026-04-10", financialAccountId: account },
+      })
+      assert.equal(paid.statusCode, 200, paid.body)
+      const afterPayment = await entries()
+      assert.equal(afterPayment.length, 1)
+      assert.equal(afterPayment[0]!.kind, "receipt")
+      assert.ok(BigInt(afterPayment[0]!.cents) > 0n)
+      const reversed = await ctx.as("user").post(`/api/v1/receivables/${receivable}/reverse-payment`, {
+        revision: Number(paid.json().data.revision),
+        body: { paymentId: paid.json().payments.at(-1).id, reason: "Estorno da comissão", occurredOn: "2026-04-11" },
+      })
+      assert.equal(reversed.statusCode, 200, reversed.body)
+      const final = await entries()
+      assert.equal(final.length, 2)
+      assert.equal(final[1]!.kind, "reversal")
+      assert.equal(BigInt(final[1]!.cents), -BigInt(final[0]!.cents), "o estorno devolve a comissão inteira")
+    })
   } finally {
     await ctx.close()
   }
