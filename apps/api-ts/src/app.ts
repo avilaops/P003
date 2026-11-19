@@ -11,6 +11,9 @@ import { registerFiscalDrafts } from "./modules/fiscal-workspace/drafts.js"
 import type { FiscalOperations } from "./modules/fiscal-workspace/engine.js"
 import { registerFiscalIncoming } from "./modules/fiscal-workspace/incoming.js"
 import { registerFiscalReceipts } from "./modules/fiscal-incoming/routes.js"
+import { registerFiscalCte } from "./modules/fiscal-cte/routes.js"
+import { registerReceivedNfse } from "./modules/received-nfse/routes.js"
+import { lojasServiceRoute, registerLojasNotes } from "./modules/lojas/routes.js"
 import { registerOrderLots } from "./modules/fiscal-workspace/order-lots.js"
 import { registerFiscalOutgoing } from "./modules/fiscal-workspace/outgoing.js"
 import { registerLocationRoutes } from "./modules/inventory/location-routes.js"
@@ -45,6 +48,7 @@ import { registerOrderImports } from "./modules/order-imports/routes.js"
 import { registerProposalRoutes } from "./modules/proposals/routes.js"
 import { registerSalesSimulator } from "./modules/sales-simulator/routes.js"
 import { registerCatalogPublication } from "./modules/catalog-publication/routes.js"
+import { registerCatalogPending } from "./modules/catalog-profile/pending.js"
 import { registerOrderSettings } from "./modules/order-settings/routes.js"
 import { registerReferenceRoutes } from "./modules/reference-data/routes.js"
 import { registerRegistrationSettingsRoutes } from "./modules/registration-settings/routes.js"
@@ -55,18 +59,31 @@ import { readAccessProfile } from "./platform/database.js"
 import { Problem } from "./platform/problem.js"
 import { parseJson, stringifyJson } from "./platform/json.js"
 import { registerMcpDispatch } from "./platform/mcp-dispatch.js"
+import { registerMcpRoutes } from "./modules/mcp/routes.js"
 import { registerDocumentCopies, type DocumentCopyIO } from "./modules/document-copies/routes.js"
 import { registerFinancialEmails } from "./modules/document-copies/financial-routes.js"
 import { registerContractPackage } from "./modules/document-copies/contract-package-routes.js"
 import { registerQualifiedReissue } from "./modules/contract-signatures/reissue.js"
 import { registerContractTemplateArchive } from "./modules/contract-templates/archive.js"
+import { registerContractTemplateDrafts } from "./modules/contract-templates/routes.js"
+import { registerCommercialContracts } from "./modules/commercial-contracts/routes.js"
+import type { ContractPortal } from "./modules/company-account/contract-webhook.js"
 import { registerSystemConfigRoutes, type SystemConfigDependencies } from "./modules/system-config/routes.js"
 import { registerPlatformAdminRoutes, type PlatformAdminDependencies } from "./modules/platform-admin/routes.js"
 import { registerCompanyAccountRoutes, type CompanyAccountDependencies } from "./modules/company-account/routes.js"
 import { trackRoutes } from "./platform/openapi.js"
 import { registerBrowserUseRoutes, type BrowserUseDependencies } from "./modules/browser-use/routes.js"
+import { registerAccessRoutes } from "./modules/access/routes.js"
+import { registerCompanyRoutes } from "./modules/company/routes.js"
+import { registerInvitationRoutes, type InvitationDependencies } from "./modules/invitations/routes.js"
+import { registerStaffRoutes } from "./modules/staff/routes.js"
+import { registerRegistryLookupRoutes, type RegistryLookupDependencies } from "./modules/registry-lookup/routes.js"
+import { registerPriceListRoutes } from "./modules/price-lists/routes.js"
+import { registerDataTransferRoutes } from "./modules/data-transfer/routes.js"
+import { registerProductCatalogRoutes } from "./modules/catalog-publication/product-routes.js"
+import { registerLogisticsRoutes } from "./modules/logistics/routes.js"
 
-export type AppDependencies = AccessDependencies & { fiscalVault?:import("./modules/outgoing-nfse/certificate-vault.js").FiscalCertificateVault; fiscalOperations?:FiscalOperations; outgoingNfse?: OutgoingNfseDependencies; nfeEmail?: NfeEmailIO; documentCopies?: DocumentCopyIO; browserUse?: BrowserUseDependencies; catalogMedia?: import("./platform/catalog-media.js").CatalogMedia; systemConfig?: SystemConfigDependencies; platformAdmin?: PlatformAdminDependencies; companyAccount?: CompanyAccountDependencies }
+export type AppDependencies = AccessDependencies & { fiscalVault?:import("./modules/outgoing-nfse/certificate-vault.js").FiscalCertificateVault; fiscalOperations?:FiscalOperations; outgoingNfse?: OutgoingNfseDependencies; nfeEmail?: NfeEmailIO; documentCopies?: DocumentCopyIO; browserUse?: BrowserUseDependencies; catalogMedia?: import("./platform/catalog-media.js").CatalogMedia; systemConfig?: SystemConfigDependencies; platformAdmin?: PlatformAdminDependencies; companyAccount?: CompanyAccountDependencies; invitations?: InvitationDependencies; registryLookup?: RegistryLookupDependencies; contracts?: ContractPortal | null }
 
 export function buildApp(_dependencies: AppDependencies): FastifyInstance {
   const app = Fastify({ logger: false, bodyLimit: 65_536 })
@@ -89,7 +106,7 @@ export function buildApp(_dependencies: AppDependencies): FastifyInstance {
     reply.header("x-request-id", requestId)
     if (request.routeOptions.url?.startsWith("/api/v1/") && !request.routeOptions.url.startsWith("/api/v1/integrations/nfse/") && !request.routeOptions.url.startsWith("/api/v1/webhooks/contracts/")) {
       reply.header("x-erp-backend", "typescript")
-      if (!channelServiceRoute(request.method,request.routeOptions.url)) await authenticateRequest(request, _dependencies)
+      if (!channelServiceRoute(request.method,request.routeOptions.url) && !lojasServiceRoute(request.method,request.routeOptions.url)) await authenticateRequest(request, _dependencies)
     }
   })
   app.get("/health/live", async () => ({ status: "ok" }))
@@ -100,6 +117,15 @@ export function buildApp(_dependencies: AppDependencies): FastifyInstance {
     try { await client.query("SELECT 1"); return { status: "ready" } }
     catch { return reply.code(503).send({ status: "unavailable" }) }
     finally { client.release() }
+  })
+  // Rotas do Rust ainda não portadas (PRs 04 a 10) respondem 404 claro, sem tocar em dados.
+  app.setNotFoundHandler((request, reply) => {
+    const problem = new Problem(404, "route_not_ported", "Rota inexistente ou ainda não portada para a API TypeScript")
+    void reply
+      .code(404)
+      .header("content-type", "application/problem+json")
+      .header("cache-control", "no-store")
+      .send({ ...problem.toJSON(), error: "route_not_ported", path: request.url.split("?")[0] })
   })
   app.setErrorHandler((error, request, reply) => {
     const databaseCode = typeof error === "object" && error !== null && "code" in error ? String(error.code) : ""
@@ -126,6 +152,9 @@ export function buildApp(_dependencies: AppDependencies): FastifyInstance {
   registerOrderLots(app, _dependencies)
   registerFiscalIncoming(app, _dependencies)
   registerFiscalReceipts(app, _dependencies)
+  registerFiscalCte(app, _dependencies)
+  registerReceivedNfse(app, _dependencies)
+  registerLojasNotes(app, _dependencies)
   app.get("/api/v1/me", async (request, reply) => {
     reply.header("cache-control", "no-store")
     return authorizeRequest(request, _dependencies, async context => {
@@ -165,20 +194,33 @@ export function buildApp(_dependencies: AppDependencies): FastifyInstance {
   registerSalesSimulator(app, _dependencies)
   registerOrderSettings(app, _dependencies)
   registerCatalogPublication(app, _dependencies)
+  registerCatalogPending(app, _dependencies)
   registerReferenceRoutes(app, _dependencies)
   registerRegistrationSettingsRoutes(app, _dependencies)
   registerOutgoingNfseRoutes(app, _dependencies)
   registerNfeEmail(app, _dependencies, _dependencies.nfeEmail)
   registerMcpDispatch(app, _dependencies)
+  registerMcpRoutes(app, _dependencies)
   registerDocumentCopies(app, _dependencies, _dependencies.documentCopies)
   registerFinancialEmails(app, _dependencies, _dependencies.documentCopies)
   registerContractPackage(app, _dependencies, _dependencies.documentCopies, _dependencies.nfeEmail?.render)
   registerQualifiedReissue(app, _dependencies)
   registerContractTemplateArchive(app, _dependencies)
+  registerContractTemplateDrafts(app, _dependencies, _dependencies.contracts)
+  registerCommercialContracts(app, _dependencies, _dependencies.contracts)
   registerParticipantRoutes(app, _dependencies)
   registerBrowserUseRoutes(app, _dependencies, _dependencies.browserUse)
   registerSystemConfigRoutes(app, _dependencies, _dependencies.systemConfig)
   registerPlatformAdminRoutes(app, _dependencies, _dependencies.platformAdmin)
   registerCompanyAccountRoutes(app, _dependencies, _dependencies.companyAccount)
+  registerAccessRoutes(app, _dependencies)
+  registerCompanyRoutes(app, _dependencies)
+  registerInvitationRoutes(app, _dependencies, _dependencies.invitations)
+  registerStaffRoutes(app, _dependencies)
+  registerRegistryLookupRoutes(app, _dependencies, _dependencies.registryLookup)
+  registerPriceListRoutes(app, _dependencies)
+  registerDataTransferRoutes(app, _dependencies)
+  registerProductCatalogRoutes(app, _dependencies)
+  registerLogisticsRoutes(app, _dependencies)
   return app
 }

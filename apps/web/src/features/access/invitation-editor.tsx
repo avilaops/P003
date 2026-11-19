@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button"
 import { read, write, errorMessage, invitationDelivery, type Access, type Invitation, type Invitations, type Role } from "./access-client"
 
 const managerPermissions = ["platform.company.read", "platform.users.read", "platform.users.manage", "platform.roles.read"]
-const field = "mt-2 min-h-11 w-full rounded-xl border border-input bg-background px-3 text-sm disabled:opacity-60"
+const field = "mt-2 min-h-9 w-full rounded-xl border border-input bg-background px-3 text-sm disabled:opacity-60"
 
 export function InvitationEditor() {
   const [context, setContext] = useState<{ access: Access; roles: Role[]; enabled: boolean } | null>(null)

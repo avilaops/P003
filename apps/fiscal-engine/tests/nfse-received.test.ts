@@ -13,8 +13,8 @@ import { nationalNfseXml, nfseKey, recipientTaxId, issuerTaxId } from "./fixture
 
 const inspect = (xml: string, company = recipientTaxId) => inspectReceivedNationalNfse({ xml, recipientTaxId: company });
 
-test("Rust HTTP fixtures match the private inspection contract with a distinct issuer and recipient", async () => {
-  const fixtures = new URL("../../api/src/http/fixtures/", import.meta.url);
+test("HTTP fixtures match the private inspection contract with a distinct issuer and recipient", async () => {
+  const fixtures = new URL("./fixtures/http/", import.meta.url);
   const xml = await readFile(new URL("nfse-national.xml", fixtures), "utf8");
   const expected = JSON.parse(await readFile(new URL("nfse-national-inspection.json", fixtures), "utf8"));
   assert.deepEqual(await inspect(xml, "04252011000110"), expected);

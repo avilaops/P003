@@ -31016,7 +31016,7 @@
       "response": {"successStatuses": [200], "errorStatuses": [400, 401, 403, 404, 409], "action": "Listar postagens"},
       "recovery": "Revisar empresa, permissão e filtros antes de consultar novamente.",
       "ui": {"pages": [], "bff": {"method": "GET", "path": "/api/erp/logistics/postings"}, "gap": "Página consumidora não inventariada nesta ficha."},
-      "sources": ["apps/api/src/domains/logistics.rs", "apps/web/src/app/api/erp/logistics/postings/route.ts"],
+      "sources": ["apps/api/src/domains/logistics.rs", "apps/api-ts/src/modules/logistics/postings.ts", "apps/web/src/app/api/erp/logistics/postings/route.ts"],
       "verification": {"status": "not_verified_by_catalog", "criteria": ["interface", "request", "authorization", "domain", "persistence", "effects", "failure", "response"]}
     },
     {
@@ -31034,7 +31034,7 @@
       "response": {"successStatuses": [200], "errorStatuses": [400, 401, 403, 404, 409], "action": "Consultar postagem"},
       "recovery": "Revisar empresa, permissão e filtros antes de consultar novamente.",
       "ui": {"pages": [], "bff": {"method": "GET", "path": "/api/erp/logistics/postings/[id]"}, "gap": "Página consumidora não inventariada nesta ficha."},
-      "sources": ["apps/api/src/domains/logistics.rs", "apps/web/src/app/api/erp/logistics/postings/[id]/route.ts"],
+      "sources": ["apps/api/src/domains/logistics.rs", "apps/api-ts/src/modules/logistics/postings.ts", "apps/web/src/app/api/erp/logistics/postings/[id]/route.ts"],
       "verification": {"status": "not_verified_by_catalog", "criteria": ["interface", "request", "authorization", "domain", "persistence", "effects", "failure", "response"]}
     },
     {
@@ -31052,7 +31052,7 @@
       "response": {"successStatuses": [200, 201], "errorStatuses": [400, 401, 403, 404, 409, 428], "action": "Preparar postagem"},
       "recovery": "Consultar o estado atual e preservar a chave ao repetir a mesma solicitação.",
       "ui": {"pages": [], "bff": {"method": "POST", "path": "/api/erp/logistics/postings"}, "gap": "Página consumidora não inventariada nesta ficha."},
-      "sources": ["apps/api/src/domains/logistics.rs", "apps/web/src/app/api/erp/logistics/postings/route.ts"],
+      "sources": ["apps/api/src/domains/logistics.rs", "apps/api-ts/src/modules/logistics/postings.ts", "apps/web/src/app/api/erp/logistics/postings/route.ts"],
       "verification": {"status": "not_verified_by_catalog", "criteria": ["interface", "request", "authorization", "domain", "persistence", "effects", "failure", "response"]}
     },
     {
@@ -31070,7 +31070,7 @@
       "response": {"successStatuses": [200], "errorStatuses": [400, 401, 403, 404, 409, 412, 428], "action": "Alterar estado da postagem"},
       "recovery": "Consultar o estado atual e preservar a chave ao repetir a mesma solicitação.",
       "ui": {"pages": [], "bff": {"method": "POST", "path": "/api/erp/logistics/postings/[id]/status"}, "gap": "Página consumidora não inventariada nesta ficha."},
-      "sources": ["apps/api/src/domains/logistics.rs", "apps/web/src/app/api/erp/logistics/postings/[id]/status/route.ts"],
+      "sources": ["apps/api/src/domains/logistics.rs", "apps/api-ts/src/modules/logistics/postings.ts", "apps/web/src/app/api/erp/logistics/postings/[id]/status/route.ts"],
       "verification": {"status": "not_verified_by_catalog", "criteria": ["interface", "request", "authorization", "domain", "persistence", "effects", "failure", "response"]}
     },
     {
@@ -31088,7 +31088,7 @@
       "response": {"successStatuses": [200], "errorStatuses": [400, 401, 403, 404, 409], "action": "Listar conferências"},
       "recovery": "Revisar empresa, permissão e filtros antes de consultar novamente.",
       "ui": {"pages": [], "bff": {"method": "GET", "path": "/api/erp/logistics/checkouts"}, "gap": "Página consumidora não inventariada nesta ficha."},
-      "sources": ["apps/api/src/domains/logistics_checkout.rs", "apps/web/src/app/api/erp/logistics/checkouts/route.ts"],
+      "sources": ["apps/api/src/domains/logistics_checkout.rs", "apps/api-ts/src/modules/logistics/checkouts.ts", "apps/web/src/app/api/erp/logistics/checkouts/route.ts"],
       "verification": {"status": "not_verified_by_catalog", "criteria": ["interface", "request", "authorization", "domain", "persistence", "effects", "failure", "response"]}
     },
     {
@@ -31106,7 +31106,7 @@
       "response": {"successStatuses": [200], "errorStatuses": [400, 401, 403, 404, 409], "action": "Consultar conferência"},
       "recovery": "Revisar empresa, permissão e filtros antes de consultar novamente.",
       "ui": {"pages": [], "bff": {"method": "GET", "path": "/api/erp/logistics/checkouts/[id]"}, "gap": "Página consumidora não inventariada nesta ficha."},
-      "sources": ["apps/api/src/domains/logistics_checkout.rs", "apps/web/src/app/api/erp/logistics/checkouts/[id]/route.ts"],
+      "sources": ["apps/api/src/domains/logistics_checkout.rs", "apps/api-ts/src/modules/logistics/checkouts.ts", "apps/web/src/app/api/erp/logistics/checkouts/[id]/route.ts"],
       "verification": {"status": "not_verified_by_catalog", "criteria": ["interface", "request", "authorization", "domain", "persistence", "effects", "failure", "response"]}
     },
     {
@@ -31124,7 +31124,7 @@
       "response": {"successStatuses": [200, 201], "errorStatuses": [400, 401, 403, 404, 409, 428], "action": "Iniciar conferência"},
       "recovery": "Consultar o estado atual e preservar a chave ao repetir a mesma solicitação.",
       "ui": {"pages": [], "bff": {"method": "POST", "path": "/api/erp/logistics/checkouts"}, "gap": "Página consumidora não inventariada nesta ficha."},
-      "sources": ["apps/api/src/domains/logistics_checkout.rs", "apps/web/src/app/api/erp/logistics/checkouts/route.ts"],
+      "sources": ["apps/api/src/domains/logistics_checkout.rs", "apps/api-ts/src/modules/logistics/checkouts.ts", "apps/web/src/app/api/erp/logistics/checkouts/route.ts"],
       "verification": {"status": "not_verified_by_catalog", "criteria": ["interface", "request", "authorization", "domain", "persistence", "effects", "failure", "response"]}
     },
     {
@@ -31142,7 +31142,7 @@
       "response": {"successStatuses": [200], "errorStatuses": [400, 401, 403, 404, 409, 412, 428], "action": "Conferir linha"},
       "recovery": "Consultar o estado atual e preservar a chave ao repetir a mesma solicitação.",
       "ui": {"pages": [], "bff": {"method": "POST", "path": "/api/erp/logistics/checkouts/[id]/lines/[line]/check"}, "gap": "Página consumidora não inventariada nesta ficha."},
-      "sources": ["apps/api/src/domains/logistics_checkout.rs", "apps/web/src/app/api/erp/logistics/checkouts/[id]/lines/[line]/check/route.ts"],
+      "sources": ["apps/api/src/domains/logistics_checkout.rs", "apps/api-ts/src/modules/logistics/checkouts.ts", "apps/web/src/app/api/erp/logistics/checkouts/[id]/lines/[line]/check/route.ts"],
       "verification": {"status": "not_verified_by_catalog", "criteria": ["interface", "request", "authorization", "domain", "persistence", "effects", "failure", "response"]}
     },
     {
@@ -31160,7 +31160,7 @@
       "response": {"successStatuses": [200, 201], "errorStatuses": [400, 401, 403, 404, 409, 412, 428], "action": "Registrar volume"},
       "recovery": "Consultar o estado atual e preservar a chave ao repetir a mesma solicitação.",
       "ui": {"pages": [], "bff": {"method": "POST", "path": "/api/erp/logistics/checkouts/[id]/packages"}, "gap": "Página consumidora não inventariada nesta ficha."},
-      "sources": ["apps/api/src/domains/logistics_checkout.rs", "apps/web/src/app/api/erp/logistics/checkouts/[id]/packages/route.ts"],
+      "sources": ["apps/api/src/domains/logistics_checkout.rs", "apps/api-ts/src/modules/logistics/checkouts.ts", "apps/web/src/app/api/erp/logistics/checkouts/[id]/packages/route.ts"],
       "verification": {"status": "not_verified_by_catalog", "criteria": ["interface", "request", "authorization", "domain", "persistence", "effects", "failure", "response"]}
     },
     {
@@ -31178,7 +31178,7 @@
       "response": {"successStatuses": [200], "errorStatuses": [400, 401, 403, 404, 409, 412, 428], "action": "Alterar estado do volume"},
       "recovery": "Consultar o estado atual e preservar a chave ao repetir a mesma solicitação.",
       "ui": {"pages": [], "bff": {"method": "POST", "path": "/api/erp/logistics/checkouts/[id]/packages/[package_id]/status"}, "gap": "Página consumidora não inventariada nesta ficha."},
-      "sources": ["apps/api/src/domains/logistics_checkout.rs", "apps/web/src/app/api/erp/logistics/checkouts/[id]/packages/[package_id]/status/route.ts"],
+      "sources": ["apps/api/src/domains/logistics_checkout.rs", "apps/api-ts/src/modules/logistics/checkouts.ts", "apps/web/src/app/api/erp/logistics/checkouts/[id]/packages/[package_id]/status/route.ts"],
       "verification": {"status": "not_verified_by_catalog", "criteria": ["interface", "request", "authorization", "domain", "persistence", "effects", "failure", "response"]}
     },
     {
@@ -31196,7 +31196,7 @@
       "response": {"successStatuses": [200], "errorStatuses": [400, 401, 403, 404, 409, 412, 428], "action": "Concluir conferência"},
       "recovery": "Consultar o estado atual e preservar a chave ao repetir a mesma solicitação.",
       "ui": {"pages": [], "bff": {"method": "POST", "path": "/api/erp/logistics/checkouts/[id]/complete"}, "gap": "Página consumidora não inventariada nesta ficha."},
-      "sources": ["apps/api/src/domains/logistics_checkout.rs", "apps/web/src/app/api/erp/logistics/checkouts/[id]/complete/route.ts"],
+      "sources": ["apps/api/src/domains/logistics_checkout.rs", "apps/api-ts/src/modules/logistics/checkouts.ts", "apps/web/src/app/api/erp/logistics/checkouts/[id]/complete/route.ts"],
       "verification": {"status": "not_verified_by_catalog", "criteria": ["interface", "request", "authorization", "domain", "persistence", "effects", "failure", "response"]}
     },
     {
@@ -31214,7 +31214,7 @@
       "response": {"successStatuses": [200], "errorStatuses": [400, 401, 403, 404, 409], "action": "Consultar fila de etiquetas"},
       "recovery": "Revisar empresa, permissão e filtros antes de consultar novamente.",
       "ui": {"pages": [], "bff": {"method": "GET", "path": "/api/erp/logistics/labels"}, "gap": "Página consumidora não inventariada nesta ficha."},
-      "sources": ["apps/api/src/domains/logistics_dispatch.rs", "apps/web/src/app/api/erp/logistics/labels/route.ts"],
+      "sources": ["apps/api/src/domains/logistics_dispatch.rs", "apps/api-ts/src/modules/logistics/dispatch.ts", "apps/web/src/app/api/erp/logistics/labels/route.ts"],
       "verification": {"status": "not_verified_by_catalog", "criteria": ["interface", "request", "authorization", "domain", "persistence", "effects", "failure", "response"]}
     },
     {
@@ -31232,7 +31232,7 @@
       "response": {"successStatuses": [200], "errorStatuses": [400, 401, 403, 404, 409], "action": "Consultar fila de etiquetas"},
       "recovery": "Revisar empresa, permissão e filtros antes de consultar novamente.",
       "ui": {"pages": [], "bff": null, "gap": "Página consumidora não inventariada nesta ficha."},
-      "sources": ["apps/api/src/domains/logistics_dispatch.rs"],
+      "sources": ["apps/api/src/domains/logistics_dispatch.rs", "apps/api-ts/src/modules/logistics/dispatch.ts"],
       "verification": {"status": "not_verified_by_catalog", "criteria": ["interface", "request", "authorization", "domain", "persistence", "effects", "failure", "response"]}
     },
     {
@@ -31250,7 +31250,7 @@
       "response": {"successStatuses": [200, 201], "errorStatuses": [400, 401, 403, 404, 409, 428], "action": "Enfileirar etiquetas"},
       "recovery": "Consultar o estado atual e preservar a chave ao repetir a mesma solicitação.",
       "ui": {"pages": [], "bff": {"method": "POST", "path": "/api/erp/logistics/checkouts/[id]/labels"}, "gap": "Página consumidora não inventariada nesta ficha."},
-      "sources": ["apps/api/src/domains/logistics_dispatch.rs", "apps/web/src/app/api/erp/logistics/checkouts/[id]/labels/route.ts"],
+      "sources": ["apps/api/src/domains/logistics_dispatch.rs", "apps/api-ts/src/modules/logistics/dispatch.ts", "apps/web/src/app/api/erp/logistics/checkouts/[id]/labels/route.ts"],
       "verification": {"status": "not_verified_by_catalog", "criteria": ["interface", "request", "authorization", "domain", "persistence", "effects", "failure", "response"]}
     },
     {
@@ -31259,7 +31259,7 @@
       "status": "implemented",
       "operation": {"method": "POST", "path": "/api/v1/logistics/postings/{id}/packages"},
       "actor": "active_tenant_member",
-      "permissions": ["logistics.checkout.read", "logistics.checkout.manage"],
+      "permissions": ["logistics.checkout.read", "logistics.checkout.manage", "logistics.postings.read", "logistics.postings.manage"],
       "input": {"headers": ["Authorization", "X-Tenant-Id", "Idempotency-Key"], "pathParameters": ["id"], "body": {"type": "PostingPackageInput", "source": "apps/api/src/domains/logistics_dispatch.rs"}, "query": null},
       "preconditions": ["Identidade e vínculo ativos na empresa selecionada.", "Postagem da empresa e volumes embalados"],
       "transition": {"from": "Postagem da empresa e volumes embalados", "to": "Vínculos entre postagem e volumes registrados"},
@@ -31268,7 +31268,7 @@
       "response": {"successStatuses": [200], "errorStatuses": [400, 401, 403, 404, 409, 428], "action": "Vincular volumes à postagem"},
       "recovery": "Consultar o estado atual e preservar a chave ao repetir a mesma solicitação.",
       "ui": {"pages": [], "bff": {"method": "POST", "path": "/api/erp/logistics/postings/[id]/packages"}, "gap": "Página consumidora não inventariada nesta ficha."},
-      "sources": ["apps/api/src/domains/logistics_dispatch.rs", "apps/web/src/app/api/erp/logistics/postings/[id]/packages/route.ts"],
+      "sources": ["apps/api/src/domains/logistics_dispatch.rs", "apps/api-ts/src/modules/logistics/dispatch.ts", "apps/web/src/app/api/erp/logistics/postings/[id]/packages/route.ts"],
       "verification": {"status": "not_verified_by_catalog", "criteria": ["interface", "request", "authorization", "domain", "persistence", "effects", "failure", "response"]}
     },
     {
@@ -40071,6 +40071,84 @@
       "sources": [
         "apps/api-ts/src/modules/products/finishes.ts",
         "apps/web/src/app/api/erp/products/finishes/route.ts"
+      ],
+      "verification": {
+        "status": "not_verified_by_catalog",
+        "criteria": [
+          "interface",
+          "request",
+          "authorization",
+          "domain",
+          "persistence",
+          "effects",
+          "failure",
+          "response"
+        ]
+      }
+    },
+    {
+      "id": "product-catalog-pending",
+      "flow": "products",
+      "status": "implemented",
+      "operation": {
+        "method": "GET",
+        "path": "/api/v1/products/catalog-pending"
+      },
+      "actor": "active_tenant_member",
+      "permissions": [
+        "catalog.products.read"
+      ],
+      "input": {
+        "headers": [
+          "Authorization",
+          "X-Tenant-Id"
+        ],
+        "pathParameters": [],
+        "body": null,
+        "query": null
+      },
+      "preconditions": [
+        "Produtos ativos da empresa e suas fichas técnicas."
+      ],
+      "transition": {
+        "from": "Estado atual da empresa selecionada",
+        "to": "Estado de negócio preservado"
+      },
+      "effects": {
+        "writes": [],
+        "external": [],
+        "excludes": []
+      },
+      "concurrency": {
+        "revision": false,
+        "idempotency": false,
+        "rule": "A requisição lê o estado atual da empresa."
+      },
+      "response": {
+        "successStatuses": [
+          200
+        ],
+        "errorStatuses": [
+          401,
+          403,
+          503
+        ],
+        "action": "Listar produtos ativos com campos de cadastro vazios"
+      },
+      "recovery": "Conferir empresa e acesso antes de repetir a consulta.",
+      "ui": {
+        "pages": [
+          "/cadastros/produtos/pendencias"
+        ],
+        "bff": {
+          "method": "GET",
+          "path": "/api/erp/products/catalog-pending"
+        },
+        "gap": null
+      },
+      "sources": [
+        "apps/api-ts/src/modules/catalog-profile/pending.ts",
+        "apps/web/src/app/api/erp/products/catalog-pending/route.ts"
       ],
       "verification": {
         "status": "not_verified_by_catalog",

@@ -37,7 +37,7 @@ export function CompanyPreferences({ summary }: { summary: ReactNode }) {
   const groups = settingsGroups.map(group => ({ ...group, items: group.items.filter(item => normalize(`${group.title} ${item.title} ${item.description}`).includes(search)) })).filter(group => group.items.length)
   return <div className="mx-auto max-w-6xl px-4 pb-8 lg:px-6">
     <div className="min-w-0 py-8">
-      <Link href="/preferencias" className="mb-4 inline-flex min-h-11 items-center gap-1 text-sm text-primary hover:underline"><ChevronRight className="size-4 rotate-180" aria-hidden="true" />Todas as preferências</Link>
+      <Link href="/preferencias" className="mb-4 inline-flex min-h-9 items-center gap-1 text-sm text-primary hover:underline"><ChevronRight className="size-4 rotate-180" aria-hidden="true" />Todas as preferências</Link>
       <PageHeader eyebrow="Preferências / Empresa" title="Empresa" description="Identidade, configuração fiscal, acesso e conexões da empresa ativa." />
       <div className="mb-6 flex items-center gap-2">
         <label className="flex h-10 min-w-0 flex-1 items-center gap-2 rounded-xl border border-border bg-card px-3">

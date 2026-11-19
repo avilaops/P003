@@ -92,7 +92,7 @@ function ReportCapabilityUnavailable({ kind }: { kind: string }) {
       <section className="mt-6 rounded-2xl border border-amber-500/30 bg-amber-500/10 p-6">
         <h2 className="text-lg font-semibold">Relatório indisponível</h2>
         <p className="mt-2 text-sm text-muted-foreground">Nenhum indicador, registro ou exportação demonstrativa será exibido.</p>
-        <Link className="mt-5 inline-flex min-h-11 items-center font-medium text-primary underline" href="/relatorios">Voltar para Relatórios</Link>
+        <Link className="mt-5 inline-flex min-h-9 items-center font-medium text-primary underline" href="/relatorios">Voltar para Relatórios</Link>
       </section>
     </div>
   )

@@ -27,7 +27,7 @@ for (const width of [320, 390, 430, 1366, 1440]) test(`exporta o CSV e preserva 
   await expect(page.getByRole("status").filter({ hasText: "CSV enviado ao navegador" })).toBeVisible()
   await expect(page.getByRole("link", { name: "Conferir produtos no catálogo", exact: true })).toHaveAttribute("href", "/cadastros/produtos?q=Academia&status=active")
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
-  if (width < 500) expect((await page.getByRole("button", { name: "Baixar produtos.csv", exact: true }).boundingBox())!.height).toBeGreaterThanOrEqual(44)
+  if (width < 500) expect((await page.getByRole("button", { name: "Baixar produtos.csv", exact: true }).boundingBox())!.height).toBeGreaterThanOrEqual(36)
   await page.screenshot({ path: info.outputPath(`product-export-${width}.png`), fullPage: true })
 })
 

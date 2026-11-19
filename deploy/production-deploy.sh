@@ -114,12 +114,11 @@ def environment(service):
 
 api = environment(config["services"]["api"])
 fiscal = environment(config["services"]["fiscal-engine"])
-previous_api_ts = environment(config["services"]["api-ts"]) if "api-ts" in config["services"] else {}
-token = api.get("ERP_FISCAL_ENGINE_TOKEN") or fiscal.get("ERP_FISCAL_ENGINE_TOKEN")
+# Releases before the TypeScript API became principal ran a private `api-ts` beside the Rust API.
+previous_api_ts = environment(config["services"].pop("api-ts")) if "api-ts" in config["services"] else {}
+token = api.get("ERP_FISCAL_ENGINE_TOKEN") or previous_api_ts.get("ERP_FISCAL_ENGINE_TOKEN") or fiscal.get("ERP_FISCAL_ENGINE_TOKEN")
 if not token or len(token) < 24:
     raise SystemExit("Private fiscal token missing")
-api.update({"ERP_CNPJ_WS_ENABLED": "true", "DANFE_MCP_URL": "http://127.0.0.1:8091/mcp/danfe", "DANFE_MCP_TOKEN": token,
-            "DANFE_MCP_TOOL_PREFIX": "bare", "DANFE_CA_BUNDLE_FILE": "/etc/ssl/certs/erp-icp-brasil-roots.pem"})
 config["services"]["fiscal-mcp"] = {
     "image": "erp-next-fiscal-mcp:sha-" + sys.argv[2], "restart": "unless-stopped",
     "network_mode": "service:api", "depends_on": {"api": {"condition": "service_healthy"}},
@@ -130,29 +129,29 @@ config["services"]["fiscal-mcp"] = {
 }
 
 web = environment(config["services"]["web"])
-# Migrated handlers are absent from production Rust. Always start their private
-# process from the validated web image; recovery selects a whole prior release.
-settings = {key: api[key] for key in ("DATABASE_URL", "DATABASE_MAX_CONNECTIONS", "AUTH_ISSUER", "AUTH_USERINFO_URL", "ERP_MCP_ORIGIN") if api.get(key)}
+# The TypeScript API is the only API. Its configuration is rebuilt from an explicit allowlist,
+# keeping private values already present in the previous release; recovery selects a whole prior release.
+KEYS = ("DATABASE_URL", "DATABASE_MAX_CONNECTIONS", "AUTH_ISSUER", "AUTH_USERINFO_URL", "ERP_MCP_ORIGIN",
+        "DOCUSEAL_URL", "DOCUSEAL_API_TOKEN", "BROWSER_USE_API_KEY")
+settings = {key: previous_api_ts.get(key) or api.get(key) for key in KEYS if previous_api_ts.get(key) or api.get(key)}
 settings.setdefault("AUTH_ISSUER", web.get("AUTH_ISSUER", ""))
-settings.update({"NODE_ENV": "production", "API_TS_HOST": "0.0.0.0", "API_TS_PORT": "8081"})
+settings.update({"NODE_ENV": "production", "API_TS_HOST": "0.0.0.0", "API_TS_PORT": "8080"})
 fiscal_url = previous_api_ts.get("ERP_FISCAL_ENGINE_URL") or api.get("ERP_FISCAL_ENGINE_URL")
-fiscal_token = previous_api_ts.get("ERP_FISCAL_ENGINE_TOKEN") or token
 fiscal_keyring = previous_api_ts.get("FISCAL_A1_KEYRING") or api.get("FISCAL_A1_KEYRING")
-if fiscal_url and fiscal_token and fiscal_keyring:
-    settings.update({"ERP_FISCAL_ENGINE_URL": fiscal_url, "ERP_FISCAL_ENGINE_TOKEN": fiscal_token,
+if fiscal_url and token and fiscal_keyring:
+    settings.update({"ERP_FISCAL_ENGINE_URL": fiscal_url, "ERP_FISCAL_ENGINE_TOKEN": token,
                      "FISCAL_A1_KEYRING": fiscal_keyring,
                      "NFSE_ISSUANCE_ENABLED": previous_api_ts.get("NFSE_ISSUANCE_ENABLED") or api.get("NFSE_ISSUANCE_ENABLED", "false")})
-# Optional third-party key for the Browser Use route; kept across releases.
-browser_use_key = previous_api_ts.get("BROWSER_USE_API_KEY") or api.get("BROWSER_USE_API_KEY")
-if browser_use_key:
-    settings["BROWSER_USE_API_KEY"] = browser_use_key
-config["services"]["api-ts"] = {
-    "image": "erp-next-web:sha-" + sys.argv[2], "restart": "unless-stopped",
-    "command": ["node", "apps/api-ts/dist/server.js"], "environment": settings,
-    "network_mode": "service:api", "depends_on": {"api": {"condition": "service_healthy"}},
-    "healthcheck": {"test": ["CMD", "node", "-e", "fetch('http://127.0.0.1:8081/health/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"], "interval": "15s", "timeout": "5s", "start_period": "30s"},
-    "security_opt": ["no-new-privileges:true"], "cap_drop": ["ALL"], "mem_limit": "384m", "pids_limit": 128,
-}
+# Catalog publication (Worker media gateway): the API reads all three or none; kept across releases.
+catalog_keys = ("CATALOG_MEDIA_ORIGIN", "CATALOG_MEDIA_TOKEN", "CATALOG_MEDIA_TENANT")
+catalog = {key: previous_api_ts.get(key) or api.get(key) for key in catalog_keys}
+if all(catalog.values()):
+    settings.update(catalog)
+service = config["services"]["api"]
+service["environment"] = settings
+service["command"] = ["node", "apps/api-ts/dist/server.js"]
+service["healthcheck"] = {"test": ["CMD", "node", "-e", "fetch('http://127.0.0.1:8080/health/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"], "interval": "15s", "timeout": "5s", "start_period": "30s"}
+service["mem_limit"], service["pids_limit"] = "384m", 128
 mail_env = Path("/etc/erp-next/document-mail-n8n.env")
 if mail_env.is_symlink():
     raise SystemExit("Unexpected document mail configuration symlink")
@@ -160,9 +159,8 @@ if mail_env.exists():
     stat = mail_env.stat()
     if not mail_env.is_file() or stat.st_uid != 0 or stat.st_mode & 0o777 != 0o600:
         raise SystemExit("Document mail configuration must be root-owned with mode 0600")
-    config["services"]["api-ts"]["env_file"] = [str(mail_env)]
-api["ERP_TYPESCRIPT_API_URL"] = "http://127.0.0.1:8081"
-web["ERP_TYPESCRIPT_API_URL"] = "http://127.0.0.1:8081"
+    service["env_file"] = [str(mail_env)]
+web["ERP_API_URL"] = web["ERP_TYPESCRIPT_API_URL"] = "http://127.0.0.1:8080"
 web.pop("ERP_TYPESCRIPT_MODULES", None)
 
 for service in config["services"].values():
@@ -196,14 +194,11 @@ PY
   compose_file=compose.json
   compose_env_args=()
 else
-  [[ -f "$previous_release/compose.yaml" && -f "$previous_release/api.env" && -f "$previous_release/web.env" && -f "$previous_release/.env" ]] || fail 'active release has an unknown layout'
+  [[ -f "$previous_release/compose.yaml" && -f "$previous_release/api-ts.env" && -f "$previous_release/web.env" && -f "$previous_release/.env" ]] || fail 'active release has an unknown layout'
   cp -p "$staging/compose.yaml" "$staging/fiscal-compose.yaml" "$release/"
-  cp -p "$previous_release/api.env" "$previous_release/web.env" "$previous_release/.env" "$release/"
-  chmod 600 "$release/api.env" "$release/web.env" "$release/.env"
-  if [[ -f "$previous_release/api-ts.env" && ! -L "$previous_release/api-ts.env" ]]; then
-    cp -p "$previous_release/api-ts.env" "$release/api-ts.env"
-    chmod 600 "$release/api-ts.env"
-  fi
+  [[ ! -L "$previous_release/api-ts.env" ]] || fail 'api-ts.env must be a regular private file'
+  cp -p "$previous_release/api-ts.env" "$previous_release/web.env" "$previous_release/.env" "$release/"
+  chmod 600 "$release/api-ts.env" "$release/web.env" "$release/.env"
   sed -i \
     -e "s|^ERP_API_IMAGE=.*|ERP_API_IMAGE=erp-next-api:sha-$source_sha|" \
     -e "s|^ERP_WEB_IMAGE=.*|ERP_WEB_IMAGE=erp-next-web:sha-$source_sha|" \
@@ -231,7 +226,6 @@ mapping = {"api": "api", "web": "web", "fiscal-engine": "fiscal", "fiscal-mcp": 
 if sys.argv[2] == "compose.json":
     path = directory / "compose.json"
     config = json.loads(path.read_text())
-    if "api-ts" in config["services"]: mapping["api-ts"] = "web"
     for service, component in mapping.items(): config["services"][service]["image"] = images[component]
     path.write_text(json.dumps(config, indent=2))
 else:

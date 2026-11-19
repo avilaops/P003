@@ -20,7 +20,7 @@ export function SalesCapabilityUnavailable({
           persistência, permissões e integração de backend verificáveis. Nenhum
           dado fixo será apresentado e nenhuma ação será simulada.
         </p>
-        <Link className="mt-5 inline-flex min-h-11 items-center font-medium text-primary underline" href={backHref}>
+        <Link className="mt-5 inline-flex min-h-9 items-center font-medium text-primary underline" href={backHref}>
           Voltar para Vendas
         </Link>
       </section>

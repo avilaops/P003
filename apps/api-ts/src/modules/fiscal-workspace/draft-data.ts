@@ -50,7 +50,7 @@ export async function sourcePreparation(c:AuthorizedContext,id:string) {
   const recipient={taxId:String(o.customer_tax_id),legalName:o.customer_name,state:address?.state ?? "",municipalityCode:address?.municipalityCode ?? "",postalCode:address?.postalCode ?? "",
     street:address?.street ?? "",number:address?.number ?? "",district:address?.district ?? "",complement:address?.complement ?? null,cityName:address?.city ?? null,
     email:recipientEmail(o.email),phone:recipientPhone(o.phone)}
-  const result=await c.client.query(`SELECT s.product_id,s.sku,s.name,s.unit,p.ncm,s.quantity_micros,order_line_fiscal_price(s) AS price,
+  const result=await c.client.query(`SELECT s.product_id,s.sku,s.name,s.unit,p.ncm,s.quantity_micros,order_line_fiscal_price(s) AS price,pc.product_line,
     nullif(concat_ws('; ',CASE WHEN s.structure_color<>'' THEN 'Estrutura: '||s.structure_color END,
       CASE WHEN s.swing_arm_color<>'' THEN 'Braços: '||s.swing_arm_color END,
       CASE WHEN s.plate_holder_type<>'' THEN 'Tipo de anilheiro: '||s.plate_holder_type END,
@@ -58,6 +58,7 @@ export async function sourcePreparation(c:AuthorizedContext,id:string) {
     CASE WHEN s.technical_snapshot IS NULL THEN (SELECT c.weight FROM product_catalog_profiles c WHERE c.tenant_id=s.tenant_id AND c.product_id=s.product_id)
       ELSE s.technical_snapshot->>'weight' END AS equipment_weight
     FROM sales_order_lines s JOIN products p ON p.id=s.product_id AND p.tenant_id=s.tenant_id
+    LEFT JOIN product_costs pc ON pc.tenant_id=s.tenant_id AND pc.product_id=s.product_id
     WHERE s.tenant_id=$1 AND s.order_id=$2 ORDER BY s.line_number`,[c.tenantId,id])
   let cents=0n
   // Suggested NF-e net and gross weight: sum of each line's equipment weight × quantity, only when every line has a valid weight.
@@ -72,6 +73,8 @@ export async function sourcePreparation(c:AuthorizedContext,id:string) {
     weightMicros = weightMicros === null || !unitMicros ? null : weightMicros + unitMicros*qty/1000000n
     return {productId:r.product_id,code:r.sku,description:r.name,unit:r.unit,ncm:r.ncm,quantity:decimal(qty/100n,4),unitPrice:decimal(price,2),grossTotal:decimal(gross,2),additionalInfo:r.info}
   })
+  // NF-e origin follows the product's registered commercial line (1 direct import, 0 national); unregistered stays for manual choice.
+  items.forEach((item,index)=>{ const line=result.rows[index]!.product_line; Object.assign(item,{origin:line==="imported" ? 1 : line==="national" ? 0 : null}) })
   if(!items.length) conflict("O pedido precisa de itens para preparação fiscal")
   const weightKg=weightMicros === null ? null : decimal((weightMicros+500n)/1000n,3)
   return {tenantId:c.tenantId,customerId:o.customer_id,orderId:id,orderRevision:revisionValue(o.revision),recipient,items,productsTotal:decimal(cents,2),weightKg,...await orderPayments(c,id)}

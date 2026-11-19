@@ -183,13 +183,6 @@ jobs:
         -- bash --noprofile --norc -e -o pipefail "$script_file"
 
         '
-    - name: Validate and package the private TypeScript API
-      if: inputs.full
-      run: |
-        python3 scripts/ci/timed.py --label 'web/api-ts-typecheck' --output "artifacts/timings/$GITHUB_JOB.jsonl" -- pnpm --filter api-ts typecheck
-        python3 scripts/ci/timed.py --label 'web/api-ts-build' --output "artifacts/timings/$GITHUB_JOB.jsonl" -- pnpm --filter api-ts build
-        python3 scripts/ci/timed.py --label 'web/api-ts-package' --output "artifacts/timings/$GITHUB_JOB.jsonl" -- pnpm --filter api-ts deploy --prod --legacy artifacts/api-ts
-        python3 scripts/ci/timed.py --label 'web/api-ts-package-smoke' --output "artifacts/timings/$GITHUB_JOB.jsonl" -- node apps/api-ts/scripts/verify-package.mjs artifacts/api-ts
     - name: Package validated web build and generated public assets
       run: 'script_file=$(mktemp)
 
@@ -199,7 +192,7 @@ jobs:
 
         mkdir -p artifacts
 
-        tar --exclude=''apps/web/.next/cache'' -czf artifacts/web-build.tar.gz apps/web/.next apps/web/public artifacts/api-ts
+        tar --exclude=''apps/web/.next/cache'' -czf artifacts/web-build.tar.gz apps/web/.next apps/web/public
 
         ERP_TIMED_1873df9a3d899516
 

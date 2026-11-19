@@ -1,75 +1,48 @@
 import assert from "node:assert/strict"
 import { randomUUID } from "node:crypto"
-import { readdir, readFile } from "node:fs/promises"
 import test from "node:test"
-import { Pool } from "pg"
 import type { LightMyRequestResponse } from "fastify"
-import { buildApp } from "../src/app.js"
-import { PgClientAdapter, type DatabasePool } from "../src/platform/database.js"
-import { createCatalogMedia, type CatalogMedia } from "../src/platform/catalog-media.js"
+import type { CatalogMedia } from "../src/platform/catalog-media.js"
 import { Problem } from "../src/platform/problem.js"
 import { commercialFixture } from "./commercial-fixture.js"
+import { createTestContext, databaseTestOptions } from "./support/test-context.js"
 
 // Within the 30-day payment term saved by these tests (Brasília date + days).
 const soon = (days: number) => { const d = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Sao_Paulo" })); d.setDate(d.getDate() + days); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}` }
 
 // Routes of PR 06: sales/purchase settings, proposal commands, sales simulator and catalog publication.
-// The shared tenant fixture of #284 is not merged yet; this file seeds only what it needs (see PR description).
-const permissions = {
+// Tenants, identities, roles and the restricted database role come from the shared fixture (#284).
+const members = {
   admin: ["platform.company.manage", "platform.company.read", "sales.orders.read", "sales.orders.manage", "sales.proposals.read", "sales.proposals.manage", "sales.proposals.decide", "sales.approvals.director", "purchasing.orders.read", "catalog.products.read", "catalog.products.manage"],
   seller: ["sales.orders.read", "sales.orders.manage", "sales.proposals.read", "sales.proposals.manage"],
   viewer: ["sales.orders.read", "sales.proposals.read", "purchasing.orders.read", "catalog.products.read"],
   nobody: [] as string[],
 }
-const otherTenantAdmin = permissions.admin
 
-test("commercial PR 06 routes keep contract, permissions, idempotency and tenant isolation", { skip: !process.env.API_TS_TEST_ADMIN_URL }, async t => {
-  const url = new URL(process.env.API_TS_TEST_ADMIN_URL!)
-  const suffix = randomUUID().replaceAll("-", ""), database = `api_ts_porte_${suffix}`, role = `api_ts_porte_role_${suffix}`
-  const admin = new Pool({ connectionString: url.toString() })
-  await admin.query(`CREATE DATABASE ${database}`)
-  url.pathname = `/${database}`
-  const seed = new Pool({ connectionString: url.toString() }), connections = new Pool({ connectionString: url.toString() })
-  let app: ReturnType<typeof buildApp> | undefined
+test("commercial PR 06 routes keep contract, permissions, idempotency and tenant isolation", databaseTestOptions, async t => {
+  const published: unknown[] = []
+  const gateway = { fail: false }
+  const ctx = await createTestContext({
+    members,
+    identitiesWithoutCompany: ["stranger"],
+    dependencies: ({ tenant }) => ({ catalogMedia: { tenantId: tenant, async publish(payload) { if (gateway.fail) throw new Problem(409, "domain_conflict", "Publicação pendente. Repita para conferir a mesma versão"); published.push(payload) } } satisfies CatalogMedia }),
+  })
+  const { seed, tenant, otherTenant: other } = ctx
   try {
-    const directory = new URL("../../../migrations/", import.meta.url)
-    for (const file of (await readdir(directory)).filter(name => name.endsWith(".sql")).sort()) await seed.query(await readFile(new URL(file, directory), "utf8"))
-    await seed.query(`CREATE ROLE ${role} NOLOGIN NOSUPERUSER NOBYPASSRLS`)
-    await seed.query(`GRANT USAGE ON SCHEMA public,system_config TO ${role}; GRANT SELECT,INSERT,UPDATE,DELETE ON ALL TABLES IN SCHEMA public TO ${role}; GRANT SELECT ON ALL TABLES IN SCHEMA system_config TO ${role}; GRANT USAGE ON ALL SEQUENCES IN SCHEMA public TO ${role}; GRANT EXECUTE ON FUNCTION system_config.has_permission(text) TO ${role}`)
-    const tenant = randomUUID(), other = randomUUID()
-    await seed.query("INSERT INTO tenants(id,legal_name,tax_id) VALUES($1,'Empresa A','04252011000110'),($2,'Empresa B','52998224725')", [tenant, other])
     await seed.query("INSERT INTO parties(id,tenant_id,person_type,legal_name,tax_id,is_customer,is_supplier,status) SELECT id,id,'fisica','Cliente','52998224725',true,false,'active' FROM tenants")
-    const identities = new Map<string, string>()
-    const member = async (subject: string, tenantId: string, codes: string[]) => {
-      const identity = randomUUID(), membership = randomUUID(), roleId = randomUUID()
-      identities.set(subject, identity)
-      await seed.query("INSERT INTO identities(id,auth_subject,email,display_name) VALUES($1,$2,$3,$2)", [identity, subject, `${subject}@example.test`])
-      await seed.query("INSERT INTO tenant_memberships(id,tenant_id,identity_id) VALUES($1,$2,$3)", [membership, tenantId, identity])
-      await seed.query("INSERT INTO roles(id,tenant_id,code,name) VALUES($1,$2,$3,'Papel')", [roleId, tenantId, subject])
-      await seed.query("INSERT INTO membership_roles(membership_id,role_id) VALUES($1,$2)", [membership, roleId])
-      for (const code of codes) await seed.query("INSERT INTO role_permissions(role_id,permission_code) VALUES($1,$2)", [roleId, code])
-    }
-    for (const [subject, codes] of Object.entries(permissions)) await member(subject, tenant, codes)
-    await member("outsider", other, otherTenantAdmin)
-    await seed.query("INSERT INTO identities(auth_subject,email,display_name) VALUES('stranger','stranger@example.test','Sem empresa')")
-
+    const adminIdentity = (await seed.query("SELECT id FROM identities WHERE auth_subject='admin'")).rows[0].id as string
     const fixture = commercialFixture()
     const product = "aa000000-0000-3000-2000-0000000000a1", catalogProduct = "aa000000-0000-3000-2000-0000000000a2", proposalProduct = "aa000000-0000-3000-2000-0000000000a3"
     for (const [id, sku] of [[product, "SIM-1"], [catalogProduct, "CAT-1"], [proposalProduct, "PROP-1"]] as const) await seed.query("INSERT INTO products(id,tenant_id,sku,name,unit,price_cents,status) VALUES($1,$2,$3,$3,'UN',10000,'active')", [id, tenant, sku])
     // Published table: price 200.00 without IPI, cost and policy as in the Rust reference tests.
     const version = randomUUID()
     await seed.query("INSERT INTO commercial_settings(tenant_id,product_line,parameters,revision) VALUES($1,'imported',$2,1)", [tenant, fixture.parameters])
-    await seed.query("INSERT INTO price_table_versions(id,tenant_id,product_line,version,settings_revision,policy_snapshot,calculator_version,digest,published_by) VALUES($1,$2,'imported',1,1,$3,'test',$4,$5)", [version, tenant, fixture.parameters, "a".repeat(64), identities.get("admin")])
+    await seed.query("INSERT INTO price_table_versions(id,tenant_id,product_line,version,settings_revision,policy_snapshot,calculator_version,digest,published_by) VALUES($1,$2,'imported',1,1,$3,'test',$4,$5)", [version, tenant, fixture.parameters, "a".repeat(64), adminIdentity])
     await seed.query("INSERT INTO price_table_items(tenant_id,version_id,product_id,product_snapshot,cost_revision,cost_snapshot,price_without_ipi_cents,ipi_bps,price_with_ipi_cents) VALUES($1,$2,$3,$4,1,$5,20000,1300,22600)", [tenant, version, product, { sku: "SIM-1", name: "Simulado", unit: "UN" }, { purchaseCostCents: 10000, taxCreditBps: 1000, packagingCents: 100 }])
     await seed.query("UPDATE commercial_settings SET active_price_version_id=$2 WHERE tenant_id=$1 AND product_line='imported'", [tenant, version])
 
-    const published: unknown[] = []
-    const gateway = { fail: false }
-    const catalogMedia: CatalogMedia = { tenantId: tenant, async publish(payload) { if (gateway.fail) throw new Problem(409, "domain_conflict", "Publicação pendente. Repita para conferir a mesma versão"); published.push(payload) } }
-    const pool: DatabasePool = { async connect() { const client = await connections.connect(); await client.query(`SET ROLE ${role}`); return new PgClientAdapter(client) } }
-    app = buildApp({ pool, userinfoUrl: "http://auth.test/userinfo", catalogMedia, fetchAuth: async (_url, init) => { const sub = new Headers(init?.headers).get("authorization")!.slice(7); return Response.json({ sub, email: `${sub}@example.test` }) } })
-    const server = app
-    const call = (method: "GET" | "POST" | "PUT", path: string, options: { as?: string | null; tenant?: string; headers?: Record<string, string>; payload?: unknown } = {}): Promise<LightMyRequestResponse> => server.inject({
+
+    const call = (method: "GET" | "POST" | "PUT", path: string, options: { as?: string | null; tenant?: string; headers?: Record<string, string>; payload?: unknown } = {}): Promise<LightMyRequestResponse> => ctx.app.inject({
       method, url: path, ...(options.payload === undefined ? {} : { payload: options.payload as object }),
       headers: { ...(options.as === null ? {} : { authorization: `Bearer ${options.as ?? "admin"}` }), "x-tenant-id": options.tenant ?? tenant, ...options.headers },
     })
@@ -304,7 +277,7 @@ test("commercial PR 06 routes keep contract, permissions, idempotency and tenant
     await t.test("catalog-publication preview and explicit publish", async () => {
       const path = "/api/v1/catalog-publication"
       const file = randomUUID(), media = randomUUID()
-      await seed.query("INSERT INTO system_config.files(tenant_id,id,storage_key,original_name,media_type,byte_size,sha256,status,created_by) VALUES($1,$2,'r2://ludus-equipamentos-midias/ludus/catalogo/cat-1.webp','cat-1.webp','image/webp',10,$3,'available',$4)", [tenant, file, "b".repeat(64), identities.get("admin")])
+      await seed.query("INSERT INTO system_config.files(tenant_id,id,storage_key,original_name,media_type,byte_size,sha256,status,created_by) VALUES($1,$2,'r2://ludus-equipamentos-midias/ludus/catalogo/cat-1.webp','cat-1.webp','image/webp',10,$3,'available',$4)", [tenant, file, "b".repeat(64), adminIdentity])
       await seed.query("INSERT INTO product_media_assets(tenant_id,id,product_id,file_id,collection,variant,version,width_px,height_px) VALUES($1,$2,$3,$4,'core','webp',1,100,100)", [tenant, media, catalogProduct, file])
       await seed.query("INSERT INTO product_catalog_profiles(tenant_id,product_id,collection,muscle_group,technical_category,dimensions_mm,description,weight,weight_stack,public_path,main_media_id) VALUES($1,$2,'core','Peito','Linha A','{1000,800,1500}','Descrição','100 kg','50 kg','/core/product-cat-1/',$3)", [tenant, catalogProduct, media])
       await status(call("GET", path, { as: null }), 401)
@@ -366,10 +339,6 @@ test("commercial PR 06 routes keep contract, permissions, idempotency and tenant
       await status(publish({ previewHash: empty.json().previewHash }), 422)
     })
   } finally {
-    await app?.close()
-    await connections.end(); await seed.end()
-    await admin.query(`DROP DATABASE IF EXISTS ${database}`)
-    await admin.query(`DROP ROLE IF EXISTS ${role}`)
-    await admin.end()
+    await ctx.close()
   }
 })

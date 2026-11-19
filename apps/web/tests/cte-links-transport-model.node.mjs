@@ -20,7 +20,7 @@ registerHooks({
   },
 });
 const { sendCteLinkCommand } = await import("../src/features/fiscal/cte-links.ts");
-const facts = JSON.parse(readFileSync(new URL("../../api/src/http/fixtures/cte-received-inspection.json", import.meta.url), "utf8"));
+const facts = JSON.parse(readFileSync(new URL("../../fiscal-engine/tests/fixtures/http/cte-received-inspection.json", import.meta.url), "utf8"));
 const tenant = "11111111-1111-4111-8111-111111111111", documentId = "22222222-2222-4222-8222-222222222222", inspectionId = "44444444-4444-4444-8444-444444444444", carrier = "55555555-5555-4555-8555-555555555555", order = "66666666-6666-4666-8666-666666666666";
 const permissions = ["fiscal.cte.read", "fiscal.cte.link", "catalog.parties.read", "purchasing.orders.read"];
 const current = { id: tenant, legalName: "Empresa sintética", subject: "editor", permissions };

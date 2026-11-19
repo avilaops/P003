@@ -6,7 +6,7 @@ const origin = process.env.ERP_TEST_WEB_ORIGIN || "http://127.0.0.1:3202"
 const tenant = "11111111-1111-4111-8111-111111111111"
 const headers = { Origin: origin, "X-Tenant-Id": tenant }
 let fixture: Record<string, string>
-test.beforeAll(async () => { fixture = JSON.parse(await readFile("../api/tests/fixtures/a1-synthetic.json", "utf8")) })
+test.beforeAll(async () => { fixture = JSON.parse(await readFile("../api-ts/test/fixtures/a1-synthetic.json", "utf8")) })
 
 // Synthetic identity and synthetic CA, restricted to the isolated local database.
 async function session(context: BrowserContext, reader = false) {

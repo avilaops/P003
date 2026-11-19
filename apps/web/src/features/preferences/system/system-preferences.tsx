@@ -56,7 +56,7 @@ export function SystemPreferences() {
       <h2 id="theme-title" className="text-lg font-semibold">Aparência</h2>
       <p className="text-sm text-muted-foreground">O tema é aplicado imediatamente e salvo somente neste navegador.</p>
       <fieldset><legend className="sr-only">Tema</legend><div className="grid gap-3 sm:grid-cols-4">
-        {(["light", "dark", "system", "avila"] as const).map(value => <label className={`theme-option theme-option-${value} flex min-h-11 items-center gap-3 rounded-xl border p-4 has-[:checked]:border-primary`} key={value}>
+        {(["light", "dark", "system", "avila"] as const).map(value => <label className={`theme-option theme-option-${value} flex min-h-9 items-center gap-3 rounded-xl border p-4 has-[:checked]:border-primary`} key={value}>
           <input type="radio" name="theme" checked={theme === value} onChange={() => setTheme(value)} />
           <span className="flex items-center gap-2">{value === "light" ? "Claro" : value === "dark" ? "Escuro" : value === "system" ? "Sistema" : "Avila"}{value === "avila" && <span className="theme-brand-swatches" aria-hidden="true"><i /><i /><i /></span>}</span>
         </label>)}
@@ -68,7 +68,7 @@ export function SystemPreferences() {
       {resource.loading && <p role="status">Carregando preferências…</p>}
       {resource.error && <div role="alert" className="space-y-3"><p>{resource.error}</p>{resource.status === 401 ? <AccessLink /> : <Button variant="outline" onClick={reload}>Tentar novamente</Button>}</div>}
       {resource.value && <>
-        <label className="grid max-w-sm gap-2 text-sm font-medium">Produtos por página<select className="min-h-11 rounded-lg border bg-background px-3" value={size} disabled={busy || resource.loading || blocked} onChange={event => { setDraft(Number(event.target.value)); setMessage("") }}>
+        <label className="grid max-w-sm gap-2 text-sm font-medium">Produtos por página<select className="min-h-9 rounded-lg border bg-background px-3" value={size} disabled={busy || resource.loading || blocked} onChange={event => { setDraft(Number(event.target.value)); setMessage("") }}>
           {[10,25,50,100].map(value => <option key={value} value={value}>{value}</option>)}
         </select></label>
         <div className="flex flex-wrap gap-3"><Button onClick={save} disabled={!dirty || busy || blocked || resource.loading}>Salvar preferências</Button><Button variant="outline" disabled={busy || resource.loading} onClick={reload}>Recarregar preferências</Button></div>

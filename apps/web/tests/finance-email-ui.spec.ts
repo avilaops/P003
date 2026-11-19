@@ -33,6 +33,8 @@ for (const kind of ["payable","contract","order-list"] as const) test(`envio doc
     return route.fulfill({ headers:{etag:'"3"'}, json:{tenantId:tenant,revision:3,delivery:{id:record,status:"sent",recipient:to,createdAt:"2026-11-17T00:00:00Z"}} })
   })
   await page.goto(isContract ? `/servicos/contratos/${record}` : isOrder ? "/vendas/pedidos" : `/financeiro/contas-pagar/${record}`)
+  // Na lista de pedidos, o envio por e-mail fica no menu recolhido "Mais ações" de cada linha.
+  if (isOrder) await page.getByText("Mais ações", { exact: true }).click()
   await page.getByRole("button",{name:isContract ? "Enviar cópia do contrato por e-mail" : "Enviar por e-mail",exact:true}).click()
   const dialog = page.getByRole("dialog")
   if (isOrder) await expect(dialog.getByLabel("Destinatário",{exact:true})).toHaveValue(to)

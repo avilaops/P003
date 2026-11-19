@@ -66,6 +66,6 @@ export function NfeProductPicker({ tenant, disabled, onSelect }: { tenant: strin
         </ul>
       </div>}
     </div>
-    <Link className="mt-3 inline-flex min-h-11 items-center font-medium text-primary underline underline-offset-4" href="/cadastros/produtos/novo" target="_blank" rel="noopener noreferrer">Cadastrar produto</Link>
+    <Link className="mt-3 inline-flex min-h-9 items-center font-medium text-primary underline underline-offset-4" href="/cadastros/produtos/novo" target="_blank" rel="noopener noreferrer">Cadastrar produto</Link>
   </div>
 }

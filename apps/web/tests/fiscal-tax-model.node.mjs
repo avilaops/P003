@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { applyTaxProfile, blankDraft, blankItem, blankTaxDeclaration, invoiceTotal, submission } from "../src/features/fiscal/nfe-draft-model.ts";
+import { applyNatureCfop, applyTaxProfile, blankDraft, blankItem, blankTaxDeclaration, invoiceTotal, submission } from "../src/features/fiscal/nfe-draft-model.ts";
 import { normalizedProfile } from "../src/features/fiscal/settings/tax-profile-model.ts";
 import { declaredProfiles } from "./helpers/tax-profile-fixture.ts";
 
@@ -102,4 +102,16 @@ test("additional profile defaults preserve existing classifications, explicit fa
   assert.equal(applied.taxDeclaration.ibsCbs.cbsRate, "0.0000");
   draft.items[0] = { ...blankItem(), csosn: "102" };
   assert.equal(applyTaxProfile(draft, declaredProfiles()[0], 3).items[0].icmsCst, null);
+});
+
+test("operation nature fills CFOP by issuer and recipient state, and leaves unknown states as typed", () => {
+  const nature = { internalCfop: "5101", interstateCfop: "6101", foreignCfop: "" };
+  const draft = blankDraft();
+  draft.items = [{ ...blankItem(), cfop: "" }, { ...blankItem(), cfop: "5949" }];
+  draft.recipient = { ...draft.recipient, state: "SP" };
+  assert.deepEqual(applyNatureCfop(draft, nature, "SP").items.map(item => item.cfop), ["5101", "5101"]);
+  assert.deepEqual(applyNatureCfop(draft, nature, "RJ").items.map(item => item.cfop), ["6101", "6101"]);
+  assert.equal(applyNatureCfop(draft, nature, null), draft);
+  assert.equal(applyNatureCfop({ ...draft, recipient: { ...draft.recipient, state: "EX" } }, nature, "SP").items[1].cfop, "5949");
+  assert.deepEqual(applyNatureCfop(draft, { internalCfop: "5102", interstateCfop: "6102", foreignCfop: "" }, "MG").items.map(item => item.cfop), ["6102", "6102"]);
 });

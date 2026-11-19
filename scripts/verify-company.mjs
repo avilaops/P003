@@ -103,7 +103,7 @@ const auth = createServer(async (request, response) => {
 
 try {
   certificateDirectory = await mkdtemp(path.join(tmpdir(), "erp-a1-test-"));
-  const certificateFixture = JSON.parse(await readFile(path.join(root, "apps/api/tests/fixtures/a1-synthetic.json"), "utf8"));
+  const certificateFixture = JSON.parse(await readFile(path.join(root, "apps/api-ts/test/fixtures/a1-synthetic.json"), "utf8"));
   env.FISCAL_A1_CA_BUNDLE_FILE = path.join(certificateDirectory, "test-root.pem");
   env.FISCAL_A1_KEYRING = JSON.stringify({ active: "isolated-test", keys: { "isolated-test": randomBytes(32).toString("base64") } });
   await writeFile(env.FISCAL_A1_CA_BUNDLE_FILE, certificateFixture.rootPem, { mode: 0o600 });

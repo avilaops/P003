@@ -40,7 +40,7 @@ export function PreferencesOverview({ instruction = "Escolha uma das opções ab
       <div className="my-6 flex flex-col gap-4 rounded-xl border border-border bg-muted/40 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-6">
         <h2 className="text-lg font-semibold">{instruction}</h2>
         <div className="flex min-w-0 items-center gap-2 sm:w-96">
-          <label className="flex min-h-11 min-w-0 flex-1 items-center gap-2 rounded-lg border border-input bg-background px-3 focus-within:ring-2 focus-within:ring-ring">
+          <label className="flex min-h-9 min-w-0 flex-1 items-center gap-2 rounded-lg border border-input bg-background px-3 focus-within:ring-2 focus-within:ring-ring">
             <Search className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
             <span className="sr-only">Pesquisar nas preferências</span>
             <input type="search" className="min-w-0 flex-1 bg-transparent py-2 text-sm outline-none" placeholder="Pesquise aqui..." value={query} onChange={event => setQuery(event.target.value)} />
@@ -57,11 +57,11 @@ export function PreferencesOverview({ instruction = "Escolha uma das opções ab
                 <h3 className="mb-2 text-sm font-medium text-muted-foreground">{section.title}</h3>
                 <ul className="divide-y divide-border border-y border-border">
                   {section.items.map(item => <li key={item.label}>
-                    {item.href ? <Link href={item.href} className="flex min-h-12 items-start gap-2 py-3 text-sm font-medium transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                    {item.href ? <Link href={item.href} className="flex min-h-9 items-start gap-2 py-3 text-sm font-medium transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
                       <ChevronRight className="mt-0.5 size-4 shrink-0 text-primary" aria-hidden="true" />
                       <span className="min-w-0 flex-1"><span>{item.label}</span>{item.description && <span className="mt-1 block text-xs font-normal text-muted-foreground">{item.description}</span>}</span>
                       {isDemonstrationRoute(item.href) && <span className="shrink-0 rounded bg-muted px-2 py-0.5 text-xs text-muted-foreground">Indisponível</span>}
-                    </Link> : <div aria-disabled="true" title={item.unavailable} className="flex min-h-12 items-start gap-2 py-3 text-sm text-muted-foreground">
+                    </Link> : <div aria-disabled="true" title={item.unavailable} className="flex min-h-9 items-start gap-2 py-3 text-sm text-muted-foreground">
                       <ChevronRight className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
                       <span className="min-w-0 flex-1"><span>{item.label}</span><span className="sr-only">. {item.unavailable}</span></span>
                       <span className="shrink-0 rounded bg-muted px-2 py-0.5 text-xs">Indisponível</span>

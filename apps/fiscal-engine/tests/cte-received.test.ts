@@ -17,7 +17,7 @@ const inspect = (xml: string) => inspectReceivedCte({ xml, companyTaxId: CTE_COM
 const invalid = (error: unknown) => error instanceof CteInspectionError && error.reason === "invalid";
 
 test("CT-e recebido: fixture HTTP Rust confere com a inspeção real e hash dos bytes originais", async () => {
-  const base = new URL("../../api/src/http/fixtures/", import.meta.url);
+  const base = new URL("./fixtures/http/", import.meta.url);
   for (const name of ["cte-received", "cte-own-carrier"]) {
     const xml = await readFile(new URL(`${name}.xml`, base), "utf8");
     const expected = JSON.parse(await readFile(new URL(`${name}-inspection.json`, base), "utf8"));

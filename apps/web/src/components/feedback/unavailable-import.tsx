@@ -7,7 +7,7 @@ export function UnavailableImport({ title, backHref, backLabel }: { title: strin
     <section className="form-section space-y-4">
       <h2 className="text-xl font-semibold">Importação indisponível</h2>
       <p>Nenhum arquivo é recebido, validado ou importado aqui. Não há resultados, totais de linhas ou relatório de processamento.</p>
-      <Link className="inline-flex min-h-11 items-center font-medium text-primary underline" href={backHref}>{backLabel}</Link>
+      <Link className="inline-flex min-h-9 items-center font-medium text-primary underline" href={backHref}>{backLabel}</Link>
     </section>
   </div>
 }

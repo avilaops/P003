@@ -42,7 +42,7 @@ export function WarehouseStockLinks({ tenant, warehouseId }: { tenant: string; w
 export function StockAnalysisLink({ dataset, tenant, warehouseId, productId, startDate, endDate, direction, disabled, children }: Props) {
   const catalog = useStockCatalog(tenant, warehouseId)
   if (!catalog?.sources?.[dataset]) return null
-  if (disabled) return <span role="link" aria-disabled="true" className="inline-flex min-h-11 items-center font-medium text-muted-foreground">{children}</span>
+  if (disabled) return <span role="link" aria-disabled="true" className="inline-flex min-h-9 items-center font-medium text-muted-foreground">{children}</span>
   const href = stockUrl("/relatorios/estoque/analises", {
     dataset, productId: productId || null, warehouseId: warehouseId || null, tenant: warehouseId || productId ? tenant : null,
     startDate: startDate || null, endDate: endDate || null, movementDirection: direction || null,

@@ -1,4 +1,4 @@
-"""Validate the permanent private API using Compose's actual config parser."""
+"""Validate the principal TypeScript API stack using Compose's actual config parser."""
 import json
 import os
 from pathlib import Path
@@ -12,7 +12,7 @@ COMMAND = [os.environ['ERP_TEST_COMPOSE_BINARY']] if os.environ.get('ERP_TEST_CO
 
 
 class TypeScriptComposeTests(unittest.TestCase):
-    def test_default_stack_uses_same_validated_image_and_separate_private_environment(self):
+    def test_api_is_the_typescript_image_with_a_restricted_private_environment(self):
         if not shutil.which(COMMAND[0]):
             self.skipTest('Compose CLI is unavailable; no container is required')
         version = subprocess.run([*COMMAND, 'version'], capture_output=True, timeout=15)
@@ -20,8 +20,7 @@ class TypeScriptComposeTests(unittest.TestCase):
             self.skipTest('Compose CLI plugin is unavailable')
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            for filename in ('api.env', 'web.env'):
-                (root / filename).write_text('SMTP_PASSWORD=mail-fixture\nERP_SESSION_SECRET=session-fixture\n')
+            (root / 'web.env').write_text('SMTP_PASSWORD=mail-fixture\nERP_SESSION_SECRET=session-fixture\n')
             (root / 'api-ts.env').write_text('DATABASE_URL=postgresql://app:fixture@db/test\nAUTH_ISSUER=https://auth.test\n')
             values = {'ERP_API_IMAGE': 'ghcr.io/avilaops/erp-next-api@sha256:' + 'a' * 64,
                       'ERP_WEB_IMAGE': 'ghcr.io/avilaops/erp-next-web@sha256:' + 'b' * 64,
@@ -33,17 +32,20 @@ class TypeScriptComposeTests(unittest.TestCase):
             result = subprocess.run(command, capture_output=True, text=True, timeout=15)
             self.assertEqual(result.returncode, 0, result.stderr)
             config = json.loads(result.stdout)
-            api = config['services']['api-ts']
-            self.assertEqual(api['image'], values['ERP_WEB_IMAGE'])
-            self.assertEqual(api['network_mode'], 'service:api')
-            self.assertNotIn('ports', api)
+            services = config['services']
+            self.assertNotIn('api-ts', services)
+            api = services['api']
+            self.assertEqual(api['image'], values['ERP_API_IMAGE'])
             self.assertEqual(api['environment']['API_TS_HOST'], '0.0.0.0')
+            self.assertEqual(api['environment']['API_TS_PORT'], '8080')
+            self.assertEqual(api['environment']['DATABASE_URL'], 'postgresql://app:fixture@db/test')
             self.assertNotIn('SMTP_PASSWORD', api['environment'])
             self.assertNotIn('ERP_SESSION_SECRET', api['environment'])
-            self.assertEqual(api['command'], ['node', 'apps/api-ts/dist/server.js'])
-            self.assertEqual(config['services']['api']['environment']['ERP_TYPESCRIPT_API_URL'], 'http://127.0.0.1:8081')
-            self.assertEqual(config['services']['web']['environment']['ERP_TYPESCRIPT_API_URL'], 'http://127.0.0.1:8081')
-
+            self.assertEqual({(p['host_ip'], p['published'], p['target']) for p in api['ports']},
+                             {('127.0.0.1', '3141', 8080), ('127.0.0.1', '3140', 3000)})
+            self.assertEqual(services['web']['image'], values['ERP_WEB_IMAGE'])
+            self.assertEqual(services['web']['environment']['ERP_API_URL'], 'http://127.0.0.1:8080')
+            self.assertEqual(services['web']['environment']['ERP_TYPESCRIPT_API_URL'], 'http://127.0.0.1:8080')
 
 if __name__ == '__main__':
     unittest.main()

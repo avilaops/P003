@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Apply the candidate web image's migrations to the SQLx ledger before activation."""
+"""Apply the candidate API image's migrations to the SQLx ledger before activation."""
 import hashlib
 import json
 import os
@@ -44,7 +44,7 @@ def migrate_release(sha, release, *, root=ROOT, run=subprocess.run):
             raise RuntimeError(f"Release {stage} failed; private diagnostic saved")
         return result.stdout.strip()
 
-    image = "erp-next-web:sha-" + sha
+    image = "erp-next-api:sha-" + sha
     image_id = execute(["docker", "image", "inspect", "--format", "{{.Id}}", image], "image-check")
     if not re.fullmatch(r"sha256:[0-9a-f]{64}", image_id):
         raise RuntimeError("Invalid candidate image identity")

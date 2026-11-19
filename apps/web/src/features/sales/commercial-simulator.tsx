@@ -329,7 +329,7 @@ function Simulator({ transfer, table: initialTable, initialSourceLine, initialPr
     } catch (reason) { setError(reason instanceof Error ? reason.message : "Não foi possível atualizar a tabela.") }
     finally { setReloading(false) }
   }
-  if (!table.data) return <section className="form-section space-y-3">{orderMode && lineControl}<p>Nenhuma tabela publicada nesta linha.</p>{table.canManage ? <Link className="inline-flex min-h-11 items-center text-primary underline" href={`/preferencias/tabela-precos?linha=${table.line}`}>Publicar tabela de preços</Link> : <p className="text-sm text-muted-foreground">Peça à gestão para publicar a tabela desta linha.</p>}</section>
+  if (!table.data) return <section className="form-section space-y-3">{orderMode && lineControl}<p>Nenhuma tabela publicada nesta linha.</p>{table.canManage ? <Link className="inline-flex min-h-9 items-center text-primary underline" href={`/preferencias/tabela-precos?linha=${table.line}`}>Publicar tabela de preços</Link> : <p className="text-sm text-muted-foreground">Peça à gestão para publicar a tabela desta linha.</p>}</section>
   if (orderMode) {
     const sale = result?.value.sale || null
     const quantityTotal = items.every(item => validOrderQuantity(item.quantity)) ? items.reduce((total, item) => total + Number(item.quantity), 0) : null
@@ -428,7 +428,7 @@ function Simulator({ transfer, table: initialTable, initialSourceLine, initialPr
         <div className="ml-auto flex min-w-0 flex-wrap justify-end gap-2"><Button type="button" variant="outline" disabled={frozen || !items.length || quoteStale} onClick={()=>{try {simulationInput();const details=document.getElementById("simulator-customer")?.closest("details");if(details)details.open=true;setQuoteRetry(value=>value+1);jumpTo("result")} catch (reason) {setError(reason instanceof Error?reason.message:"Confira a seleção.");jumpTo("equipment")}}}>{busy?"Calculando…":"Simular"}</Button>{canCreate && <Button type="button" disabled={!result || frozen || quoteStale} onClick={continueOrder}>Continuar no novo pedido</Button>}</div>
       </div>
       <nav aria-label="Etapas da simulação" className={`grid ${canCreate?"grid-cols-4":"grid-cols-3"} gap-1 text-xs sm:text-sm`}>
-        {[["equipment", "Equipamentos"], ["conditions", "Condições"], ["result", "Resultado"], ...(canCreate?[["customer","Cliente"]]:[])].map(([id, label]) => <a key={id} href={`#simulator-${id}`} className="flex min-h-11 min-w-0 items-center justify-center rounded-md px-1 font-medium hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring sm:min-h-9" onClick={event => { event.preventDefault(); jumpTo(id) }}>{label}</a>)}
+        {[["equipment", "Equipamentos"], ["conditions", "Condições"], ["result", "Resultado"], ...(canCreate?[["customer","Cliente"]]:[])].map(([id, label]) => <a key={id} href={`#simulator-${id}`} className="flex min-h-9 min-w-0 items-center justify-center rounded-md px-1 font-medium hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring sm:min-h-9" onClick={event => { event.preventDefault(); jumpTo(id) }}>{label}</a>)}
       </nav>
     </div>
     <div className="grid min-w-0 items-start gap-4 lg:grid-cols-[minmax(0,1.65fr)_minmax(0,1fr)] lg:gap-5">
@@ -472,7 +472,7 @@ function Simulator({ transfer, table: initialTable, initialSourceLine, initialPr
         {table.paymentMethods !== undefined ? <CommercialCheckout ref={checkout} tenantId={table.tenantId} customerId={customer?.id} methods={table.paymentMethods} totalCents={paymentTotal} entryCents={paymentEntry} entryRaw={downPayment} onEntryChange={raw => { setDownPayment(raw); change() }} dueDate={dueDate} onDueDateChange={date => { setDueDate(date); setDirty(true) }} onDirty={() => { setDirty(true); setError("") }} disabled={frozen} /> : <label className="grid min-w-0 gap-1 sm:gap-2">Vencimento da conta a receber<Input type="date" disabled={frozen} value={dueDate} onChange={e => { setDueDate(e.target.value); setDirty(true) }} /></label>}
         {result && <>
           {(!customer || !dueDate) && <p className="text-xs text-muted-foreground">Selecione o cliente e informe o vencimento para criar o pedido.</p>}
-          <Button className="h-auto min-h-11 max-w-full whitespace-normal" disabled={!customer || !dueDate || busy || reloading || command.busy || command.stale} onClick={convert}>{command.uncertain ? "Conferir criação com o mesmo comando" : "Criar pedido com estas condições"}</Button>
+          <Button className="h-auto min-h-9 max-w-full whitespace-normal" disabled={!customer || !dueDate || busy || reloading || command.busy || command.stale} onClick={convert}>{command.uncertain ? "Conferir criação com o mesmo comando" : "Criar pedido com estas condições"}</Button>
           <p className="text-xs text-muted-foreground">{table.paymentMethods !== undefined ? "Depois de criar, aceite a encomenda para gerar as parcelas. Reserve os produtos quando houver estoque disponível." : "O pedido recebe um número. A confirmação seguinte reserva o estoque."}</p>
         </>}
       </details>}

@@ -5,6 +5,6 @@ export default function NotFound() {
     <title>Página não encontrada • ERP</title>
     <h1 className="text-3xl font-semibold">Página não encontrada</h1>
     <p>O endereço não existe ou não está disponível. Confira o link ou volte ao início para escolher outra área.</p>
-    <Link className="inline-flex min-h-11 items-center font-medium text-primary underline" href="/">Voltar ao início</Link>
+    <Link className="inline-flex min-h-9 items-center font-medium text-primary underline" href="/">Voltar ao início</Link>
   </section>
 }

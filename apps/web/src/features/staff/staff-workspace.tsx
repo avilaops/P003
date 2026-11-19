@@ -184,6 +184,6 @@ export function StaffEditor({ kind, id, view = false }: { kind: StaffKind; id?: 
         </form>}
       </>}
     </section>
-    {view && id && snapshot?.data?.isEmployee && <Link className={`${linkClass} mt-5 inline-flex min-h-11 items-center`} href={`/financeiro/contas-pagar?aba=funcionarios&funcionario=${id}`}>Pagamentos em Contas a pagar</Link>}
+    {view && id && snapshot?.data?.isEmployee && <Link className={`${linkClass} mt-5 inline-flex min-h-9 items-center`} href={`/financeiro/contas-pagar?aba=funcionarios&funcionario=${id}`}>Pagamentos em Contas a pagar</Link>}
   </>
 }

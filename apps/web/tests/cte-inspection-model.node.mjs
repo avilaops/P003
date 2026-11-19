@@ -4,7 +4,7 @@ import { test } from "node:test";
 import * as model from "../src/features/fiscal/cte-inspection-model.ts";
 const { parseCteInspection, formatCteMoney } = model;
 
-const facts = JSON.parse(readFileSync(new URL("../../api/src/http/fixtures/cte-received-inspection.json", import.meta.url), "utf8"));
+const facts = JSON.parse(readFileSync(new URL("../../fiscal-engine/tests/fixtures/http/cte-received-inspection.json", import.meta.url), "utf8"));
 const tenant = "11111111-1111-4111-8111-111111111111";
 const selected = { id: "22222222-2222-4222-8222-222222222222", xmlSha256: facts.xmlSha256, companyTaxId: facts.companyTaxId };
 const reply = () => ({ tenantId: tenant, documentId: selected.id, sourceXmlSha256: selected.xmlSha256, canInspect: true, data: { id: "44444444-4444-4444-8444-444444444444", documentId: selected.id, sourceXmlSha256: selected.xmlSha256, inspectorVersion: "cte-received-v1", document: structuredClone(facts), createdAt: "2026-11-03T15:00:00Z" } });

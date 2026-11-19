@@ -91,8 +91,8 @@ export function EmissionActions({ id, tenantId, draftRevision, environment, mode
     {notice && <p role="status">{notice}</p>}
     {command.error && <p role="alert">{command.error}</p>}
     {dirty && <p>Salve as alterações do rascunho para habilitar os comandos fiscais.</p>}
-    {command.uncertain ? <Button className="min-h-11" disabled={command.busy || !allowed(pendingAction)} onClick={() => void act(pendingAction)}>Conferir mesma operação fiscal</Button> : <div className="flex flex-wrap gap-3">
-      {(!document || ["preparing", "prepared", "unknown"].includes(document.status)) && <Button className="h-auto min-h-11 max-w-full whitespace-normal text-center" disabled={!canIssue || !canTransmit || dirty || command.busy || resource.loading || mismatched || command.stale || !document && resource.status !== 404} onClick={() => void act("issue")}>{prepareOffline ? "Preparar NFC-e em contingência" : `Transmitir ${documentLabel} à SEFAZ em ${environmentLabel}`}</Button>}
+    {command.uncertain ? <Button className="min-h-9" disabled={command.busy || !allowed(pendingAction)} onClick={() => void act(pendingAction)}>Conferir mesma operação fiscal</Button> : <div className="flex flex-wrap gap-3">
+      {(!document || ["preparing", "prepared", "unknown"].includes(document.status)) && <Button className="h-auto min-h-9 max-w-full whitespace-normal text-center" disabled={!canIssue || !canTransmit || dirty || command.busy || resource.loading || mismatched || command.stale || !document && resource.status !== 404} onClick={() => void act("issue")}>{prepareOffline ? "Preparar NFC-e em contingência" : `Transmitir ${documentLabel} à SEFAZ em ${environmentLabel}`}</Button>}
       {canIssue && document?.accessKey && <Button variant="outline" disabled={dirty || command.busy || command.stale || mismatched} onClick={() => void act("consult")}>Consultar situação na SEFAZ</Button>}
       {document?.returnOrderId && <a className="self-center text-primary underline" href={"/vendas/pedidos/"+document.returnOrderId+"?devolucao="+id+"&ambiente="+environment+"#faturamento-devolucoes"}>Registrar devolução</a>}
       {document?.accessKey && <Button variant="outline" onClick={() => void download()}>Baixar XML da emissão</Button>}
@@ -103,9 +103,9 @@ export function EmissionActions({ id, tenantId, draftRevision, environment, mode
     {emailOpen && canIssue && !mismatched && document?.status === "authorized" && <NfeEmailPanel key={`${tenantId}/${id}`} id={id} tenantId={tenantId} label={documentLabel} onClose={() => setEmailOpen(false)} />}
     {(canCancel || canCorrect && documentModel===55) && document?.status === "authorized" && <form className="space-y-3 rounded-xl border p-4" onSubmit={e => { e.preventDefault(); void act(selectedEvent) }}>
       <fieldset className="space-y-3" disabled={command.busy || command.uncertain || dirty || mismatched}>
-        <label className="grid gap-2 text-sm">Evento fiscal<select className="workspace-fiscal-event min-h-11 min-w-0 rounded-lg border bg-background px-3" value={selectedEvent} onChange={e => setEvent(e.target.value)}>{canCorrect && documentModel===55 && <option value="correction">Carta de correção</option>}{canCancel && <option value="cancel">{cancellationLabel}</option>}</select></label>
-        <label className="grid gap-2 text-sm">Texto do evento<Input className="min-h-11" value={text} minLength={15} maxLength={selectedEvent === "cancel" ? 255 : 1000} required onChange={e => setText(e.target.value)} /></label>
-        <Button className="min-h-11" type="submit" disabled={command.stale}>Transmitir evento fiscal</Button>
+        <label className="grid gap-2 text-sm">Evento fiscal<select className="workspace-fiscal-event min-h-9 min-w-0 rounded-lg border bg-background px-3" value={selectedEvent} onChange={e => setEvent(e.target.value)}>{canCorrect && documentModel===55 && <option value="correction">Carta de correção</option>}{canCancel && <option value="cancel">{cancellationLabel}</option>}</select></label>
+        <label className="grid gap-2 text-sm">Texto do evento<Input className="min-h-9" value={text} minLength={15} maxLength={selectedEvent === "cancel" ? 255 : 1000} required onChange={e => setText(e.target.value)} /></label>
+        <Button className="min-h-9" type="submit" disabled={command.stale}>Transmitir evento fiscal</Button>
       </fieldset>
     </form>}
     {document && events.value?.data.length ? <section className="space-y-3 rounded-xl border p-4" aria-labelledby="fiscal-events-title">
