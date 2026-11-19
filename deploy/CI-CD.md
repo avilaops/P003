@@ -5,7 +5,7 @@
 | Arquivo | Disparo | Resultado |
 | --- | --- | --- |
 | `ci.yml` | PR ou manual | Lint, testes e banco por escopo; sem publicação |
-| `release.yml` | Tag `v*` ou manual na main com SHA completo | Validação completa, imagens GHCR, migração, deploy e conferência pública |
+| `release.yml` | Merge na main, tag `v*` ou manual na main com SHA completo | Validação completa, imagens GHCR, migração, deploy e conferência pública |
 | `regression.yml` | Segunda-feira 04:23 UTC ou manual | Regressão completa; sem publicação do ERP |
 
 Os quatro arquivos `_validate-*.yml` são tarefas reutilizáveis. Não possuem
@@ -58,21 +58,25 @@ alterar os serviços. O código não instala ferramentas nem compila no servidor
 
 ## Publicar
 
-1. Integrar o PR após os checks exigidos pela política do repositório.
-2. Selecionar **Release / Run workflow**, branch `main`, e informar o SHA completo
-   integrado; alternativamente, criar uma tag de versão `v1.2.3` nesse commit.
+1. Integrar o PR após os checks exigidos pela política do repositório. O merge
+   na `main` dispara o Release automaticamente para o commit resultante.
+2. Para republicar uma revisão específica, selecionar **Release / Run workflow**,
+   branch `main`, e informar o SHA completo integrado; alternativamente, criar
+   uma tag de versão `v1.2.3` nesse commit.
 3. A seleção confirma que a revisão pertence à main. As imagens são construídas
    e testadas no GitHub e o manifesto aceita apenas os quatro digests do ERP.
 4. O ambiente `production` conserva suas proteções. Uma única release executa
-   por vez. O servidor baixa os digests usando sua credencial de leitura.
+   por vez; com vários merges seguidos, fica na fila apenas o mais recente, que
+   já contém os anteriores. O servidor baixa os digests usando sua credencial de leitura.
 5. O helper aplica somente migrações pendentes da imagem candidata antes de
    ativar os serviços. Preserva o cadastro, os segredos e os volumes existentes.
 6. A conferência verifica API, web, página de entrada, mídia e SHA. Falha na
    ativação tenta restaurar o conjunto anterior. Rollback de imagens não desfaz
    automaticamente as migrações do banco.
 
-Pushes e merges comuns na main não disparam publicação. Agrupar alterações
-aprovadas em uma versão permite reduzir builds completos.
+Todo push na main dispara publicação, para que nenhum código integrado fique
+fora de produção. Componentes já publicados com entradas idênticas são
+reaproveitados pela seleção.
 
 ## Retenção no servidor
 
