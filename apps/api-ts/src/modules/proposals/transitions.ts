@@ -2,7 +2,7 @@ import { advanceLinkedProposal } from "../opportunities/documents.js"
 import { randomUUID } from "node:crypto"
 import {saveCheckout} from "../orders/checkout-save.js"
 import {paymentSchedule,type FrozenTerm} from "../commercial/payment-term.js"
-import type { FastifyInstance } from "fastify"
+import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify"
 import { z } from "zod"
 import type { AppDependencies } from "../../app.js"
 import { authorizeRequest, requirePermission, type AuthorizedContext } from "../../platform/access.js"
@@ -59,8 +59,9 @@ async function convert(context: AuthorizedContext, headers: CommandHeaders, curr
 }
 
 export function registerProposalTransitions(app: FastifyInstance, dependencies: AppDependencies) {
-  app.post<{ Params: { id: string; action: string } }>("/api/v1/proposals/:id/:action", async (request, reply) => {
-    const { action } = request.params
+  // The three non-decision commands have their own routes, as in the contract; the generic route keeps the decisions.
+  const handle = (fixedAction?: string) => async (request: FastifyRequest<{ Params: { id: string; action: string } }>, reply: FastifyReply) => {
+    const action = fixedAction ?? request.params.action
     const events: Record<string, string> = { send: "proposal.sent", accept: "proposal.accepted", reject: "proposal.rejected", cancel: "proposal.cancelled", revise: "proposal.revised", convert: "proposal.converted", "approve-order": "proposal.approved_order" }
     const event = Object.hasOwn(events, action) ? events[action] : undefined
     if (!event) throw new Problem(404, "not_found", "Registro não encontrado nesta empresa")
@@ -106,5 +107,7 @@ export function registerProposalTransitions(app: FastifyInstance, dependencies: 
       return result
     })
     return reply.header("cache-control", "no-store").header("etag", `"${(body.data as Record<string, unknown>).revision}"`).send(body)
-  })
+  }
+  for (const action of ["revise", "convert", "approve-order"]) app.post<{ Params: { id: string; action: string } }>(`/api/v1/proposals/:id/${action}`, handle(action))
+  app.post<{ Params: { id: string; action: string } }>("/api/v1/proposals/:id/:action", handle())
 }

@@ -8,6 +8,7 @@ import { FiscalCertificateVault } from "./modules/outgoing-nfse/certificate-vaul
 import { HttpOutgoingNfseEngine } from "./modules/outgoing-nfse/engine-client.js"
 import { SettingsSecretVault } from "./modules/platform-admin/secret-vault.js"
 import { createBrowserUseRuns } from "./platform/browser-use.js"
+import { createCatalogMedia } from "./platform/catalog-media.js"
 
 const configuration = loadConfiguration()
 const pool = new PostgresPool(configuration.databaseUrl, configuration.maximumConnections)

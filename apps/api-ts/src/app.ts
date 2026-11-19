@@ -43,6 +43,9 @@ import { registerProductRoutes } from "./modules/products/routes.js"
 import { registerPosRoutes } from "./modules/pos/routes.js"
 import { registerOrderImports } from "./modules/order-imports/routes.js"
 import { registerProposalRoutes } from "./modules/proposals/routes.js"
+import { registerSalesSimulator } from "./modules/sales-simulator/routes.js"
+import { registerCatalogPublication } from "./modules/catalog-publication/routes.js"
+import { registerOrderSettings } from "./modules/order-settings/routes.js"
 import { registerReferenceRoutes } from "./modules/reference-data/routes.js"
 import { registerRegistrationSettingsRoutes } from "./modules/registration-settings/routes.js"
 import { registerOutgoingNfseRoutes, type OutgoingNfseDependencies } from "./modules/outgoing-nfse/routes.js"
@@ -159,6 +162,9 @@ export function buildApp(_dependencies: AppDependencies): FastifyInstance {
   registerPosRoutes(app, _dependencies)
   registerOrderImports(app, _dependencies)
   registerProposalRoutes(app, _dependencies)
+  registerSalesSimulator(app, _dependencies)
+  registerOrderSettings(app, _dependencies)
+  registerCatalogPublication(app, _dependencies)
   registerReferenceRoutes(app, _dependencies)
   registerRegistrationSettingsRoutes(app, _dependencies)
   registerOutgoingNfseRoutes(app, _dependencies)

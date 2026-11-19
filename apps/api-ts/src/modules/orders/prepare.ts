@@ -9,7 +9,7 @@ function invalid(message: string): never { throw new Problem(422, "invalid_input
 function conflict(message: string): never { throw new Problem(409, "domain_conflict", message) }
 export { selectColor } from "../sales/finishes.js"
 import { loadSaleProduct, selectFinishes } from "../sales/finishes.js"
-export async function prepareOrder(context: AuthorizedContext, input: OrderInput, previous?: Awaited<ReturnType<typeof loadOrder>>, channel?:string) {
+export async function prepareOrder(context: AuthorizedContext, input: OrderInput, previous?: Awaited<ReturnType<typeof loadOrder>>, channel?:string, allowPublished=false) {
   const { client, tenantId } = context
   const due = validateDate(input.dueDate)
   if (input.items.length === 0 || input.items.length > 100) invalid("Pedido exige de 1 a 100 itens")
@@ -25,7 +25,7 @@ export async function prepareOrder(context: AuthorizedContext, input: OrderInput
     const quantity = fixed(item.quantity, 6)
     if (quantity === 0n) invalid("Quantidade deve ser positiva")
     const saved = previous?.items.find(line => line.productId === item.productId)
-    if (!saved) {
+    if (!saved && !allowPublished) {
       const published = await client.query<{ published: boolean }>("SELECT EXISTS(SELECT 1 FROM product_costs c JOIN commercial_settings s ON s.tenant_id=c.tenant_id AND s.product_line=c.product_line WHERE c.tenant_id=$1 AND c.product_id=$2 AND s.active_price_version_id IS NOT NULL) OR EXISTS(SELECT 1 FROM price_table_items i JOIN commercial_settings s ON s.tenant_id=i.tenant_id AND s.active_price_version_id=i.version_id WHERE i.tenant_id=$1 AND i.product_id=$2) AS published", [tenantId, item.productId])
       if (published.rows[0]?.published) conflict("Este produto usa tabela publicada. Simule a negociação antes de criar o pedido")
     }
