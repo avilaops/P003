@@ -105,8 +105,9 @@ jobs:
         trap 'rm -f -- "$script_file"' EXIT
         cat > "$script_file" <<'ERP_TIMED_ac05e919a9c58614'
         xcrun simctl list runtimes available
-        runtime=$(xcrun simctl list runtimes available -j | python3 -c "import json,sys; r=[x for x in json.load(sys.stdin)['runtimes'] if x['platform']=='iOS']; print(sorted(r, key=lambda x: [int(n) for n in x['version'].split('.')])[-1]['identifier'])")
-        device=$(xcrun simctl list devicetypes -j | python3 -c "import json,sys; print([x['identifier'] for x in json.load(sys.stdin)['devicetypes'] if 'iPhone' in x['name']][-1])")
+        sdk=$(xcrun --sdk iphonesimulator --show-sdk-version)
+        pick='import json,os,subprocess,sys; sdk=[int(n) for n in os.environ["SDK"].split(".")]; v=lambda r:[int(n) for n in r["version"].split(".")]; rs=[r for r in json.load(sys.stdin)["runtimes"] if r["platform"]=="iOS" and r["isAvailable"] and v(r)[:2]<=sdk[:2]]; r=sorted(rs,key=v)[-1]; d=[t["identifier"] for t in r["supportedDeviceTypes"] if t["productFamily"]=="iPhone"][-1]; print(r["identifier"],d)'
+        read -r runtime device < <(xcrun simctl list runtimes available -j | SDK="$sdk" python3 -c "$pick")
         udid=$(xcrun simctl create erp-ci "$device" "$runtime")
         xcodebuild test -project ErpMobile.xcodeproj -scheme ErpMobile -destination "id=$udid" CODE_SIGNING_ALLOWED=NO
         ERP_TIMED_ac05e919a9c58614
