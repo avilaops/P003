@@ -103,6 +103,23 @@ class ScopeTests(unittest.TestCase):
         self.assertEqual(gate.plan(["apps/fiscal-mcp/src/server.py"]), {"web": False, "api": False, "fiscal": True, "mobile": False})
 
 
+class ChangedPathsTests(unittest.TestCase):
+    def test_missing_base_commit_fails_closed(self):
+        import os, subprocess, tempfile
+        with tempfile.TemporaryDirectory() as directory:
+            subprocess.run(["git", "init", "-q", directory], check=True)
+            old = os.getcwd()
+            os.chdir(directory)
+            os.environ["BASE_SHA"] = "1" * 40
+            try:
+                paths = gate.changed_paths()
+            finally:
+                os.chdir(old)
+                del os.environ["BASE_SHA"]
+        self.assertTrue(all(gate.plan(paths).values()))
+        self.assertTrue(gate.signature_check_required(paths))
+
+
 class GateTests(unittest.TestCase):
     def jobs(self):
         return {"changes": {"result": "success", "outputs": {"web": "true", "api": "false", "fiscal": "false", "mobile": "false"}},

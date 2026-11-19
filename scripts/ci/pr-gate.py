@@ -90,6 +90,10 @@ def changed_paths():
         ['git', 'rev-parse', 'HEAD^'], text=True).strip()
     if not re.fullmatch(r'[a-f0-9]{40}', base):
         raise ValueError('Invalid comparison base SHA')
+    # Checkouts rasos (fetch-depth 2) não trazem a base quando ela ficou para trás da main.
+    # Sem credenciais para buscá-la, o diff é desconhecido: falha fechada, exigindo todas as verificações.
+    if subprocess.run(['git', 'cat-file', '-e', f'{base}^{{commit}}'], capture_output=True).returncode:
+        return ['<base-unavailable>']
     return [path for path in subprocess.check_output([
         'git', 'diff', '--name-only', '--no-renames', '-z', base, 'HEAD'
     ]).decode().split('\0') if path]
