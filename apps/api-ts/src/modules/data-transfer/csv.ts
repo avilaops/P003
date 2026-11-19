@@ -39,6 +39,6 @@ export function parseCsv(content: string): string[][] {
 
 // Spreadsheet formulas are neutralized before quoting.
 export function csvCell(value: string) {
-  const safe = /^[=+\-@]/.test(value) ? `'${value}` : value
+  const safe = /^[=+\-@\t\r]/.test(value) ? `'${value}` : value
   return /[",\r\n]/.test(safe) ? `"${safe.replaceAll('"', '""')}"` : safe
 }

@@ -7,6 +7,7 @@ import type { AppDependencies } from "../../app.js"
 import { authenticateRequest, authorizeRequest, requirePermission } from "../../platform/access.js"
 import type { DatabaseClient } from "../../platform/database.js"
 import { sameJson } from "../../platform/json.js"
+import { acceptInvitations } from "../invitations/routes.js"
 import { Problem } from "../../platform/problem.js"
 import { revisionValue, type Revision } from "../../platform/revision.js"
 import { companySchema, emptyCompany, toCompanyData, validateCompany, type CompanyData, type FieldError } from "./schema.js"
@@ -108,6 +109,7 @@ export function registerCompanyRoutes(app: FastifyInstance, dependencies: AppDep
 
   app.get("/api/v1/companies", async (request, reply) => {
     const identity = await authenticateRequest(request, dependencies)
+    await acceptInvitations(dependencies, identity)
     const body = await withIdentityTransaction(dependencies, identity.subject, async client => {
       const admin = await client.query<{ exists: boolean }>("SELECT EXISTS (SELECT 1 FROM platform_administrators WHERE auth_subject = $1 AND active) AS exists", [identity.subject])
       const platformAdministrator = admin.rows[0]?.exists === true

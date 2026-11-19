@@ -5,7 +5,7 @@ import { z } from "zod"
 
 import type { AppDependencies } from "../../app.js"
 import { authorizeRequest, requirePermission, type AuthorizedContext } from "../../platform/access.js"
-import { commandKey, record } from "../../platform/commands.js"
+import { commandKey, record, remember, replay } from "../../platform/commands.js"
 import { databaseId } from "../../platform/database-id.js"
 import { Problem } from "../../platform/problem.js"
 import { productInputSchema } from "../products/schema.js"
@@ -118,12 +118,14 @@ export function registerDataTransferRoutes(app: FastifyInstance, dependencies: A
   app.post<{ Params: { id: string } }>("/api/v1/products/import/:id/confirm", async (request, reply) => {
     const body = await authorizeRequest(request, dependencies, async context => {
       requirePermission(context, IMPORT)
-      commandKey(request.headers["idempotency-key"])
+      const key = commandKey(request.headers["idempotency-key"])
       if (!databaseId.safeParse(request.params.id).success) throw new Problem(404, "not_found", "Registro não encontrado nesta empresa")
       const id = request.params.id.toLowerCase()
       const job = await findJob(context, id, true)
-      // A confirmed job is final: repeating the command, with any key, returns the same result.
-      if (job.status === "imported") return { data: job }
+      // The key belongs to this job: repeating it returns the result; reusing it on another job is a conflict.
+      if (await replay(context, key, "products.import.confirm", { job: id })) return { data: job }
+      // A confirmed job is final: a new key on the same job returns the same result without importing again.
+      if (job.status === "imported") { await remember(context, key, "products.import.confirm", { job: id }, { job: id }); return { data: job } }
       let imported = 0
       for (const row of job.rows.filter(item => item.error === null && !item.conflict)) {
         const parsed = productInputSchema.safeParse(row.input)
@@ -137,6 +139,7 @@ export function registerDataTransferRoutes(app: FastifyInstance, dependencies: A
       const result = { imported, total: job.rows.length }
       await context.client.query("UPDATE product_import_jobs SET status='imported',result=$3,completed_at=clock_timestamp() WHERE tenant_id=$1 AND id=$2", [context.tenantId, id, JSON.stringify(result)])
       await record(context, request.headers, "product_import", id, "products.imported", result)
+      await remember(context, key, "products.import.confirm", { job: id }, { job: id })
       return { data: await findJob(context, id) }
     })
     return reply.header("cache-control", "no-store").send(body)

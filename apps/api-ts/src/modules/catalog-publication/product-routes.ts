@@ -13,7 +13,7 @@ const notFound = () => new Problem(404, "not_found", "Registro não encontrado n
 const invalid = (title: string) => new Problem(422, "invalid_input", title)
 const clean = (value: string) => !/\p{Cc}/u.test(value)
 const chars = (value: string) => [...value].length
-const optionalText = (limit: number) => z.string().transform(value => value.trim()).refine(value => chars(value) <= limit && clean(value)).optional()
+const optionalText = (limit: number) => z.string().transform(value => value.trim()).refine(value => chars(value) <= limit && clean(value)).nullish().transform(value => value ?? undefined)
 const page = z.number().int().min(1).max(10_000).nullish().transform(value => value ?? null)
 
 const source = z.strictObject({
@@ -37,7 +37,7 @@ export const catalogProfileSchema = z.strictObject({
   mainMediaId: databaseId.transform(value => value.toLowerCase()).nullable(),
   manufacturer: optionalText(80), manufacturerModel: optionalText(80),
   catalogProductName: optionalText(200), liveArea: optionalText(200),
-  catalogSources: z.array(source).max(10).optional(),
+  catalogSources: z.array(source).max(10).nullish().transform(value => value ?? undefined),
   newImage: z.string().nullish(),
 })
 
