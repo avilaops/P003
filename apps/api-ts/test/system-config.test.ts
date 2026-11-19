@@ -2,7 +2,7 @@ import assert from "node:assert/strict"
 import { createHash, randomUUID } from "node:crypto"
 import test from "node:test"
 
-import { platformFixture } from "./platform-fixture.js"
+import { platformContext, type PlatformToken } from "./platform-context.js"
 
 const skip = !process.env.API_TS_TEST_ADMIN_URL
 const admin = ["system.custom_fields.read", "system.custom_fields.manage", "system.labels.manage", "system.workflows.manage", "system.files.read", "system.files.manage"]
@@ -11,7 +11,7 @@ const etag = (response: { headers: Record<string, unknown> }) => String(response
 const json = (response: { body: string }) => JSON.parse(response.body)
 
 test("system-config: campos personalizados", { skip }, async () => {
-  const f = await platformFixture({ adminPermissions: admin, readerPermissions: reader })
+  const f = await platformContext({ adminPermissions: admin, readerPermissions: reader })
   try {
     const input = { entityType: "product", code: "cor", label: " Cor ", valueType: "choice", choices: ["verde", "azul", "azul"] }
     const url = "/api/v1/system/custom-fields"
@@ -59,7 +59,7 @@ test("system-config: campos personalizados", { skip }, async () => {
 })
 
 test("system-config: modelos de etiqueta", { skip }, async () => {
-  const f = await platformFixture({ adminPermissions: admin, readerPermissions: reader })
+  const f = await platformContext({ adminPermissions: admin, readerPermissions: reader })
   try {
     const url = "/api/v1/system/label-templates"
     const input = { name: "Gôndola", widthMm: 60, heightMm: 40, source: "product", elements: [{ kind: "text", field: "name", xMm: 2, yMm: 2, widthMm: 40, heightMm: 8 }, { kind: "barcode", field: "code", label: " EAN ", xMm: 2, yMm: 12, widthMm: 40, heightMm: 20, fontSizePt: 8 }] }
@@ -77,7 +77,7 @@ test("system-config: modelos de etiqueta", { skip }, async () => {
     assert.equal(tpl.layout.elements[1].label, "EAN")
     assert.deepEqual(json(await f.call({ method: "GET", url, token: "other", tenant: f.otherTenant })).data, [])
     assert.equal(json(await f.call({ method: "GET", url })).data.length, 1)
-    const put = (body: unknown, match: string | undefined, extra: Record<string, unknown> = {}) => f.call({ method: "PUT", url: `${url}/${extra.id ?? tpl.id}`, ...(extra.token ? { token: extra.token as string } : {}), ...(extra.tenant ? { tenant: extra.tenant as string } : {}), body, headers: match ? { "if-match": match } : {} })
+    const put = (body: unknown, match: string | undefined, extra: Record<string, unknown> = {}) => f.call({ method: "PUT", url: `${url}/${extra.id ?? tpl.id}`, ...(extra.token ? { token: extra.token as PlatformToken } : {}), ...(extra.tenant ? { tenant: extra.tenant as string } : {}), body, headers: match ? { "if-match": match } : {} })
     assert.equal((await put({ ...input, name: "Novo" }, undefined)).statusCode, 428)
     assert.equal((await put({ ...input, name: "Novo" }, '"3"')).statusCode, 412)
     assert.equal((await put({ ...input, extra: 1 }, '"1"')).statusCode, 422)
@@ -91,7 +91,7 @@ test("system-config: modelos de etiqueta", { skip }, async () => {
 })
 
 test("system-config: fluxos de trabalho", { skip }, async () => {
-  const f = await platformFixture({ adminPermissions: admin })
+  const f = await platformContext({ adminPermissions: admin })
   try {
     const url = "/api/v1/system/workflows"
     const flow = (version = 1) => ({ code: "aprovacao", version, name: "Aprovação", states: [{ code: "novo", label: "Novo", isInitial: true }, { code: "ok", label: "Aprovado", isTerminal: true }], transitions: [{ fromState: "novo", toState: "ok", permissionCode: "system.files.read" }] })
@@ -142,7 +142,7 @@ test("system-config: fluxos de trabalho", { skip }, async () => {
 })
 
 test("system-config: arquivos", { skip }, async () => {
-  const f = await platformFixture({ adminPermissions: admin, readerPermissions: reader })
+  const f = await platformContext({ adminPermissions: admin, readerPermissions: reader })
   try {
     const url = "/api/v1/system/files"
     const content = Buffer.from("%PDF-1.4 conteúdo")
@@ -150,7 +150,7 @@ test("system-config: arquivos", { skip }, async () => {
     const sha = createHash("sha256").update(content).digest("hex")
     await f.seed.query("INSERT INTO legacy_history(tenant_id,id,collection,title,details) VALUES($1,$2,'docs','Manual','{}'),($3,$4,'docs','Alheio','{}')", [f.tenant, history, f.otherTenant, foreignHistory])
     await f.seed.query("INSERT INTO legacy_files(tenant_id,id,history_id,filename,media_type,content,sha256) VALUES($1,$2,$3,'manual ç.pdf','application/pdf',$4,$5),($1,$6,$3,'x.html','text/html',$7,$5),($8,$9,$10,'alheio.pdf','application/pdf',$4,$5)", [f.tenant, legacy, history, content, sha, legacyHtml, Buffer.from("<script>1</script>"), f.otherTenant, foreignFile, foreignHistory])
-    await f.seed.query("INSERT INTO system_config.files(tenant_id,id,storage_key,original_name,media_type,byte_size,sha256,status,created_by) SELECT $1,$2,'k1','sistema.png','image/png',10,$3,'available',id FROM identities WHERE auth_subject='admin'", [f.tenant, systemFile, sha])
+    await f.seed.query("INSERT INTO system_config.files(tenant_id,id,storage_key,original_name,media_type,byte_size,sha256,status,created_by) SELECT $1,$2,'k1','sistema.png','image/png',10,$3,'available',id FROM identities WHERE auth_subject='user'", [f.tenant, systemFile, sha])
 
     assert.equal((await f.call({ method: "GET", url, token: null })).statusCode, 401)
     assert.equal((await f.call({ method: "GET", url, token: "visitor" })).statusCode, 403)

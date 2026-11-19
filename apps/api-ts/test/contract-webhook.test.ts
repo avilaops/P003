@@ -2,7 +2,7 @@ import assert from "node:assert/strict"
 import test from "node:test"
 
 import { DocuSeal, type ContractProvider } from "../src/modules/company-account/contract-webhook.js"
-import { platformFixture } from "./platform-fixture.js"
+import { platformContext } from "./platform-context.js"
 
 const enabled = { skip: !process.env.API_TS_TEST_ADMIN_URL }
 const SECRET = "fixture-webhook-secret-with-32-chars!!"
@@ -16,7 +16,7 @@ class FakePortal implements ContractProvider {
   pdfs: string[] = []
   fail = false
   email = "Cliente@example.test"
-  constructor(private readonly tenant: string, private readonly contract: string) {}
+  constructor(public tenant: string, private readonly contract: string) {}
   verifyWebhook(candidate: string) { return candidate === SECRET }
   async request(_method: "GET", path: string) {
     this.requests.push(path)
@@ -32,8 +32,9 @@ class FakePortal implements ContractProvider {
 }
 
 async function setup() {
-  const portal = new FakePortal("11111111-1111-4111-8111-111111111111", CONTRACT)
-  const f = await platformFixture({ adminPermissions: ["platform.company.read"], dependencies: { companyAccount: { contractWebhook: portal, payments: null, assistant: null } } })
+  const portal = new FakePortal("", CONTRACT)
+  const f = await platformContext({ adminPermissions: ["platform.company.read"], dependencies: { companyAccount: { contractWebhook: portal, payments: null, assistant: null } } })
+  portal.tenant = f.tenant // o helper sorteia as empresas
   for (const tenant of [f.tenant, f.otherTenant]) {
     const party = tenant === f.tenant ? PARTY : "aaaaaaaa-0000-4000-8000-000000000002", order = tenant === f.tenant ? ORDER : "dddddddd-dddd-4ddd-8ddd-ddddddddddd2"
     await f.seed.query("INSERT INTO parties(id,tenant_id,person_type,legal_name,tax_id,is_customer,is_supplier,status) VALUES($1,$2,'fisica','Cliente','52998224725',true,false,'active')", [party, tenant])
@@ -119,7 +120,7 @@ test("webhook de contratos: isola empresas, pede repetição se o contrato é de
 })
 
 test("webhook de contratos: sem integração configurada responde 409 e DocuSeal compara segredo e origem", enabled, async () => {
-  const f = await platformFixture({ adminPermissions: ["platform.company.read"], dependencies: { companyAccount: { contractWebhook: null, payments: null, assistant: null } } })
+  const f = await platformContext({ adminPermissions: ["platform.company.read"], dependencies: { companyAccount: { contractWebhook: null, payments: null, assistant: null } } })
   try {
     const response = await f.app.inject({ method: "POST", url: `/api/v1/webhooks/contracts/${f.tenant}`, headers: { "content-type": "application/json" }, payload: "{}" })
     assert.equal(response.statusCode, 409)

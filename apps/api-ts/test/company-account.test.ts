@@ -1,14 +1,14 @@
 import assert from "node:assert/strict"
 import test from "node:test"
 
-import { platformFixture } from "./platform-fixture.js"
+import { platformContext } from "./platform-context.js"
 import { FakeMercadoPago, companyPermissions, planPrice } from "./company-account-support.js"
 
 const enabled = { skip: !process.env.API_TS_TEST_ADMIN_URL }
 const problem = (response: { json(): unknown }) => response.json() as { type: string; status: number; title: string }
 
 async function setup(payments: FakeMercadoPago | null = new FakeMercadoPago()) {
-  const fixture = await platformFixture({ adminPermissions: companyPermissions, readerPermissions: ["platform.company.read"], dependencies: { companyAccount: { payments, assistant: null, contractWebhook: null } } })
+  const fixture = await platformContext({ adminPermissions: companyPermissions, readerPermissions: ["platform.company.read"], dependencies: { companyAccount: { payments, assistant: null, contractWebhook: null } } })
   return { ...fixture, payments }
 }
 const checkout = (f: Awaited<ReturnType<typeof setup>>, extra: Partial<Parameters<typeof f.call>[0]> = {}) =>
@@ -25,7 +25,7 @@ test("company-account: GET lista planos, assinaturas e uso; exige login e permis
     assert.equal(body.canEdit, true)
     assert.equal(body.providerConfigured, true)
     assert.equal(body.plans.length, 6)
-    assert.equal(body.activeUsers, 3)
+    assert.equal(body.activeUsers, 2) // persona `user` e `denied` na empresa A
     assert.equal(body.productPhotoBytes, 0)
     assert.deepEqual(body.subscriptions, [])
     const reader = await f.call({ method: "GET", url: "/api/v1/company-account", token: "reader" })

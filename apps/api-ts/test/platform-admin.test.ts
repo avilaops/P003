@@ -5,7 +5,7 @@ import type { LightMyRequestResponse } from "fastify"
 
 import { buildApp } from "../src/app.js"
 import { SettingsSecretVault } from "../src/modules/platform-admin/secret-vault.js"
-import { platformFixture } from "./platform-fixture.js"
+import { platformContext, type PlatformToken } from "./platform-context.js"
 
 const PERMS = ["platform.audit.read", "platform.roles.read", "platform.integrations.manage", "platform.legacy.read"]
 const keyring = JSON.stringify({ active: "k1", keys: { k1: randomBytes(32).toString("base64") } })
@@ -35,7 +35,7 @@ test("cofre de segredos usa AES-256-GCM com o contexto como dado autenticado", (
 })
 
 test("permissões, auditoria, chaves de serviço, histórico legado e OpenAPI", { skip }, async () => {
-  const f = await platformFixture({ adminPermissions: PERMS, readerPermissions: ["platform.audit.read"] })
+  const f = await platformContext({ adminPermissions: PERMS, readerPermissions: ["platform.audit.read"] })
   try {
     const { call, seed, tenant, otherTenant } = f
 
@@ -158,14 +158,13 @@ test("permissões, auditoria, chaves de serviço, histórico legado e OpenAPI", 
 })
 
 test("configuração SMTP da plataforma: somente administradores, ETag, cifra e sem segredo na resposta", { skip }, async () => {
-  const f = await platformFixture({ adminPermissions: PERMS, dependencies: { platformAdmin: { mail: { vault } } } })
+  const f = await platformContext({ adminPermissions: PERMS, readerIsPlatformAdministrator: true, dependencies: { platformAdmin: { mail: { vault } } } })
   try {
     const { call, seed } = f
     // `reader` é administrador da plataforma; `admin` (administrador só da empresa) não é.
-    await seed.query("INSERT INTO platform_administrators(auth_subject,granted_by,reason) VALUES('reader','teste','SMTP')")
     const url = "/api/v1/platform/mail-settings"
     const settings = { enabled: true, name: "Central", host: " SMTP.Example.Test ", port: 587, security: "starttls", username: "usuario", fromName: "Empresa", fromAddress: "vendas@example.test", password: "senha-secreta-teste" }
-    const put = (revision: string | undefined, payload: unknown, token = "reader") => call({ method: "PUT", url, token, tenant: null, body: payload, headers: revision ? { "if-match": revision } : {} })
+    const put = (revision: string | undefined, payload: unknown, token: PlatformToken = "reader") => call({ method: "PUT", url, token, tenant: null, body: payload, headers: revision ? { "if-match": revision } : {} })
     problem(await call({ method: "GET", url, token: null, tenant: null }), 401, "missing_token")
     problem(await call({ method: "GET", url, tenant: null }), 403, "forbidden")
     problem(await put('"0"', settings, "admin"), 403, "forbidden")
@@ -208,9 +207,8 @@ test("configuração SMTP da plataforma: somente administradores, ETag, cifra e 
 
 test("configuração SMTP: sem cofre não ativa nem salva senha; ambiente aparece até o primeiro salvamento", { skip }, async () => {
   const environment = { enabled: true, name: "Ambiente", host: "smtp.env.test", port: 465, security: "tls" as const, username: "env", fromName: "Env", fromAddress: "env@example.test", passwordSet: true }
-  const f = await platformFixture({ adminPermissions: PERMS, dependencies: { platformAdmin: { mail: { environment } } } })
+  const f = await platformContext({ adminPermissions: PERMS, readerIsPlatformAdministrator: true, dependencies: { platformAdmin: { mail: { environment } } } })
   try {
-    await f.seed.query("INSERT INTO platform_administrators(auth_subject,granted_by,reason) VALUES('reader','teste','SMTP')")
     const url = "/api/v1/platform/mail-settings"
     const initial = body(await f.call({ method: "GET", url, token: "reader", tenant: null }))
     assert.equal(initial.source, "environment")

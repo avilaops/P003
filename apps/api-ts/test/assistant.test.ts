@@ -4,7 +4,7 @@ import test from "node:test"
 import { AssistantUnavailable, type AssistantProvider, type ModelMessage } from "../src/modules/company-account/assistant-provider.js"
 import { navigationRequest, parseCall } from "../src/modules/company-account/assistant-tools.js"
 import { validateInferenceOrigin } from "../src/modules/company-account/assistant-ollama.js"
-import { platformFixture } from "./platform-fixture.js"
+import { platformContext } from "./platform-context.js"
 
 const enabled = { skip: !process.env.API_TS_TEST_ADMIN_URL }
 const ORDER_A = "dddddddd-dddd-4ddd-8ddd-dddddddddddd", ORDER_B = "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee"
@@ -43,7 +43,7 @@ class FakeAssistant implements AssistantProvider {
 }
 
 async function setup(assistant: AssistantProvider | null, adminPermissions = ["catalog.products.read", "inventory.stock.read", "catalog.parties.read", "sales.orders.read"]) {
-  const f = await platformFixture({ adminPermissions, dependencies: { companyAccount: { assistant, payments: null, contractWebhook: null } } })
+  const f = await platformContext({ adminPermissions, dependencies: { companyAccount: { assistant, payments: null, contractWebhook: null } } })
   const { seed, tenant, otherTenant } = f
   await seed.query("INSERT INTO products(id,tenant_id,sku,name,unit,price_cents,status) VALUES($1,$2,'SKU-123','Produto de teste','UN',1234,'active'),($3,$4,'SKU-123','SEGREDO OUTRA EMPRESA','UN',99999,'active')", [PRODUCT_A, tenant, PRODUCT_B, otherTenant])
   await seed.query("INSERT INTO stock_balances(tenant_id,product_id,quantity_micros) VALUES($1,$2,42000000)", [tenant, PRODUCT_A])
