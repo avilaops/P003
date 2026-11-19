@@ -185,6 +185,7 @@ export const draftInputSchema = z.strictObject({
   model: z.number().int().min(0),
   number: z.number().int().min(0).nullable().optional(),
   operationNature: z.string(),
+  operationTypeId: z.guid().nullable().optional(),
   paymentTerms: z.string().nullable().optional(),
   payments: z.array(draftPaymentSchema).max(990).nullable().optional(),
   presenceIndicator: z.number().int().min(0).nullable().optional(),

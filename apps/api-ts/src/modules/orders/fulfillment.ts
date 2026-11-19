@@ -6,7 +6,7 @@ import { conflict, type OrderSnapshot } from "./acceptance.js"
 import type { CommandHeaders } from "./receivables.js"
 
 export async function heldQuantity(context: AuthorizedContext, product: unknown) {
-  const result = await context.client.query("SELECT COALESCE(sum(l.quantity_micros-order_line_delivered(l.tenant_id,l.order_id,l.line_number)),0)::bigint AS quantity FROM sales_order_lines l JOIN sales_orders o ON o.tenant_id=l.tenant_id AND o.id=l.order_id WHERE l.tenant_id=$1 AND l.product_id=$2 AND o.status='confirmed'", [context.tenantId, product])
+  const result = await context.client.query("SELECT COALESCE(sum(l.quantity_micros-order_line_delivered(l.tenant_id,l.order_id,l.line_number)),0)::bigint AS quantity FROM sales_order_lines l JOIN sales_orders o ON o.tenant_id=l.tenant_id AND o.id=l.order_id WHERE l.tenant_id=$1 AND l.product_id=$2 AND o.status='confirmed' AND NOT EXISTS(SELECT 1 FROM fiscal_operation_types t WHERE t.tenant_id=o.tenant_id AND t.id=o.operation_type_id AND NOT t.moves_stock)", [context.tenantId, product])
   return BigInt(String(result.rows[0]!.quantity))
 }
 
