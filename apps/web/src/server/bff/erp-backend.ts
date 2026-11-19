@@ -1,6 +1,7 @@
 import "server-only"
 import { financeRoute } from "./finance-resources"
 import { stockLocationPath } from "./stock-location-path"
+import { platformRoute } from "./platform-resources"
 export { financeRoute, stockLocationPath }
 
 // Permanent ownership after the four-module transition. The previous release,
@@ -94,6 +95,7 @@ export function erpHealthOrigins(rustOrigin: string, environment: BackendEnviron
 }
 export function selectErpBackend(method: string, resource: string, rustOrigin: string, environment: BackendEnvironment) {
   if (financeRoute(method, resource)) return { origin: typescriptOrigin(environment), backend: "typescript" as const, module: "finance" as const }
+  if (platformRoute(method, resource)) return { origin: typescriptOrigin(environment), backend: "typescript" as const, module: "preferences" as const }
   if (stockLocationPath(resource,method.toUpperCase())) return { origin: typescriptOrigin(environment), backend: "typescript" as const, module: "inventory" as const }
   const route = routes.find(route => route.methods.includes(method.toUpperCase()) && route.path.test(resource))
   if (salesPolicyResource(method, resource)) return { origin: typescriptOrigin(environment), backend: "typescript" as const, module: "sales" as const }

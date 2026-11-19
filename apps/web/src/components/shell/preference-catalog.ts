@@ -17,6 +17,7 @@ export const preferenceCategories: PreferenceCategory[] = [
     { title: "Configurações do sistema", items: [{ label: "Interface", href: "/preferencias/sistema", description: "Aparência e quantidade de produtos por página." }, { label: "E-mail (SMTP)", href: "/preferencias/sistema/email", description: "Servidor de envio compartilhado da plataforma." }] },
     { title: "Tabelas e configurações adicionais", items: [
       { label: "Consulta de exclusões realizadas", href: "/preferencias/sistema/exclusoes" }, { label: "Gerenciador de arquivos", href: "/preferencias/sistema/arquivos" }, { label: "Relatórios customizados", href: "/preferencias/sistema/relatorios-customizados" }, { label: "Etiquetas customizadas", href: "/preferencias/sistema/etiquetas-customizadas" },
+      { label: "Parâmetros da empresa", href: "/preferencias/sistema/parametros", description: "Catálogo de parâmetros com valor atual, padrão, efeito e histórico." },
       { label: "Registro de atividades", href: "/preferencias/seguranca" },
       { label: "Usuários", href: "/preferencias/usuarios" },
       { label: "Papéis e permissões", href: "/preferencias/papeis" },

@@ -2,6 +2,7 @@ import "server-only"
 import { fiscalApiOrigin } from "@/lib/api/local-fiscal-origin"
 import { financeRoute, selectErpBackend, salesPolicyResource, stockLocationPath } from "@/server/bff/erp-backend"
 
+import { platformRoute } from "@/server/bff/platform-resources"
 import { currentIdentitySession, currentSession, erpConfiguration } from "@/server/auth/erp-session"
 
 export async function forwardErp(request: Request, resource: string) {
@@ -108,7 +109,8 @@ export async function forwardErp(request: Request, resource: string) {
   const orderAcceptanceResource = /^\/orders\/[a-f0-9-]{36}\/accept$/i.test(resource)
   if (orderAcceptanceResource && request.method !== "POST") return Response.json({ title: "Método inválido" }, { status: 405 })
   const purchaseResource = purchaseCollection || /^\/(?:purchase-orders|purchase-receipts|payables|financial-payables)\/[a-f0-9-]{36}$|^\/purchase-orders\/[a-f0-9-]{36}\/(?:confirm|cancel|close)$|^\/(?:payables|financial-payables)\/[a-f0-9-]{36}\/(?:payments|reverse-payment)$/i.test(resource)
-  const financialRoute = financeRoute(request.method, resource)
+  const platformDownload = request.method === "GET" && !!platformRoute(request.method, resource)?.download
+  const financialRoute = financeRoute(request.method, resource) ?? platformRoute(request.method, resource)
   if (financialEmailResource && !financialRoute && new URL(request.url).search) return Response.json({ title: "Consulta inválida" }, { status: 400 })
   if (!financialRoute && !stockLocationPath(resource, request.method) && !(resource === "/sales/overview" && request.method === "GET") && !salesImportResource && !salesPolicy && !orderAcceptanceResource && !supportingResource && !platformMailResource && !orderDocumentResource && !posResource && !documentEmailResource && !priceListResource && !opportunityResource && !negotiationResource && !warrantyResource && !simulatorResource && !dashboardResource && !productCostResource && !priceTableResource && !fixedExpenseResource && !commercialResource && !proposalResource && !payrollResource && !registryResource && !salesSettingsResource && !accountResource && !continuityResource && !auditResource && !systemResource && !returnResource && !logisticsResource && !invitationResource && !referenceResource && !financialAccountEntriesResource && !financialAccountTransfersResource && !inventoryCountResource && !serviceKeyResource && !purchaseResource && !productTransferResource && !productCatalogResource && !productFinishesResource && !/^\/(?:me|company|companies|financial-settings|preferences|staff|users|roles|permissions|products|stock|parties|orders|receivables)$|^\/(?:users|roles|products|parties|staff|orders|receivables)\/[a-f0-9-]{36}$|^\/stock\/movements$|^\/orders\/[a-f0-9-]{36}\/(?:confirm|cancel|complete)$|^\/receivables\/[a-f0-9-]{36}\/(?:payments|reverse-payment)$/i.test(resource)) return Response.json({ title: "Recurso inválido" }, { status: 400 })
   try {
@@ -300,7 +302,7 @@ export async function forwardErp(request: Request, resource: string) {
     const output = new Headers({ "Cache-Control": "no-store, no-transform", "Content-Type": response.headers.get("content-type") || "application/json" })
     if ((productExportResource || orderDocumentResource) && response.ok) { const disposition = response.headers.get("content-disposition"); if (disposition) output.set("Content-Disposition", disposition) }
     for (const name of ["etag", "x-request-id", "idempotency-replayed", "x-erp-backend"]) { const value = response.headers.get(name); if (value) output.set(name, value) }
-    if ((supportingDownloadResource || warrantyDownload) && response.ok) {
+    if ((supportingDownloadResource || warrantyDownload || platformDownload) && response.ok) {
       output.set("X-Content-Type-Options", "nosniff")
       output.set("Content-Disposition", response.headers.get("content-disposition") || "attachment")
       return new Response(response.body, { status: response.status, headers: output })
