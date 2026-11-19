@@ -5,6 +5,26 @@
     "version": "1.0.0"
   },
   "paths": {
+    "/api/health": {
+      "get": {
+        "operationId": "getApiHealth",
+        "responses": {
+          "200": {
+            "description": "Sucesso"
+          },
+          "default": {
+            "description": "Erro",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/accounting": {
       "get": {
         "operationId": "getApiV1Accounting",
@@ -252,6 +272,58 @@
     "/api/v1/accounting/sync": {
       "post": {
         "operationId": "postApiV1AccountingSync",
+        "responses": {
+          "200": {
+            "description": "Sucesso"
+          },
+          "default": {
+            "description": "Erro",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": [],
+            "tenantHeader": []
+          }
+        ]
+      }
+    },
+    "/api/v1/assistant": {
+      "post": {
+        "operationId": "postApiV1Assistant",
+        "responses": {
+          "200": {
+            "description": "Sucesso"
+          },
+          "default": {
+            "description": "Erro",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": [],
+            "tenantHeader": []
+          }
+        ]
+      }
+    },
+    "/api/v1/audit": {
+      "get": {
+        "operationId": "getApiV1Audit",
         "responses": {
           "200": {
             "description": "Sucesso"
@@ -1428,6 +1500,162 @@
             }
           }
         ],
+        "responses": {
+          "200": {
+            "description": "Sucesso"
+          },
+          "default": {
+            "description": "Erro",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": [],
+            "tenantHeader": []
+          }
+        ]
+      }
+    },
+    "/api/v1/company-account": {
+      "get": {
+        "operationId": "getApiV1CompanyAccount",
+        "responses": {
+          "200": {
+            "description": "Sucesso"
+          },
+          "default": {
+            "description": "Erro",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": [],
+            "tenantHeader": []
+          }
+        ]
+      }
+    },
+    "/api/v1/company-account/cancel": {
+      "post": {
+        "operationId": "postApiV1CompanyAccountCancel",
+        "responses": {
+          "200": {
+            "description": "Sucesso"
+          },
+          "default": {
+            "description": "Erro",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": [],
+            "tenantHeader": []
+          }
+        ]
+      }
+    },
+    "/api/v1/company-account/change-plan": {
+      "post": {
+        "operationId": "postApiV1CompanyAccountChangePlan",
+        "responses": {
+          "200": {
+            "description": "Sucesso"
+          },
+          "default": {
+            "description": "Erro",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": [],
+            "tenantHeader": []
+          }
+        ]
+      }
+    },
+    "/api/v1/company-account/checkout": {
+      "post": {
+        "operationId": "postApiV1CompanyAccountCheckout",
+        "responses": {
+          "200": {
+            "description": "Sucesso"
+          },
+          "default": {
+            "description": "Erro",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": [],
+            "tenantHeader": []
+          }
+        ]
+      }
+    },
+    "/api/v1/company-account/invoices": {
+      "get": {
+        "operationId": "getApiV1CompanyAccountInvoices",
+        "responses": {
+          "200": {
+            "description": "Sucesso"
+          },
+          "default": {
+            "description": "Erro",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": [],
+            "tenantHeader": []
+          }
+        ]
+      }
+    },
+    "/api/v1/company-account/refresh": {
+      "post": {
+        "operationId": "postApiV1CompanyAccountRefresh",
         "responses": {
           "200": {
             "description": "Sucesso"
@@ -6251,6 +6479,92 @@
         ]
       }
     },
+    "/api/v1/integrations/service-keys": {
+      "get": {
+        "operationId": "getApiV1IntegrationsServiceKeys",
+        "responses": {
+          "200": {
+            "description": "Sucesso"
+          },
+          "default": {
+            "description": "Erro",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": [],
+            "tenantHeader": []
+          }
+        ]
+      },
+      "post": {
+        "operationId": "postApiV1IntegrationsServiceKeys",
+        "responses": {
+          "200": {
+            "description": "Sucesso"
+          },
+          "default": {
+            "description": "Erro",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": [],
+            "tenantHeader": []
+          }
+        ]
+      }
+    },
+    "/api/v1/integrations/service-keys/{id}": {
+      "delete": {
+        "operationId": "deleteApiV1IntegrationsServiceKeysId",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Sucesso"
+          },
+          "default": {
+            "description": "Erro",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": [],
+            "tenantHeader": []
+          }
+        ]
+      }
+    },
     "/api/v1/inventory-counts": {
       "get": {
         "operationId": "getApiV1InventoryCounts",
@@ -6472,6 +6786,68 @@
       },
       "put": {
         "operationId": "putApiV1InventorySettings",
+        "responses": {
+          "200": {
+            "description": "Sucesso"
+          },
+          "default": {
+            "description": "Erro",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": [],
+            "tenantHeader": []
+          }
+        ]
+      }
+    },
+    "/api/v1/legacy-history": {
+      "get": {
+        "operationId": "getApiV1LegacyHistory",
+        "responses": {
+          "200": {
+            "description": "Sucesso"
+          },
+          "default": {
+            "description": "Erro",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": [],
+            "tenantHeader": []
+          }
+        ]
+      }
+    },
+    "/api/v1/legacy-history/files/{id}": {
+      "get": {
+        "operationId": "getApiV1LegacyHistoryFilesId",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Sucesso"
@@ -8032,6 +8408,82 @@
             }
           }
         ],
+        "responses": {
+          "200": {
+            "description": "Sucesso"
+          },
+          "default": {
+            "description": "Erro",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": [],
+            "tenantHeader": []
+          }
+        ]
+      }
+    },
+    "/api/v1/permissions": {
+      "get": {
+        "operationId": "getApiV1Permissions",
+        "responses": {
+          "200": {
+            "description": "Sucesso"
+          },
+          "default": {
+            "description": "Erro",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": [],
+            "tenantHeader": []
+          }
+        ]
+      }
+    },
+    "/api/v1/platform/mail-settings": {
+      "get": {
+        "operationId": "getApiV1PlatformMailSettings",
+        "responses": {
+          "200": {
+            "description": "Sucesso"
+          },
+          "default": {
+            "description": "Erro",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": [],
+            "tenantHeader": []
+          }
+        ]
+      },
+      "put": {
+        "operationId": "putApiV1PlatformMailSettings",
         "responses": {
           "200": {
             "description": "Sucesso"
@@ -11810,6 +12262,92 @@
         ]
       }
     },
+    "/api/v1/system/custom-fields": {
+      "get": {
+        "operationId": "getApiV1SystemCustomFields",
+        "responses": {
+          "200": {
+            "description": "Sucesso"
+          },
+          "default": {
+            "description": "Erro",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": [],
+            "tenantHeader": []
+          }
+        ]
+      },
+      "post": {
+        "operationId": "postApiV1SystemCustomFields",
+        "responses": {
+          "200": {
+            "description": "Sucesso"
+          },
+          "default": {
+            "description": "Erro",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": [],
+            "tenantHeader": []
+          }
+        ]
+      }
+    },
+    "/api/v1/system/custom-fields/{id}": {
+      "put": {
+        "operationId": "putApiV1SystemCustomFieldsId",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Sucesso"
+          },
+          "default": {
+            "description": "Erro",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": [],
+            "tenantHeader": []
+          }
+        ]
+      }
+    },
     "/api/v1/system/custom-reports": {
       "get": {
         "operationId": "getApiV1SystemCustomReports",
@@ -11863,6 +12401,348 @@
     "/api/v1/system/custom-reports/{id}": {
       "put": {
         "operationId": "putApiV1SystemCustomReportsId",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Sucesso"
+          },
+          "default": {
+            "description": "Erro",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": [],
+            "tenantHeader": []
+          }
+        ]
+      }
+    },
+    "/api/v1/system/files": {
+      "get": {
+        "operationId": "getApiV1SystemFiles",
+        "responses": {
+          "200": {
+            "description": "Sucesso"
+          },
+          "default": {
+            "description": "Erro",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": [],
+            "tenantHeader": []
+          }
+        ]
+      }
+    },
+    "/api/v1/system/files/{id}/archive": {
+      "post": {
+        "operationId": "postApiV1SystemFilesIdArchive",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Sucesso"
+          },
+          "default": {
+            "description": "Erro",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": [],
+            "tenantHeader": []
+          }
+        ]
+      }
+    },
+    "/api/v1/system/files/{id}/content": {
+      "get": {
+        "operationId": "getApiV1SystemFilesIdContent",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Sucesso"
+          },
+          "default": {
+            "description": "Erro",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": [],
+            "tenantHeader": []
+          }
+        ]
+      }
+    },
+    "/api/v1/system/label-templates": {
+      "get": {
+        "operationId": "getApiV1SystemLabelTemplates",
+        "responses": {
+          "200": {
+            "description": "Sucesso"
+          },
+          "default": {
+            "description": "Erro",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": [],
+            "tenantHeader": []
+          }
+        ]
+      },
+      "post": {
+        "operationId": "postApiV1SystemLabelTemplates",
+        "responses": {
+          "200": {
+            "description": "Sucesso"
+          },
+          "default": {
+            "description": "Erro",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": [],
+            "tenantHeader": []
+          }
+        ]
+      }
+    },
+    "/api/v1/system/label-templates/{id}": {
+      "put": {
+        "operationId": "putApiV1SystemLabelTemplatesId",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Sucesso"
+          },
+          "default": {
+            "description": "Erro",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": [],
+            "tenantHeader": []
+          }
+        ]
+      }
+    },
+    "/api/v1/system/workflows": {
+      "get": {
+        "operationId": "getApiV1SystemWorkflows",
+        "responses": {
+          "200": {
+            "description": "Sucesso"
+          },
+          "default": {
+            "description": "Erro",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": [],
+            "tenantHeader": []
+          }
+        ]
+      },
+      "post": {
+        "operationId": "postApiV1SystemWorkflows",
+        "responses": {
+          "200": {
+            "description": "Sucesso"
+          },
+          "default": {
+            "description": "Erro",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": [],
+            "tenantHeader": []
+          }
+        ]
+      }
+    },
+    "/api/v1/system/workflows/{id}": {
+      "put": {
+        "operationId": "putApiV1SystemWorkflowsId",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Sucesso"
+          },
+          "default": {
+            "description": "Erro",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": [],
+            "tenantHeader": []
+          }
+        ]
+      }
+    },
+    "/api/v1/system/workflows/{id}/archive": {
+      "post": {
+        "operationId": "postApiV1SystemWorkflowsIdArchive",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Sucesso"
+          },
+          "default": {
+            "description": "Erro",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": [],
+            "tenantHeader": []
+          }
+        ]
+      }
+    },
+    "/api/v1/system/workflows/{id}/publish": {
+      "post": {
+        "operationId": "postApiV1SystemWorkflowsIdPublish",
         "parameters": [
           {
             "name": "id",
@@ -13178,6 +14058,42 @@
         ]
       }
     },
+    "/api/v1/webhooks/contracts/{tenant}": {
+      "post": {
+        "operationId": "postApiV1WebhooksContractsTenant",
+        "parameters": [
+          {
+            "name": "tenant",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Sucesso"
+          },
+          "default": {
+            "description": "Erro",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": [],
+            "tenantHeader": []
+          }
+        ]
+      }
+    },
     "/health/live": {
       "get": {
         "operationId": "getHealthLive",
@@ -13239,6 +14155,26 @@
             }
           }
         ],
+        "responses": {
+          "200": {
+            "description": "Sucesso"
+          },
+          "default": {
+            "description": "Erro",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/openapi.json": {
+      "get": {
+        "operationId": "getOpenapiJson",
         "responses": {
           "200": {
             "description": "Sucesso"
