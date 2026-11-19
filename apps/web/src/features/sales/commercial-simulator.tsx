@@ -496,6 +496,8 @@ function SelectedProductContent({ item, name, sku, tenant, update, remove, order
   const colors = product.value?.tenantId === tenant ? product.value.data : null
   const palette = catalogPaletteFor(item.line === "national" ? null : colors?.finishingPalette)
   const selectedFinishes = [item.structureColor, item.swingArmColor, item.upholsteryColor, item.plateHolderType].filter(Boolean).join(" · ")
+  // National items only offer the plate holder; without registered types there is nothing to choose.
+  const hasFinishes = item.line !== "national" || Boolean(colors?.plateHolderTypes?.length || item.plateHolderType)
   return <>
     <tr>
       <th scope="row" className="min-w-0 break-words py-3 pr-2 text-left align-top font-medium"><span className="block text-xs text-muted-foreground">{sku}</span>{name}</th>
@@ -506,7 +508,7 @@ function SelectedProductContent({ item, name, sku, tenant, update, remove, order
     <tr className="border-b last:border-0"><td colSpan={orderMode ? 6 : 3} className="min-w-0 pb-3">
       {product.error && <div className={orderMode ? "flex flex-wrap items-center gap-2 text-xs" : "space-y-2 rounded-lg border p-2 text-xs"}><p role="alert">{orderMode ? "Acabamentos indisponíveis" : <RequestError message={product.error} status={product.status} />}</p><Button type="button" variant="outline" disabled={product.loading} aria-label={`Recarregar acabamentos de ${name}`} onClick={product.reload}>{product.loading ? "Carregando acabamentos…" : orderMode ? "Tentar de novo" : "Recarregar acabamentos"}</Button></div>}
       {orderMode && product.loading && <p role="status" className="text-xs text-muted-foreground">Carregando acabamentos…</p>}
-      {(!orderMode || !!colors && !product.error) && <details className="group min-w-0" onInvalidCapture={event => { event.currentTarget.open = true }}>
+      {(!orderMode || !!colors && !product.error) && hasFinishes && <details className="group min-w-0" onInvalidCapture={event => { event.currentTarget.open = true }}>
         <summary className="min-h-10 cursor-pointer rounded-md py-2 text-sm font-medium focus-visible:outline-2 focus-visible:outline-ring">Acabamentos<span className="sr-only"> de {name}</span><span className="ml-2 text-xs font-normal text-muted-foreground group-open:hidden">{selectedFinishes || (item.line === "national" ? "Tipo de anilheiro" : "Escolher cores")}</span></summary>
         <fieldset disabled={disabled} className="grid min-w-0 gap-4 pt-3 sm:grid-cols-2">
           {orderColorParts.map(color=>{
@@ -514,7 +516,7 @@ function SelectedProductContent({ item, name, sku, tenant, update, remove, order
             if(item.line === "national" || !options.length&&!item[color.field])return null
             return <FinishChoice key={color.field} title={color.title} part={color.part} palette={palette} label={color.label+" de "+name} options={options} value={item[color.field]} onChange={value=>update({...item,[color.field]:value})}/>
           })}
-          <PlateHolderChoice label={`Tipo de anilheiro de ${name}`} value={item.plateHolderType} onChange={value=>update({...item,plateHolderType:value})}/>
+          <PlateHolderChoice label={`Tipo de anilheiro de ${name}`} options={colors?.plateHolderTypes} value={item.plateHolderType} onChange={value=>update({...item,plateHolderType:value})}/>
           <div className="sm:col-span-2"><CatalogPaletteReference palette={palette} /></div>
         </fieldset>
       </details>}

@@ -412,7 +412,7 @@ test("acabamentos podem ser recarregados sem perder a negociação", async ({ co
   let catalogAvailable = false
   await page.route(`**/api/erp/products/${product}`, route => {
     attempts++
-    return route.fulfill(!catalogAvailable ? { status: 503, json: { message: "Catálogo temporariamente indisponível" } } : { json: { tenantId: tenant, data: { structureColors: ["Preto"], upholsteryConfigurable: false } } })
+    return route.fulfill(!catalogAvailable ? { status: 503, json: { message: "Catálogo temporariamente indisponível" } } : { json: { tenantId: tenant, data: { structureColors: ["Preto"], upholsteryConfigurable: false, plateHolderTypes: ["Standard", "Olímpico"] } } })
   })
   await openCheckout(page)
   await page.getByLabel("Buscar cliente", { exact: true }).fill("Horizonte")
