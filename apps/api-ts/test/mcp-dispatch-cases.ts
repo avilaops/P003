@@ -3,7 +3,7 @@ import { createHash, randomUUID } from "node:crypto"
 import type { FastifyInstance } from "fastify"
 import type { Pool } from "pg"
 
-export async function verifyMcpDispatch(app: FastifyInstance, seed: Pool, native = false) {
+export async function verifyMcpDispatch(app: FastifyInstance, seed: Pool) {
   const resource = "https://erp.avilaops.com/mcp"
   const tenant = randomUUID(), foreign = randomUUID(), identity = randomUUID(), membership = randomUUID(), role = randomUUID()
   const subject = `mcp-dispatch-${randomUUID()}`
@@ -22,34 +22,11 @@ export async function verifyMcpDispatch(app: FastifyInstance, seed: Pool, native
     return { grant, token }
   }
   const read = await issue({ scope: "erp.read" }), write = await issue()
-  const protocolHeaders = { "content-type": "application/json", accept: "application/json, text/event-stream" }
-  const tools: { name: string; _meta: Record<string, string>; inputSchema: { properties: { headers?: { properties: Record<string, unknown> } } } }[] = []
-  if (native) {
-    let cursor: string | undefined
-    do {
-      const response = await app.inject({ method: "POST", url: "/mcp", headers: { ...protocolHeaders, authorization: `Bearer ${write.token}` }, payload: { jsonrpc: "2.0", id: 1, method: "tools/list", params: cursor ? { cursor } : {} } })
-      assert.equal(response.statusCode, 200, response.body)
-      const page = response.json().result
-      tools.push(...page.tools)
-      cursor = page.nextCursor
-    } while (cursor)
-  }
   const call = async (token: string, method: string, path: string, body?: object, extra: Record<string, string> = {}) => {
-    if (!native) return app.inject({
+    return app.inject({
       method: "POST", url: "/internal/mcp/dispatch", headers: { authorization: `Bearer ${token}` },
       payload: { method, resource: path, headers: { "x-tenant-id": tenant, ...extra, ...(body ? { "content-type": "application/json" } : {}) }, ...(body ? { body: Buffer.from(JSON.stringify(body)).toString("base64") } : {}) },
     })
-    const tool = tools.find(tool => tool._meta["erp/path"] === path && tool._meta["erp/method"] === method)!
-    assert.ok(tool, `${method} ${path} must retain its native MCP tool`)
-    const argumentHeaders = Object.fromEntries(Object.keys(tool.inputSchema.properties.headers?.properties ?? {}).flatMap(name => {
-      const value = Object.entries(extra).find(([key]) => key.toLowerCase() === name.toLowerCase())?.[1]
-      return value === undefined ? [] : [[name, value]]
-    }))
-    const response = await app.inject({ method: "POST", url: "/mcp", headers: { ...protocolHeaders, authorization: `Bearer ${token}`, "x-request-id": extra["x-request-id"] ?? "native-mcp-fixture" }, payload: { jsonrpc: "2.0", id: 2, method: "tools/call", params: { name: tool.name, arguments: { tenant_id: extra["x-tenant-id"] ?? tenant, ...(body ? { body } : {}), ...(Object.keys(argumentHeaders).length ? { headers: argumentHeaders } : {}) } } } })
-    if (response.statusCode !== 200) return response
-    const result = response.json().result.structuredContent
-    assert.ok(result, response.body)
-    return { statusCode: result.status as number, headers: result.headers as Record<string, string>, body: JSON.stringify(result.data), json: () => result.data }
   }
   const preferences = await call(read.token, "GET", "/api/v1/preferences")
   assert.equal(preferences.statusCode, 200, preferences.body)

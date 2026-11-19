@@ -18,7 +18,6 @@ import { verifyCommercialMixed } from "./commercial-mixed-cases.js"
 import { verifyOpportunities } from "./opportunity-cases.js"
 import { verifyCommercialMetrics } from "./commercial-metric-cases.js"
 import { verifyLegacyPricing } from "./legacy-pricing-cases.js"
-import { startRustContractBackend } from "./rust-contract-backend.js"
 import { authContractProfile } from "./auth-contract-fixture.js"
 import { verifyAuthContract } from "./auth-contract-cases.js"
 import { verifyMcpDispatch } from "./mcp-dispatch-cases.js"
@@ -30,8 +29,7 @@ import { verifyQualifiedReissue } from "./qualified-reissue-cases.js"
 
 // Opt in with a disposable PostgreSQL administrator URL. The generated database
 // and NOLOGIN role belong exclusively to this test and are removed afterwards.
-const backends = ["typescript", ...(process.env.API_TS_TEST_RUST_BINARY ? ["rust"] : []), ...(process.env.API_TS_TEST_GATEWAY_BINARY ? ["gateway"] : [])]
-for (const backend of backends) test(`${backend}: PostgreSQL migrations and RLS preserve registration and sales workflows across tenants`, { skip: !process.env.API_TS_TEST_ADMIN_URL }, async () => {
+test(`PostgreSQL migrations and RLS preserve registration and sales workflows across tenants`, { skip: !process.env.API_TS_TEST_ADMIN_URL }, async () => {
   const url = new URL(process.env.API_TS_TEST_ADMIN_URL!)
   const suffix = randomUUID().replaceAll("-", ""), database = `api_ts_test_${suffix}`, role = `api_ts_role_${suffix}`
   const admin = new Pool({ connectionString: url.toString() })
@@ -75,13 +73,8 @@ for (const backend of backends) test(`${backend}: PostgreSQL migrations and RLS 
       return new PgClientAdapter(client)
     } }
     const headers = { authorization: "Bearer reader", "x-tenant-id": tenant }
-    if (backend !== "rust") privateApp = buildApp({ pool, userinfoUrl: "http://auth.test/userinfo", mcpResource: "https://erp.avilaops.com/mcp", fetchAuth: async (_url, init) => { const fixture = authContractProfile(new Headers(init?.headers).get("authorization")!.slice(7)); return Response.json(fixture.profile, { status: fixture.status }) } })
-    if (backend === "gateway") {
-      const origin = await privateApp!.listen({ port: 0, host: "127.0.0.1" })
-      app = await startRustContractBackend(process.env.API_TS_TEST_GATEWAY_BINARY!, url.toString(), role, origin)
-      const proof = await app.inject({ url: "/api/v1/preferences", headers })
-      assert.equal(proof.headers["x-erp-backend"], "typescript", "Production Rust must dispatch migrated operations to TypeScript")
-    } else app = backend === "rust" ? await startRustContractBackend(process.env.API_TS_TEST_RUST_BINARY!, url.toString(), role) : privateApp!
+    privateApp = buildApp({ pool, userinfoUrl: "http://auth.test/userinfo", mcpResource: "https://erp.avilaops.com/mcp", fetchAuth: async (_url, init) => { const fixture = authContractProfile(new Headers(init?.headers).get("authorization")!.slice(7)); return Response.json(fixture.profile, { status: fixture.status }) } })
+    app = privateApp!
     await verifyAuthContract(app, tenant)
     const detail = await app.inject({ method: "GET", url: `/api/v1/orders/${order}`, headers })
     assert.equal(detail.statusCode, 200, detail.body)
@@ -109,8 +102,8 @@ for (const backend of backends) test(`${backend}: PostgreSQL migrations and RLS 
     }
     assert.equal((await app.inject({ method: "GET", url: `/api/v1/proposals/${proposal}?version=1.0`, headers })).statusCode, 422)
     await seed.query(`GRANT INSERT,UPDATE ON ALL TABLES IN SCHEMA public TO ${role}`)
-    if (backend === "typescript") await verifyNfeEmail(seed, pool, tenant, other, readerRole)
-    if (backend === "typescript") await verifyDocumentCopies(seed, pool, other)
+    await verifyNfeEmail(seed, pool, tenant, other, readerRole)
+    await verifyDocumentCopies(seed, pool, other)
     await seed.query("INSERT INTO role_permissions(role_id,permission_code) VALUES($1,'catalog.parties.read'),($1,'catalog.parties.manage')", [readerRole])
     const partyInput = { personType: "juridica", legalName: "Cliente novo", tradeName: null, taxId: "04252011000110", email: "client@example.test", phone: null, isCustomer: true, isSupplier: false, status: "active", addresses: [], contacts: [] }
     const key = randomUUID()
@@ -214,7 +207,7 @@ for (const backend of backends) test(`${backend}: PostgreSQL migrations and RLS 
     const categoryEdit = await app.inject({ method: "PUT", url: categoryUrl, headers: { ...categoryHeaders, "idempotency-key": randomUUID(), "if-match": '"1"' }, payload: { code: "LEGADO", name: "Categoria atualizada", status: "active", sortOrder: 0 } })
     assert.equal(categoryEdit.statusCode, 200, categoryEdit.body)
     assert.equal(categoryEdit.json().data.id, legacyCategory)
-    if (backend !== "rust") {
+    {
       const malformedProduct = product.slice(1)
       assert.equal((await app.inject({ method: "GET", url: `/api/v1/products/${malformedProduct}`, headers })).statusCode, 404)
       assert.equal((await app.inject({ method: "GET", url: `/api/v1/products?category_id=${legacyCategory.slice(1)}`, headers })).statusCode, 422)
@@ -429,23 +422,22 @@ for (const backend of backends) test(`${backend}: PostgreSQL migrations and RLS 
     await verifyOrderTransitions(app, seed, other, role)
     await verifyProposalCommands(app, seed, other, role)
     await verifyReports(app, seed, role)
-    await verifyCommercialApprovals(app, seed, other, role, backend)
+    await verifyCommercialApprovals(app, seed, other, role)
     await verifyLegacyPricing(app, seed, other, role)
     await verifyCommercialSimulation(app, seed, other, role)
     await verifyCommercialMixed(app, seed, other, role)
     await verifyOpportunities(app, seed, other, role)
     await verifyCommercialMetrics(app, seed)
-    if (backend !== "rust") await verifyCommercialProposals(app, seed, role)
-    if (backend === "typescript") await verifyMcpDispatch(app, seed)
-    if (backend === "gateway") await verifyMcpDispatch(app, seed, true)
+    await verifyCommercialProposals(app, seed, role)
+    await verifyMcpDispatch(app, seed)
     await seed.query("UPDATE platform_administrators SET active=false WHERE auth_subject='operator'")
     assert.equal((await app.inject({ method: "GET", url: `/api/v1/orders/${foreignOrder}`, headers: operatorHeaders })).statusCode, 403)
-    // A manage grant alone does not imply the read grant required by Rust writes.
+    // A manage grant alone does not imply the read grant required for writes.
     await seed.query("DELETE FROM role_permissions WHERE role_id=$1 AND permission_code='catalog.products.read'", [readerRole])
     const manageOnly = await app.inject({ method: "PUT", url: `/api/v1/products/${productId}`, headers: { ...headers, "if-match": '"2"' }, payload: productInput })
     assert.equal(manageOnly.statusCode, 403, manageOnly.body)
-    if (backend === "typescript") await verifySalesMail(seed, pool, tenant, readerRole, order, proposal)
-    if (backend === "typescript") await verifyQualifiedReissue(seed, pool, tenant, readerRole)
+    await verifySalesMail(seed, pool, tenant, readerRole, order, proposal)
+    await verifyQualifiedReissue(seed, pool, tenant, readerRole)
   } finally {
     await app?.close()
     if (privateApp && privateApp !== app) await privateApp.close()
