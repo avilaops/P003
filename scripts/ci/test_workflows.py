@@ -105,11 +105,14 @@ class WorkflowTests(unittest.TestCase):
             self.assertNotIn('environment', job)
             self.assertNotEqual(job.get('with', {}).get('publish'), True)
 
-    def test_release_is_explicit_and_deployment_is_serialized(self):
+    def test_release_deploys_every_main_merge_and_is_serialized(self):
         release = self.workflows()['release.yml']
         triggers = self.triggers(release)
-        self.assertNotIn('branches', triggers.get('push', {}))
+        self.assertEqual(triggers['push']['branches'], ['main'])
         self.assertEqual(triggers['push']['tags'], ['v*'])
+        source = release['jobs']['select']['steps'][1]
+        self.assertIn('"$EVENT" == push && "$EVENT_REF" == refs/heads/main', source['run'])
+        self.assertIn('git merge-base --is-ancestor "$source_sha" origin/main', source['run'])
         self.assertIn('workflow_dispatch', triggers)
         self.assertFalse(release['concurrency']['cancel-in-progress'])
         deploy = release['jobs']['deploy']

@@ -23,13 +23,29 @@ jobs:
         EVENT: ${{ github.event_name }}
         REQUESTED_SHA: ${{ inputs.source_sha }}
         EVENT_REF: ${{ github.ref }}
-      run: "script_file=$(mktemp)\ntrap 'rm -f -- \"$script_file\"' EXIT\ncat > \"$script_file\" <<'ERP_TIMED_36c32cfd3745883f'\nset -euo pipefail\nif [[ \"$EVENT\"\
-        \ == workflow_dispatch ]]; then\n  [[ \"$EVENT_REF\" == refs/heads/main ]]\n  [[ \"$REQUESTED_SHA\" =~ ^[a-f0-9]{40}$ ]]\n  source_sha=\"$REQUESTED_SHA\"\n\
-        else\n  [[ \"$EVENT_REF\" =~ ^refs/tags/v[0-9][0-9A-Za-z._-]*$ ]]\n  source_sha=$(git rev-parse --verify \"$EVENT_REF^{commit}\")\nfi\ngit cat-file -e \"\
-        $source_sha^{commit}\"\ngit merge-base --is-ancestor \"$source_sha\" origin/main\necho \"sha=$source_sha\" >> \"$GITHUB_OUTPUT\"\necho \"Promoted revision:\
-        \ $source_sha\" >> \"$GITHUB_STEP_SUMMARY\"\nERP_TIMED_36c32cfd3745883f\npython3 \"$GITHUB_WORKSPACE/scripts/ci/timed.py\" --label 'release/select: Require\
-        \ an exact promoted revision integrated into main' --output \"$GITHUB_WORKSPACE/artifacts/timings/$GITHUB_JOB.jsonl\" -- bash --noprofile --norc -e -o pipefail\
-        \ \"$script_file\"\n"
+        EVENT_SHA: ${{ github.sha }}
+      run: |
+        script_file=$(mktemp)
+        trap 'rm -f -- "$script_file"' EXIT
+        cat > "$script_file" <<'ERP_TIMED_36c32cfd3745883f'
+        set -euo pipefail
+        if [[ "$EVENT" == workflow_dispatch ]]; then
+          [[ "$EVENT_REF" == refs/heads/main ]]
+          [[ "$REQUESTED_SHA" =~ ^[a-f0-9]{40}$ ]]
+          source_sha="$REQUESTED_SHA"
+        elif [[ "$EVENT" == push && "$EVENT_REF" == refs/heads/main ]]; then
+          [[ "$EVENT_SHA" =~ ^[a-f0-9]{40}$ ]]
+          source_sha="$EVENT_SHA"
+        else
+          [[ "$EVENT_REF" =~ ^refs/tags/v[0-9][0-9A-Za-z._-]*$ ]]
+          source_sha=$(git rev-parse --verify "$EVENT_REF^{commit}")
+        fi
+        git cat-file -e "$source_sha^{commit}"
+        git merge-base --is-ancestor "$source_sha" origin/main
+        echo "sha=$source_sha" >> "$GITHUB_OUTPUT"
+        echo "Promoted revision: $source_sha" >> "$GITHUB_STEP_SUMMARY"
+        ERP_TIMED_36c32cfd3745883f
+        python3 "$GITHUB_WORKSPACE/scripts/ci/timed.py" --label 'release/select: Require an exact promoted revision integrated into main' --output "$GITHUB_WORKSPACE/artifacts/timings/$GITHUB_JOB.jsonl" -- bash --noprofile --norc -e -o pipefail "$script_file"
     - uses: actions/checkout@v4
       with:
         ref: ${{ steps.source.outputs.sha }}
@@ -198,22 +214,7 @@ jobs:
         if-no-files-found: warn
     outputs:
       manifest_artifact_name: erp-release-${{ needs.select.outputs.sha }}-${{ github.run_attempt }}
-  authorize_ssh:
-    name: Authorize SSH activation
-    if: inputs.package_only
-    needs:
-    - select
-    - evidence
-    runs-on: ubuntu-latest
-    timeout-minutes: 2
-    environment: production
-    steps:
-    - name: Identify approved release manifest
-      env:
-        MANIFEST: ${{ needs.evidence.outputs.manifest_artifact_name }}
-      run: echo "$MANIFEST" >> "$GITHUB_STEP_SUMMARY"
   deploy:
-    if: ${{ !inputs.package_only }}
     needs:
     - select
     - evidence
@@ -326,6 +327,8 @@ jobs:
         if-no-files-found: warn
 'on':
   push:
+    branches:
+    - main
     tags:
     - v*
   workflow_dispatch:
@@ -336,10 +339,6 @@ jobs:
         required: true
       typescript_only:
         description: Require reuse of the published native API and fiscal-mcp images
-        type: boolean
-        default: false
-      package_only:
-        description: Produce the validated manifest for a separately authorized SSH deployment
         type: boolean
         default: false
       force_native_rebuild:
