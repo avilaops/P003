@@ -10,7 +10,7 @@ import { BankIdentity, BankPicker } from "./bank-picker"
 import { RequestError } from "@/components/feedback/session-recovery"
 
 import { GuardedLink as Link, useNavigationGuard, useListNavigationHref } from "@/components/shell/navigation-guard"
-import { useRouter, useSearchParams } from "next/navigation"
+import { useRouter } from "next/navigation"
 import { useId, useState } from "react"
 import { PageHeader } from "@/components/page-header"
 import { WarehouseStockLinks } from "@/features/inventory/stock-analysis-link"
@@ -83,10 +83,10 @@ function RecordAccess({ kind, id, mode }: { kind: ReferenceKind; id?: string; mo
   const config = referenceConfigs[kind]
   const result = useResource<ReferenceSnapshot | ReferenceList>(id ? `/api/erp/${config.endpoint}/${id}` : `/api/erp/${config.endpoint}?limit=1`)
   if (result.loading) return <p role="status">Carregando cadastro e permissões…</p>
-  if (result.error || !result.value) return <><PageHeader eyebrow="Cadastros" title={config.title} description={config.description} /><section className="form-section space-y-3"><p role="alert"><RequestError message={result.error || "Cadastro indisponível"} status={result.status} /></p><Button onClick={result.reload}>Tentar novamente</Button><Link className={linkClass} href={`${referencePath(kind)}`}>Voltar à listagem</Link></section></>
+  if (result.error || !result.value) return <><PageHeader breadcrumbs={kind === "depositos" ? undefined : referenceCrumbs(kind)} eyebrow={kind === "depositos" ? "Cadastros" : undefined} title={config.title} description={config.description} /><section className="form-section space-y-3"><p role="alert"><RequestError message={result.error || "Cadastro indisponível"} status={result.status} /></p><Button onClick={result.reload}>Tentar novamente</Button><Link className={linkClass} href={`${referencePath(kind)}`}>Voltar à listagem</Link></section></>
   const initial = id && !Array.isArray(result.value.data) ? result.value as ReferenceSnapshot : undefined
   if (mode === "view" && initial) return <Detail kind={kind} value={initial} />
-  if (!result.value.canEdit) return <><PageHeader eyebrow="Cadastros" title={config.title} description={config.description} /><section className="form-section space-y-3"><p role="status">Somente consulta. Solicite permissão para alterar este cadastro.</p><Link className={linkClass} href={`${referencePath(kind)}`}>Voltar à listagem</Link></section></>
+  if (!result.value.canEdit) return <><PageHeader breadcrumbs={kind === "depositos" ? undefined : referenceCrumbs(kind)} eyebrow={kind === "depositos" ? "Cadastros" : undefined} title={config.title} description={config.description} /><section className="form-section space-y-3"><p role="status">Somente consulta. Solicite permissão para alterar este cadastro.</p><Link className={linkClass} href={`${referencePath(kind)}`}>Voltar à listagem</Link></section></>
   return <Editor key={`${id || "new"}:${result.etag}`} kind={kind} initial={initial} tenantId={result.value.tenantId} etag={result.etag} reload={result.reload} />
 }
 
@@ -94,6 +94,12 @@ function ParentName({ kind, id }: { kind: ReferenceKind; id: string }) {
   const result = useResource<ReferenceSnapshot>(`/api/erp/${referenceConfigs[kind].endpoint}/${id}`)
   return <span className="break-words">{result.loading ? "Consultando categoria…" : result.error ? `Categoria indisponível (${id})` : result.value?.data.name}</span>
 }
+
+const referenceCrumbs = (kind: ReferenceKind, ...tail: { label: string; href?: string }[]) => [
+  { label: "Cadastros", href: "/cadastros" },
+  { label: referenceConfigs[kind].title, href: referencePath(kind) },
+  ...tail,
+]
 
 function Detail({ kind, value }: { kind: ReferenceKind; value: ReferenceSnapshot }) {
   const config = referenceConfigs[kind], data = value.data
@@ -103,7 +109,7 @@ function Detail({ kind, value }: { kind: ReferenceKind; value: ReferenceSnapshot
   if (kind === "categorias-financeiras") values.push(["Natureza", data.direction === "income" ? "Receita" : "Despesa"])
   if (kind === "contas-financeiras") values.push(["Tipo de conta", accountTypes[data.accountType as keyof typeof accountTypes]], ["Banco", String(data.bank || "Não informado")], ["Agência", String(data.branch || "Não informada")], ["Número da conta", String(data.accountNumber || "Não informado")])
   if (kind === "formas-pagamento") values.push(["Modalidade", modalities[data.modality as keyof typeof modalities]], ["Prazo de referência (dias)", String(data.settlementDays)])
-  return <><PageHeader eyebrow={kind === "depositos" ? config.title : `Cadastros · ${config.title}`} title={data.name} description={config.description}
+  return <><PageHeader breadcrumbs={kind === "depositos" ? undefined : referenceCrumbs(kind, { label: data.name })} eyebrow={kind === "depositos" ? config.title : undefined} title={data.name} description={config.description}
     actions={kind === "depositos" && <WarehouseStockLinks tenant={value.tenantId} warehouseId={data.id} />} /><Link className={linkClass} href={`${referencePath(kind)}`}>Voltar à listagem</Link><section className="compact-records form-section mt-3 min-w-0 space-y-3">
     <RecordCompany key={value.tenantId} tenantId={value.tenantId} />
     <dl className="grid min-w-0 gap-4 sm:grid-cols-2">{values.map(([label, text]) => <div className="min-w-0" key={label}><dt className="text-sm text-muted-foreground">{label}</dt><dd className="mt-1 whitespace-pre-wrap break-words">{kind === "contas-financeiras" && label === "Banco" && data.bank ? <BankIdentity value={String(data.bank)} /> : text}</dd></div>)}
@@ -158,8 +164,7 @@ function Editor({ kind, initial, tenantId, etag, reload }: { kind: ReferenceKind
   const config = referenceConfigs[kind]
   const router = useRouter(), command = useCommand()
   const listHref = useListNavigationHref()
-  const initialType = useSearchParams().get("tipo")
-  const [draft, setDraft] = useState<ReferenceFields>(() => initial ? Object.fromEntries(Object.keys(config.defaults).map(key => [key, initial.data[key]])) as ReferenceFields : { ...config.defaults, ...(kind === "contas-financeiras" && initialType === "cash" ? { accountType: "cash" } : {}) })
+  const [draft, setDraft] = useState<ReferenceFields>(() => initial ? Object.fromEntries(Object.keys(config.defaults).map(key => [key, initial.data[key]])) as ReferenceFields : { ...config.defaults })
   const [dirty, setDirty] = useState(false)
   const frozen = command.busy || command.uncertain || command.stale
   useNavigationGuard(dirty || command.uncertain ? "Sair sem confirmar as alterações deste cadastro?" : null)
@@ -167,7 +172,7 @@ function Editor({ kind, initial, tenantId, etag, reload }: { kind: ReferenceKind
   function change(key: string, value: string | number | null) { setDraft(previous => ({ ...previous, [key]: value, ...(key === "direction" && previous.direction !== value ? { parentId: null } : {}) })); setDirty(true) }
   function input(key: string, label: string, max: number, required = false) { return <label key={key} className="block min-w-0 space-y-2">{label}<Input required={required} maxLength={max} value={String(draft[key] ?? "")} onChange={event => change(key, event.target.value || (required ? "" : null))} /></label> }
   function select(key: string, label: string, options: Record<string, string>) { return <label className="block min-w-0 space-y-2">{label}<select className={selectClass} value={String(draft[key])} onChange={event => change(key, event.target.value)}>{Object.entries(options).map(([value, text]) => <option key={value} value={value}>{text}</option>)}</select></label> }
-  return <><PageHeader eyebrow={kind === "depositos" ? config.title : `Cadastros · ${config.title}`}
+  return <><PageHeader breadcrumbs={kind === "depositos" ? undefined : referenceCrumbs(kind, ...(initial ? [{ label: String(initial.data.name), href: `${referencePath(kind)}/${initial.data.id}` }, { label: "Editar" }] : [{ label: "Novo cadastro" }]))} eyebrow={kind === "depositos" ? config.title : undefined}
     title={kind === "depositos" && !initial ? config.create : `${initial ? "Editar" : "Novo cadastro de"} ${config.singular}`} description={config.description} />
     <Link className={linkClass} href={initial ? `${referencePath(kind)}/${initial.data.id}` : referencePath(kind)}>Voltar</Link>
     <section className="compact-records form-section mt-3 min-w-0 space-y-3">

@@ -22,7 +22,8 @@ var/
 *.log
 .DS_Store
 Thumbs.db
-
+docs/
+.obsidian/
 # Local conversations, scratch notes and generated document previews.
 /codex-ml.md
 /Untitled-*.md
