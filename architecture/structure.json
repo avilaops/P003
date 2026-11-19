@@ -46,8 +46,8 @@
     "pos": "Operação do PDV, sessões de caixa, fechamento e histórico, com autorização no backend."
   },
   "routeSurface": {
-    "count": 568,
-    "sha256": "3b80b6cea878425e9dd91fbf89739d9ea33be6e05472d3d99c374bab8433d622"
+    "count": 574,
+    "sha256": "92e61cc84e32cb8fd70f4cb07efc6f9b7dcff6b7778edf6693deb58dbe46c12d"
   },
   "retiredPaths": [
     "apps/web/src/lib/erp-session.ts",
@@ -93,6 +93,6 @@
   "routeSurfaceReview": {
     "previousPolicyCommit": "5f853bcd226a7776573603ae134955699ac82779",
     "reviewedMainCommit": "2a2148f8c2d18a380215928a6c9803de57f3227d",
-    "changes": "Financeiro em TypeScript • BFF autenticado, baixas em lote nas três carteiras, consulta de folha e notificações de cobrança do Mercado Pago."
+    "changes": "Cadastros D02 • telas Duplicados e qualidade e Condições de pagamento, e BFF de duplicados, completude, mesclagem e histórico. Anterior: Financeiro em TypeScript • BFF autenticado, baixas em lote nas três carteiras, consulta de folha e notificações de cobrança do Mercado Pago."
   }
 }
