@@ -48,7 +48,7 @@ class TypeScriptComposeTests(unittest.TestCase):
             with self.subTest(modules=modules), tempfile.TemporaryDirectory() as directory:
                 path = Path(directory) / 'compose.json'
                 config = {'services': {
-                    'api': {'image': 'rust', 'environment': {'DATABASE_URL': 'postgresql://app:fixture@db/test', 'AUTH_USERINFO_URL': 'https://auth.test/oauth/userinfo', 'SMTP_PASSWORD': 'MAIL', 'ERP_CERT_KEY': 'CERT', 'ERP_FISCAL_ENGINE_URL': 'http://127.0.0.1:8091', 'ERP_FISCAL_ENGINE_TOKEN': 'fixture-token-with-at-least-24-characters', 'FISCAL_A1_KEYRING': '{"active":"primary","keys":{"primary":"fixture"}}', 'NFSE_ISSUANCE_ENABLED': 'true', 'BROWSER_USE_API_KEY': 'bu_fixture'}},
+                    'api': {'image': 'previous-api', 'environment': {'DATABASE_URL': 'postgresql://app:fixture@db/test', 'AUTH_USERINFO_URL': 'https://auth.test/oauth/userinfo', 'SMTP_PASSWORD': 'MAIL', 'ERP_CERT_KEY': 'CERT', 'ERP_FISCAL_ENGINE_URL': 'http://127.0.0.1:8091', 'ERP_FISCAL_ENGINE_TOKEN': 'fixture-token-with-at-least-24-characters', 'FISCAL_A1_KEYRING': '{"active":"primary","keys":{"primary":"fixture"}}', 'NFSE_ISSUANCE_ENABLED': 'true', 'BROWSER_USE_API_KEY': 'bu_fixture'}},
                     'web': {'image': 'web', 'environment': {'AUTH_ISSUER': 'https://auth.test', 'ERP_SESSION_SECRET': 'SESSION', 'ERP_TYPESCRIPT_MODULES': modules}},
                     'fiscal-engine': {'image': 'fiscal', 'environment': {}, 'healthcheck': {}},
                 }}
@@ -58,11 +58,12 @@ class TypeScriptComposeTests(unittest.TestCase):
                 self.assertEqual(result.returncode, 0, result.stderr)
                 services = json.loads(path.read_text())['services']
                 self.assertNotIn('ERP_TYPESCRIPT_MODULES', services['web']['environment'])
-                api = services['api-ts']
-                self.assertEqual(api['image'], 'erp-next-web:sha-' + A)
-                self.assertEqual(api['network_mode'], 'service:api')
-                self.assertNotIn('ports', api)
+                self.assertNotIn('api-ts', services, 'The TypeScript API is the principal service, not a private sidecar')
+                api = services['api']
+                self.assertEqual(api['command'], ['node', 'apps/api-ts/dist/server.js'])
+                self.assertIn('/health/ready', json.dumps(api['healthcheck']))
                 self.assertEqual(api['environment']['API_TS_HOST'], '0.0.0.0')
+                self.assertEqual(api['environment']['API_TS_PORT'], '8080')
                 self.assertEqual(api['environment']['AUTH_ISSUER'], 'https://auth.test')
                 self.assertEqual(api['environment']['DATABASE_URL'], config['services']['api']['environment']['DATABASE_URL'])
                 self.assertEqual(api['environment']['ERP_FISCAL_ENGINE_URL'], 'http://127.0.0.1:8091')
@@ -71,18 +72,40 @@ class TypeScriptComposeTests(unittest.TestCase):
                 self.assertEqual(api['environment']['NFSE_ISSUANCE_ENABLED'], 'true')
                 self.assertEqual(api['environment']['BROWSER_USE_API_KEY'], 'bu_fixture')
                 self.assertNotIn('BROWSER_USE_API_KEY', services['web']['environment'])
-                for key in ('SMTP_PASSWORD', 'ERP_CERT_KEY', 'ERP_SESSION_SECRET'):
+                for key in ('SMTP_PASSWORD', 'ERP_CERT_KEY', 'ERP_SESSION_SECRET', 'DANFE_MCP_TOKEN', 'ERP_TYPESCRIPT_API_URL'):
                     self.assertNotIn(key, api['environment'])
-                self.assertEqual(services['web']['environment']['ERP_TYPESCRIPT_API_URL'], 'http://127.0.0.1:8081')
+                self.assertEqual(services['web']['environment']['ERP_API_URL'], 'http://127.0.0.1:8080')
+                self.assertEqual(services['web']['environment']['ERP_TYPESCRIPT_API_URL'], 'http://127.0.0.1:8080')
                 services['web']['environment']['ERP_TYPESCRIPT_MODULES'] = ''
                 path.write_text(json.dumps({'services': services}))
                 replay = subprocess.run([sys.executable, '-c', code, str(path), A], capture_output=True, text=True)
                 self.assertEqual(replay.returncode, 0, replay.stderr)
                 restored = json.loads(path.read_text())['services']
                 self.assertNotIn('ERP_TYPESCRIPT_MODULES', restored['web']['environment'])
-                self.assertIn('api-ts', restored, 'Retired traffic flags cannot disable a required business backend')
-                self.assertEqual(restored['api-ts']['environment']['BROWSER_USE_API_KEY'], 'bu_fixture', 'The Browser Use key survives a redeploy')
-                self.assertEqual(restored['api']['environment']['ERP_TYPESCRIPT_API_URL'], 'http://127.0.0.1:8081')
+                self.assertEqual(restored['api']['environment']['BROWSER_USE_API_KEY'], 'bu_fixture', 'The Browser Use key survives a redeploy')
+                self.assertEqual(restored['api']['environment']['API_TS_PORT'], '8080')
+
+    def test_first_release_after_the_gateway_keeps_values_of_the_previous_private_api(self):
+        import sys
+        code = re.search(r'python3 - "\$release/compose.json" "\$source_sha" <<\'PY\'\n([\s\S]*?)\nPY', (DEPLOY / 'production-deploy.sh').read_text())[1]
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / 'compose.json'
+            token = 'previous-private-token-with-24-or-more'
+            path.write_text(json.dumps({'services': {
+                'api': {'image': 'rust', 'ports': ['127.0.0.1:3141:8080'], 'environment': {'DATABASE_URL': 'postgresql://app:fixture@db/test', 'SMTP_PASSWORD': 'MAIL', 'DOCUSEAL_URL': 'https://contrato.test', 'DOCUSEAL_API_TOKEN': 'seal'}},
+                'api-ts': {'image': 'web', 'environment': {'BROWSER_USE_API_KEY': 'bu_previous', 'ERP_FISCAL_ENGINE_URL': 'http://127.0.0.1:8091', 'ERP_FISCAL_ENGINE_TOKEN': token, 'FISCAL_A1_KEYRING': '{"k":1}'}},
+                'web': {'image': 'web', 'environment': {'AUTH_ISSUER': 'https://auth.test'}},
+                'fiscal-engine': {'image': 'fiscal', 'environment': {}, 'healthcheck': {}},
+            }}))
+            result = subprocess.run([sys.executable, '-c', code, str(path), A], capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            services = json.loads(path.read_text())['services']
+            self.assertNotIn('api-ts', services)
+            self.assertEqual(services['api']['ports'], ['127.0.0.1:3141:8080'], 'Public loopback publication is preserved')
+            self.assertEqual(services['api']['environment']['BROWSER_USE_API_KEY'], 'bu_previous')
+            self.assertEqual(services['api']['environment']['ERP_FISCAL_ENGINE_TOKEN'], token)
+            self.assertEqual(services['api']['environment']['DOCUSEAL_API_TOKEN'], 'seal')
+            self.assertNotIn('SMTP_PASSWORD', services['api']['environment'])
 
 
 FAKE_DOCKER = r'''#!/usr/bin/env python3

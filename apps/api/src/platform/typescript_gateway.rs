@@ -1,3 +1,5 @@
+//! FORA DO CAMINHO DE PRODUÇÃO (PR 02): o `api-ts` é a API principal e nenhuma imagem, compose ou
+//! release inicia o binário Rust. Mantido só como referência de leitura até a remoção no PR 11.
 //! Transport for the four migrated modules. No business rules or command retry.
 use std::time::Duration;
 
