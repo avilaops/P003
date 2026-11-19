@@ -106,7 +106,7 @@ export function registerInventoryMcp(app: FastifyInstance, resource: string, rea
     if(body!==undefined) headers["content-type"]="application/json"
     const resourcePath=path ? route.resource.replace(":id",path.id).replace(":movement",path.movement??"") : route.resource
     const identity: AuthenticatedIdentity = { subject: grant.subject, email: grant.email, name: grant.name, emailVerified: grant.verified_email }
-    const response = await runWithMcpIdentity(identity, () => app.inject({
+    const response = await runWithMcpIdentity(identity, async () => await app.inject({
       method: route.method, url: resourcePath + (query.size ? `?${query}` : ""), headers, ...(body === undefined ? {} : { payload: body }),
     }))
     const responseHeaders: Record<string, unknown> = {}

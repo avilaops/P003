@@ -48,3 +48,24 @@ Portar as 15 operações do MCP (`apps/api/src/mcp`), mantendo OAuth, escopos e 
 - Conflitos esperados com os outros PRs de porte: só a linha de registro em `app.ts`. Resolver mantendo as duas linhas.
 - Contagem e origem das rotas vêm de `verification/ts-migration-inventory.mjs` (status `native_only`).
 
+
+## Entrega (api-ts)
+
+Código: `apps/api-ts/src/modules/mcp/` (`oauth.ts`, `catalog.ts`, `routes.ts`), registrado em `app.ts`.
+Testes: `apps/api-ts/test/mcp-oauth.test.ts` (PostgreSQL): registro → autorização → grant → token → `/mcp` com escopo certo (200) e errado (403) → revogação, rotação e reuso de refresh token, isolamento por empresa.
+
+O catálogo de ferramentas deriva do OpenAPI do próprio api-ts (como o Rust derivava do seu). Os nomes de ferramenta são os mesmos (326 no Rust; 263 já existem no TS com nome idêntico; as 63 restantes são rotas ainda `native_only` de outros PRs e aparecem sozinhas quando forem portadas).
+
+### Divergências em relação ao Rust
+
+| Rota | Rust | TypeScript | Motivo |
+| --- | --- | --- | --- |
+| `POST /mcp` `tools/call` | `inject` sem `await` dentro do contexto de identidade (no despacho interno do `api-ts`) | `await app.inject` dentro de `runWithMcpIdentity` (também em `platform/mcp-dispatch.ts` e `inventory/mcp.ts`) | `inject` do light-my-request é preguiçoso: com o servidor escutando, a rota interna perdia a identidade do MCP e respondia 401 |
+| `POST /mcp/oauth/register` | URI de redirecionamento com `#` vazio aceita (a URL normalizada some com o fragmento) | rejeitada | RFC 6749 §3.1.2 proíbe fragmento |
+| `POST /mcp/oauth/token`, `/revoke` | parâmetro de formulário repetido: vale o primeiro | `400 invalid_request`; mídia diferente de `application/x-www-form-urlencoded` → `415` | RFC 6749 §3.2 |
+| `POST /mcp/oauth/revoke` | token ausente: `400 invalid_grant` | `400 invalid_request` | RFC 7009 |
+| `GET /mcp/oauth/authorization-request` | parâmetro repetido: erro de deserialização | `400 invalid_request` | ambiguidade |
+| Ferramentas de escrita | cabeçalhos livres por operação do OpenAPI | `headers` aceita só `If-Match` e `Idempotency-Key` | o contrato TS não declara cabeçalhos; a rota decide se são obrigatórios |
+| Ferramentas GET sem filtros declarados | sem `query` | `query` aberta (valores escalares) | rotas TS validam o próprio `query` com zod |
+
+Fora do escopo/adiado: `OPTIONS` não entra no relatório de cobertura (`route-coverage` só reconhece GET/POST/PUT/PATCH/DELETE; testados mesmo assim). A tela de consentimento (`apps/web`) continua falando com `/mcp/oauth/*` por HTTP e não muda.

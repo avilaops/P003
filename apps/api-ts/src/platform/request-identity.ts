@@ -7,6 +7,8 @@ const verifiedMcpIdentity = new AsyncLocalStorage<AuthenticatedIdentity>()
 
 export function currentVerifiedMcpIdentity() { return verifiedMcpIdentity.getStore() }
 
+// `operation` must await app.inject(): light-my-request dispatches lazily, on `then`,
+// so a returned (not awaited) inject would run outside this context.
 export function runWithMcpIdentity<T>(identity: AuthenticatedIdentity, operation: () => T): T {
   return verifiedMcpIdentity.run(Object.freeze({ ...identity }), operation)
 }

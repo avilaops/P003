@@ -1,4 +1,3 @@
-import { createHash } from "node:crypto"
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
 
@@ -7,8 +6,8 @@ import type { AuthenticatedIdentity } from "./auth.js"
 import { Problem } from "./problem.js"
 import { runWithMcpIdentity } from "./request-identity.js"
 import { registerInventoryMcp } from "../modules/inventory/mcp.js"
+import { mcpGrantReader, type McpCredential as Credential } from "../modules/mcp/routes.js"
 
-type Credential = { subject: string; email: string; name: string; verified_email: boolean; scope: string }
 const allowedHeaders = new Set(["x-tenant-id", "if-match", "idempotency-key", "content-type", "accept", "x-request-id"])
 const responseHeaders = ["content-type", "cache-control", "etag", "retry-after", "content-disposition", "location", "x-request-id", "x-erp-backend", "idempotency-replayed"]
 const inputSchema = z.strictObject({
@@ -18,29 +17,16 @@ const inputSchema = z.strictObject({
   body: z.string().optional(),
 })
 
-async function credential(authorization: string | string[] | undefined, dependencies: AppDependencies): Promise<Credential> {
-  const invalid = () => new Problem(401, "invalid_token", "Credencial MCP inválida")
-  if (typeof authorization !== "string") throw invalid()
-  const separator = authorization.indexOf(" ")
-  const token = authorization.slice(separator + 1).trim()
-  if (separator < 0 || authorization.slice(0, separator).toLowerCase() !== "bearer" || !token.startsWith("mcp_at_") || Buffer.byteLength(token) >= 200) throw invalid()
-  const client = await dependencies.pool.connect()
-  try {
-    const result = await client.query<Credential>("SELECT g.subject,g.email,g.name,g.verified_email,g.scope FROM mcp_oauth_tokens t JOIN mcp_oauth_grants g ON g.id=t.grant_id WHERE t.hash=$1 AND t.kind='access' AND t.expires_at>now() AND g.resource=$2 AND g.revoked_at IS NULL AND g.expires_at>now()", [createHash("sha256").update(token).digest("hex"), dependencies.mcpResource])
-    if (!result.rows[0]) throw invalid()
-    return result.rows[0]
-  } finally { client.release() }
-}
-
 export function registerMcpDispatch(app: FastifyInstance, dependencies: AppDependencies) {
   if (!dependencies.mcpResource) return
-  registerInventoryMcp(app, dependencies.mcpResource, authorization => credential(authorization, dependencies))
+  const credential = mcpGrantReader(dependencies)
+  registerInventoryMcp(app, dependencies.mcpResource, credential)
   const credentials = new WeakMap<object, Credential>()
   app.post("/internal/mcp/dispatch", {
     // A product body can contain an inline photo. Its existing inner route
     // limit still applies after decoding; this bounds the base64 envelope.
     bodyLimit: 3_000_000,
-    onRequest: async request => { credentials.set(request, await credential(request.headers.authorization, dependencies)) },
+    onRequest: async request => { credentials.set(request, await credential(request.headers.authorization)) },
   }, async (request, reply) => {
     const grant = credentials.get(request)!
     const parsed = inputSchema.safeParse(request.body)
@@ -68,7 +54,7 @@ export function registerMcpDispatch(app: FastifyInstance, dependencies: AppDepen
       throw new Problem(422, "invalid_input", "Corpo MCP inválido")
     }
     const identity: AuthenticatedIdentity = { subject: grant.subject, email: grant.email, name: grant.name, emailVerified: grant.verified_email }
-    const response = await runWithMcpIdentity(identity, () => app.inject({ method: input.method, url: input.resource, headers, ...(body === undefined ? {} : { payload: body }) }))
+    const response = await runWithMcpIdentity(identity, async () => await app.inject({ method: input.method, url: input.resource, headers, ...(body === undefined ? {} : { payload: body }) }))
     for (const name of responseHeaders) {
       const value = response.headers[name]
       if (value !== undefined) reply.header(name, value)

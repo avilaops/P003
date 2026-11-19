@@ -55,6 +55,7 @@ import { readAccessProfile } from "./platform/database.js"
 import { Problem } from "./platform/problem.js"
 import { parseJson, stringifyJson } from "./platform/json.js"
 import { registerMcpDispatch } from "./platform/mcp-dispatch.js"
+import { registerMcpRoutes } from "./modules/mcp/routes.js"
 import { registerDocumentCopies, type DocumentCopyIO } from "./modules/document-copies/routes.js"
 import { registerFinancialEmails } from "./modules/document-copies/financial-routes.js"
 import { registerContractPackage } from "./modules/document-copies/contract-package-routes.js"
@@ -170,6 +171,7 @@ export function buildApp(_dependencies: AppDependencies): FastifyInstance {
   registerOutgoingNfseRoutes(app, _dependencies)
   registerNfeEmail(app, _dependencies, _dependencies.nfeEmail)
   registerMcpDispatch(app, _dependencies)
+  registerMcpRoutes(app, _dependencies)
   registerDocumentCopies(app, _dependencies, _dependencies.documentCopies)
   registerFinancialEmails(app, _dependencies, _dependencies.documentCopies)
   registerContractPackage(app, _dependencies, _dependencies.documentCopies, _dependencies.nfeEmail?.render)
