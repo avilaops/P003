@@ -429,7 +429,7 @@ for (const backend of backends) test(`${backend}: PostgreSQL migrations and RLS 
     await verifyOrderTransitions(app, seed, other, role)
     await verifyProposalCommands(app, seed, other, role)
     await verifyReports(app, seed, role)
-    await verifyCommercialApprovals(app, seed, other, role)
+    await verifyCommercialApprovals(app, seed, other, role, backend)
     await verifyLegacyPricing(app, seed, other, role)
     await verifyCommercialSimulation(app, seed, other, role)
     await verifyCommercialMixed(app, seed, other, role)

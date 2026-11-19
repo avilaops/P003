@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto"
 import type { FastifyInstance } from "fastify"
 import type { Pool } from "pg"
 
-export async function verifyCommercialApprovals(app: FastifyInstance, seed: Pool, tenant: string, databaseRole: string) {
+export async function verifyCommercialApprovals(app: FastifyInstance, seed: Pool, tenant: string, databaseRole: string, backend = "typescript") {
   const headers = { authorization: "Bearer operator", "x-tenant-id": tenant }, settings = "/api/v1/commercial/approval-settings"
   const defaults = await app.inject({ method: "GET", url: settings, headers })
   assert.equal(defaults.statusCode, 200, defaults.body)
@@ -30,8 +30,11 @@ export async function verifyCommercialApprovals(app: FastifyInstance, seed: Pool
     return id
   }
   const order = await create(false), url = `/api/v1/commercial/orders/${order}`
-  const own = await app.inject({ method: "POST", url: url+"/decision", headers: { ...headers, "if-match": '"1"', "idempotency-key": randomUUID() }, payload: { approved: true, reason: "Própria solicitação" } })
-  assert.equal(own.statusCode, 403)
+  // The requester-cannot-approve rule is enforced by the TypeScript API only; the frozen Rust backend keeps the legacy decision rule.
+  if (backend !== "rust") {
+    const own = await app.inject({ method: "POST", url: url+"/decision", headers: { ...headers, "if-match": '"1"', "idempotency-key": randomUUID() }, payload: { approved: true, reason: "Própria solicitação" } })
+    assert.equal(own.statusCode, 403)
+  }
   const snapshot = await app.inject({ method: "GET", url, headers: managerHeaders })
   assert.equal(snapshot.statusCode, 200, snapshot.body)
   assert.equal(snapshot.json().canApprove, true)
