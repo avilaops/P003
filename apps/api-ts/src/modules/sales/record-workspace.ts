@@ -2,11 +2,12 @@ import { z } from "zod"
 import type { AuthorizedContext } from "../../platform/access.js"
 import { Problem } from "../../platform/problem.js"
 import { salesListSchema, orderSearchNumber } from "./shared.js"
+import { expiringProposalDays } from "../pending-work/parameters.js"
 
 const filterSchema=salesListSchema.extend({
   view:z.literal("workspace"), from:z.iso.date().optional(), to:z.iso.date().optional(),
   seller:z.string().trim().max(100).default(""), includeCancelled:z.enum(["true","false"]).default("false"),
-  validity:z.enum(["","current","expired"]).default(""), stale:z.enum(["true","false"]).default("false"),
+  validity:z.enum(["","current","expired","expiring"]).default(""), stale:z.enum(["true","false"]).default("false"),
   stage:z.enum(["","approval","production","billed","partial","delivered"]).default("")
 })
 const localToday="(now() AT TIME ZONE 'America/Sao_Paulo')::date"
@@ -68,7 +69,7 @@ export async function recordWorkspace(c:AuthorizedContext,raw:unknown,kind:"orde
         AND ($6::date IS NULL OR created_at>=($6::date::timestamp AT TIME ZONE 'America/Sao_Paulo'))
         AND ($7::date IS NULL OR created_at<(($7::date+1)::timestamp AT TIME ZONE 'America/Sao_Paulo'))
         AND ($8='' OR strpos(lower(seller),lower($8))>0) AND ($9 OR status<>'cancelled' OR $5='cancelled')
-        AND ($10='' OR ${orders ? "false" : "($10='expired')=\"pastValidity\""}) AND (NOT $11 OR "staleDays">7) AND ($12='' OR stage=$12)
+        AND ($10='' OR ${orders ? "false" : `CASE WHEN $10='expiring' THEN status='sent' AND NOT "pastValidity" AND "validUntil"::date<=${localToday}+${expiringProposalDays} ELSE ($10='expired')="pastValidity" END`}) AND (NOT $11 OR "staleDays">7) AND ($12='' OR stage=$12)
     ), page AS (SELECT * FROM filtered ORDER BY ${orderBy} DESC,id DESC LIMIT $13 OFFSET $14)
     SELECT (SELECT count(*)::int FROM filtered) AS total,(SELECT (coalesce(sum(amount_cents),0)/100::numeric)::numeric(30,2)::text FROM filtered) AS "totalAmount",
        coalesce(jsonb_agg(to_jsonb(page)-'amount_cents'-'created_at'-'updated_at' ORDER BY ${orderBy} DESC,id DESC),'[]') AS data FROM page`

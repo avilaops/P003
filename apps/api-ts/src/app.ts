@@ -20,6 +20,7 @@ import { registerProduction } from "./modules/production/routes.js"
 import { registerPartyRoutes } from "./modules/parties/routes.js"
 import { registerWarranties } from "./modules/warranties/routes.js"
 import { registerDashboardRoutes } from "./modules/dashboard/routes.js"
+import { registerPendingWorkRoutes } from "./modules/pending-work/routes.js"
 import { registerReportRoutes } from "./modules/reports/routes.js"
 import { registerPosSessionRoutes } from "./modules/pos-sessions/routes.js"
 import { registerFinanceInsightRoutes } from "./modules/finance-insights/routes.js"
@@ -140,6 +141,7 @@ export function buildApp(_dependencies: AppDependencies): FastifyInstance {
   registerPartyRoutes(app, _dependencies)
   registerWarranties(app, _dependencies)
   registerDashboardRoutes(app, _dependencies)
+  registerPendingWorkRoutes(app, _dependencies)
   registerReportRoutes(app, _dependencies)
   registerPosSessionRoutes(app, _dependencies)
   registerFinanceInsightRoutes(app, _dependencies)

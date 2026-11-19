@@ -1,14 +1,20 @@
 import { expect, test } from "@playwright/test"
-import { installFrontendFixture } from "./helpers/frontend-fixture"
+import { installFrontendFixture, tenant } from "./helpers/frontend-fixture"
 
-test.beforeEach(async ({ context }) => installFrontendFixture(context))
+const nothingPending = { tenantId: tenant, asOf: "2026-11-19T12:00:00Z", total: 0, items: [] }
 
-test("página inicial limpa mostra só título e atalhos no desktop e celular", async ({ page }, info) => {
+test.beforeEach(async ({ context, page }) => {
+  await installFrontendFixture(context)
+  await page.route("**/api/erp/pending-work", route => route.fulfill({ json: nothingPending }))
+})
+
+test("página inicial sem pendências mostra título, atalhos e \"Nada pendente agora\" no desktop e celular", async ({ page }, info) => {
   await page.goto("/")
+  await expect(page.getByText("Nada pendente agora.")).toBeVisible()
   for (const width of [1440, 390]) {
     await page.setViewportSize({ width, height: 950 })
     const main = page.locator("main")
-    await expect(main.getByRole("heading")).toHaveText(["Visão geral"])
+    await expect(main.getByRole("heading")).toHaveText(["Visão geral", "Precisa da sua atenção"])
     const shortcuts = main.getByRole("navigation", { name: "Atalhos", exact: true })
     await expect(shortcuts.getByRole("link")).toHaveCount(3)
     await expect(shortcuts.getByRole("link", { name: "Novo pedido", exact: true })).toHaveAttribute("href", "/vendas/pedidos/novo")
