@@ -11,10 +11,9 @@ ROOT = Path('/etc/erp-next/contract-signatures')
 
 def configure(data, source):
     services = data['services']
-    app = services['api-ts']
-    env = app['environment']
-    provider = services['api']['environment']
-    if not isinstance(env, dict) or not isinstance(provider, dict) or app.get('network_mode') != 'service:api':
+    app = services['api']
+    env = provider = app['environment']
+    if not isinstance(env, dict):
         raise ValueError('unexpected_erp_service_layout')
     if provider.get('DOCUSEAL_URL', '').rstrip('/') != 'https://contrato.avilaops.com' or not provider.get('DOCUSEAL_API_TOKEN'):
         raise ValueError('confirmed_docuseal_integration_required')
@@ -60,7 +59,9 @@ def main():
         previous = args.previous
         if previous.is_symlink() or not previous.is_file() or previous.stat().st_uid != 0:
             raise SystemExit('expected previous root-owned compose JSON')
-        service = json.loads(previous.read_bytes())['services']['api-ts']
+        services = json.loads(previous.read_bytes())['services']
+        # A release anterior ao PR 02 ainda tinha o serviço privado `api-ts` ao lado do Rust.
+        service = services.get('api-ts', services['api'])
         mounts = [m for m in service.get('volumes',[]) if isinstance(m,dict)
                   and m.get('target') == '/etc/contract-validation' and m.get('type') == 'bind' and m.get('read_only') is True]
         if len(mounts) != 1:

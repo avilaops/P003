@@ -32,7 +32,7 @@ estão em [CI, publicação e retenção](CI-CD.md).
 
 Antes das migrações, preserve um backup do schema e confira os arquivos/checksums
 contra `_sqlx_migrations`. O dispatcher executa `node /app/apps/api-ts/dist/migrate.js /app/migrations`
-na imagem web candidata. O migrador TypeScript aplica as pendentes sob o mesmo lock. Bootstrap e
+na imagem candidata da API (`deploy/api-ts.Dockerfile`). O migrador TypeScript aplica as pendentes sob o mesmo lock. Bootstrap e
 importação do legado são operações de provisionamento e não fazem parte de uma
 publicação normal. Não os repita.
 

@@ -23,10 +23,8 @@ test("release dispatcher preserves private config and pins the restricted MCP ru
     const result = spawnSync(process.env.ERP_TEST_PYTHON || "python3", ["-c", code, file, sha], { encoding: "utf8" });
     assert.equal(result.status, 0, result.stderr || result.error?.message);
     const value = JSON.parse(readFileSync(file, "utf8")).services;
-    assert.equal(value.api.environment.DANFE_MCP_TOKEN, privateToken);
-    assert.equal(value.api.environment.ERP_CNPJ_WS_ENABLED, "true");
-    assert.equal(value.api.environment.DANFE_MCP_TOOL_PREFIX, "bare");
-    assert.equal(value.api.environment.DANFE_MCP_URL, "http://127.0.0.1:8091/mcp/danfe");
+    // The TypeScript API does not use the Rust-only DANFE/CNPJ variables.
+    for (const key of ["DANFE_MCP_TOKEN", "DANFE_MCP_URL", "ERP_CNPJ_WS_ENABLED"]) assert.equal(value.api.environment[key], undefined);
     assert.equal(value.web.environment.ERP_SESSION_SECRET, "synthetic-original-session-secret");
     assert.equal(value["fiscal-mcp"].image, "erp-next-fiscal-mcp:sha-" + sha);
     assert.equal(value["fiscal-mcp"].read_only, true);

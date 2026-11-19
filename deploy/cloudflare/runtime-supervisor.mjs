@@ -47,24 +47,20 @@ export function startSupervisor({ env = process.env, spawnProcess = spawn, fetch
   }
   const ready = (async () => {
     try {
-      const apis = [{ command: '/usr/local/bin/erp-next-api', args: [], env: environments.api, port: 8080 },
-        { command: process.execPath, args: ['apps/api-ts/dist/server.js'], env: environments.apiTs, port: 8081 }];
-      for (const api of apis) {
-        launch(api.command, api.args, api.env);
-        let apiReady = false;
-        for (let attempt = 0; attempt < attempts && !stopping; attempt++) {
-          try {
-            const response = await fetchImpl(`http://127.0.0.1:${api.port}/health/ready`, {
-              signal: AbortSignal.any([startup.signal, AbortSignal.timeout(1500)]),
-            });
-            const value = response.status === 200 ? await response.json() : null;
-            if (response.status !== 200 && response.body) await response.body.cancel();
-            if (value?.status === 'ready') { apiReady = true; break; }
-          } catch { /* Local read-only readiness probe; never send a business command. */ }
-          if (attempt + 1 < attempts && !stopping) await sleep(500);
-        }
-        if (!apiReady || stopping) throw Error('API startup failed');
+      launch(process.execPath, ['apps/api-ts/dist/server.js'], environments.api);
+      let apiReady = false;
+      for (let attempt = 0; attempt < attempts && !stopping; attempt++) {
+        try {
+          const response = await fetchImpl('http://127.0.0.1:8080/health/ready', {
+            signal: AbortSignal.any([startup.signal, AbortSignal.timeout(1500)]),
+          });
+          const value = response.status === 200 ? await response.json() : null;
+          if (response.status !== 200 && response.body) await response.body.cancel();
+          if (value?.status === 'ready') { apiReady = true; break; }
+        } catch { /* Local read-only readiness probe; never send a business command. */ }
+        if (attempt + 1 < attempts && !stopping) await sleep(500);
       }
+      if (!apiReady || stopping) throw Error('API startup failed');
       launch(process.execPath, ['apps/web/server.js'], environments.web);
     } catch {
       stop('SIGTERM', true);
