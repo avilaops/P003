@@ -101,6 +101,15 @@ export function buildApp(_dependencies: AppDependencies): FastifyInstance {
     catch { return reply.code(503).send({ status: "unavailable" }) }
     finally { client.release() }
   })
+  // Rotas do Rust ainda não portadas (PRs 04 a 10) respondem 404 claro, sem tocar em dados.
+  app.setNotFoundHandler((request, reply) => {
+    const problem = new Problem(404, "route_not_ported", "Rota inexistente ou ainda não portada para a API TypeScript")
+    void reply
+      .code(404)
+      .header("content-type", "application/problem+json")
+      .header("cache-control", "no-store")
+      .send({ ...problem.toJSON(), error: "route_not_ported", path: request.url.split("?")[0] })
+  })
   app.setErrorHandler((error, request, reply) => {
     const databaseCode = typeof error === "object" && error !== null && "code" in error ? String(error.code) : ""
     const problem = error instanceof Problem ? error
