@@ -57,12 +57,14 @@ import { registerFinancialEmails } from "./modules/document-copies/financial-rou
 import { registerContractPackage } from "./modules/document-copies/contract-package-routes.js"
 import { registerQualifiedReissue } from "./modules/contract-signatures/reissue.js"
 import { registerContractTemplateArchive } from "./modules/contract-templates/archive.js"
+import { trackRoutes } from "./platform/openapi.js"
 import { registerBrowserUseRoutes, type BrowserUseDependencies } from "./modules/browser-use/routes.js"
 
 export type AppDependencies = AccessDependencies & { fiscalVault?:import("./modules/outgoing-nfse/certificate-vault.js").FiscalCertificateVault; fiscalOperations?:FiscalOperations; outgoingNfse?: OutgoingNfseDependencies; nfeEmail?: NfeEmailIO; documentCopies?: DocumentCopyIO; browserUse?: BrowserUseDependencies }
 
 export function buildApp(_dependencies: AppDependencies): FastifyInstance {
   const app = Fastify({ logger: false, bodyLimit: 65_536 })
+  trackRoutes(app)
   const validateJson = app.getDefaultJsonParser("error", "error")
   app.removeContentTypeParser("application/json")
   app.addContentTypeParser("application/json", { parseAs: "string" }, (request, body, done) => {

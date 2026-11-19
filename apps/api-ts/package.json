@@ -11,7 +11,9 @@
     "migrate": "node dist/migrate.js",
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "tsx --test test/**/*.test.ts"
+    "test": "tsx --test test/**/*.test.ts",
+    "openapi": "tsx scripts/openapi.ts",
+    "openapi:check": "tsx scripts/openapi.ts --check"
   },
   "dependencies": {
     "@xmldom/xmldom": "0.9.12",
