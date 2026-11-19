@@ -39,10 +39,10 @@ export async function sourcePreparation(c:AuthorizedContext,id:string) {
     if (qty%100n || r.price==null || String(r.sku).length>60) conflict("Confira a precisão, o SKU e o preço fiscal das linhas da venda")
     const price=BigInt(String(r.price)),gross=(qty*price+500000n)/1000000n
     cents+=gross
-    // NF-e origin follows the product's registered commercial line (1 direct import, 0 national); unregistered stays for manual choice.
-    const origin=r.product_line==="imported" ? 1 : r.product_line==="national" ? 0 : null
-    return {productId:r.product_id,code:r.sku,description:r.name,unit:r.unit,ncm:r.ncm,origin,quantity:decimal(qty/100n,4),unitPrice:decimal(price,2),grossTotal:decimal(gross,2),additionalInfo:r.info}
+    return {productId:r.product_id,code:r.sku,description:r.name,unit:r.unit,ncm:r.ncm,quantity:decimal(qty/100n,4),unitPrice:decimal(price,2),grossTotal:decimal(gross,2),additionalInfo:r.info}
   })
+  // NF-e origin follows the product's registered commercial line (1 direct import, 0 national); unregistered stays for manual choice.
+  items.forEach((item,index)=>{ const line=result.rows[index]!.product_line; Object.assign(item,{origin:line==="imported" ? 1 : line==="national" ? 0 : null}) })
   if(!items.length) conflict("O pedido precisa de itens para preparação fiscal")
   return {tenantId:c.tenantId,customerId:o.customer_id,orderId:id,orderRevision:revisionValue(o.revision),recipient,items,productsTotal:decimal(cents,2)}
 }

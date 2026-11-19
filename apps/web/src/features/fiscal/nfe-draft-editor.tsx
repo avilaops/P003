@@ -30,7 +30,8 @@ import { NfeFinancialFields, hasHeaderFiscalReference } from "./nfe-financial-fi
 import { NfeRecipientPicker, NfeMunicipalityLookup } from "./nfe-recipient-picker"
 import { applyMunicipalityCode } from "@/lib/municipality-code"
 import { EmissionActions } from "./emission-actions"
-import { applyNatureCfop, applyRecipientFiscal, applyTaxProfile, blankDraft, blankIbptItem, blankItem, blankTaxDeclaration, blockerLabels, invoiceTotal, itemTotal, productsTotal, submission, type DraftInput, type DraftItem, type FiscalReadiness, type TaxDeclaration } from "./nfe-draft-model"
+import { applyRecipientFiscal, applyTaxProfile, blankDraft, blankIbptItem, blankItem, blankTaxDeclaration, blockerLabels, invoiceTotal, itemTotal, productsTotal, submission, type DraftInput, type DraftItem, type FiscalReadiness, type TaxDeclaration } from "./nfe-draft-model"
+import { applyNatureCfop } from "./nfe-draft-model"
 import { IbptDraftFields, IbptSavedSnapshot } from "./ibpt-draft-fields"
 
 type Snapshot = Schema<"DraftSnapshot">
@@ -96,8 +97,10 @@ export function NfeDraftEditor({ id, sourceOrderId, lotId, lotEnvironment="produ
         const current: Snapshot | undefined = id ? origin : undefined
         const proposed: Preparation | undefined = !id && sourceOrderId ? origin : undefined
         if (ready.tenantId !== me.tenant?.id || origin && origin.tenantId !== me.tenant.id) throw new Error("A empresa da sessão mudou. Reabra o rascunho")
-        const input: DraftInput = current ? {...current.data.input} : proposed ? { ...blankDraft(), model: initialModel, sourceOrderId: proposed.orderId, recipient: proposed.recipient, items: proposed.items.map(item => ({ ...blankItem(), code: item.code, description: item.description, additionalInfo: item.additionalInfo || null, unit: item.unit, ncm: item.ncm || "", ...(item.origin === 0 || item.origin === 1 ? { origin: item.origin } : {}), quantity: item.quantity, unitPrice: item.unitPrice, grossTotal: item.grossTotal })), productsTotal: proposed.productsTotal } : { ...blankDraft(), model: initialModel }
+        const input: DraftInput = current ? {...current.data.input} : proposed ? { ...blankDraft(), model: initialModel, sourceOrderId: proposed.orderId, recipient: proposed.recipient, items: proposed.items.map(item => ({ ...blankItem(), code: item.code, description: item.description, additionalInfo: item.additionalInfo || null, unit: item.unit, ncm: item.ncm || "", quantity: item.quantity, unitPrice: item.unitPrice, grossTotal: item.grossTotal })), productsTotal: proposed.productsTotal } : { ...blankDraft(), model: initialModel }
         if (!current) { input.environment = ready.environment; input.issuedAt = new Date().toISOString(); if (initialModel === 55) input.departureAt = input.issuedAt; input.presenceIndicator = initialModel === 65 ? 1 : 9 }
+        // Origin suggested by the preparation from each product's commercial line; items without it stay for manual choice.
+        if (!current && proposed) input.items = input.items.map((item, index) => { const origin = proposed.items[index]?.origin; return origin === 0 || origin === 1 ? { ...item, origin } : item })
         if (lotId && id) {
           const allocation:OrderLots=values[3]
           const lot=allocation?.lots.find(l=>l.id===lotId && l.draftId===id)
