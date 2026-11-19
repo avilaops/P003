@@ -85,7 +85,7 @@ export function SalesRecordList({ kind, labels }: { kind: "pedidos" | "propostas
               <label className="grid gap-1 text-sm">Etapa do pedido<select className="h-10 rounded-lg border bg-background px-3" value={stage} onChange={e=>update({stage:e.target.value,offset:0})}><option value="">Todas</option>{Object.entries(stages).map(([key,label])=><option key={key} value={key}>{label}</option>)}</select></label>
               <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={includeCancelled} onChange={e=>update({includeCancelled:e.target.checked?"true":"",offset:0})}/>Incluir cancelados</label>
               <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={stale} onChange={e=>update({stale:e.target.checked?"true":"",offset:0})}/>Rascunhos parados há mais de 7 dias</label>
-            </> : <label className="grid gap-1 text-sm">Prazo de validade<select className="h-10 rounded-lg border bg-background px-3" value={validity} onChange={e=>update({validity:e.target.value,offset:0})}><option value="">Todos</option><option value="current">Dentro da validade</option><option value="expired">Validade vencida</option></select></label>}
+            </> : <label className="grid gap-1 text-sm">Prazo de validade<select className="h-10 rounded-lg border bg-background px-3" value={validity} onChange={e=>update({validity:e.target.value,offset:0})}><option value="">Todos</option><option value="current">Dentro da validade</option><option value="expiring">Vencendo em até 3 dias</option><option value="expired">Validade vencida</option></select></label>}
           </div>
         </details>
       </form>

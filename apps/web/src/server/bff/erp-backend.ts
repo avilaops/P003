@@ -80,6 +80,7 @@ const routes: { module: MigratedModule; methods: readonly string[]; path: RegExp
   { module: "sales", methods: ["GET"], path: /^\/commercial\/(?:tables\/(?:imported|national)|metrics\/(?:orders|commissions))$/ },
   { module: "sales", methods: ["POST"], path: /^\/commercial\/(?:mixed\/)?(?:simulate|orders)$/ },
   { module: "reports", methods: ["GET"], path: /^\/dashboard$/ },
+  { module: "sales", methods: ["GET"], path: /^\/pending-work$/ },
   { module: "reports", methods: ["GET", "POST"], path: /^\/system\/custom-reports$/ },
   { module: "reports", methods: ["PUT"], path: new RegExp(`^/system/custom-reports/${uuid}$`, "i") },
 ]
