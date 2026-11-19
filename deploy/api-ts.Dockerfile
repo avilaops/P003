@@ -13,8 +13,6 @@ FROM node:24-bookworm-slim
 ENV NODE_ENV=production API_TS_HOST=0.0.0.0 API_TS_PORT=8080
 WORKDIR /app
 COPY --from=build --chown=node:node /out/ ./apps/api-ts/
-COPY --chown=node:node apps/api/assets/documents/commercial-document.css ./apps/api/assets/documents/
-COPY --chown=node:node apps/api/assets/fonts/ ./apps/api/assets/fonts/
 COPY --chown=node:node migrations/ ./migrations/
 USER node
 EXPOSE 8080
