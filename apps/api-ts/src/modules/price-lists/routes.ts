@@ -13,7 +13,7 @@ import { integer, queryInteger, searchQuery } from "../registrations/query.js"
 
 const invalid = (title: string) => new Problem(422, "invalid_input", title)
 const upper = (value: string) => value.replace(/[a-z]/g, character => character.toUpperCase())
-const isoDate = z.string().refine(value => /^\d{4}-\d{2}-\d{2}$/.test(value) && new Date(`${value}T00:00:00Z`).toISOString().startsWith(value))
+const isoDate = z.string().refine(value => /^\d{4}-\d{2}-\d{2}$/.test(value) && value >= "1900-01-01" && value <= "2100-12-31" && new Date(`${value}T00:00:00Z`).toISOString().startsWith(value))
 const optionalText = <T extends z.ZodType>(schema: T) => z.preprocess(value => value ?? null, schema.nullable())
 
 export const priceListInputSchema = z.strictObject({

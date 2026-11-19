@@ -3,7 +3,9 @@ import type { FastifyInstance } from "fastify"
 import { z } from "zod"
 
 import type { AppDependencies } from "../../app.js"
-import { authorizeRequest, requirePermission, type AuthorizedContext } from "../../platform/access.js"
+import { authorizeRequest, requirePermission, type AccessDependencies, type AuthorizedContext } from "../../platform/access.js"
+import type { AuthenticatedIdentity } from "../../platform/auth.js"
+import { reloadTenantPermissions, type DatabaseClient } from "../../platform/database.js"
 import { sameJson } from "../../platform/json.js"
 import { Problem } from "../../platform/problem.js"
 import { deliveryFromEnvironment, type InvitationDelivery } from "./delivery.js"
@@ -80,17 +82,67 @@ async function companyName(context: AuthorizedContext) {
   return (await context.client.query<{ legal_name: string }>("SELECT legal_name FROM tenants WHERE id = $1", [context.tenantId])).rows[0]!.legal_name
 }
 
+// Plain tenant transaction without the caller's membership check: used to record a delivery outcome after the
+// e-mail went out (the caller may have lost access meanwhile) and to accept invitations of a not-yet member.
+async function tenantTransaction<T>(dependencies: AccessDependencies, tenantId: string, subject: string, operation: (client: DatabaseClient) => Promise<T>, extra: Record<string, string> = {}) {
+  const client = await dependencies.pool.connect()
+  try {
+    await client.query("BEGIN")
+    await client.query("SELECT set_config('app.tenant_id',$1,true),set_config('app.auth_subject',$2,true),set_config('app.invitation_email',$3,true)", [tenantId, subject, extra.email ?? ""])
+    const result = await operation(client)
+    await client.query("COMMIT")
+    return result
+  } catch (error) {
+    try { await client.query("ROLLBACK") } catch { /* Preserve the original failure. */ }
+    throw error
+  } finally { client.release() }
+}
+
+/**
+ * Accepts pending invitations addressed to a verified e-mail (Rust invitations::accept_for_identity), called by
+ * GET /api/v1/companies. The inviter must still manage users and hold every invited permission; otherwise the
+ * invitation stays pending. An invitation never reactivates a blocked membership nor changes existing roles.
+ */
+export async function acceptInvitations(dependencies: AccessDependencies, identity: AuthenticatedIdentity) {
+  if (!identity.emailVerified) return
+  const candidates = await tenantTransaction(dependencies, "", identity.subject, async client =>
+    (await client.query<{ id: string; tenant_id: string }>("SELECT id, tenant_id FROM user_invitations WHERE email = $1 AND status = 'pending' AND expires_at > now() ORDER BY created_at LIMIT 100", [identity.email])).rows,
+  { email: identity.email })
+  for (const candidate of candidates) {
+    await tenantTransaction(dependencies, candidate.tenant_id, identity.subject, async client => {
+      await client.query("SELECT id FROM tenants WHERE id = $1 FOR UPDATE", [candidate.tenant_id])
+      const pending = (await client.query<{ invited_by: string; role_ids: string[]; permission_ceiling: string[] }>("SELECT invited_by, role_ids, permission_ceiling FROM user_invitations WHERE tenant_id = $1 AND id = $2 AND email = $3 AND status = 'pending' AND expires_at > now() FOR UPDATE", [candidate.tenant_id, candidate.id, identity.email])).rows[0]
+      if (!pending) return
+      const inviter: AuthorizedContext = { client, tenantId: candidate.tenant_id, authSubject: pending.invited_by, permissions: [], identity }
+      try {
+        await reloadTenantPermissions(inviter)
+        if (!inviter.permissions.includes("platform.users.manage")) return
+        const permissions = await selectedPermissions(inviter, pending.role_ids)
+        if (permissions.some(code => !pending.permission_ceiling.includes(code))) return
+      } catch (error) {
+        if (error instanceof Problem && error.status < 500) return
+        throw error
+      }
+      const identityId = (await client.query<{ id: string }>("INSERT INTO identities (auth_subject, email, display_name) VALUES ($1,$2,$3) ON CONFLICT (auth_subject) DO UPDATE SET email = EXCLUDED.email, display_name = EXCLUDED.display_name, updated_at = now() RETURNING id", [identity.subject, identity.email, identity.name])).rows[0]!.id
+      const membership = (await client.query<{ id: string }>("INSERT INTO tenant_memberships (tenant_id, identity_id) VALUES ($1,$2) ON CONFLICT (tenant_id, identity_id) DO NOTHING RETURNING id", [candidate.tenant_id, identityId])).rows[0]
+      if (membership) await client.query("INSERT INTO membership_roles (membership_id, role_id) SELECT $1, unnest($2::uuid[])", [membership.id, pending.role_ids])
+      await client.query("UPDATE user_invitations SET status = 'accepted', accepted_at = now(), accepted_subject = $3 WHERE tenant_id = $1 AND id = $2", [candidate.tenant_id, candidate.id, identity.subject])
+      await audit({ client, tenantId: candidate.tenant_id, identity } as AuthorizedContext, candidate.id, "user_invitation.accepted")
+    })
+  }
+}
+
 // `delivery` replaces ERP Auth (tests); `null` means not configured; omitted reads the environment.
 export type InvitationDependencies = { delivery?: InvitationDelivery | null }
 
 export function registerInvitationRoutes(app: FastifyInstance, dependencies: AppDependencies, options: InvitationDependencies = {}) {
   const delivery = options.delivery === undefined ? deliveryFromEnvironment() : options.delivery ?? undefined
   // Auth is contacted only after the invitation is committed, so a delivered e-mail always has a stored invitation.
-  const finish = (request: Parameters<typeof authorizeRequest>[0], id: string, command: string, outcome: string) =>
-    authorizeRequest(request, dependencies, async context => {
-      await context.client.query("UPDATE user_invitations SET delivery = $4 WHERE tenant_id = $1 AND id = $2 AND delivery_key = $3", [context.tenantId, id, command, outcome])
-      return invitation(context, id)
-    }, true)
+  const finish = (tenantId: string, subject: string, id: string, command: string, outcome: string) =>
+    tenantTransaction(dependencies, tenantId, subject, async client => {
+      await client.query("UPDATE user_invitations SET delivery = $4 WHERE tenant_id = $1 AND id = $2 AND delivery_key = $3", [tenantId, id, command, outcome])
+      return invitation({ client, tenantId } as AuthorizedContext, id)
+    })
 
   app.get("/api/v1/invitations", async (request, reply) => {
     const body = await authorizeRequest(request, dependencies, async context => {
@@ -126,11 +178,11 @@ export function registerInvitationRoutes(app: FastifyInstance, dependencies: App
       const id = randomUUID()
       await context.client.query("INSERT INTO user_invitations (id, tenant_id, name, email, invited_by, role_ids, permission_ceiling, command_key, delivery_key, request) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$8,$9)", [id, context.tenantId, input.name, input.email, context.identity.subject, roleIds, ceiling, key, stored])
       await audit(context, id, "user_invitation.created")
-      return { created: await invitation(context, id), company: await companyName(context), inviter: context.identity.name }
+      return { created: await invitation(context, id), company: await companyName(context), inviter: context.identity.name, tenantId: context.tenantId, subject: context.authSubject }
     }, true)
     if ("replay" in step) return reply.header("cache-control", "no-store").send(step.replay)
     const outcome = await delivery.send(step.created, step.company, step.inviter)
-    return reply.header("cache-control", "no-store").send(await finish(request, step.created.id, key, outcome))
+    return reply.header("cache-control", "no-store").send(await finish(step.tenantId, step.subject, step.created.id, key, outcome))
   })
 
   app.post<{ Params: { id: string } }>("/api/v1/invitations/:id/resend", async (request, reply) => {
@@ -149,11 +201,11 @@ export function registerInvitationRoutes(app: FastifyInstance, dependencies: App
       await selectedPermissions(context, row.role_ids)
       await context.client.query("UPDATE user_invitations SET delivery = 'sending', delivery_key = $3, last_delivery_at = now() WHERE tenant_id = $1 AND id = $2", [context.tenantId, value.id, command])
       await audit(context, value.id, "user_invitation.resent")
-      return { sending: value, company: await companyName(context), inviter: context.identity.name }
+      return { sending: value, company: await companyName(context), inviter: context.identity.name, tenantId: context.tenantId, subject: context.authSubject }
     }, true)
     if ("replay" in step) return reply.header("cache-control", "no-store").send(step.replay)
     const outcome = await delivery.send(step.sending, step.company, step.inviter)
-    return reply.header("cache-control", "no-store").send(await finish(request, step.sending.id, command, outcome))
+    return reply.header("cache-control", "no-store").send(await finish(step.tenantId, step.subject, step.sending.id, command, outcome))
   })
 
   app.post<{ Params: { id: string } }>("/api/v1/invitations/:id/revoke", async (request, reply) => {
