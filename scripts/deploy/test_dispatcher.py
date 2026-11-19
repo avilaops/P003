@@ -48,7 +48,7 @@ class TypeScriptComposeTests(unittest.TestCase):
             with self.subTest(modules=modules), tempfile.TemporaryDirectory() as directory:
                 path = Path(directory) / 'compose.json'
                 config = {'services': {
-                    'api': {'image': 'rust', 'environment': {'DATABASE_URL': 'postgresql://app:fixture@db/test', 'AUTH_USERINFO_URL': 'https://auth.test/oauth/userinfo', 'SMTP_PASSWORD': 'MAIL', 'ERP_CERT_KEY': 'CERT', 'ERP_FISCAL_ENGINE_URL': 'http://127.0.0.1:8091', 'ERP_FISCAL_ENGINE_TOKEN': 'fixture-token-with-at-least-24-characters', 'FISCAL_A1_KEYRING': '{"active":"primary","keys":{"primary":"fixture"}}', 'NFSE_ISSUANCE_ENABLED': 'true', 'BROWSER_USE_API_KEY': 'bu_fixture'}},
+                    'api': {'image': 'rust', 'environment': {'DATABASE_URL': 'postgresql://app:fixture@db/test', 'AUTH_USERINFO_URL': 'https://auth.test/oauth/userinfo', 'SMTP_PASSWORD': 'MAIL', 'ERP_CERT_KEY': 'CERT', 'ERP_FISCAL_ENGINE_URL': 'http://127.0.0.1:8091', 'ERP_FISCAL_ENGINE_TOKEN': 'fixture-token-with-at-least-24-characters', 'FISCAL_A1_KEYRING': '{"active":"primary","keys":{"primary":"fixture"}}', 'NFSE_ISSUANCE_ENABLED': 'true', 'BROWSER_USE_API_KEY': 'bu_fixture', 'CATALOG_MEDIA_ORIGIN': 'https://media.test', 'CATALOG_MEDIA_TOKEN': 'catalog-fixture', 'CATALOG_MEDIA_TENANT': '11111111-1111-4111-8111-111111111111'}},
                     'web': {'image': 'web', 'environment': {'AUTH_ISSUER': 'https://auth.test', 'ERP_SESSION_SECRET': 'SESSION', 'ERP_TYPESCRIPT_MODULES': modules}},
                     'fiscal-engine': {'image': 'fiscal', 'environment': {}, 'healthcheck': {}},
                 }}
@@ -82,6 +82,9 @@ class TypeScriptComposeTests(unittest.TestCase):
                 self.assertNotIn('ERP_TYPESCRIPT_MODULES', restored['web']['environment'])
                 self.assertIn('api-ts', restored, 'Retired traffic flags cannot disable a required business backend')
                 self.assertEqual(restored['api-ts']['environment']['BROWSER_USE_API_KEY'], 'bu_fixture', 'The Browser Use key survives a redeploy')
+                self.assertEqual(restored['api-ts']['environment']['CATALOG_MEDIA_ORIGIN'], 'https://media.test', 'The catalog gateway reaches the TypeScript API and survives a redeploy')
+                self.assertEqual(restored['api-ts']['environment']['CATALOG_MEDIA_TENANT'], '11111111-1111-4111-8111-111111111111')
+                self.assertNotIn('CATALOG_MEDIA_TOKEN', services['web']['environment'])
                 self.assertEqual(restored['api']['environment']['ERP_TYPESCRIPT_API_URL'], 'http://127.0.0.1:8081')
 
 

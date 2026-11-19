@@ -146,6 +146,11 @@ if fiscal_url and fiscal_token and fiscal_keyring:
 browser_use_key = previous_api_ts.get("BROWSER_USE_API_KEY") or api.get("BROWSER_USE_API_KEY")
 if browser_use_key:
     settings["BROWSER_USE_API_KEY"] = browser_use_key
+# Catalog publication (Worker media gateway): the api-ts reads all three or none; kept across releases.
+catalog_keys = ("CATALOG_MEDIA_ORIGIN", "CATALOG_MEDIA_TOKEN", "CATALOG_MEDIA_TENANT")
+catalog = {key: previous_api_ts.get(key) or api.get(key) for key in catalog_keys}
+if all(catalog.values()):
+    settings.update(catalog)
 config["services"]["api-ts"] = {
     "image": "erp-next-web:sha-" + sys.argv[2], "restart": "unless-stopped",
     "command": ["node", "apps/api-ts/dist/server.js"], "environment": settings,
