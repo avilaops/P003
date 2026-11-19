@@ -20,6 +20,8 @@ import { registerProduction } from "./modules/production/routes.js"
 import { registerPartyRoutes } from "./modules/parties/routes.js"
 import { registerWarranties } from "./modules/warranties/routes.js"
 import { registerLogisticsShipments } from "./modules/logistics-shipments/routes.js"
+import { registerLogisticsFreight } from "./modules/logistics-freight/routes.js"
+import type { FreightProvider } from "./modules/logistics-freight/provider.js"
 import { registerDashboardRoutes } from "./modules/dashboard/routes.js"
 import { registerReportRoutes } from "./modules/reports/routes.js"
 import { registerPosSessionRoutes } from "./modules/pos-sessions/routes.js"
@@ -67,7 +69,7 @@ import { registerCompanyAccountRoutes, type CompanyAccountDependencies } from ".
 import { trackRoutes } from "./platform/openapi.js"
 import { registerBrowserUseRoutes, type BrowserUseDependencies } from "./modules/browser-use/routes.js"
 
-export type AppDependencies = AccessDependencies & { fiscalVault?:import("./modules/outgoing-nfse/certificate-vault.js").FiscalCertificateVault; fiscalOperations?:FiscalOperations; outgoingNfse?: OutgoingNfseDependencies; nfeEmail?: NfeEmailIO; documentCopies?: DocumentCopyIO; browserUse?: BrowserUseDependencies; systemConfig?: SystemConfigDependencies; platformAdmin?: PlatformAdminDependencies; companyAccount?: CompanyAccountDependencies; catalogMedia?: import("./platform/catalog-media.js").CatalogMedia }
+export type AppDependencies = AccessDependencies & { fiscalVault?:import("./modules/outgoing-nfse/certificate-vault.js").FiscalCertificateVault; fiscalOperations?:FiscalOperations; outgoingNfse?: OutgoingNfseDependencies; nfeEmail?: NfeEmailIO; documentCopies?: DocumentCopyIO; browserUse?: BrowserUseDependencies; systemConfig?: SystemConfigDependencies; platformAdmin?: PlatformAdminDependencies; companyAccount?: CompanyAccountDependencies; catalogMedia?: import("./platform/catalog-media.js").CatalogMedia; freight?: FreightProvider }
 
 export function buildApp(_dependencies: AppDependencies): FastifyInstance {
   const app = Fastify({ logger: false, bodyLimit: 65_536 })
@@ -141,6 +143,7 @@ export function buildApp(_dependencies: AppDependencies): FastifyInstance {
   registerPartyRoutes(app, _dependencies)
   registerWarranties(app, _dependencies)
   registerLogisticsShipments(app, _dependencies)
+  registerLogisticsFreight(app, _dependencies)
   registerDashboardRoutes(app, _dependencies)
   registerReportRoutes(app, _dependencies)
   registerPosSessionRoutes(app, _dependencies)
