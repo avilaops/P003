@@ -1,4 +1,3 @@
-import { randomUUID } from "node:crypto"
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
 import type { AppDependencies } from "../../app.js"
@@ -10,6 +9,7 @@ import { decimal } from "../sales/fixed.js"
 import { prepareOrder, storeLines } from "./prepare.js"
 import { orderInputSchema } from "./schema.js"
 import { loadOrder } from "./snapshot.js"
+import { persistDraft } from "./persist-draft.js"
 
 export function registerOrderCommands(app: FastifyInstance, dependencies: AppDependencies) {
   app.post("/api/v1/orders", async (request, reply) => {
@@ -20,10 +20,8 @@ export function registerOrderCommands(app: FastifyInstance, dependencies: AppDep
       if (!parsed.success) throw new Problem(422, "invalid_input", "JSON inválido ou campos desconhecidos")
       const previous = await replay(context, key, "order.create", parsed.data)
       if (previous) return previous
-      const prepared = await prepareOrder(context, parsed.data), id = randomUUID()
-      await context.client.query("INSERT INTO sales_orders(id,tenant_id,customer_id,customer_name,customer_tax_id,due_date,amount_cents,status) VALUES($1,$2,$3,$4,$5,$6,$7,'draft')", [id, context.tenantId, parsed.data.customerId, prepared.customerName, prepared.customerTaxId, prepared.due, prepared.total])
-      await storeLines(context, id, prepared.lines)
-      await record(context, request.headers, "sales_order", id, "order.created", { revision: 1, amount: decimal(prepared.total, 2), items: prepared.lines.length })
+      const prepared = await prepareOrder(context, parsed.data)
+      const { id } = await persistDraft(context, request.headers, parsed.data.customerId, prepared)
       const result = await loadOrder(context, id)
       await remember(context, key, "order.create", parsed.data, result)
       return result

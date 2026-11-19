@@ -69,7 +69,7 @@ export async function verifyCommercialConversion(app: FastifyInstance, seed: Poo
   const zeroOrder = zero.json().id as string
   const acceptZero = (revision: number) => app.inject({ method: "POST", url: `/api/v1/orders/${zeroOrder}/accept`, headers: { ...headers, "if-match": `"${revision}"`, "idempotency-key": randomUUID() } })
   assert.equal((await acceptZero(1)).statusCode, 409)
-  const approved = await app.inject({ method: "POST", url: `/api/v1/commercial/orders/${zeroOrder}/decision`, headers: { ...headers, "if-match": '"1"', "idempotency-key": randomUUID() }, payload: { approved: true, reason: "Entrada zero aprovada explicitamente" } })
+  const approved = await app.inject({ method: "POST", url: `/api/v1/commercial/orders/${zeroOrder}/decision`, headers: { ...headers, authorization: "Bearer commercial-manager", "if-match": '"1"', "idempotency-key": randomUUID() }, payload: { approved: true, reason: "Entrada zero aprovada explicitamente" } })
   assert.equal(approved.statusCode, 200, approved.body)
   assert.equal((await acceptZero(2)).statusCode, 200)
   assert.equal((await seed.query("SELECT count(*)::int AS count FROM receivables WHERE tenant_id=$1 AND order_id=$2", [tenant, zeroOrder])).rows[0].count, 1)

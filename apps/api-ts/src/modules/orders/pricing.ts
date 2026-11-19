@@ -12,12 +12,13 @@ function idValue(value: string) {
   if (!parsed.success) throw new Problem(422, "invalid_input", "Identificador inválido")
   return parsed.data.toLowerCase()
 }
+const orderStatus = "SELECT revision,status,EXISTS(SELECT 1 FROM audit_log a JOIN identities i ON i.id=a.identity_id WHERE a.tenant_id=$1 AND a.entity_id=$2::text AND a.action='order.created' AND i.auth_subject=$3) AS own FROM sales_orders WHERE tenant_id=$1 AND id=$2::uuid"
 export function registerOrderPricing(app: FastifyInstance, dependencies: AppDependencies) {
   app.get<{ Params: { id: string } }>("/api/v1/orders/:id/pricing", async (request, reply) => {
     const result = await authorizeRequest(request, dependencies, async context => {
       requirePermission(context, "sales.orders.read")
       const id = idValue(request.params.id)
-      const order = (await context.client.query("SELECT revision,status FROM sales_orders WHERE tenant_id=$1 AND id=$2", [context.tenantId, id])).rows[0]
+      const order = (await context.client.query(orderStatus, [context.tenantId, id,context.authSubject])).rows[0]
       if (!order) throw new Problem(404, "not_found", "Registro não encontrado nesta empresa")
       const row = (await context.client.query("SELECT snapshot,needs_approval,approved_by FROM order_pricing_snapshots WHERE tenant_id=$1 AND order_id=$2", [context.tenantId, id])).rows[0]
       await reloadTenantPermissions(context)
@@ -32,7 +33,7 @@ export function registerOrderPricing(app: FastifyInstance, dependencies: AppDepe
         }
         data = { snapshot, needsApproval: row.needs_approval, approved: row.approved_by !== null }
       }
-      return { revision: revisionValue(order.revision), body: { tenantId: context.tenantId, canApprove: canApprove && order.status === "draft", data } }
+      return { revision: revisionValue(order.revision), body: { tenantId: context.tenantId, canApprove: canApprove && !order.own && order.status === "draft", data } }
     })
     return reply.header("cache-control", "no-store").header("etag", `"${result.revision}"`).send(result.body)
   })
@@ -48,9 +49,10 @@ export function registerOrderPricing(app: FastifyInstance, dependencies: AppDepe
       const input = { id, revision: expected, reason }, scope = "order.pricing.approved"
       const repeated = await replay(context, key, scope, input)
       if (repeated) return repeated
-      const order = (await context.client.query("SELECT revision,status FROM sales_orders WHERE tenant_id=$1 AND id=$2", [context.tenantId, id])).rows[0]
+      const order = (await context.client.query(orderStatus, [context.tenantId, id,context.authSubject])).rows[0]
       if (!order) throw new Problem(404, "not_found", "Registro não encontrado nesta empresa")
       if (revisionValue(order.revision) !== expected) throw new Problem(412, "revision_conflict", "Outra pessoa alterou o cadastro. Sua edição foi preservada")
+      if (order.own) throw new Problem(403,"forbidden","A decisão exige um responsável diferente do solicitante")
       if (order.status !== "draft") throw new Problem(409, "domain_conflict", "Aprovação exige pedido em rascunho")
       const approved = await context.client.query("UPDATE order_pricing_snapshots SET approved_by=$3,approved_at=now(),approval_reason=$4 WHERE tenant_id=$1 AND order_id=$2 AND needs_approval AND approved_by IS NULL RETURNING order_id", [context.tenantId, id, context.authSubject, reason])
       if (approved.rows.length !== 1) throw new Problem(409, "domain_conflict", "Nenhuma exceção pendente neste pedido")

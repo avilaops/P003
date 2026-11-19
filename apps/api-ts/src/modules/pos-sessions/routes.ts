@@ -44,7 +44,7 @@ export function registerPosSessionRoutes(app: FastifyInstance, deps: AppDependen
         const result = (
           await c.client.query(
             `WITH sessions AS (SELECT ${summary} FROM pos_sessions s WHERE s.tenant_id=$1
-        AND ($2::text IS NULL OR s.status=$2) AND ($3::text IS NULL OR s.register=$3)
+        AND ($2::text IS NULL OR s.status=$2) AND ($3::text IS NULL OR lower(s.register)=lower($3))
         AND ($4::date IS NULL OR (s.opened_at AT TIME ZONE 'America/Sao_Paulo')::date>=$4)
         AND ($5::date IS NULL OR (s.opened_at AT TIME ZONE 'America/Sao_Paulo')::date<=$5)),
         page AS (SELECT * FROM sessions ORDER BY "openedAt" DESC,id DESC LIMIT $6 OFFSET $7)
@@ -78,7 +78,7 @@ export function registerPosSessionRoutes(app: FastifyInstance, deps: AppDependen
         requirePermission(c, read)
         const current = (
           await c.client.query(
-            "SELECT id FROM pos_sessions WHERE tenant_id=$1 AND status='open' AND ($2::text IS NULL OR register=$2) ORDER BY opened_at DESC,id DESC LIMIT 1 FOR SHARE",
+            "SELECT id FROM pos_sessions WHERE tenant_id=$1 AND status='open' AND ($2::text IS NULL OR lower(register)=lower($2)) ORDER BY opened_at DESC,id DESC LIMIT 1 FOR SHARE",
             [c.tenantId, q.register ?? null],
           )
         ).rows[0]

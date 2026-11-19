@@ -2,6 +2,8 @@
 
 [Funcionalidades pendentes](README.md) • [Padrão Protheus](PADRAO-PROTHEUS.md) • [Guias de Vendas](../vendas/README.md)
 
+[Situação da implementação de Vendas](../vendas/IMPLEMENTACAO.md) • As descrições de lacunas e o erro de sessões abaixo registram o diagnóstico original. A matriz de implementação identifica o código atual, os cenários executados e as dependências de homologação.
+
 Referência Protheus: módulo de Faturamento (SIGAFAT) • pedido de venda (MATA410), liberação de pedido e de crédito, documento de saída (MATA460), condição de pagamento, tabela de preço, regras de desconto e comissões.
 
 ## O que já existe (conferido nos guias)

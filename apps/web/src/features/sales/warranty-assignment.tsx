@@ -3,7 +3,8 @@
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { useCommand, useResource } from "@/hooks/use-operation"
+import { useCommand } from "@/hooks/use-operation"
+import { Lookup } from "./orders"
 
 type AssignmentResponse = {
   tenantId: string
@@ -11,24 +12,22 @@ type AssignmentResponse = {
     id: string
     queue: string
     assignedTo: string | null
+    assignedToName?: string | null
     slaDueAt: string | null
     revision: number
   }
 }
 
-export function WarrantyAssignment({ id }: { id: string }) {
-  const resource = useResource<AssignmentResponse>(`/api/erp/warranty-cases/${id}`)
-  if (resource.loading) return <section className="rounded-2xl border p-5"><p role="status">Carregando triagem…</p></section>
-  if (resource.error || !resource.value) return <section className="rounded-2xl border p-5"><p role="alert">{resource.error || "Triagem indisponível"}</p></section>
-
-  return <WarrantyAssignmentForm key={`${resource.value.data.id}:${resource.value.data.revision}`} item={resource.value.data} tenantId={resource.value.tenantId} etag={resource.etag} onSaved={resource.reload} />
-}
-
-function WarrantyAssignmentForm({ item, tenantId, etag, onSaved }: { item: AssignmentResponse["data"]; tenantId: string; etag: string; onSaved: () => void }) {
+export function WarrantyAssignment({ item, tenantId, etag, onSaved }: { item: AssignmentResponse["data"]; tenantId: string; etag: string; onSaved: () => void }) {
   const command = useCommand()
   const [queue, setQueue] = useState(item.queue)
   const [assignedTo, setAssignedTo] = useState(item.assignedTo || "")
-  const [slaDueAt, setSlaDueAt] = useState(item.slaDueAt ? item.slaDueAt.slice(0, 16) : "")
+  const [name,setName]=useState(item.assignedToName || "")
+  const [slaDueAt, setSlaDueAt] = useState(() => {
+    if (!item.slaDueAt) return ""
+    const local = new Date(item.slaDueAt)
+    return new Date(local.getTime() - local.getTimezoneOffset() * 60000).toISOString().slice(0, 16)
+  })
 
   async function save() {
     const result = await command.send(`/api/erp/warranty-cases/${item.id}/assignment`, tenantId, {
@@ -39,5 +38,14 @@ function WarrantyAssignmentForm({ item, tenantId, etag, onSaved }: { item: Assig
     if (result) onSaved()
   }
 
-  return <section className="space-y-4 rounded-2xl border p-5"><div><h2 className="font-semibold">Triagem operacional</h2><p className="mt-1 text-sm text-muted-foreground">Defina a fila, o responsável e o prazo sem alterar o histórico do atendimento.</p></div><label className="grid gap-2 text-sm">Fila<Input value={queue} onChange={event => setQueue(event.target.value)} maxLength={80} /></label><label className="grid gap-2 text-sm">Responsável (ID do funcionário)<Input value={assignedTo} onChange={event => setAssignedTo(event.target.value)} placeholder="UUID opcional" /></label><label className="grid gap-2 text-sm">Prazo do SLA<Input type="datetime-local" value={slaDueAt} onChange={event => setSlaDueAt(event.target.value)} /></label><Button disabled={command.busy || !queue.trim()} onClick={() => void save()}>{command.busy ? "Salvando…" : "Salvar triagem"}</Button>{command.error && <p role="alert">{command.error}</p>}</section>
+  return <section className="space-y-3 rounded-lg border p-4"><h2 className="font-semibold">Triagem operacional</h2>
+    <fieldset disabled={command.busy || command.uncertain || command.stale} className="grid gap-2">
+      <label>Fila<Input value={queue} onChange={event=>setQueue(event.target.value)} maxLength={80}/></label>
+      <Lookup endpoint="warranty-staff" label="responsável" compact searchOnly disabled={command.busy} choose={v=>{setAssignedTo(v.id);setName(v.name ?? "")}}/>
+      {assignedTo && <div>Responsável • {name || "Funcionário atribuído"} <Button variant="outline" onClick={()=>{setAssignedTo("");setName("")}}>Remover responsável</Button></div>}
+      <label>Prazo do SLA<Input type="datetime-local" value={slaDueAt} onChange={event=>setSlaDueAt(event.target.value)}/></label>
+    </fieldset>
+    {command.stale ? <Button onClick={onSaved}>Atualizar registro</Button> : <Button disabled={command.busy || !queue.trim()} onClick={()=>void save()}>{command.uncertain?"Conferir triagem":"Salvar triagem"}</Button>}
+    {command.error && <p role="alert">{command.error}</p>}
+  </section>
 }

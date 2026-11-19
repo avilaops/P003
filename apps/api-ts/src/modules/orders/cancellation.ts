@@ -76,16 +76,27 @@ export async function requestContractWithdrawals(context: AuthorizedContext, hea
   }
 }
 
-export async function reconcileUnshipped(context: AuthorizedContext, headers: CommandHeaders, order: string, next: Revision) {
+type CompletedReversal = {
+  reason: string
+  occurred: string
+  receivableIds: string[]
+  paymentReversalIds: string[]
+  stockMovementIds: string[]
+}
+export async function reconcileCancellation(context: AuthorizedContext, headers: CommandHeaders, order: string, next: Revision, completed?: CompletedReversal) {
   const { client, tenantId } = context
   const fiscal = await fiscalCancellation(context, order)
-  const id = randomUUID(), reason = "Cancelamento do pedido antes da expedição", occurred = new Date().toISOString().slice(0, 10)
+  const id = randomUUID(), reason = completed?.reason ?? "Cancelamento do pedido antes da expedição", occurred = completed?.occurred ?? new Date().toISOString().slice(0, 10)
   await client.query("SELECT set_config('app.stock_effective_on',$1,true)", [occurred])
   const production = await cancelProduction(context, headers, order, id, reason)
   await reverseOrderInvoices(context, headers, order, id, occurred, reason)
   const commission = await commissionReconciliation(context, order)
-  const summary = { id, kind: "sale_cancellation", sourceId: order, orderId: order, cancellationId: id, revision: next, reason, occurredOn: occurred, receivableId: null, stockMovementIds: [], paymentReversalIds: [], beforeShipment: true, fiscalCancellation: fiscal, reconciliation: { commission, production } }
+  const summary = { id, kind: "sale_cancellation", sourceId: order, orderId: order, cancellationId: id, revision: next, reason, occurredOn: occurred, receivableId: completed?.receivableIds.length === 1 ? completed.receivableIds[0] : null,
+    stockMovementIds: completed?.stockMovementIds ?? [], paymentReversalIds: completed?.paymentReversalIds ?? [],
+    ...(completed ? { receivableIds: completed.receivableIds } : { beforeShipment: true }), fiscalCancellation: fiscal, reconciliation: { commission, production } }
   await client.query("INSERT INTO sales_order_cancellations(id,tenant_id,order_id,reason,occurred_on,order_revision,summary) VALUES($1,$2,$3,$4,$5,$6,$7)", [id, tenantId, order, reason, occurred, next, summary])
   await requestContractWithdrawals(context, headers, order, id, reason)
-  await record(context, headers, "sales_order", order, "sales.order.reconciliation_requested", summary)
+  await record(context, headers, "sales_order", order, "sales.order.reconciliation_requested",
+    completed ? { orderId: order, cancellationId: id, commission, production } : summary)
+  return summary
 }

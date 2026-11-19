@@ -13,7 +13,7 @@ export function proposalFiscalLabel(customer: ProposalCustomer) { return `${cust
 export function proposalSimulationInput(items: ProposalEquipment[], tables: PriceTable[], customer: ProposalCustomer, input: Omit<MixedSimulationInput, "items" | "taxpayer">): MixedSimulationInput | null {
   const source = (id: string) => tables.flatMap(table => table.data?.items.filter(item => item.productId === id).map(item => ({ table, item })) ?? [])
   if (!items.some(item => source(item.id).length)) return null
-  return { ...input, taxpayer: taxpayer(customer), items: items.map(item => {
+  return { ...input, ...(customer.id ? {customerId:customer.id} : {}), taxpayer: taxpayer(customer), items: items.map(item => {
     const matches = source(item.id)
     if (matches.length !== 1 || !matches[0].table.data || matches[0].item.available === false) throw Error("Todos os equipamentos precisam estar disponíveis em uma única tabela publicada por linha.")
     const quantity = Number(item.quantity.replace(",", "."))

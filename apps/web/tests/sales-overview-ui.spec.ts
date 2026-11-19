@@ -21,6 +21,22 @@ async function fixtures(page: Page, canEdit = true, failOrders = false, pricingO
 
 test.beforeEach(async ({ context, baseURL }) => { await installFrontendFixture(context, baseURL) })
 
+test("o indicador abre a população da conversão dos últimos 90 dias", async ({page})=>{
+  await fixtures(page)
+  const section={group:"conversion",total:4,converted:1,amountCents:"50050"}
+  await page.route("**/api/erp/sales/overview*",route=>{
+    const group=new URL(route.request().url()).searchParams.get("group")
+    return route.fulfill({json:{tenantId:tenant,sections:[{...section,data:group?[{kind:"propostas",id:proposalId,number:"9",customer,amount:50050,converted:true,status:"accepted"}]:[]}]}})
+  })
+  await page.goto("/vendas",{waitUntil:"domcontentloaded"})
+  const card=page.getByRole("link",{name:/Conversão em 90 dias.*25%/})
+  await expect(card).toHaveAttribute("href","/vendas/indicadores/conversion")
+  await card.click()
+  await expect(page.getByRole("heading",{name:"Conversão em 90 dias"})).toBeVisible()
+  await expect(page.getByRole("link",{name:"Proposta 9"})).toHaveAttribute("href","/vendas/propostas/"+proposalId)
+  await expect(page.getByText("25% • 4 registro(s) • 1 convertido(s)")).toBeVisible()
+})
+
 test("resumo usa totais filtrados e recentes separados com retomada direta", async ({ page }) => {
   const requests = await fixtures(page)
   await page.goto("/vendas")
@@ -47,7 +63,7 @@ test("consulta abre detalhes e não oferece editar nem criar", async ({ page }) 
   await expect(section.getByRole("link", { name: "Abrir", exact: true })).toHaveAttribute("href", `/vendas/pedidos/${orderId}`)
   await expect(page.getByRole("link", { name: "Continuar", exact: true })).toHaveCount(0)
   await expect(page.getByRole("link", { name: "Novo pedido", exact: true })).toHaveCount(0)
-  await expect(page.getByRole("link", { name: "Novo orçamento", exact: true })).toHaveCount(0)
+  await expect(page.getByRole("link", { name: "Nova proposta", exact: true })).toHaveCount(0)
 })
 
 test("pedido com preços preservados abre o detalhe sem prometer edição indisponível", async ({ page }) => {

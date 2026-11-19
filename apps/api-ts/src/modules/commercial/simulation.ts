@@ -20,7 +20,7 @@ export function registerCommercialSimulation(app: FastifyInstance, dependencies:
       await reloadTenantPermissions(context)
       requireCommercialRead(context)
       const director = context.permissions.includes("platform.company.manage") && context.permissions.includes("sales.approvals.director") ? prepared.director : null
-      return { tenantId: context.tenantId, digest: prepared.digest, sale: prepared.sale, director }
+      return { tenantId: context.tenantId, digest: prepared.digest, sale: {...prepared.sale,...(prepared.sale.approvalReasons.length ? {approvalLevel:prepared.director.requiresDirector?"director":"manager"}:{})}, director }
     }, false)
     return reply.header("cache-control", "no-store").send(body)
   })
@@ -33,7 +33,7 @@ export function registerCommercialSimulation(app: FastifyInstance, dependencies:
       const prepared = await prepareNegotiation(context, parsed.data)
       await reloadTenantPermissions(context)
       const director = context.permissions.includes("platform.company.manage") && context.permissions.includes("sales.approvals.director") ? prepared.director : null
-      return { tenantId: context.tenantId, version: prepared.version, digest: prepared.digest, sale: prepared.sale, director }
+      return { tenantId: context.tenantId, version: prepared.version, digest: prepared.digest, sale: {...prepared.sale,...(prepared.sale.approvalReasons.length ? {approvalLevel:prepared.director.requiresDirector?"director":"manager"}:{})}, director }
     }, false)
     return reply.header("cache-control", "no-store").send(body)
   })

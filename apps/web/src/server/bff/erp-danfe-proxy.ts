@@ -1,5 +1,6 @@
 import "server-only"
 
+import { typescriptOrigin } from "./erp-backend"
 import { currentSession, erpConfiguration } from "../auth/erp-session"
 
 const noStore = { "Cache-Control": "no-store" }
@@ -27,7 +28,7 @@ export async function forwardDanfe(request: Request) {
     if (request.headers.get("content-type")?.split(";")[0].trim() !== "application/json") return failure("Envie JSON", 415)
     let body: Buffer
     try { body = await bounded(request.body, 1024 * 1024) } catch { return failure("XML excede o limite de envio", 413) }
-    const response = await fetch(`${config.api}/api/v1/fiscal/danfe`, {
+    const response = await fetch(`${typescriptOrigin({ERP_TYPESCRIPT_API_URL:process.env.ERP_TYPESCRIPT_API_URL})}/api/v1/fiscal/danfe`, {
       method: "POST", headers: { Authorization: `Bearer ${session.accessToken}`, "X-Tenant-Id": session.tenantId, "Content-Type": "application/json", Accept: "application/pdf, application/problem+json" },
       body: new Uint8Array(body), cache: "no-store", redirect: "error", signal: AbortSignal.timeout(60_000),
     })

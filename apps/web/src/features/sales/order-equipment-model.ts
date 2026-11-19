@@ -21,9 +21,9 @@ export const orderColorParts = [
 
 type ColorPart = typeof orderColorParts[number]
 
-export function orderFinishOptions(item: SelectedOrderItem, product: ProductFinishes | undefined, { options }: ColorPart) {
-  if (!product || item.line === "national" || options === "upholsteryColors" && !product.upholsteryConfigurable) return []
-  return product[options]
+export function orderFinishOptions(item: SelectedOrderItem, product: Partial<ProductFinishes> | undefined, { options }: ColorPart) {
+  if (item.line === "national" || !product || options === "upholsteryColors" && product.upholsteryConfigurable === false) return []
+  return product[options] ?? []
 }
 
 export function requiredOrderFinishParts(item: SelectedOrderItem, product: ProductFinishes | undefined) {

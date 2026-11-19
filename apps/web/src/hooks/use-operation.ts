@@ -19,6 +19,7 @@ function message(value: unknown, fallback: string) {
 }
 
 export function useResource<T>(url: string) {
+  const [requestId, setRequestId] = useState("")
   const [state, setState] = useState<{ url: string; value: T | null; etag: string; error: string; pending: boolean; status: number }>({ url, value: null, etag: "", error: "", pending: true, status: 0 })
   const [revision, setRevision] = useState(0)
   useEffect(() => {
@@ -26,6 +27,7 @@ export function useResource<T>(url: string) {
     let status = 0
     erpFetch(url, { cache: "no-store", signal: controller.signal }).then(async response => {
       status = response.status
+      if (!controller.signal.aborted) setRequestId(response.headers.get("x-request-id") || "")
       const value = await readJson(response)
       if (!response.ok) throw new Error(message(value, "Consulta indisponível"))
       if (!controller.signal.aborted) setState({ url, value: value as T, etag: response.headers.get("etag") || "", error: "", pending: false, status })
@@ -35,7 +37,7 @@ export function useResource<T>(url: string) {
     return () => controller.abort()
   }, [url, revision])
   function reload() { setState(previous => ({ ...previous, pending: true })); setRevision(value => value + 1) }
-  return { value: state.url === url ? state.value : null, etag: state.url === url ? state.etag : "", loading: state.url !== url || state.pending, error: state.url === url ? state.error : "", status: state.url === url ? state.status : 0, reload }
+  return { value: state.url === url ? state.value : null, etag: state.url === url ? state.etag : "", loading: state.url !== url || state.pending, error: state.url === url ? state.error : "", status: state.url === url ? state.status : 0, requestId: state.url === url ? requestId : "", reload }
 }
 
 type Command = { url: string; tenant: string; body: string; etag: string; key: string; method: "POST" | "PUT" }

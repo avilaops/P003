@@ -1,6 +1,10 @@
-export const pipelineStages = { new: "Novo", contacted: "Contato feito", proposed: "Proposta enviada", negotiation: "Negociação", won: "Ganho", lost: "Perdido" }
-export type PipelineStage = keyof typeof pipelineStages
-export type PipelineQuery = { q: string; stage: PipelineStage | ""; offset: number }
+export const pipelineStages:Record<string,string> = { new: "Novo", contacted: "Contato feito", proposed: "Proposta enviada", negotiation: "Negociação", won: "Ganho", lost: "Perdido" }
+export type PipelineStage = string
+export type StageOption = {code:string;label:string;active:boolean}
+export type SalesMember = {id:string;name:string}
+export const defaultStages:StageOption[] = Object.entries(pipelineStages).map(([code,label])=>({code,label,active:true}))
+export const isStage=(code:string)=>Object.hasOwn(pipelineStages,code) || /^custom-[a-z0-9][a-z0-9-]{0,30}$/.test(code)
+export type PipelineQuery = { q: string; stage: PipelineStage | ""; offset: number; start?:string; end?:string }
 export const pipelinePageSize = 25
 
 export function readPipelineQuery(params: Pick<URLSearchParams, "get">): PipelineQuery {
@@ -8,13 +12,16 @@ export function readPipelineQuery(params: Pick<URLSearchParams, "get">): Pipelin
   const stage = params.get("stage") || ""
   const rawOffset = params.get("offset") || "0"
   const offset = /^\d{1,6}$/.test(rawOffset) && Number(rawOffset) <= 100000 ? Math.floor(Number(rawOffset) / pipelinePageSize) * pipelinePageSize : 0
-  return { q, stage: Object.hasOwn(pipelineStages, stage) ? stage as PipelineStage : "", offset }
+  const start=params.get("start"),end=params.get("end")
+  return { q, stage: isStage(stage) ? stage : "", offset,...(start && /^\d{4}-\d\d-\d\d$/.test(start)?{start}:{}),...(end && /^\d{4}-\d\d-\d\d$/.test(end)?{end}:{}) }
 }
 
 export function pipelineHref(query: PipelineQuery) {
   const params = new URLSearchParams()
   if (query.q) params.set("q", query.q)
   if (query.stage) params.set("stage", query.stage)
+  if (query.start) params.set("start",query.start)
+  if (query.end) params.set("end",query.end)
   if (query.offset) params.set("offset", String(query.offset))
   return `/vendas/funil${params.size ? `?${params}` : ""}`
 }
@@ -31,7 +38,7 @@ export function pipelineSummary(totals?: PipelineTotal[]) {
   const result = { open: { count: 0, estimatedCents: 0 }, won: { count: 0, estimatedCents: 0 }, lost: { count: 0, estimatedCents: 0 } }
   const seen = new Set<string>()
   for (const total of totals) {
-    if (!Object.hasOwn(pipelineStages, total.stage) || seen.has(total.stage) || !Number.isSafeInteger(total.count) || total.count < 0 || !Number.isSafeInteger(total.estimatedCents) || total.estimatedCents < 0) return null
+    if (!isStage(total.stage) || seen.has(total.stage) || !Number.isSafeInteger(total.count) || total.count < 0 || !Number.isSafeInteger(total.estimatedCents) || total.estimatedCents < 0) return null
     seen.add(total.stage)
     const target = result[total.stage === "won" || total.stage === "lost" ? total.stage : "open"]
     target.count += total.count

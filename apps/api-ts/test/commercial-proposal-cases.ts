@@ -21,6 +21,12 @@ export async function verifyCommercialProposals(app: FastifyInstance, seed: Pool
   const simulation = { destinationState: "SP", taxpayer: false, discount: { kind: "percent", value: 0 }, freightCents: 0, downPaymentCents: null, items: [{ line: "national", versionId: version, productId: product, quantity: 1, structureColor: null, swingArmColor: null, upholsteryColor: null, plateHolderColor: null, plateHolderType: null }] }
   const quoted = await app.inject({ method: "POST", url: "/api/v1/commercial/mixed/simulate", headers, payload: simulation })
   assert.equal(quoted.statusCode, 200, quoted.body)
+  const colored = {...simulation.items[0]!, structureColor: "Preto"}
+  const refusedMixed = await app.inject({method: "POST", url: "/api/v1/commercial/mixed/simulate", headers, payload: {...simulation, items: [colored]}})
+  assert.equal(refusedMixed.statusCode, 422, refusedMixed.body)
+  const {line, versionId, ...coloredItem} = colored
+  const refusedSingle = await app.inject({method: "POST", url: "/api/v1/commercial/simulate", headers, payload: {...simulation, line, versionId, items: [coloredItem]}})
+  assert.equal(refusedSingle.statusCode, 422, refusedSingle.body)
   const input = { customerId: tenant, validUntil: "2100-01-01", paymentTerms: "Entrada e saldo", deliveryTerms: "Entrega SP em 45 dias úteis", notes: "Acordo preservado", items: [{ productId: product, quantity: "1.000000", unitPrice: "14196.45" }] }
   const save = (payload: object, key = randomUUID()) => app.inject({ method: "POST", url: "/api/v1/proposals", headers: { ...headers, "idempotency-key": key }, payload })
   const unpriced = await save({ ...input, items: [{ ...input.items[0], unitPrice: "1.00" }] })
@@ -155,7 +161,7 @@ export async function verifyCommercialProposals(app: FastifyInstance, seed: Pool
   assert.equal(directorSent.statusCode, 200, directorSent.body)
   const accepted = await app.inject({ method: "POST", url: `/api/v1/proposals/${excessId}/accept`, headers: { ...sellerHeaders, "idempotency-key": randomUUID(), "if-match": '"2"' }, payload: {} })
   assert.equal(accepted.statusCode, 200, accepted.body)
-  const revised = await app.inject({ method: "POST", url: `/api/v1/proposals/${excessId}/revise`, headers: { ...headers, "idempotency-key": randomUUID(), "if-match": '"3"' } })
+  const revised = await app.inject({ method: "POST", url: `/api/v1/proposals/${excessId}/revise`, headers: { ...sellerHeaders, "idempotency-key": randomUUID(), "if-match": '"3"' } })
   assert.equal(revised.statusCode, 200, revised.body)
   assert.equal(revised.json().data.version, 2)
   assert.equal(revised.json().items[0].technical.weightStack, "120 kg")

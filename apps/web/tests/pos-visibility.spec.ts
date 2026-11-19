@@ -1,0 +1,56 @@
+import { expect, test } from "@playwright/test"
+import { installFrontendFixture, tenant } from "./helpers/frontend-fixture"
+
+test("o menu Vendas agrupa as três abas do PDV e preserva os destinos de pesquisa e índice", async ({page, context}) => {
+  await installFrontendFixture(context)
+  await page.route("**/api/erp/pos/settings", route => route.fulfill({json:{tenantId:tenant,data:{enabled:true,revision:1}}}))
+  const menu = page.getByRole("navigation", {name:"Módulos do ERP",exact:true})
+  const operations = page.getByRole("navigation", {name:"Operações do PDV",exact:true})
+  await page.goto("/vendas/pdv")
+  for (const [label,path] of [
+    ["Frente de caixa","/vendas/pdv"], ["Fechamento do caixa","/vendas/pdv/fechamento"], ["Histórico dos caixas","/vendas/pdv/historico"],
+  ]) {
+    await operations.getByRole("link",{name:label,exact:true}).click()
+    await expect(page).toHaveURL(new RegExp(path + "$"))
+    await expect(operations.getByRole("link",{name:label,exact:true})).toHaveAttribute("aria-current","page")
+    await expect(menu.locator('a[href^="/vendas/pdv"]')).toHaveCount(1)
+    await expect(menu.getByRole("link",{name:"PDV",exact:true})).toHaveAttribute("aria-current","page")
+  }
+  await menu.getByRole("button",{name:"Índice completo",exact:true}).click()
+  await expect(menu.locator('a[href^="/vendas/pdv"]')).toHaveCount(3)
+  await expect(menu.getByRole("link",{name:"Histórico do PDV",exact:true})).toHaveAttribute("aria-current","page")
+  await page.keyboard.press("Control+k")
+  await page.getByRole("combobox").fill("fechamento do pdv")
+  await page.getByRole("option",{name:/Fechamento do PDV/i}).click()
+  await expect(page).toHaveURL(/\/vendas\/pdv\/fechamento$/)
+  await page.setViewportSize({width:390,height:844})
+  await page.getByRole("button",{name:"Abrir menu"}).click()
+  const drawer = page.getByRole("dialog")
+  await drawer.getByRole("button",{name:"Vendas",exact:true}).click()
+  await expect(drawer.getByRole("link",{name:"PDV",exact:true})).toHaveAttribute("aria-current","page")
+  await expect(drawer.getByRole("link",{name:"Fechamento do PDV",exact:true})).toHaveCount(0)
+  await expect(drawer.getByRole("link",{name:"Histórico do PDV",exact:true})).toHaveCount(0)
+  await drawer.getByRole("searchbox",{name:"Pesquisar no menu"}).fill("histórico do pdv")
+  await expect(drawer.getByRole("link",{name:/Histórico do PDV/i})).toHaveAttribute("href","/vendas/pdv/historico")
+})
+
+test("a preferência da empresa vale para menu, busca e acesso direto ao caixa", async ({ page, context }) => {
+  await installFrontendFixture(context)
+  await page.route("**/api/erp/pos/settings", route => route.fulfill({json:{tenantId:tenant,data:{enabled:false,revision:1}}}))
+  await page.goto("/vendas/pdv")
+  await expect(page.getByText("PDV desativado para esta empresa")).toBeVisible()
+  const menu = page.getByRole("navigation", { name: "Módulos do ERP" })
+  await expect(menu.getByRole("link", { name:"PDV",exact:true })).toHaveCount(0)
+  await menu.getByRole("button",{name:"Índice completo",exact:true}).click()
+  await expect(menu.locator('a[href^="/vendas/pdv"]')).toHaveCount(0)
+  await page.goto("/vendas/pdv/historico")
+  await expect(page.getByText("PDV desativado para esta empresa")).toBeVisible()
+  await page.keyboard.press("Control+k")
+  await page.getByRole("combobox").fill("fechamento do pdv")
+  await expect(page.getByRole("option", { name:/Fechamento do PDV/i })).toHaveCount(0)
+  await page.keyboard.press("Escape")
+  await page.setViewportSize({width:390,height:844})
+  await page.getByRole("button",{name:"Abrir menu"}).click()
+  await page.getByRole("searchbox",{name:"Pesquisar no menu"}).fill("fechamento do pdv")
+  await expect(page.getByRole("link",{name:/Fechamento do PDV/i})).toHaveCount(0)
+})

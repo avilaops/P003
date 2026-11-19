@@ -98,17 +98,21 @@ test.beforeEach(async ({ context, page }) => {
  await page.route("**/api/erp/me", r => r.fulfill({ json: { tenant: { id: tenant }, permissions: ["fiscal.nfe.read", "fiscal.nfe.manage", "fiscal.nfe.cancel", "fiscal.nfe.correction"] } }))
  await page.route("**/api/erp/fiscal/certificate", r => r.fulfill({ json: { tenantId: tenant, status: "active" } }))
  await page.route("**/api/erp/fiscal/readiness", r => r.fulfill({ json: { tenantId: tenant, environment: "production", profileConfigured: true, certificateVerified: true, canTransmit: true, productionEnabled: true, blockers: [] } }))
- await page.route("**/api/erp/fiscal/nfe?*", r => r.fulfill({ json: { tenantId: tenant, nextCursor: null, data: [
-  { id, createdAt: "2026-11-08T12:00:00Z", productsTotal: "100.00", input: { model: 55, environment: "production", recipient: { legalName: "Cliente autorizado", taxId: "11222333000181" } } },
-  { id: pending, createdAt: "2026-11-07T12:00:00Z", productsTotal: "50.00", input: { model: 55, environment: "homologation", recipient: { legalName: "Cliente rascunho", taxId: "52998224725" } } }
- ] } }))
- await page.route("**/api/erp/fiscal/issued-nfes?*", r => r.fulfill({ json: { tenantId: tenant, nextCursor: null, data: [{ id, model: 55, status: "authorized", environment: "production", series: 1, number: 42, issuedAt: "2026-11-08T12:00:00Z" }] } }))
+ await page.route("**/api/erp/fiscal/outgoing-documents?*", route => {
+  const filters = new URL(route.request().url()).searchParams
+  expect(filters.get("model")).toBe("55")
+  const rows = [
+    { id,model:55,status:"authorized",origin:"internal",environment:"production",series:1,number:42,recipient:"Cliente autorizado",taxId:"11222333000181",date:"2026-11-08T12:00:00Z",amount:"110.00" },
+    { id:pending,model:55,status:"draft",origin:"internal",environment:"homologation",recipient:"Cliente rascunho",taxId:"52998224725",date:"2026-11-07T12:00:00Z",amount:"50.00" },
+  ].filter(row => (!filters.has("status") || row.status===filters.get("status")) && (!filters.has("q") || row.taxId===(filters.get("q") || "").replace(/\D/g,"")) && (!filters.has("from") || row.date.slice(0,10)>=(filters.get("from") || "")))
+  return route.fulfill({json:{tenantId:tenant,data:rows,total:rows.length}})
+ })
 })
 test("lista reúne notas sem duplicação, filtra e mantém ações nos detalhes", async ({ page }) => {
  const mutations: string[] = []
  page.on("request", r => { if (r.url().includes("/api/erp/") && r.method() !== "GET") mutations.push(r.url()) })
  await page.goto("/fiscal/notas-saida")
- await expect(page.getByText("2 nota(s)", { exact: true })).toBeVisible()
+ await expect(page.getByText("2 notas", { exact: true })).toBeVisible()
  await expect(page.getByText("Cliente autorizado", { exact: true })).toHaveCount(1)
  await expect(page.getByRole("link", { name: "Ver nota e documentos" })).toHaveAttribute("href", `/fiscal/notas-saida/${id}#fiscal-emission`)
  await page.getByLabel("Situação", { exact: true }).selectOption("draft")
@@ -116,9 +120,11 @@ test("lista reúne notas sem duplicação, filtra e mantém ações nos detalhes
  await expect(page.getByRole("link", { name: "Editar rascunho" })).toBeVisible()
  await page.getByRole("button", { name: "Limpar filtros" }).click()
  await page.getByLabel("Buscar nota", { exact: true }).fill("11.222.333/0001-81")
- await expect(page.getByText("1 nota(s)", { exact: true })).toBeVisible()
+ await expect(page.getByText("1 nota", { exact: true })).toBeVisible()
  await page.getByRole("button", { name: "Limpar filtros" }).click()
+ await page.getByText("Mais filtros",{exact:true}).click()
  await page.getByLabel("De", { exact: true }).fill("2026-11-08")
+ await expect(page.getByText("Cliente autorizado",{exact:true})).toBeVisible()
  await expect(page.getByText("Cliente rascunho", { exact: true })).toHaveCount(0)
  for (const width of [390, 1280]) {
   await page.setViewportSize({ width, height: 900 })
@@ -134,20 +140,20 @@ test("lista preserva o ambiente sem painel de preparação e atualizar consulta 
   return r.fulfill({ json: { tenantId: tenant, environment: connected ? "production" : "homologation", profileConfigured: true, certificateVerified: connected, canTransmit: connected, blockers: connected ? [] : ["a1_certificate_missing_expired_or_unavailable"] } })
  })
  await page.goto("/fiscal/notas-saida")
- await expect(page.getByText("Ambiente: Homologação · sem valor fiscal", { exact: true })).toBeVisible()
- await expect(page.getByText("2 nota(s)", { exact: true })).toBeVisible()
+ await expect(page.getByText("Ambiente • Homologação", { exact: true })).toBeVisible()
+ await expect(page.getByText("2 notas", { exact: true })).toBeVisible()
  await expect(page.getByText(/Preparação para emissão ·/)).toHaveCount(0)
  const before = readinessCalls
  connected = true
  await page.getByRole("button", { name: "Atualizar lista" }).click()
  await expect.poll(() => readinessCalls).toBeGreaterThan(before)
- await expect(page.getByText("Ambiente: Produção", { exact: true })).toBeVisible()
- await expect(page.getByRole("link", { name: "Preparar nota", exact: true })).toHaveAttribute("href", "/fiscal/notas-saida/nova")
+ await expect(page.getByText("Ambiente • Produção", { exact: true })).toBeVisible()
+ await expect(page.getByRole("link", { name: "Nova NF-e", exact: true })).toHaveAttribute("href", "/fiscal/notas-saida/nova")
  await expect(page.getByText(/Preparação para emissão ·/)).toHaveCount(0)
 })
 
 test("recusa lista de outra empresa", async ({ page }) => {
- await page.route("**/api/erp/fiscal/issued-nfes?*", r => r.fulfill({ json: { tenantId: id, data: [], nextCursor: null } }))
+ await page.route("**/api/erp/fiscal/outgoing-documents?*", r => r.fulfill({ json: { tenantId: id, data: [], total:0 } }))
  await page.goto("/fiscal/notas-saida")
  await expect(page.getByRole("alert").filter({ hasText: "A empresa da sessão mudou" })).toContainText("A empresa da sessão mudou")
  await expect(page.getByText("Cliente autorizado", { exact: true })).toHaveCount(0)

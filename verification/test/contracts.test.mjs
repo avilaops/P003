@@ -13,11 +13,14 @@ test('every production API operation and BFF has a contract without claiming ver
   const inventory = await discover(fileURLToPath(root));
   const assessment = assessContracts(catalogue, inventory);
   assert.deepEqual(assessment.findings, []);
-  assert.equal(assessment.apiOperations, 509);
-  assert.equal(assessment.bffOperations, 396);
+  assert.equal(assessment.apiOperations, 559);
+  assert.equal(assessment.bffOperations, 432);
   assert.equal(assessment.pendingFlows, 34);
   assert.equal(assessment.p0Ready, false);
   assert.equal(assessment.runtimeVerdict, 'not_verified_by_catalog');
+  for (const action of catalogue.actionsAppendix) {
+    for (const file of action.sources) await readFile(new URL(file,root));
+  }
   const { tsImport } = createRequire(new URL('../../apps/api-ts/package.json', import.meta.url))('tsx/esm/api');
   const { buildApp } = await tsImport('../apps/api-ts/src/app.ts', new URL('../discovery.mjs', import.meta.url).href);
   const app = buildApp({ pool: { connect() { throw Error('Registration cannot query the database'); } }, userinfoUrl: 'https://auth.example.invalid/userinfo' });

@@ -1,3 +1,4 @@
+import { SalesPerformance } from "@/features/reports/sales-performance"
 import { DashboardDetail, type DashboardKind } from "@/features/dashboard/dashboard-detail"
 import { notFound } from "next/navigation"
 import { Suspense } from "react"
@@ -24,5 +25,6 @@ export default function DashboardPage({ params }: DashboardProps) {
 async function ResolvedDashboard({ params }: DashboardProps) {
   const { kind } = await params
   if (!dashboardKinds.includes(kind as DashboardKind)) notFound()
+  if (kind === "metas" || kind === "margem-pedidos" || kind === "curva-abc") return <SalesPerformance initialView={kind === "metas" ? "goals" : kind === "curva-abc" ? "abc" : "margins"}/>
   return <DashboardDetail kind={kind as DashboardKind} />
 }

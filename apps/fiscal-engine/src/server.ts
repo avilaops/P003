@@ -19,7 +19,7 @@ export function createHandler(token: string, danfeUpstream?: string) {
     const candidate = Buffer.from(request.headers.authorization ?? "");
     if (candidate.length !== expected.length || !timingSafeEqual(candidate, expected)) { reply(response, 401, { code: "unauthorized" }); return; }
     if (request.method === "GET" && request.url === "/healthz") { reply(response, 200, { status: "ok", environments: ["homologation", "production"] }); return; }
-    const match = /^\/v1\/(prepare|authorize|consult|event|void|distribute|distribute-cte|inspect-cte|inspect-nfse|prepare-nfse|issue-nfse|consult-nfse|cancel-nfse|manifest)$/.exec(request.url ?? "");
+    const match = /^\/v1\/(offline-receipt|verify-a1|prepare|authorize|consult|event|void|distribute|distribute-cte|inspect-cte|inspect-nfse|prepare-nfse|issue-nfse|consult-nfse|cancel-nfse|manifest)$/.exec(request.url ?? "");
     const danfeMcp = request.url === "/mcp/danfe" && ["GET", "POST", "DELETE"].includes(request.method ?? "");
     const danfeRender = request.url === "/v1/danfe" && request.method === "POST";
     if (!danfeMcp && !danfeRender && (request.method !== "POST" || !match)) { reply(response, 404, { code: "not_found" }); return; }

@@ -1,8 +1,6 @@
 # Motor fiscal interno do ERP Next
 
-Adaptador de XML, assinatura A1, XSD e SOAP. A API Rust é dona dos documentos,
-numeração, autorização por empresa e estados duráveis. Este serviço não possui
-banco nem fila e não pode ser exposto ao navegador ou à internet.
+Adaptador privado TypeScript de XML, assinatura A1, XSD e SOAP. Nos atalhos de Vendas, a API Fastify controla a numeração, as permissões e os estados dos documentos em PostgreSQL. O navegador acessa as rotas do BFF.
 
 Os módulos em `src/lib/fiscal`, `src/lib/pricing/money.ts`, os schemas e os testes
 de conformidade foram portados do ERP Ávila Ops, commit
@@ -34,14 +32,13 @@ O serviço escuta `127.0.0.1:8091` por padrão. `FISCAL_ENGINE_BIND` e
 TLS no proxy e permitir acesso somente da API. Não registrar corpos das
 requisições: contêm certificado e senha transitoriamente em memória.
 
-Na API Rust, configurar `ERP_FISCAL_ENGINE_URL` com a origem do serviço e
-`ERP_FISCAL_ENGINE_TOKEN` com o mesmo segredo. A chave A1 continua criptografada
-no PostgreSQL; nunca é enviada em respostas públicas.
+Na API Fastify de Vendas, configure `ERP_FISCAL_ENGINE_URL` com a origem do serviço e
+`ERP_FISCAL_ENGINE_TOKEN` com o mesmo segredo e forneça o chaveiro por `FISCAL_A1_KEYRING`. O A1 e o CSC permanecem criptografados no PostgreSQL. O ambiente de produção exige liberação por empresa na API e credenciamento fiscal externo.
 
 ## Contrato
 
 `POST /v1/{prepare,authorize,consult,event,void,distribute,distribute-cte,manifest}` exige
-Bearer, JSON e `environment: "homologation"`. O campo `certificate` contém
+Bearer, JSON e o ambiente correspondente à operação. O campo `certificate` contém
 `pkcs12Base64` e `password`, abertos exclusivamente no servidor.
 
 - `prepare`: recebe o snapshot de emitente e rascunho da API, número, instante e
@@ -51,7 +48,7 @@ Bearer, JSON e `environment: "homologation"`. O campo `certificate` contém
 - `event`, `void` e `manifest`: montam e assinam o pedido, validam o XSD e
   retornam o resultado efetivamente recebido. Nenhum timeout confirma evento.
 - `distribute`: consulta lote sequencial, limita descompressão e retorna NSUs e
-  documentos. O cursor somente é confirmado pela transação da API Rust.
+  documentos. Nos atalhos de Vendas, a API Fastify confirma o cursor ao gravar o lote em PostgreSQL.
 - `distribute-cte`: consulta o distribuidor nacional CT-e em homologação, com
   `issuerTaxId`, `authorState` e `lastNsu`. Valida pedido e retorno com o pacote
   oficial `PL_CTeDistDFe_100`, além de ambiente, ordem/intervalo dos NSUs e
@@ -97,7 +94,7 @@ Credenciamento, autorização e situação fiscal continuam dependentes da UF,
 do certificado e do serviço externo. Consulte
 [o contrato e os limites do QR Code](../../docs/superpowers/plans/2026-11-03-nfce-qr.md).
 
-Emissão cobre NF-e 55/SP em homologação e os seguintes recortes explícitos:
+A emissão dos modelos 55 e 65 opera com serviços de SP por ambiente. A NF-e de entrada própria de devolução usa o modelo 55, a finalidade 4 e a chave da venda. Os recortes tributários dependem do regime e dos dados declarados.
 
 - CRT 1: CSOSN 102/103/300/400, PIS e COFINS sem alíquota (CST 04–09),
   destinatário não contribuinte/consumidor final, sem IPI ou IBS/CBS.

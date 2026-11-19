@@ -1,6 +1,7 @@
 "use client"
 
 import Link from "next/link"
+import { usePathname } from "next/navigation"
 import { DataTable } from "@/components/workspace/data-table"
 import { Button } from "@/components/ui/button"
 import { RequestError } from "@/components/feedback/session-recovery"
@@ -14,10 +15,12 @@ export function AccountSelect({ accounts, value, onChange, label, cashOnly = fal
   return <label className="grid min-w-0 gap-1.5 text-xs font-medium">{label}<select aria-label={label} required className={controlClass} value={value} disabled={disabled} onChange={e => onChange(e.target.value)}><option value="">Selecione uma conta</option>{accounts.filter(account => account.status === "active" && account.id !== omit && (!cashOnly || account.accountType === "cash")).map(account => <option key={account.id} value={account.id}>{account.code} · {account.name}</option>)}</select></label>
 }
 export function CashNav({ id }: { id?: string }) {
-  return <nav aria-label="Operações do PDV" className="flex flex-wrap gap-x-5 gap-y-2 text-sm print:hidden"><Link className="text-primary underline" href="/vendas/pdv">Frente de caixa</Link><Link className="text-primary underline" href={`/vendas/pdv/fechamento${id ? `?caixa=${id}` : ""}`}>Fechamento do caixa</Link><Link className="text-primary underline" href="/vendas/pdv/historico">Histórico dos caixas</Link></nav>
+  const pathname = usePathname()
+  const tabs = [["Frente de caixa", "/vendas/pdv"], ["Fechamento do caixa", "/vendas/pdv/fechamento"], ["Histórico dos caixas", "/vendas/pdv/historico"]] as const
+  return <nav aria-label="Operações do PDV" className="flex flex-wrap gap-x-4 border-b print:hidden">{tabs.map(([label,path]) => <Link key={path} aria-current={pathname===path ? "page" : undefined} className="inline-flex min-h-11 items-center border-b-2 border-transparent text-sm text-muted-foreground aria-[current=page]:border-primary aria-[current=page]:font-medium aria-[current=page]:text-foreground" href={path.endsWith("/fechamento") && id ? path+`?caixa=${id}` : path}>{label}</Link>)}</nav>
 }
-export function Failure({ message, status, retry }: { message: string; status?: number; retry?: () => void }) {
-  return <div className="space-y-2" role="alert"><RequestError message={message} status={status} />{retry && <Button variant="outline" onClick={retry}>Consultar novamente</Button>}</div>
+export function Failure({ message, status, retry, requestId }: { message: string; status?: number; retry?: () => void; requestId?: string }) {
+  return <div className="space-y-2" role="alert"><RequestError message={message} status={status} />{requestId && <details><summary>Detalhes técnicos</summary><p>Identificador da consulta • {requestId}</p></details>}{retry && <Button variant="outline" onClick={retry}>Consultar novamente</Button>}</div>
 }
 export function SessionSummary({ session }: { session: CashSession }) {
   return <dl className="grid grid-cols-2 gap-x-5 gap-y-3 text-sm sm:grid-cols-3 lg:grid-cols-4">{[["Abertura", session.openingAmount], ["Dinheiro em vendas", session.totals.cash], ["PIX", session.totals.pix], ["Débito", session.totals.debit], ["Crédito", session.totals.credit], ["Suprimentos", session.totals.supplies], ["Sangrias", session.totals.withdrawals], ["Estornos em dinheiro", session.totals.refunds], ["Dinheiro esperado", session.totals.expectedCash], ["Dinheiro contado", session.totals.countedCash], ["Diferença", session.totals.difference]].filter(([, value]) => value != null).map(([label, value]) => <div key={label} className="min-w-0"><dt className="text-xs text-muted-foreground">{label}</dt><dd className="mt-1 font-medium tabular-nums">{money(value)}</dd></div>)}</dl>

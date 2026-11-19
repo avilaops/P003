@@ -14,7 +14,9 @@ export async function installSessionCookie(context: BrowserContext, fixtureOrigi
   await context.addCookies([{ name: secure ? "__Host-erp_session" : "erp_session", value: Buffer.concat([iv, cipher.getAuthTag(), data]).toString("base64url"), url: fixtureOrigin, secure, httpOnly: true, sameSite: "Lax" }])
 }
 
+export { installSessionCookie as installFrontendSession }
+
 export async function installFrontendFixture(context: BrowserContext, fixtureOrigin = origin, fixtureTenant = tenant, fixtureAccessToken = "frontend-integration-fixture") {
-  await installSessionCookie(context,fixtureOrigin,fixtureTenant,fixtureAccessToken)
+  await installSessionCookie(context, fixtureOrigin, fixtureTenant, fixtureAccessToken)
   await context.route("**/api/erp/**", route => route.fulfill({ status: route.request().method() === "GET" ? 503 : 405, json: { title: "Operação indisponível na fixture de leitura" } }))
 }

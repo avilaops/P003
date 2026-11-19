@@ -28,3 +28,4 @@ apps/web/public/sitemap.xml text eol=lf
 
 # Keep the exported strategy document byte-exact.
 docs/strategy/*.pdf binary
+docs/telas/vendas/*.pdf binary

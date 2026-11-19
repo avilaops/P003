@@ -46,6 +46,7 @@ export function paymentToday() {
 
 export type PaymentMethod = { id: string; name: string; kind: string }
 export type CheckoutInput = {
+  paymentTerm?:{id:string;revision:number;start:string}
   entry: { paymentMethodId: string | null; dueOn: string | null }
   installments: PaymentInstallment[]
   stateRegistration: string | null

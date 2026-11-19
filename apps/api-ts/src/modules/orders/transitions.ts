@@ -6,10 +6,12 @@ import { commandKey, replay, remember, record } from "../../platform/commands.js
 import { Problem } from "../../platform/problem.js"
 import { nextRevision, parseRevision } from "../../platform/revision.js"
 import { conflict, validateAcceptance, validateCustomer, validateProducts } from "./acceptance.js"
-import { reconcileUnshipped, requireCancellationPermissions } from "./cancellation.js"
+import { reconcileCancellation, requireCancellationPermissions } from "./cancellation.js"
 import { issueOrder, reserveOrder, validateFiscalCompletion } from "./fulfillment.js"
 import { cancelUnpaid, originateOnCompletion, originateSchedule, verifyReceivables } from "./receivables.js"
+import { checkOrderCredit } from "../commercial/credit.js"
 import { loadOrder } from "./snapshot.js"
+import { canReadRealizedMargin } from "./realized-margin.js"
 import { allocateOrderAdvances } from "../finance-insights/operations.js"
 import { freezeOrderPolicies, onInvoicedOrder } from "../finance-management/accrual.js"
 
@@ -27,9 +29,17 @@ export function registerOrderTransitions(app: FastifyInstance, dependencies: App
         // Production rights must still be current when returning an old cancellation.
         if (action === "cancel") await requireCancellationPermissions(context, id)
         const previous = await replay(context, key, scope, input)
-        if (previous) return previous
+        if (previous) {
+          if (canReadRealizedMargin(context)) return previous
+          const { realizedMargin: _margin, ...visible } = previous
+          return visible
+        }
         const current = await loadOrder(context, id), status = String(current.data.status)
         if (current.data.revision !== expected) throw new Problem(412, "revision_conflict", "Outra pessoa alterou o cadastro. Sua edição foi preservada")
+        if ((action === "accept" && status === "draft") || (action === "confirm" && ["draft", "accepted"].includes(status))) {
+          const credit = await checkOrderCredit(context, request.headers, id, String(current.data.customerId), expected, status)
+          if (credit) return { creditConflict: credit }
+        }
         if (action === "accept") {
           if (status !== "draft") conflict("Somente pedidos em rascunho podem ser aceitos")
           if (!current.checkout) conflict("Aceitar encomenda exige condições completas de entrada e parcelas")
@@ -57,7 +67,7 @@ export function registerOrderTransitions(app: FastifyInstance, dependencies: App
         const next = nextRevision(expected)
         if (action === "cancel") {
           await cancelUnpaid(context, request.headers, id)
-          await reconcileUnshipped(context, request.headers, id, next)
+          await reconcileCancellation(context, request.headers, id, next)
         }
         await context.client.query("UPDATE sales_orders SET status=$3,revision=$4,updated_at=now() WHERE tenant_id=$1 AND id=$2", [context.tenantId, id, target, next])
         await record(context, request.headers, "sales_order", id, `order.${target}`, { previousRevision: expected, revision: next, previousStatus: status, status: target })
@@ -69,6 +79,7 @@ export function registerOrderTransitions(app: FastifyInstance, dependencies: App
         await remember(context, key, scope, input, result)
         return result
       })
+      if ("creditConflict" in body && typeof body.creditConflict === "string") throw new Problem(409, "domain_conflict", body.creditConflict)
       return reply.header("cache-control", "no-store").header("etag", `"${(body.data as Record<string, unknown>).revision}"`).send(body)
     })
   }

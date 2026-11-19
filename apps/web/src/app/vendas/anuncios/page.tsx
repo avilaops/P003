@@ -1,4 +1,4 @@
-import { SalesCapabilityUnavailable } from "@/features/sales/sales-capability-unavailable"
-export default function Page() { return <SalesCapabilityUnavailable title="Gestão de anúncios" description="Publicação e sincronização de anúncios por canal." /> }
+import { ChannelWorkspace } from "@/features/sales/channel-workspace"
 
-export const metadata = { title: "Anúncios" }
+export const metadata = {title:"Anúncios"}
+export default function Page() { return <ChannelWorkspace mode="list"/> }

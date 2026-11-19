@@ -3,12 +3,12 @@ import { Suspense } from "react"
 
 export const metadata = { title: "Nova NF-e de saída" }
 
-export default function Page({ searchParams }: { searchParams: Promise<{ pedido?: string; modelo?: string }> }) {
+export default function Page({ searchParams }: { searchParams: Promise<{ pedido?: string; modelo?: string; lote?: string; ambiente?: string }> }) {
   return <Suspense fallback={<p role="status">Carregando preparação fiscal…</p>}><Preparation searchParams={searchParams} /></Suspense>
 }
 
-async function Preparation({ searchParams }: { searchParams: Promise<{ pedido?: string; modelo?: string }> }) {
-  const { pedido, modelo } = await searchParams
+async function Preparation({ searchParams }: { searchParams: Promise<{ pedido?: string; modelo?: string; lote?: string; ambiente?: string }> }) {
+  const { pedido, modelo, lote, ambiente } = await searchParams
   const initialModel: 55 | 65 = modelo === "65" ? 65 : 55
-  return <NfeDraftEditor key={`${pedido || "manual"}-${initialModel}`} sourceOrderId={pedido} initialModel={initialModel} />
+  return <NfeDraftEditor key={`${pedido || "manual"}-${initialModel}`} sourceOrderId={pedido} lotId={lote} lotEnvironment={ambiente==="homologation" ? "homologation" : "production"} initialModel={initialModel} />
 }

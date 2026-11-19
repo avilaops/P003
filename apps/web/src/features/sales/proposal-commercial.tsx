@@ -5,13 +5,15 @@ import { erpFetch } from "@/lib/api/client"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { money, percent, parseAmount, inputAmount, type PriceTable, type MixedSimulationInput } from "./negotiation-types"
+import {SalesPriceChannel,ItemPriceOrigins} from "./price-channel"
 import { proposalFiscalLabel, proposalSimulationInput, type ProposalCustomer, type ProposalEquipment, type ProposalCommercial, type ProposalQuote, type ProposalPricingState } from "./proposal-commercial-model"
 
-type Props = { tenantId: string; customerId?: string; items: ProposalEquipment[]; initial?: ProposalCommercial; disabled: boolean; onChange: (state: ProposalPricingState) => void }
+type Props = { entryCents?:number; tenantId: string; customerId?: string; items: ProposalEquipment[]; initial?: ProposalCommercial; disabled: boolean; onChange: (state: ProposalPricingState) => void }
 const states = "AC AL AM AP BA CE DF ES GO MA MG MS MT PA PB PE PI PR RJ RN RO RR RS SC SE SP TO".split(" ")
 const selectClass = "h-9 min-w-0 rounded-lg border bg-background px-2"
 
-export function ProposalCommercialFields({ tenantId, customerId, items, initial, disabled, onChange }: Props) {
+export function ProposalCommercialFields({ tenantId, customerId, items, initial, disabled, onChange,entryCents }: Props) {
+  const [channel,setChannel]=useState(initial?.input.channel??"")
   const [customer, setCustomer] = useState<ProposalCustomer | null>(null)
   const [mode, setMode] = useState<MixedSimulationInput["discount"]["kind"]>(initial?.input.discount.kind || "percent")
   const [discount, setDiscount] = useState(initial ? inputAmount(initial.input.discount.value) : "0")
@@ -41,7 +43,7 @@ export function ProposalCommercialFields({ tenantId, customerId, items, initial,
         const tables = await Promise.all(["national", "imported"].map(line => read<PriceTable>(`/api/erp/commercial/tables/${line}?${query}`)))
         const value = parseAmount(discount), freightCents = parseAmount(freight)
         if (value === null || freightCents === null || mode === "percent" && value >= 10000) throw Error("Confira o desconto e o frete. O desconto deve preservar um valor positivo.")
-        const input = proposalSimulationInput(JSON.parse(signature), tables, buyer, { destinationState: uf || tables.find(table => table.data)?.data?.originState || "SP", discount: { kind: mode, value }, freightCents, downPaymentCents: initial?.input.downPaymentCents ?? null })
+        const input = proposalSimulationInput(JSON.parse(signature), tables, {...buyer,id:customerId}, { ...(channel?{channel}:{}),destinationState: uf || tables.find(table => table.data)?.data?.originState || "SP", discount: { kind: mode, value }, freightCents, downPaymentCents: entryCents??initial?.input.downPaymentCents ?? null })
         let next: ProposalPricingState
         if (!input) next = { status: "generic" }
         else {
@@ -56,7 +58,7 @@ export function ProposalCommercialFields({ tenantId, customerId, items, initial,
       })
     }, 180)
     return () => { controller.abort(); clearTimeout(timer) }
-  }, [tenantId, customerId, signature, destination, mode, discount, freight, initial, reload, onChange, items.length])
+  }, [tenantId, customerId, signature, destination, mode, discount, freight, initial, channel,entryCents,reload, onChange, items.length])
 
   if (!customerId || !items.length) return null
   if (state.status === "generic") return null
@@ -64,6 +66,7 @@ export function ProposalCommercialFields({ tenantId, customerId, items, initial,
   const destinations = [...new Set(customer?.addresses?.map(address => address.state).filter(Boolean))]
   return <section className="min-w-0 space-y-2 rounded-lg border p-3" aria-label="Cotação comercial do orçamento">
     <div className="flex flex-wrap items-center justify-between gap-2"><h2 className="text-sm font-semibold">Cotação comercial</h2>{customer && <p className="text-xs text-muted-foreground">{proposalFiscalLabel(customer)}</p>}</div>
+    <SalesPriceChannel value={channel} disabled={disabled} onChange={setChannel}/>{quote&&<ItemPriceOrigins items={quote.sale.items}/>}
     <div className="grid min-w-0 grid-cols-2 gap-2 sm:grid-cols-4">
       <label className="grid min-w-0 gap-1 text-xs">UF de entrega<select className={selectClass} disabled={disabled} value={destination || customer?.addresses?.find(address => address.primary)?.state || customer?.addresses?.[0]?.state || "SP"} onChange={event => setDestination(event.target.value)}>{(destinations.length ? destinations : states).map(state => <option key={state}>{state}</option>)}</select></label>
       <label className="grid min-w-0 gap-1 text-xs">Forma de negociação<select className={selectClass} disabled={disabled} value={mode} onChange={event => { setMode(event.target.value as typeof mode); setDiscount("0") }}><option value="percent">Desconto percentual</option><option value="amount">Desconto em reais</option><option value="total">Total desejado</option></select></label>

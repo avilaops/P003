@@ -1,5 +1,5 @@
 import { catchAllSegment, normalizedRoute } from './discovery.mjs';
-import { validateProductFlows } from './product-context.mjs';
+import { actionDefinitions, validateProductFlows } from './product-context.mjs';
 import mcpProtocolActions from './mcp/protocol-actions.json' with { type: 'json' };
 
 const dimensions = ['interface', 'request', 'authorization', 'domain', 'persistence', 'effects', 'failure', 'response'];
@@ -25,7 +25,7 @@ export function assessContracts(catalogue, inventory) {
     fail('invalid_contract_catalogue', 'contracts', 'Formato de catálogo incompatível ou coleções ausentes.');
     return { status: 'invalid', findings, runtimeVerdict: 'not_verified_by_catalog' };
   }
-  const actions = [...catalogue.actions, ...(catalogue.actionsAppendix ?? [])];
+  const actions = actionDefinitions(catalogue);
   const api = new Set(inventory.api.flatMap(route => route.methods.map(method => key({ method, path: route.path }))));
   const bff = new Set(inventory.bff.flatMap(route => route.methods.map(method => key({ method, path: route.path }))));
   const pages = new Set(inventory.pages.map(page => normalizedRoute(page.path)));

@@ -8,7 +8,26 @@ export { financeRoute, stockLocationPath }
 export type MigratedModule = "access" | "preferences" | "registrations" | "sales" | "reports" | "finance" | "inventory"
 export type BackendEnvironment = { ERP_TYPESCRIPT_API_URL?: string | undefined; ERP_TYPESCRIPT_MODULES?: string | undefined }
 const uuid = "[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}"
+export function salesPolicyResource(method: string, resource: string) {
+ return method === "GET" ? /^\/commercial\/policies\/(queue|performance|store(?:\/[a-f0-9-]{36})?|catalog(?:\/[a-f0-9-]{36})?)$/i.test(resource) : method === "POST" && /^\/commercial\/policies\/(settings|decisions|plan|goals|store)$/.test(resource)
+}
 const routes: { module: MigratedModule; methods: readonly string[]; path: RegExp }[] = [
+  { module:"sales", methods:["GET"], path:/^\/warranty-metrics$/ },
+  { module:"sales", methods:["GET","POST"], path:new RegExp(`^/warranty-cases/${uuid}/records$`, "i") },
+  { module:"sales", methods:["GET"], path:new RegExp(`^/warranty-evidence/${uuid}/file$`, "i") },
+  { module: "sales", methods:["GET"],path:/^\/sales\/overview$/ },
+  { module:"sales", methods:["GET","POST"], path:new RegExp(`^/warranty-cases/${uuid}/settlements$`,"i") },
+  { module: "sales", methods: ["GET","POST"], path: /^\/warranty-(?:cases|policies|equipment)$/ },
+  { module: "sales", methods: ["GET"], path: new RegExp(`^/warranty-(?:cases/${uuid}|service-orders|origins|staff)$`, "i") },
+  { module: "sales", methods: ["POST"], path: new RegExp(`^/warranty-(?:cases/${uuid}/(?:assignment|transition|approval|service-order|rma|quarantine)|service-orders/${uuid}/parts|(?:rmas|quarantines)/${uuid}/transition)$`, "i") },
+  { module: "sales", methods: ["GET","PUT"], path: /^\/opportunities\/settings$/ },
+  { module: "sales", methods: ["POST"], path: new RegExp(`^/opportunities/${uuid}/activities(?:/${uuid}/complete)?$`, "i") },
+  { module: "sales", methods: ["GET"], path: new RegExp(`^/sales-imports(?:/${uuid})?$`, "i") },
+  { module: "sales", methods: ["POST"], path: new RegExp(`^/sales-imports/(?:preview|${uuid}/confirm)$`, "i") },
+  { module: "sales", methods: ["GET"], path: /^\/sales-channels\/[a-z0-9][a-z0-9_-]{0,47}\/orders$/ },
+  { module: "sales", methods: ["GET", "PUT"], path: /^\/pos\/settings$/ },
+  { module: "sales", methods: ["GET"], path: new RegExp(`^/pos/(?:products|sessions(?:/current|/${uuid})?|sales(?:/${uuid})?)$`, "i") },
+  { module: "sales", methods: ["POST"], path: new RegExp(`^/pos/(?:sessions(?:/${uuid}/(?:movements|sales|close))?|sales/${uuid}/cancel)$`, "i") },
   { module: "access", methods: ["GET"], path: /^\/me$/ },
   { module: "inventory", methods: ["GET","POST"], path: /^\/production\/(orders|stages)$/ },
   { module: "inventory", methods: ["GET","POST"], path: new RegExp("^/production/structures/"+uuid+"$", "i") },
@@ -37,12 +56,25 @@ const routes: { module: MigratedModule; methods: readonly string[]; path: RegExp
   { module: "registrations", methods: ["GET", "PUT"], path: /^\/registration-settings\/(?:products|parties|contact-types|tax-profiles)$/ },
   { module: "sales", methods: ["GET", "POST"], path: /^\/(?:orders|proposals|opportunities)$/ },
   { module: "sales", methods: ["GET", "PUT"], path: new RegExp(`^/(?:orders|proposals|opportunities)/${uuid}$`, "i") },
-  { module: "sales", methods: ["POST"], path: new RegExp(`^/orders/${uuid}/(?:accept|confirm|cancel|complete|cancel-completed)$`, "i") },
-  { module: "sales", methods: ["GET"], path: new RegExp(`^/orders/${uuid}/cancellations$`, "i") },
+  { module: "sales", methods: ["GET"], path: new RegExp(`^/orders/${uuid}/(?:document|finance|cancellations|documents/${uuid})$`, "i") },
+  { module: "sales", methods: ["GET", "POST"], path: new RegExp(`^/orders/${uuid}/documents$`, "i") },
+  { module: "sales", methods: ["GET", "PUT"], path: new RegExp(`^/orders/${uuid}/commission$`, "i") },
+  { module: "sales", methods: ["POST"], path: new RegExp(`^/orders/${uuid}/cancel-completed$`, "i") },
+  { module: "sales", methods: ["GET"], path: new RegExp(`^/receivables/${uuid}$`, "i") },
+  { module: "sales", methods: ["POST"], path: new RegExp(`^/receivables/${uuid}/(?:payments|reverse-payment)$`, "i") },
+  { module: "sales", methods: ["POST"], path: new RegExp(`^/orders/${uuid}/(?:accept|confirm|cancel|complete)$`, "i") },
   { module: "sales", methods: ["GET"], path: new RegExp(`^/orders/${uuid}/pricing$`, "i") },
   { module: "sales", methods: ["POST"], path: new RegExp(`^/orders/${uuid}/pricing/approve$`, "i") },
   { module: "sales", methods: ["POST"], path: new RegExp(`^/proposals/${uuid}/(?:send|accept|reject|cancel|revise|convert|approve-order)$`, "i") },
   { module: "sales", methods: ["GET", "PUT"], path: /^\/commercial\/approval-settings$/ },
+  { module: "sales", methods: ["GET", "PUT"], path: /^\/commercial-settings\/(?:imported|national)$/ },
+  { module: "sales", methods: ["POST"], path: /^\/commercial-settings\/(?:imported|national)\/preview$/ },
+  { module: "sales", methods: ["GET"], path: /^\/price-tables\/(?:imported|national)(?:\/preview)?$/ },
+  { module: "sales", methods: ["POST"], path: /^\/price-tables\/(?:imported|national)\/publish$/ },
+  { module: "sales", methods: ["GET", "PUT"], path: new RegExp("^/product-costs/" + uuid + "$", "i") },
+  { module: "sales", methods: ["GET", "POST"], path: /^\/fixed-expenses$/ },
+  { module: "sales", methods: ["PUT"], path: new RegExp("^/fixed-expenses/" + uuid + "$", "i") },
+  { module: "registrations", methods: ["GET"], path: /^\/financial-categories$/ },
   { module: "sales", methods: ["GET"], path: new RegExp(`^/commercial/orders/${uuid}$`, "i") },
   { module: "sales", methods: ["POST"], path: new RegExp(`^/commercial/orders/${uuid}/decision$`, "i") },
   { module: "sales", methods: ["GET"], path: /^\/commercial\/(?:tables\/(?:imported|national)|metrics\/(?:orders|commissions))$/ },
@@ -64,6 +96,7 @@ export function selectErpBackend(method: string, resource: string, rustOrigin: s
   if (financeRoute(method, resource)) return { origin: typescriptOrigin(environment), backend: "typescript" as const, module: "finance" as const }
   if (stockLocationPath(resource,method.toUpperCase())) return { origin: typescriptOrigin(environment), backend: "typescript" as const, module: "inventory" as const }
   const route = routes.find(route => route.methods.includes(method.toUpperCase()) && route.path.test(resource))
+  if (salesPolicyResource(method, resource)) return { origin: typescriptOrigin(environment), backend: "typescript" as const, module: "sales" as const }
   if (!route) return { origin: rustOrigin, backend: "rust" as const, module: null }
   return { origin: typescriptOrigin(environment), backend: "typescript" as const, module: route.module }
 }

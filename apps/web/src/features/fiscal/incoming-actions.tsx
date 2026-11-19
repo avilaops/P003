@@ -8,6 +8,7 @@ import { useCommand, useResource } from "@/hooks/use-operation"
 import { PurchaseLookup, type PurchaseChoice } from "@/features/purchasing/purchase-lookup"
 import type { ReceivedNote } from "./received-documents"
 import { PurchaseMatch } from "./purchase-match"
+import { FiscalPurchaseReceipt } from "./fiscal-purchase-receipt"
 
 type DistributionStatus = { tenantId: string; revision: number; lastNsu: string; maxNsu: string; nextQueryAt: string | null; lastCode: string | null; running: boolean }
 type DistributionResult = DistributionStatus & { status: "completed" | "failed" | "unknown" | "running" }
@@ -90,8 +91,8 @@ function PurchaseConversion({ note, tenantId }: { note: ReceivedNote; tenantId: 
     <h2 id="conversion-title" className="text-lg font-semibold">Criar compra a partir da nota</h2>
     {snapshot.value?.canConvert && !purchaseId && <Button variant="outline" disabled={frozen} onClick={() => setMode("match")}>Conciliar com compra existente</Button>}
     <p className="text-sm font-medium">{note.environment === 1 ? "NF-e de produção: o rascunho será uma compra operacional da empresa." : "NF-e de homologação, sem valor fiscal: o rascunho será registrado no módulo de compras da empresa. Use apenas para testes controlados."}</p>
-    <p className="text-sm text-muted-foreground">Selecione o fornecedor correspondente a {note.issuerName} e vincule cada item ao seu catálogo. O rascunho conserva os custos fiscais; o recebimento físico e a conta a pagar são registrados depois, no fluxo de compras.</p>
-    {snapshot.loading && !created ? <p role="status">Conferindo itens e vínculo da compra…</p> : snapshot.error ? <><p role="alert">{snapshot.error}</p><Button variant="outline" onClick={snapshot.reload}>Recarregar vínculo da compra</Button></> : purchaseId ? <div className="space-y-3"><p role="status">Esta nota está vinculada a uma compra.</p><Link className="text-primary underline" href={`/compras/pedidos/${purchaseId}`}>Abrir compra vinculada</Link></div> : !snapshot.value?.canConvert ? <p>Solicite permissão para criar pedidos de compra nesta empresa.</p> : <>
+    <p className="text-sm text-muted-foreground">Selecione o fornecedor correspondente a {note.issuerName} e vincule cada item ao seu catálogo. O rascunho conserva os custos fiscais. Após confirmar a compra, registre a entrega para atualizar o estoque e gerar a conta a pagar.</p>
+    {snapshot.loading && !created ? <p role="status">Conferindo itens e vínculo da compra…</p> : snapshot.error ? <><p role="alert">{snapshot.error}</p><Button variant="outline" onClick={snapshot.reload}>Recarregar vínculo da compra</Button></> : purchaseId ? <div className="space-y-3"><p role="status">Esta nota está vinculada a uma compra.</p><Link className="text-primary underline" href={`/compras/pedidos/${purchaseId}`}>Abrir compra vinculada</Link><FiscalPurchaseReceipt key={tenantId+purchaseId} base={url} tenantId={tenantId} purchaseId={purchaseId}/></div> : !snapshot.value?.canConvert ? <p>Solicite permissão para criar pedidos de compra nesta empresa.</p> : <>
       <PurchaseLookup supplier disabled={frozen} choose={value => { setSupplier(value); setError("") }} />
       <p className="text-sm"><strong>Fornecedor selecionado:</strong> {supplier?.legalName || "Nenhum fornecedor selecionado"}</p>
       <div className="space-y-3">{items.map(item => <article key={item.number} className="min-w-0 rounded-xl border p-4">

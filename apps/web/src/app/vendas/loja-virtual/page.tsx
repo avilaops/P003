@@ -1,4 +1,4 @@
-import { SalesCapabilityUnavailable } from "@/features/sales/sales-capability-unavailable"
-export default function Page() { return <SalesCapabilityUnavailable title="Loja virtual" description="Catálogo, pedidos e sincronização com a loja virtual." /> }
+import { ChannelWorkspace } from "@/features/sales/channel-workspace"
 
-export const metadata = { title: "Loja virtual" }
+export const metadata = {title:"Loja virtual"}
+export default function Page() { return <ChannelWorkspace mode="store"/> }

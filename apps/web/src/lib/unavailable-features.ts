@@ -15,8 +15,6 @@ export const unavailableFeatures: Record<string, UnavailableFeature> = {
   "/logistica/reversa": { title: "Logística reversa", purpose: "Organizar devoluções e coletas de mercadoria.", related: ["Logística", "/logistica"] },
   "/notificacoes": { title: "Notificações", purpose: "Reunir os avisos e pendências que pedem a sua atenção.", related: ["Visão geral", "/"] },
   "/novidades": { title: "Novidades", purpose: "Mostrar as mudanças recentes do ERP.", related: ["Visão geral", "/"] },
-  "/vendas/anuncios": { title: "Anúncios", purpose: "Publicar e acompanhar anúncios dos produtos em marketplaces.", related: ["Integrações", "/preferencias/integracoes"] },
-  "/vendas/loja-virtual": { title: "Loja virtual", purpose: "Receber pedidos da loja virtual da empresa.", related: ["Integrações", "/preferencias/integracoes"] },
 }
 
 export function unavailableFeatureFor(pathname: string): UnavailableFeature | undefined {

@@ -41,6 +41,43 @@ test("publicação de preços mantém prévia e versão publicada legíveis sem 
   await page.screenshot({ path: info.outputPath("price-publication-mobile.png"), fullPage: true })
 })
 
+test("publicação de preços recupera prévia vencida e confirmação incompleta com a mesma chave", async ({ page }) => {
+  const item = { productId, sku: "LD-01", name: "Produto", priceWithoutIpiCents: 100, ipiBps: 1000, priceWithIpiCents: 110 }
+  const keys: string[] = []
+  let revision = 1, published = false
+  await page.route("**/api/erp/price-tables/**", async route => {
+    const request = route.request(), path = new URL(request.url()).pathname
+    const headers = { etag: '"' + revision + '"' }, line = "imported"
+    if (path.endsWith("/preview")) return route.fulfill({ headers, json: { tenantId: tenant, line, revision, digest: String(revision).repeat(64), items: [item] } })
+    if (path.endsWith("/publish")) {
+      keys.push(request.headers()["idempotency-key"] ?? "")
+      if (keys.length === 1) { revision++; return route.fulfill({ status: 412, json: { title: "Revisão alterada" } }) }
+      if (keys.length === 2) return route.fulfill({ headers, json: { tenantId: tenant, line, status: "published" } })
+      published = true
+      return route.fulfill({ headers, json: { tenantId: tenant, line, status: "published", version: 2 } })
+    }
+    return route.fulfill({ headers, json: { tenantId: tenant, line, data: published ? {version:2,publishedAt:"2026-11-18T17:00:00Z",items:[item]} : null } })
+  })
+  await page.goto("/preferencias/tabela-precos")
+  const prepare = page.getByRole("button", { name: "Preparar prévia", exact: true })
+  const confirm = page.getByRole("button", { name: "Confirmar publicação", exact: true })
+  const select = page.getByRole("combobox", { name: "Linha comercial", exact: true })
+  await prepare.click()
+  await confirm.click()
+  await expect(page.getByText("Os dados mudaram. Prepare nova prévia e confira os valores.")).toBeVisible()
+  await expect(select).toBeEnabled()
+  await prepare.click()
+  await confirm.click()
+  await expect(select).toBeDisabled()
+  await page.getByRole("button", { name: "Repetir confirmação", exact: true }).click()
+  await expect(page.getByText("Versão 2 publicada.", {exact:true})).toBeVisible()
+  await expect(select).toBeEnabled()
+  expect(keys).toHaveLength(3)
+  expect(keys[0]).toBeTruthy()
+  expect(keys[1]).not.toBe(keys[0])
+  expect(keys[2]).toBe(keys[1])
+})
+
 async function authenticate(context: BrowserContext, tenantId = tenant, token = "catalog-navigation-fixture") {
   const iv = randomBytes(12)
   const cipher = createCipheriv("aes-256-gcm", createHash("sha256").update(secret).digest(), iv)

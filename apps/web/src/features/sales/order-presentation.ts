@@ -25,6 +25,20 @@ export function normalizeCommercialMoney(raw: string) {
   return normalizeDecimal(grouped ? value.replaceAll(".", "") : value, 2)
 }
 
+export function proposalCatalogTotal(items: readonly { basePrice?: string | null; quantity: string }[]) {
+  let total = BigInt(0)
+  const scale = BigInt(1_000_000)
+  for (const item of items) {
+    const price = normalizeCommercialMoney(item.basePrice || "")
+    const quantity = normalizeDecimal(item.quantity, 6)
+    if (!price || !quantity) return null
+    const cents = BigInt(price.replace(".", ""))
+    const units = BigInt(quantity.replace(".", ""))
+    total += (cents * units + scale / BigInt(2)) / scale
+  }
+  return total <= BigInt(Number.MAX_SAFE_INTEGER) ? Number(total) : null
+}
+
 export function commercialMoneyInput(value: string) {
   const normalized = normalizeCommercialMoney(value)
   return normalized ? commercialMoney(normalized).slice(3) : value

@@ -1,5 +1,6 @@
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
+import { recordWorkspace } from "../sales/record-workspace.js"
 
 import type { AppDependencies } from "../../app.js"
 import { authorizeRequest, requirePermission } from "../../platform/access.js"
@@ -9,8 +10,9 @@ import { orderSummary, orderSearchNumber, queryInput } from "../sales/shared.js"
 import { loadOrder, summary } from "./snapshot.js"
 import { registerOrderCommands } from "./commands.js"
 import { registerOrderTransitions } from "./transitions.js"
-import { registerOrderPricing } from "./pricing.js"
+import { registerOrderCommercialDocuments } from "./commercial-documents.js"
 import { registerCompletedOrderCancellation } from "./completed-cancellation.js"
+import { registerOrderPricing } from "./pricing.js"
 
 
 
@@ -18,6 +20,7 @@ export function registerOrderRoutes(app: FastifyInstance, dependencies: AppDepen
   registerOrderCommands(app, dependencies)
   registerOrderTransitions(app, dependencies)
   registerOrderPricing(app, dependencies)
+  registerOrderCommercialDocuments(app, dependencies)
   registerCompletedOrderCancellation(app, dependencies)
   app.get<{ Params: { id: string } }>("/api/v1/orders/:id", async (request, reply) => {
     const body = await authorizeRequest(request, dependencies, async context => {
@@ -34,6 +37,13 @@ export function registerOrderRoutes(app: FastifyInstance, dependencies: AppDepen
     return reply.header("cache-control", "no-store").header("etag", `"${body.data.revision}"`).send(body)
   })
   app.get("/api/v1/orders", async (request, reply) => {
+    if ((request.query as Record<string, unknown>).view === "workspace") {
+      const page=await authorizeRequest(request,dependencies,async c=>{
+        requirePermission(c,"sales.orders.read")
+        return recordWorkspace(c,request.query,"orders")
+      })
+      return reply.header("cache-control","no-store").send(page)
+    }
     const query = queryInput(request.query, ["", "draft", "accepted", "confirmed", "completed", "cancelled"])
     const body = await authorizeRequest(request, dependencies, async context => {
       requirePermission(context, "sales.orders.read")

@@ -202,12 +202,24 @@ test("transmissão explica a falta de permissão", async ({ page }) => {
 
 test("NFC-e usa o fluxo fiscal persistente de modelo 65", async ({ page }) => {
   await page.route("**/api/erp/me", route => route.fulfill({ json: { tenant: { id: tenant }, permissions: ["fiscal.nfe.read", "fiscal.nfe.manage"] } }))
-  await page.route("**/api/erp/fiscal/nfe?*", route => route.fulfill({ json: { tenantId: tenant, data: [], nextCursor: null } }))
-  await page.route("**/api/erp/fiscal/readiness", route => route.fulfill({ json: { tenantId: tenant, profileConfigured: true, certificateVerified: true, canTransmit: false, productionEnabled: false, blockers: [] } }))
+  await page.route("**/api/erp/fiscal/outgoing-documents?*", route => {
+    const query = new URL(route.request().url()).searchParams
+    expect(query.get("model")).toBe("65")
+    const data = query.get("status")==="draft" ? [] : [{id:record,origin:"internal",model:65,status:"authorized",recipient:"Consumidor",taxId:"",environment:"homologation",number:17,series:1,date:"2026-11-17T10:00:00-03:00",amount:"12.00"}]
+    return route.fulfill({json:{tenantId:tenant,data,total:data.length}})
+  })
+  await page.route("**/api/erp/fiscal/readiness", route => route.fulfill({ json: { tenantId: tenant, environment:"homologation",profileConfigured: true, certificateVerified: true, canTransmit: true, productionEnabled: false, blockers: [] } }))
+  await page.route("**/api/erp/fiscal/nfce-readiness?*", route => route.fulfill({json:{tenantId:tenant,model:65,environment:"homologation",blockers:["nfce_csc_unavailable"]}}))
   await page.goto("/fiscal/nfce")
-  await expect(page.getByRole("heading", { name: "Rascunhos de NFC-e", exact: true })).toBeVisible()
-  await expect(page.getByText("Nenhum rascunho cadastrado nesta empresa.", { exact: true })).toBeVisible()
-  await expect(page.getByRole("link", { name: "Preparar NFC-e", exact: true })).toHaveAttribute("href", "/fiscal/notas-saida/nova?modelo=65")
+  await expect(page.getByRole("heading",{name:"NFC-e",exact:true})).toBeVisible()
+  await expect(page.getByText("Configure o CSC da NFC-e para esta empresa e ambiente")).toBeVisible()
+  await expect(page.getByRole("link",{name:"NFC-e 17 • Série 1"})).toHaveAttribute("href","/fiscal/nfce/"+record)
+  await expect(page.getByRole("article").getByText("Autorizada",{exact:true})).toBeVisible()
+  await page.getByRole("button",{name:"Rascunhos",exact:true}).click()
+  await expect(page.getByText("Nenhuma NFC-e encontrada para esta consulta.")).toBeVisible()
+  await page.getByRole("button",{name:"Emitidas",exact:true}).click()
+  await expect(page.getByRole("link",{name:"NFC-e 17 • Série 1"})).toHaveCount(1)
+  await expect(page.getByRole("link",{name:"Nova NFC-e",exact:true})).toHaveAttribute("href","/fiscal/notas-saida/nova?modelo=65")
 })
 
 test("NFC-e autorizada gera DANFE e valida XML e PDF pelo BFF", async ({ page }) => {
@@ -302,14 +314,14 @@ test("envio da NF-e exibe o destinatário e exige confirmação para enviar os a
 
 test("lista de NF-e distingue emissão em homologação da produção indisponível", async ({ page }) => {
   await page.route("**/api/erp/fiscal/certificate", route => route.fulfill({ json: { tenantId: tenant, status: "active" } }))
-  await page.route("**/api/erp/fiscal/issued-nfes?*", route => route.fulfill({ json: { tenantId: tenant, data: [], nextCursor: null } }))
+  await page.route("**/api/erp/fiscal/outgoing-documents?*", route => route.fulfill({ json: { tenantId: tenant, data: [], total: 0 } }))
   await page.route("**/api/erp/me", route => route.fulfill({ json: { tenant: { id: tenant }, permissions: ["fiscal.nfe.read", "fiscal.nfe.manage"] } }))
-  await page.route("**/api/erp/fiscal/nfe?*", route => route.fulfill({ json: { tenantId: tenant, data: [], nextCursor: null } }))
+  await page.route("**/api/erp/fiscal/nfe?*", route => route.fulfill({ json: { tenantId: tenant, data: [], total: 0 } }))
   await page.route("**/api/erp/fiscal/readiness", route => route.fulfill({ json: { tenantId: tenant, profileConfigured: true, certificateVerified: true, canTransmit: true, productionEnabled: false, blockers: [] } }))
   await page.goto("/fiscal/notas-saida")
-  await expect(page.getByText("Ambiente: Homologação · sem valor fiscal", { exact: true })).toBeVisible()
+  await expect(page.getByText("Ambiente • Homologação", { exact: true })).toBeVisible()
   await expect(page.getByText("A transmissão à SEFAZ permanece indisponível.", { exact: true })).toHaveCount(0)
-  await expect(page.getByRole("link", { name: "Preparar nota", exact: true })).toBeVisible()
+  await expect(page.getByRole("link", { name: "Nova NF-e", exact: true })).toBeVisible()
 })
 
 test("emissão conserva comando em resposta incerta e eventos usam a revisão fiscal", async ({ page }) => {

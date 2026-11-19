@@ -1,6 +1,10 @@
+import {createHash} from "node:crypto";
+import {renderNfceReceipt} from "./lib/fiscal/nfce-receipt.ts";
 import { financialLegacyMode, financialNoteProblems } from "./lib/fiscal/financial-note.ts";
 import { buildNfeXml, accessKeyDigit, nfeTotals, nfeProblems, UF_CODES, IPI_TAXED_CSTS, IPI_UNTAXED_CSTS, exactFiscalCents, INVALID_FISCAL_TEXT, NFE_MAX_CENTS } from "./lib/fiscal/nfe.ts";
 import type { NfeInput, NfeItem } from "./lib/fiscal/nfe.ts";
+import {nfceSp} from "./lib/fiscal/nfce-sp.ts";
+import {verifyA1} from "./lib/fiscal/a1-provision.ts";
 import { readCertificate } from "./lib/fiscal/certificate.ts";
 import { signNfeXml, signEventXml, signVoidXml, signingKeyOf } from "./lib/fiscal/sign.ts";
 import { assertFiscalXml } from "./lib/fiscal/local-layout.ts";
@@ -10,8 +14,8 @@ import { AUTHORIZATION_ACTION, CONSULT_ACTION, VOID_ACTION, authorizationEnvelop
 import { EVENT_ACTION, eventEnvelope, eventUrl, eventXml, parseEvent, processedEventXml } from "./lib/fiscal/events.ts";
 import { DISTRIBUTION_ACTION, distributionEnvelope, distributionUrl, parseDistributionResponse } from "./lib/fiscal/distribution.ts";
 import { recipientManifestXml } from "./lib/fiscal/recipient-manifest.ts";
-import { supplementSimplifiedNfe } from "./lib/fiscal/simplified-nfe.ts";
-import { createNfceQrPayload } from "./lib/fiscal/nfce-qr.ts";
+import { supplementSimplifiedNfe,supplementNfce } from "./lib/fiscal/simplified-nfe.ts";
+import type { NfceQrProfile } from "./lib/fiscal/nfce-qr.ts";
 import { queryCteDistribution } from "./lib/fiscal/cte-distribution-client.ts";
 import { inspectReceivedNationalNfse } from "./lib/fiscal/nfse-received.ts";
 import { prepareNationalNfse } from "./lib/fiscal/nfse-issuance.ts";
@@ -361,7 +365,7 @@ export function mapDraft(value: unknown): NfeInput {
   const emissionType = draft.emissionType == null ? "1" : text(draft.emissionType, "Modalidade de emissão", 1);
   if (!(model === 65 ? ["1", "3", "4", "9"] : ["1"]).includes(emissionType)) refuse("Modalidade de emissão incompatível com o modelo fiscal", "tax_rule_scope");
   if (model !== 65 && changeAmount !== 0) refuse("Troco somente pode ser declarado na NFC-e modelo 65", "tax_rule_scope");
-  const presenceIndicator = draft.presenceIndicator ?? 9;
+  const presenceIndicator = draft.presenceIndicator ?? (model === 65 ? 1 : 9);
   if (typeof presenceIndicator !== "number" || ![0, 1, 2, 3, 4, 5, 9].includes(presenceIndicator)) refuse("Indicador de presença inválido");
   if (model === 65 && draft.presenceIndicator != null && ![1, 4, 5].includes(presenceIndicator)) refuse("NFC-e exige presença 1, 4 ou 5");
   const printType = draft.printType ?? (model === 65 ? 4 : 1);
@@ -474,6 +478,15 @@ function material(input: ObjectValue, expected: string) {
 /** Only fixed authority endpoints exist here. No URL from a request is used. */
 export async function dispatch(operation: string, value: unknown, send: Send = sendToSefaz, sefin: SefinTransport = sendToSefin): Promise<ObjectValue> {
   const input = object(value);
+  if(operation==="offline-receipt"){
+    const accessKey=validKey(input.accessKey);
+    if(typeof input.signedXml!=="string" || Buffer.byteLength(input.signedXml)>1024*1024 || /<!\s*(?:DOCTYPE|ENTITY)|\0/i.test(input.signedXml) ||
+      !["production","homologation"].includes(String(input.environment)))return refuse("XML de contingência inválido");
+    const pdf=await renderNfceReceipt(input.signedXml,accessKey,input.environment as "production"|"homologation");
+    if(pdf.length>4*1024*1024)return refuse("Cupom acima do limite");
+    return {pdf:pdf.toString("base64"),xmlHash:createHash("sha256").update(input.signedXml).digest("hex"),pdfHash:createHash("sha256").update(pdf).digest("hex")};
+  }
+  if(operation==="verify-a1"){try{return await verifyA1(input)}catch{return refuse("Confira o PFX, a senha, o CNPJ, a validade e a cadeia ICP-Brasil do A1","certificate_invalid")}}
   if (operation === "inspect-cte") {
     try { return { ...await inspectReceivedCte(input as { xml: string; companyTaxId: string; environment: "homologation" }) }; }
     catch (error) {
@@ -500,14 +513,16 @@ export async function dispatch(operation: string, value: unknown, send: Send = s
     }
   }
   const environment = fiscalEnvironment(input);
-  if (!["prepare", "authorize", "consult", "event", "void"].includes(operation)) homologation(input);
+  if (["distribute", "manifest"].includes(operation) && environment === "producao") {
+    if (process.env.SEFAZ_MONITOR_ENABLED !== "true") refuse("Distribuição de produção desativada no motor fiscal");
+  } else if (!["prepare", "authorize", "consult", "event", "void"].includes(operation)) homologation(input);
   if (operation === "prepare") {
     const mapped = mapDraft(input), credentials = material(input, mapped.issuer.cnpj);
     const generated = buildNfeXml(mapped), signedXml = signNfeXml(generated.xml, signingKeyOf(credentials.pfx, credentials.passphrase));
     await assertFiscalXml(signedXml, "nfe");
     if (mapped.model === 65) {
-      const qr = await createNfceQrPayload({ signedXml, profile: input.nfce as Parameters<typeof createNfceQrPayload>[0]["profile"] });
-      return { accessKey: generated.key, signedXml, qrCode: qr.payload, qrMode: qr.mode, qrVersion: qr.version, qrSourceSha256: qr.sourceSha256 };
+      const {qr,xml,url}=await supplementNfce(signedXml,input.nfce as NfceQrProfile,nfceSp(environment));
+      return {accessKey:generated.key,signedXml:xml,qrCode:url,qrMode:qr.mode,qrVersion:qr.version,qrSourceSha256:qr.sourceSha256};
     }
     if (mapped.printType === 6) {
       const endpoints = declaredObject(object(input.draft).simplifiedDanfe, ["qrCodeUrl", "accessKeyUrl"]);
@@ -536,8 +551,8 @@ export async function dispatch(operation: string, value: unknown, send: Send = s
       }
     }
     const rawXml = operation === "authorize"
-      ? await send(authorizationUrl("SP", environment), AUTHORIZATION_ACTION, authorizationEnvelope(signed!, String(input.batch ?? "1")), credentials)
-      : await send(consultUrl("SP", environment), CONSULT_ACTION, consultEnvelope(key, environment), credentials);
+      ? await send(key.slice(20,22)==="65"?nfceSp(environment).authorize:authorizationUrl("SP", environment), AUTHORIZATION_ACTION, authorizationEnvelope(signed!, String(input.batch ?? "1")), credentials)
+      : await send(key.slice(20,22)==="65"?nfceSp(environment).consult:consultUrl("SP", environment), CONSULT_ACTION, consultEnvelope(key, environment), credentials);
     const parsed = operation === "authorize" ? parseAuthorization(rawXml, key) : parseConsult(rawXml, key);
     const duplicates = ["204", "205", "206", "218", "539"];
     const status = duplicates.includes(parsed.code) ? "unknown" : ({ autorizada: "authorized", rejeitada: "rejected", cancelada: "cancelled", "nao-consta": "not_found", denegada: "denied" } as Record<string, string>)[parsed.status] ?? "unknown";
@@ -548,7 +563,9 @@ export async function dispatch(operation: string, value: unknown, send: Send = s
   }
   if (operation === "distribute") {
     const cnpj = text(input.issuerTaxId, "CNPJ", 14), credentials = material(input, cnpj);
-    const rawXml = await send(distributionUrl("homologacao"), DISTRIBUTION_ACTION, distributionEnvelope(cnpj, text(input.lastNsu, "NSU", 15), "homologacao"), credentials);
+    const authorState = environment === "producao" ? text(input.authorState, "UF do ator", 2) : undefined;
+    if (authorState && !Object.hasOwn(UF_CODES,authorState)) refuse("UF do ator inválida");
+    const rawXml = await send(distributionUrl(environment), DISTRIBUTION_ACTION, distributionEnvelope(cnpj, text(input.lastNsu, "NSU", 15), environment, authorState), credentials);
     return { ...parseDistributionResponse(rawXml), rawXml };
   }
   if (operation === "distribute-cte") {
@@ -562,12 +579,13 @@ export async function dispatch(operation: string, value: unknown, send: Send = s
     if (operation === "event") {
       if (key.slice(6, 20) !== cnpj || key.slice(0, 2) !== "35") refuse("Evento não pertence ao emitente SP");
       if (input.kind !== "cancelamento" && input.kind !== "correcao") refuse("Tipo de evento inválido");
+      if (key.slice(20,22)==="65" && input.kind==="correcao") refuse("O modelo 65 não aceita carta de correção");
       xml = eventXml({ kind: input.kind, environment, accessKey: key, cnpj, at: date(input.issuedAt), sequence: whole(input.sequence, 20), protocol: typeof input.protocol === "string" ? input.protocol : undefined, text: text(input.text, "Texto do evento", 1000) }).xml;
-      endpoint = eventUrl("SP", environment);
+      endpoint = key.slice(20,22)==="65"?nfceSp(environment).event:eventUrl("SP", environment);
     } else {
       if (!["ciencia", "confirmacao", "desconhecimento", "nao_realizada"].includes(String(input.kind))) refuse("Tipo de manifestação inválido");
-      xml = recipientManifestXml({ accessKey: key, cnpj, environment: "homologacao", at: date(input.issuedAt), kind: input.kind as RecipientManifestKind, reason: typeof input.justification === "string" ? input.justification : undefined }).xml;
-      endpoint = recipientEventUrl("homologacao");
+      xml = recipientManifestXml({ accessKey: key, cnpj, environment, at: date(input.issuedAt), kind: input.kind as RecipientManifestKind, reason: typeof input.justification === "string" ? input.justification : undefined }).xml;
+      endpoint = recipientEventUrl(environment);
     }
     const signed = signEventXml(xml, signingKey);
     await assertFiscalXml(signed, "evento");

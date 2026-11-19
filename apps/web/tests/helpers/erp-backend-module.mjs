@@ -10,5 +10,5 @@ function moduleUrl(file, transform = source => source) {
 const locations = moduleUrl("stock-location-path.ts");
 const pos = moduleUrl("pos-resources.ts");
 const finance = moduleUrl("finance-resources.ts", source => source.replace('"./pos-resources"', JSON.stringify(pos)));
-export const { selectErpBackend, erpHealthOrigins, stockLocationPath, financeRoute } = await import(moduleUrl("erp-backend.ts",
+export const { selectErpBackend, erpHealthOrigins, salesPolicyResource, stockLocationPath, financeRoute } = await import(moduleUrl("erp-backend.ts",
   source => source.replace('"./stock-location-path"', JSON.stringify(locations)).replace('"./finance-resources"', JSON.stringify(finance))));

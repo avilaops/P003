@@ -1,4 +1,5 @@
 import type { TenantContext } from "../../platform/database.js"
+import { returnedSaleQuantities, type ReturnedSaleQuantity } from "./sale-return-values.js"
 import { decimal } from "../sales/fixed.js"
 
 export type CostContext = Pick<TenantContext,"client" | "tenantId">
@@ -27,7 +28,7 @@ export const positionKey = (product:string,warehouse:string)=>product+"/"+wareho
 export async function projectedCosts({client,tenantId}:CostContext, productIds:readonly string[], until?:string) {
   const positions=new Map<string,Position>(), movements=new Map<string,ValuedMovement>(), transferCosts=new Map<string,bigint|null>()
   const totals=new Map<string,bigint>()
-  if(!productIds.length) return {positions,movements}
+  if(!productIds.length) return {positions,movements,saleReturns:[] as ReturnedSaleQuantity[]}
   // A posted assembly depends on the valued issues that actually fed that run.
   // Expand all component levels, then value them in the same chronological pass.
   const links=await client.query<{receipt:string; component:string; issue:string; manual:string|null; extra:string}>(`
@@ -51,6 +52,14 @@ export async function projectedCosts({client,tenantId}:CostContext, productIds:r
     const recipe=recipes.get(link.receipt)??{extra:BigInt(link.extra)*1000000n,inputs:[]}
     recipe.inputs.push({id:link.issue,manual:link.manual===null?null:BigInt(link.manual)*1000000n})
     recipes.set(link.receipt,recipe)
+  }
+  const saleReturns=await returnedSaleQuantities({client,tenantId},[...required])
+  const returnsByReceipt=new Map<string,ReturnedSaleQuantity[]>()
+  for(const part of saleReturns){
+    if(!part.receipt_id)continue
+    const parts=returnsByReceipt.get(part.receipt_id)??[]
+    parts.push(part)
+    returnsByReceipt.set(part.receipt_id,parts)
   }
   const rows=await client.query<LedgerRow>(`
     WITH events AS MATERIALIZED (
@@ -88,6 +97,15 @@ export async function projectedCosts({client,tenantId}:CostContext, productIds:r
     const receiving=row.direction==="receipt", transfer=row.transfer_id ? positionKey(row.product_id,row.transfer_id) : null
     let amount:bigint|null
     if(row.reverses_id) amount=movements.get(row.reverses_id)?.amount ?? null
+    else if(receiving && returnsByReceipt.has(row.id)){
+      amount=BigInt(row.delta)
+      for(const part of returnsByReceipt.get(row.id)!){
+        const original=movements.get(part.issue_id)?.amount
+        if(original==null){amount=null;break}
+        const before=BigInt(part.restocked_before),issued=BigInt(part.issued)
+        amount+=roundedCost(original*(before+BigInt(part.returned)),issued)-roundedCost(original*before,issued)
+      }
+    }
     else if(receiving && transfer) amount=transferCosts.get(transfer) ?? null
     else if(receiving && recipes.has(row.id)){
       const recipe=recipes.get(row.id)!
@@ -115,7 +133,7 @@ export async function projectedCosts({client,tenantId}:CostContext, productIds:r
     for(const [key,p] of positions) if(!requested.has(p.productId)) positions.delete(key)
     for(const [key,m] of movements) if(!requested.has(m.productId)) movements.delete(key)
   }
-  return {positions,movements}
+  return {positions,movements,saleReturns}
 }
 export async function movementValues(context:CostContext,productIds:readonly string[],until?:string) {
   return (await projectedCosts(context,productIds,until)).movements

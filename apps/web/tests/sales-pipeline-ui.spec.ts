@@ -91,6 +91,7 @@ test("filtros e página do funil sobrevivem à consulta, retorno e Back/Forward"
 test("revisão: sair da oportunidade editada pede confirmação e cancelar preserva os dados", async ({ context, page, baseURL }) => {
   await installFrontendFixture(context, baseURL)
   await fixture(page)
+  await page.route(`**/api/erp/opportunities/${record}`, route => route.fulfill({ headers:{ETag:'"1"'}, json:{tenantId:tenant,canEdit:true,data:{...opportunity,stage:"negotiation"}} }))
   await page.setViewportSize({ width: 390, height: 900 })
   await page.goto(`/vendas/funil/${record}?returnTo=${encodeURIComponent("/vendas/funil?q=Horizonte&stage=won&offset=25")}`)
   const title = page.getByLabel("O que está sendo vendido", { exact: true })
@@ -217,4 +218,44 @@ test("consulta repetida, erro, vazio e limpeza conservam filtros e permissões",
   await page.getByRole("button", { name: "Limpar filtros", exact: true }).click()
   await expect(page).toHaveURL(/\/vendas\/funil$/)
   expect(state.writes).toHaveLength(0)
+})
+test("quadro configurado mantém coorte, atividades e documentos vinculados no celular", async ({context,page,baseURL})=>{
+  await installFrontendFixture(context,baseURL)
+  const stages=[{code:"custom-visita",label:"Visita técnica",active:true},{code:"won",label:"Ganho",active:true},{code:"lost",label:"Perdido",active:true}]
+  const members=[{id:third,name:"Marina"}], item={...opportunity,stage:"custom-visita",ownerId:third,proposalId:third,orderId:other}
+  let activities:{id:string;kind:"call";subject:string;dueDate:string;ownerName:string;completedAt:null|string}[]=[]
+  let revision=1
+  const dates:string[]=[]
+  await page.route(/\/api\/erp\/opportunities\?/,route=>{
+    dates.push(new URL(route.request().url()).search)
+    return route.fulfill({json:{tenantId:tenant,data:[item],total:1,canEdit:true,canConfigure:true,stages,members,totals:[{stage:item.stage,count:1,estimatedCents:30003}],filteredTotals:[{stage:item.stage,count:1,estimatedCents:"30003"}],conversion:[{stage:item.stage,reached:2,won:1}]}})
+  })
+  await page.route("**/api/erp/opportunities/"+record,route=>route.fulfill({headers:{etag:'"'+revision+'"'},json:{tenantId:tenant,data:{...item,revision},canEdit:true,canCreateProposal:true,activities,members,stages,history:[{at:"2026-11-18T13:00:00Z",stage:item.stage,label:"Visita técnica"}]}}))
+  await page.route("**/api/erp/opportunities/"+record+"/activities",route=>{
+    expect(route.request().postDataJSON()).toEqual({kind:"call",subject:"Confirmar medidas",dueDate:"2027-01-10",ownerId:third})
+    expect(route.request().headers()["if-match"]).toBe('"1"')
+    activities=[{id:third,kind:"call",subject:"Confirmar medidas",dueDate:"2027-01-10",ownerName:"Marina",completedAt:null}]
+    revision++
+    return route.fulfill({status:201,headers:{etag:'"2"'},json:{tenantId:tenant,data:{id:third,revision}}})
+  })
+  await page.setViewportSize({width:390,height:844})
+  await page.goto("/vendas/funil")
+  const board=page.getByRole("region",{name:"Quadro de oportunidades por etapa"})
+  await expect(board.getByRole("region",{name:"Visita técnica"})).toContainText("1 oportunidades")
+  await expect(page.getByText("Página 1 de 1")).toHaveCount(0)
+  await page.getByText("Conversão por etapa",{exact:true}).click()
+  await expect(page.getByText(/1 de 2 • 50%/)).toBeVisible()
+  await page.getByLabel("Criadas a partir de").fill("2026-11-01")
+  await page.getByRole("button",{name:"Buscar",exact:true}).click()
+  await expect.poll(()=>dates.at(-1)).toContain("start=2026-11-01")
+  await board.getByRole("link",{name:item.title,exact:true}).click()
+  await expect(page.getByRole("link",{name:"Voltar ao funil"})).toHaveAttribute("href","/vendas/funil?start=2026-11-01")
+  await expect(page.getByRole("link",{name:"Abrir proposta vinculada"})).toHaveAttribute("href","/vendas/propostas/"+third)
+  await expect(page.getByRole("link",{name:"Abrir pedido vinculado"})).toHaveAttribute("href","/vendas/pedidos/"+other)
+  await page.getByLabel("Assunto",{exact:true}).fill("Confirmar medidas")
+  await page.getByLabel("Prazo da atividade").fill("2027-01-10")
+  await page.getByLabel("Responsável pela atividade").selectOption(third)
+  await page.getByRole("button",{name:"Agendar atividade"}).click()
+  await expect(page.getByText("Confirmar medidas",{exact:true})).toBeVisible()
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true)
 })

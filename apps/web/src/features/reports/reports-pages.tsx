@@ -7,6 +7,7 @@ import { PageHeader } from "@/components/page-header"
 import { useDashboardData, money } from "@/features/dashboard/dashboard-data"
 import { DashboardDetail } from "@/features/dashboard/dashboard-detail"
 import { FinanceReportLive } from "./finance-report-live"
+import { SalesPerformance } from "./sales-performance"
 import { StockReportLive } from "./stock-report-live"
 import { ServiceReportsLive } from "@/features/services/service-reports-live"
 
@@ -18,7 +19,7 @@ type ReportCard = {
 }
 
 const reports: ReportCard[] = [
-  { slug: "vendas", title: "Vendas", description: "Receita, pedidos, ticket médio e conversão.", icon: ShoppingCart },
+  { slug: "vendas", title: "Vendas", description: "Pedidos, faturamento, recebimentos, metas e curva ABC.", icon: ShoppingCart },
   { slug: "estoque", title: "Estoque", description: "Posição, saldos e movimentações autorizadas.", icon: Boxes },
   { slug: "financeiro", title: "Financeiro", description: "Recebíveis, contas a pagar e saldos operacionais.", icon: CircleDollarSign },
   { slug: "servicos", title: "Serviços", description: "Ordens, produtividade e custos calculados a partir da operação.", icon: Wrench },
@@ -73,7 +74,7 @@ export function ReportsHub() {
 
 export function ReportDetail({ kind }: { kind: string }) {
   if (kind === "executivo") return <DashboardDetail kind="geral" />
-  if (kind === "vendas") return <DashboardDetail kind="vendas" />
+  if (kind === "vendas") return <SalesPerformance />
   if (kind === "financeiro") return <FinanceReportLive />
   if (kind === "estoque") return <StockReportLive />
   if (kind === "servicos") return <ServiceReportsLive />

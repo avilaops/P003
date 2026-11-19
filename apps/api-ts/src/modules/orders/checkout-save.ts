@@ -1,3 +1,4 @@
+import { loadTerm,verifyPaymentTerm,termReference,type FrozenTerm } from "../commercial/payment-term.js"
 import { randomUUID } from "node:crypto"
 import { z } from "zod"
 import type { AuthorizedContext } from "../../platform/access.js"
@@ -7,6 +8,7 @@ import { Problem } from "../../platform/problem.js"
 import { validateDate } from "../sales/fixed.js"
 
 export const checkoutInputSchema = z.strictObject({
+  paymentTerm:termReference.optional(),
   entry: z.strictObject({ paymentMethodId: normalizedDatabaseId.nullable().default(null), dueOn: z.string().nullable().default(null) }),
   installments: z.array(z.strictObject({ paymentMethodId: normalizedDatabaseId, dueOn: z.string(), amountCents: signed64 })),
   manufacturingDays: z.number().int().min(0).max(65535).nullable().default(null), deliveryNotes: z.string(), paymentNotes: z.string(), notes: z.string(), stateRegistration: z.string().nullable().default(null),
@@ -24,7 +26,9 @@ async function method(context: AuthorizedContext, id: string) {
   if (!row) invalid("Selecione uma forma de pagamento ativa desta empresa")
   return row.data
 }
-export async function saveCheckout(context: AuthorizedContext, order: string, customer: string, total: bigint, entry: bigint, input: CheckoutInput) {
+export async function saveCheckout(context: AuthorizedContext, order: string, customer: string, total: bigint, entry: bigint, input: CheckoutInput, frozenTerm?:FrozenTerm|null) {
+  const paymentTerm=frozenTerm??(input.paymentTerm ? await loadTerm(context,input.paymentTerm) : null)
+  if (paymentTerm) verifyPaymentTerm(total,entry,paymentTerm,input)
   if (total < 1n || total > 99999999999999n || entry < 0n || entry > total || input.installments.length > 120) invalid("Confira total, entrada e quantidade de parcelas")
   if (input.manufacturingDays !== null && input.manufacturingDays > 3650) invalid("Prazo de fabricação deve ter até 3650 dias")
   const deliveryNotes = text(input.deliveryNotes, 2000), paymentNotes = text(input.paymentNotes, 2000), notes = text(input.notes, 10000), stateRegistration = input.stateRegistration === null ? null : text(input.stateRegistration, 40) || null
@@ -50,6 +54,6 @@ export async function saveCheckout(context: AuthorizedContext, order: string, cu
   const savedCustomer = (await client.query<{ data: Record<string, unknown> }>("SELECT jsonb_build_object('id',id,'revision',revision,'personType',person_type,'legalName',legal_name,'tradeName',trade_name,'taxId',tax_id,'email',email,'phone',phone,'addresses',addresses,'contacts',contacts) AS data FROM parties WHERE tenant_id=$1 AND id=$2 AND status='active' AND is_customer", [tenantId, customer])).rows[0]?.data
   if (!savedCustomer) throw new Problem(409, "domain_conflict", "Selecione um cliente ativo desta empresa")
   savedCustomer.stateRegistration = stateRegistration
-  await client.query("INSERT INTO sales_order_checkouts(tenant_id,order_id,customer_snapshot,entry_amount_cents,entry_payment_method_id,entry_payment_method,entry_due_on,manufacturing_days,delivery_notes,payment_notes,notes) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)", [tenantId, order, savedCustomer, entry, input.entry.paymentMethodId, entryMethod, due, input.manufacturingDays, deliveryNotes, paymentNotes, notes])
+  await client.query("INSERT INTO sales_order_checkouts(tenant_id,order_id,customer_snapshot,entry_amount_cents,entry_payment_method_id,entry_payment_method,entry_due_on,manufacturing_days,delivery_notes,payment_notes,notes,payment_term_snapshot) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)", [tenantId, order, savedCustomer, entry, input.entry.paymentMethodId, entryMethod, due, input.manufacturingDays, deliveryNotes, paymentNotes, notes,paymentTerm])
   for (const item of prepared) await client.query("INSERT INTO sales_order_installments(id,tenant_id,order_id,number,kind,payment_method_id,payment_method,due_on,amount_cents) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9)", [randomUUID(), tenantId, order, item.number, item.kind, item.method.id, item.method, item.due, item.amount])
 }

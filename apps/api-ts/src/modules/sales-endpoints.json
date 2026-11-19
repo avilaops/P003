@@ -1,0 +1,196 @@
+{
+  "offline-receipt": {
+    "GET": "/api/v1/fiscal/nfe/:id/danfe"
+  },
+  "product-finishes": {
+    "GET": "/api/v1/products/finishes"
+  },
+  "sales-overview": {
+    "GET": "/api/v1/sales/overview"
+  },
+  "opportunities-settings": {
+    "GET": "/api/v1/opportunities/settings",
+    "PUT": "/api/v1/opportunities/settings"
+  },
+  "opportunities-id-activities": {
+    "POST": "/api/v1/opportunities/:id/activities"
+  },
+  "opportunities-id-activities-activityId-complete": {
+    "POST": "/api/v1/opportunities/:id/activities/:activityId/complete"
+  },
+  "pos-settings": {
+    "GET": "/api/v1/pos/settings",
+    "PUT": "/api/v1/pos/settings"
+  },
+  "sales-imports": {
+    "GET": "/api/v1/sales-imports"
+  },
+  "sales-imports-id": {
+    "GET": "/api/v1/sales-imports/:id"
+  },
+  "sales-imports-preview": {
+    "POST": "/api/v1/sales-imports/preview"
+  },
+  "sales-imports-id-confirm": {
+    "POST": "/api/v1/sales-imports/:id/confirm"
+  },
+  "sales-channels-channel-orders": {
+    "GET": "/api/v1/sales-channels/:channel/orders"
+  },
+  "fiscal-outgoing-documents": {
+    "GET": "/api/v1/fiscal/outgoing-documents"
+  },
+  "fiscal-nfce-readiness": {
+    "GET": "/api/v1/fiscal/nfce-readiness"
+  },
+  "fiscal-order-lots-id": {
+    "GET": "/api/v1/fiscal/order-lots/:id",
+    "POST": "/api/v1/fiscal/order-lots/:id"
+  },
+  "warranty-equipment": {
+    "GET": "/api/v1/warranty-equipment",
+    "POST": "/api/v1/warranty-equipment"
+  },
+  "warranty-origins": {
+    "GET": "/api/v1/warranty-origins"
+  },
+  "warranty-staff": {
+    "GET": "/api/v1/warranty-staff"
+  },
+  "commercial-policies-queue": {
+    "GET": "/api/v1/commercial/policies/queue"
+  },
+  "commercial-policies-catalog": {
+    "GET": "/api/v1/commercial/policies/catalog"
+  },
+  "commercial-policies-catalog-customer": {
+    "GET": "/api/v1/commercial/policies/catalog/:customer"
+  },
+  "commercial-policies-settings": {
+    "POST": "/api/v1/commercial/policies/settings"
+  },
+  "commercial-policies-decisions": {
+    "POST": "/api/v1/commercial/policies/decisions"
+  },
+  "commercial-policies-plan": {
+    "POST": "/api/v1/commercial/policies/plan"
+  },
+  "commercial-policies-performance": {
+    "GET": "/api/v1/commercial/policies/performance"
+  },
+  "commercial-policies-goals": {
+    "POST": "/api/v1/commercial/policies/goals"
+  },
+  "commercial-policies-store": {
+    "GET": "/api/v1/commercial/policies/store",
+    "POST": "/api/v1/commercial/policies/store"
+  },
+  "commercial-policies-store-id": {
+    "GET": "/api/v1/commercial/policies/store/:id"
+  },
+  "integrations-sales-channels-channel-deliveries": {
+    "GET": "/api/v1/integrations/sales-channels/:channel/deliveries"
+  },
+  "integrations-sales-channels-channel-deliveries-id-confirmation": {
+    "POST": "/api/v1/integrations/sales-channels/:channel/deliveries/:id/confirmation"
+  },
+  "integrations-sales-channels-channel-events": {
+    "POST": "/api/v1/integrations/sales-channels/:channel/events"
+  },
+  "warranty-metrics": {
+    "GET": "/api/v1/warranty-metrics"
+  },
+  "warranty-cases-id-records": {
+    "GET": "/api/v1/warranty-cases/:id/records",
+    "POST": "/api/v1/warranty-cases/:id/records"
+  },
+  "warranty-evidence-id-file": {
+    "GET": "/api/v1/warranty-evidence/:id/file"
+  },
+  "warranty-cases-id-settlements": {
+    "GET": "/api/v1/warranty-cases/:id/settlements",
+    "POST": "/api/v1/warranty-cases/:id/settlements"
+  },
+  "fiscal-return-policy": {
+    "GET": "/api/v1/fiscal/return-policy",
+    "PUT": "/api/v1/fiscal/return-policy"
+  },
+  "fiscal-received-nfes-id-purchase-progress": {
+    "GET": "/api/v1/fiscal/received-nfes/:id/purchase/progress"
+  },
+  "fiscal-received-nfes-id-purchase-options": {
+    "GET": "/api/v1/fiscal/received-nfes/:id/purchase/options"
+  },
+  "fiscal-received-nfes-id-purchase-confirm": {
+    "POST": "/api/v1/fiscal/received-nfes/:id/purchase/confirm"
+  },
+  "fiscal-received-nfes-id-purchase-receive": {
+    "POST": "/api/v1/fiscal/received-nfes/:id/purchase/receive"
+  },
+  "fiscal-order-cancellations-id-process": {
+    "GET": "/api/v1/fiscal/order-cancellations/:id/process",
+    "POST": "/api/v1/fiscal/order-cancellations/:id/process"
+  },
+  "orders-id-document": {
+    "GET": "/api/v1/orders/:id/document"
+  },
+  "orders-id-commission": {
+    "GET": "/api/v1/orders/:id/commission",
+    "PUT": "/api/v1/orders/:id/commission"
+  },
+  "orders-id-finance": {
+    "GET": "/api/v1/orders/:id/finance"
+  },
+  "receivables-id": {
+    "GET": "/api/v1/receivables/:id"
+  },
+  "receivables-id-payments": {
+    "POST": "/api/v1/receivables/:id/payments"
+  },
+  "receivables-id-reverse-payment": {
+    "POST": "/api/v1/receivables/:id/reverse-payment"
+  },
+  "orders-id-documents": {
+    "GET": "/api/v1/orders/:id/documents",
+    "POST": "/api/v1/orders/:id/documents"
+  },
+  "orders-id-documents-documentId": {
+    "GET": "/api/v1/orders/:id/documents/:documentId"
+  },
+  "orders-id-cancellations": {
+    "GET": "/api/v1/orders/:id/cancellations"
+  },
+  "orders-id-cancel-completed": {
+    "POST": "/api/v1/orders/:id/cancel-completed"
+  },
+  "commercial-settings-line": {
+    "GET": "/api/v1/commercial-settings/:line",
+    "PUT": "/api/v1/commercial-settings/:line"
+  },
+  "commercial-settings-line-preview": {
+    "POST": "/api/v1/commercial-settings/:line/preview"
+  },
+  "product-costs-id": {
+    "GET": "/api/v1/product-costs/:id",
+    "PUT": "/api/v1/product-costs/:id"
+  },
+  "fixed-expenses": {
+    "GET": "/api/v1/fixed-expenses",
+    "POST": "/api/v1/fixed-expenses"
+  },
+  "fixed-expenses-id": {
+    "PUT": "/api/v1/fixed-expenses/:id"
+  },
+  "price-tables-line": {
+    "GET": "/api/v1/price-tables/:line"
+  },
+  "price-tables-line-preview": {
+    "GET": "/api/v1/price-tables/:line/preview"
+  },
+  "price-tables-line-publish": {
+    "POST": "/api/v1/price-tables/:line/publish"
+  },
+  "fiscal-sales-returns": {
+    "GET": "/api/v1/fiscal/sales-returns"
+  }
+}

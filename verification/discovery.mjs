@@ -226,30 +226,23 @@ export async function discover(root, options = {}) {
   for (const absolute of productionRustFiles(rustSources, path.join(root, 'apps/api/src'))) {
     api.push(...rustRoutes(rustSources.get(absolute), slash(path.relative(root, absolute))));
   }
-  const documentRoutes = 'apps/api-ts/src/modules/document-endpoints.json';
-  let registry;
-  try { registry = await readFile(path.join(root, documentRoutes), 'utf8'); }
-  catch (error) { if (error.code !== 'ENOENT') throw error; }
-  if (registry) {
-    files.push({ file: documentRoutes, hash: hash(registry) });
+  for (const file of ['apps/api-ts/src/modules/document-endpoints.json', 'apps/api-ts/src/modules/sales-endpoints.json']) {
+    let registry;
+    try { registry = await readFile(path.join(root, file), 'utf8'); }
+    catch (error) { if (error.code === 'ENOENT') continue; throw error; }
+    files.push({ file, hash: hash(registry) });
     const routes = new Map();
     for (const endpoints of Object.values(JSON.parse(registry))) {
       for (const [method, url] of Object.entries(endpoints)) {
-        if (!verbs.has(method) || !url.startsWith('/api/v1/')) throw Error('Invalid document endpoint: ' + method + ' ' + url);
+        if (!verbs.has(method) || !url.startsWith('/api/v1/')) throw Error('Invalid endpoint in ' + file + ': ' + method + ' ' + url);
         const route = url.replace(/:([a-zA-Z][\w]*)/g, '{$1}');
         const methods = routes.get(route) || [];
-        if (methods.includes(method)) throw Error('Duplicate document endpoint: ' + method + ' ' + url);
+        if (methods.includes(method)) throw Error('Duplicate endpoint in ' + file + ': ' + method + ' ' + url);
         methods.push(method);
         routes.set(route, methods);
       }
     }
-    for (const [route, methods] of routes) {
-      const endpoint = { path: route, methods, file: documentRoutes };
-      // The TypeScript document registry owns these methods, including migrated operations.
-      const migrated = api.findIndex(existing => existing.path === route && existing.methods.every(method => methods.includes(method)));
-      if (migrated >= 0) api[migrated] = endpoint;
-      else api.push(endpoint);
-    }
+    for (const [route, methods] of routes) api.push({ path: route, methods, file });
   }
   const financeFile = 'apps/api-ts/src/modules/finance-endpoints.json';
   let financeRegistry;
@@ -274,7 +267,7 @@ export async function discover(root, options = {}) {
   const stock = await stockRoutes(root, ts);
   for (const source of stock.sources) files.push({ file: source.file, hash: hash(source.content) });
   for (const { method, path: url, file, line } of stock.routes) {
-    const existing = api.find(route => normalizedRoute(route.path) === normalizedRoute(url));
+    const existing = api.find(route => route.file.startsWith("apps/api-ts/") && normalizedRoute(route.path) === normalizedRoute(url));
     if (existing) {
       if (existing.typescript?.[method]) throw Error('Duplicate Fastify stock operation: ' + method + ' ' + url);
       if (!existing.methods.includes(method)) existing.methods.push(method);
@@ -296,8 +289,16 @@ export async function discover(root, options = {}) {
     'pnpm-lock.yaml',
     'package.json', 'Cargo.toml', 'Cargo.lock', 'apps/api/Cargo.toml',
     'apps/web/package.json', 'apps/web/tsconfig.json', 'apps/web/playwright.config.ts',
-    'apps/web/playwright.company.config.ts', 'scripts/verify-company.mjs',
+    'apps/web/playwright.company.config.ts', 'apps/web/playwright.danfe.config.ts', 'scripts/verify-company.mjs',
+    'apps/api-ts/package.json','apps/api-ts/tsconfig.json','apps/fiscal-engine/package.json','apps/fiscal-engine/package-lock.json',
   ];
+  for (const directory of ['apps/api-ts/src','apps/api-ts/test','apps/fiscal-engine/src','apps/fiscal-engine/tests']) {
+    try {
+      for (const file of await walk(path.join(root,directory))) {
+        if (/\.(?:[cm]?[jt]s|tsx)$/.test(file)) extra.push(slash(path.relative(root,file)));
+      }
+    } catch (error) { if (error.code !== 'ENOENT') throw error; }
+  }
   for (const file of await walk(path.join(root, 'migrations'))) if (file.endsWith('.sql')) extra.push(slash(path.relative(root, file)));
   try {
     for (const file of await walk(path.join(root, 'verification'))) if (/\.(?:mjs|mts|py|txt)$/.test(file)) extra.push(slash(path.relative(root, file)));
@@ -311,21 +312,35 @@ export async function discover(root, options = {}) {
   return { schemaVersion: '1', sourceHash: hash(JSON.stringify(files)), parser: { typescript: ts.version, rust: 'production-module-literal-router-v2' }, pages, bff, api, browserTests, sourceFiles: files };
 }
 
+// During a method-by-method migration one public path can be served by both services.
+export function publicApiRoutes(routes) {
+  const paths = new Map();
+  for (const route of routes) {
+    const key = normalizedRoute(route.path);
+    const entry = paths.get(key) || { path: route.path, methods: [], files: [] };
+    for (const method of route.methods) if (!entry.methods.includes(method)) entry.methods.push(method);
+    entry.files.push(route.file);
+    paths.set(key, entry);
+  }
+  return paths;
+}
+
 export function analyze(inventory, catalogue = null) {
   const findings = [];
   const lookup = collection => new Map(collection.map(route => [normalizedRoute(route.path), route]));
-  const bff = lookup(inventory.bff), api = lookup(inventory.api);
+  const bff = lookup(inventory.bff), api = publicApiRoutes(inventory.api);
   for (const [kind, collection] of [['page', inventory.pages], ['bff', inventory.bff], ['api', inventory.api]]) {
     const seen = new Set();
     for (const route of collection) {
-      const key = normalizedRoute(route.path);
+      const service = kind === 'api' && route.file.startsWith('apps/api-ts/') ? 'fastify' : kind;
+      const key = service + ':' + normalizedRoute(route.path);
       if (seen.has(key)) findings.push({ severity: 'error', code: 'duplicate_route', path: route.path, evidence: [route.file], detail: `Mais de uma definição ${kind} para o mesmo padrão; verificar roteadores e condições.` });
       seen.add(key);
     }
   }
   for (const route of inventory.bff) {
     if (catchAllSegment.test(route.path)) {
-      const mappings = (catalogue?.actions || []).filter(action => action.ui?.bff?.path === route.path);
+      const mappings = [...(catalogue?.actions || []), ...(catalogue?.actionsAppendix || [])].filter(action => action.ui?.bff?.path === route.path);
       if (!mappings.length) {
         findings.push({ severity: 'info', code: 'dynamic_forward_requires_runtime', path: route.path, evidence: [route.file], detail: 'O recurso abrangente pode conter vários segmentos; uma rota de parâmetro único não determina seus destinos ou métodos.' });
       } else for (const method of route.methods) {
@@ -337,7 +352,7 @@ export function analyze(inventory, catalogue = null) {
             : action.operation.path;
           const backend = api.get(normalizedRoute(target));
           if (!backend) findings.push({ severity: 'error', code: 'bff_target_missing', path: route.path, evidence: [route.file], detail: `Recurso declarado aponta para ${target}, ausente da API.` });
-          else if (!backend.methods.includes(method)) findings.push({ severity: 'error', code: 'bff_method_missing', path: route.path, evidence: [route.file, backend.file], detail: `${method} não encontrado no destino ${backend.path}.` });
+          else if (!backend.methods.includes(method)) findings.push({ severity: 'error', code: 'bff_method_missing', path: route.path, evidence: [route.file, ...backend.files], detail: `${method} não encontrado no destino ${backend.path}.` });
         }
       }
       continue;
@@ -349,7 +364,7 @@ export function analyze(inventory, catalogue = null) {
         findings.push({ severity: 'info', code: 'dynamic_forward_requires_runtime', path: route.path, evidence: [route.file, ...candidates.map(item => item.file)], detail: `Destino dinâmico ${target.path}; ${candidates.length} rota(s) compatível(is) encontrada(s). A seleção e o método exigem execução ou análise adicional.` });
       }
       else if (!backend) findings.push({ severity: 'error', code: 'bff_target_missing', path: route.path, evidence: [route.file], detail: `forwardErp aponta para ${target.path}, não localizado nos roteadores literais.` });
-      else for (const method of route.methods) if (!backend.methods.includes(method)) findings.push({ severity: 'error', code: 'bff_method_missing', path: route.path, evidence: [route.file, backend.file], detail: `${method} não encontrado no destino ${backend.path}.` });
+      else for (const method of route.methods) if (!backend.methods.includes(method)) findings.push({ severity: 'error', code: 'bff_method_missing', path: route.path, evidence: [route.file, ...backend.files], detail: `${method} não encontrado no destino ${backend.path}.` });
     }
   }
   for (const page of inventory.pages) {

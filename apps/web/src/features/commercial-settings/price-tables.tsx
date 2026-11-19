@@ -1,12 +1,13 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { PageHeader } from "@/components/page-header"
 import { DataTable } from "@/components/workspace/data-table"
-import Link from "next/link"
+import { GuardedLink as Link } from "@/components/shell/navigation-guard"
 import { Button } from "@/components/ui/button"
 import { RequestError } from "@/components/feedback/session-recovery"
 import { useCommand, useResource } from "@/hooks/use-operation"
+import { erpFetch } from "@/lib/api/client"
 import { useNavigationGuard } from "@/components/shell/navigation-guard"
 
 type Item = { productId: string; sku: string; name: string; priceWithoutIpiCents: number; ipiBps: number; priceWithIpiCents: number }
@@ -19,7 +20,7 @@ export function PriceTables({ initialLine = "imported" }: { initialLine?: "impor
   const [locked, setLocked] = useState(false)
   return <main className="mx-auto min-w-0 max-w-5xl space-y-3 px-4 pb-12 pt-4 [--workspace-control-height:2.25rem]">
     <PageHeader eyebrow="Vendas / Tabelas de preços" title="Nova tabela de preços" description="Escolha a linha, confira os preços calculados e publique uma nova versão." />
-    <div className="flex flex-wrap gap-3"><Link href="/vendas/simulador" className="text-primary underline">Simular negociação</Link><Link href="/preferencias/comercial" className="text-primary underline">Parâmetros comerciais</Link><Link href="/preferencias/despesas-fixas" className="text-primary underline">Despesas fixas</Link></div>
+    <div className="flex flex-wrap gap-3"><Link href={`/vendas/simulador?linha=${line}`} className="text-primary underline">Simular negociação</Link><Link href={`/preferencias/comercial?linha=${line}`} className="text-primary underline">Parâmetros comerciais</Link><Link href="/preferencias/despesas-fixas" className="text-primary underline">Despesas fixas</Link></div>
     <label className="grid max-w-xs gap-1">Linha comercial<select disabled={locked} className="min-h-10 rounded-lg border bg-background px-2" value={line} onChange={e => setLine(e.target.value as typeof line)}><option value="imported">Importada</option><option value="national">Nacional</option></select></label>
     <Publication key={line} line={line} onLocked={setLocked} />
   </main>
@@ -33,25 +34,29 @@ function Publication({ line, onLocked }: { line: "imported" | "national"; onLock
   const [error, setError] = useState("")
   const [notice, setNotice] = useState("")
   useNavigationGuard(command.busy || command.uncertain ? "A publicação ainda não foi confirmada. Sair?" : null)
+  useEffect(() => { onLocked(preparing || command.busy || command.uncertain) }, [preparing, command.busy, command.uncertain, onLocked])
   async function prepare() {
     if (!current.value || preparing || command.busy || command.uncertain) return
-    onLocked(true); setPreparing(true); setPreview(null); setError(""); setNotice(""); command.reset()
+    setPreparing(true); setPreview(null); setError(""); setNotice(""); command.reset()
     try {
-      const response = await fetch(`/api/erp/price-tables/${line}/preview`, { cache: "no-store" })
+      const response = await erpFetch(`/api/erp/price-tables/${line}/preview`, { cache: "no-store", headers: { "X-Tenant-Id": current.value.tenantId } })
       const result = await response.json()
       if (!response.ok) throw Error(result.title || "Não foi possível preparar a tabela.")
       if (result.tenantId !== current.value.tenantId || result.line !== line || response.headers.get("etag") !== `"${result.revision}"` || !/^[a-f0-9]{64}$/.test(result.digest) || !Array.isArray(result.items) || !result.items.length) throw Error("Prévia incompleta. Recarregue antes de publicar.")
       setPreview(result)
     } catch (reason) { setError(reason instanceof Error ? reason.message : "Prévia indisponível.") }
-    finally { setPreparing(false); onLocked(false) }
+    finally { setPreparing(false) }
   }
   async function publish() {
     if (!preview || !current.value || command.busy) return
-    onLocked(true)
-    const result = await command.send<{ tenantId: string; line: string; status: string; version: number }>(`/api/erp/price-tables/${line}/publish`, current.value.tenantId, { digest: preview.digest }, `"${preview.revision}"`)
-    if (result?.tenantId === current.value.tenantId && result.line === line && result.status === "published") {
-      setNotice(`Versão ${result.version} publicada.`); setPreview(null); current.reload(); onLocked(false)
-    } else if (result) { setError("Resposta divergente. Confira a versão publicada."); onLocked(false) }
+    const tenant = current.value.tenantId
+    const result = await command.send<{ tenantId: string; line: string; status: string; version: number }>(
+      `/api/erp/price-tables/${line}/publish`, tenant, { digest: preview.digest }, `"${preview.revision}"`, "POST",
+      value => value?.tenantId === tenant && value.line === line && value.status === "published" && Number.isSafeInteger(value.version) && value.version > 0,
+    )
+    if (result) {
+      setNotice(`Versão ${result.version} publicada.`); setPreview(null); current.reload()
+    }
   }
   return <div className="min-w-0 space-y-3">
     <p>Publicar cria uma versão da tabela com os custos dos produtos ativos e os parâmetros salvos. Produtos e pedidos existentes mantêm os preços cadastrados.</p>

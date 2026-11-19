@@ -1,5 +1,6 @@
 "use client"
 
+import Link from "next/link"
 import { useEffect, useState } from "react"
 import { DataTable } from "@/components/workspace/data-table"
 import { ProductThumbnail } from "@/features/catalog/product-thumbnail"
@@ -122,6 +123,7 @@ export function OrderDetailCommercial({ order, permissions }: { order: Order; pe
       ]} />{entry !== undefined && <p className="text-xs text-muted-foreground">Valores negociados. Consulte os recebimentos no financeiro.</p>}</section>
     </div>
     {checkout && <CommercialCheckoutSummary checkout={checkout} />}
+    {agreement && <Link className="text-primary underline" href={"/vendas/propostas/"+agreement.proposalId+"?versao="+agreement.proposalVersion}>Abrir proposta de origem {agreement.proposalNumber} • Versão {agreement.proposalVersion}</Link>}
     {!checkout && agreement && <section className="space-y-3 border-t pt-4" aria-label="Condições aprovadas na proposta"><h2 className="font-semibold">Condições aprovadas • Proposta {agreement.proposalNumber}</h2><Fields values={[["Pagamento previsto", agreement.paymentTerms], ["Entrega", agreement.deliveryTerms], ["Observações", agreement.notes]]} /></section>}
     {hasComposition && <section className="space-y-3 border-t pt-4" aria-label="Desconto e aprovação"><h2 className="font-semibold">Desconto e aprovação</h2><Fields values={[
       ["Desconto aplicado", discountBps === undefined ? undefined : percent(discountBps)], ["Desconto em reais", amount(discount)], ["Limite sem aprovação", freeDiscount === undefined ? undefined : percent(freeDiscount)],

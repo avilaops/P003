@@ -85,6 +85,11 @@ export function registerCompletedOrderCancellation(app: FastifyInstance, depende
       if (!order) throw new Problem(404, "not_found", "Pedido não encontrado")
       if (revisionValue(order.revision) !== expected) throw new Problem(412, "revision_conflict", "A revisão do pedido mudou")
       if (order.status !== "completed") conflict("Cancelamento integral exige venda concluída")
+      // Fiscal lots and item returns from the sales workspace must be reconciled before reversing the whole sale.
+      const lots = await client.query(`SELECT 1 FROM sales_invoice_lots l LEFT JOIN fiscal_nfe_documents d ON d.tenant_id=l.tenant_id AND d.id=l.draft_id
+        WHERE l.tenant_id=$1 AND l.order_id=$2 AND l.environment='production' AND (NOT l.legacy_full OR EXISTS(SELECT 1 FROM sales_partial_returns r WHERE r.tenant_id=l.tenant_id AND r.lot_id=l.id))
+        AND (l.delivered_at IS NOT NULL OR NOT l.withdrawn AND coalesce(d.status,'draft') NOT IN ('rejected','cancelled')) LIMIT 1`, [tenantId, id])
+      if (lots.rows.length) conflict("Concilie os lotes fiscais e as devoluções por item antes de cancelar integralmente")
       const fiscal = await fiscalCancellation(context, id)
       await client.query("SELECT set_config('app.stock_effective_on',$1,true)", [occurredOn])
       const stockMovementIds = await reverseShippedGoods(context, request.headers, id, reason)

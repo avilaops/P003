@@ -1,5 +1,6 @@
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
+import { recordWorkspace } from "../sales/record-workspace.js"
 
 import type { AppDependencies } from "../../app.js"
 import { authorizeRequest, requirePermission } from "../../platform/access.js"
@@ -34,6 +35,13 @@ export function registerProposalRoutes(app: FastifyInstance, dependencies: AppDe
     return reply.header("cache-control", "no-store").header("etag", `"${body.data.revision}"`).send(body)
   })
   app.get("/api/v1/proposals", async (request, reply) => {
+    if ((request.query as Record<string, unknown>).view === "workspace") {
+      const page=await authorizeRequest(request,dependencies,async c=>{
+        requirePermission(c,"sales.proposals.read")
+        return recordWorkspace(c,request.query,"proposals")
+      })
+      return reply.header("cache-control","no-store").send(page)
+    }
     const query = queryInput(request.query, ["", "draft", "sent", "accepted", "rejected", "cancelled", "expired"], true)
     const body = await authorizeRequest(request, dependencies, async context => {
       requirePermission(context, "sales.proposals.read")

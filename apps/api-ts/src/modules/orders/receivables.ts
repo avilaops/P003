@@ -12,7 +12,7 @@ export async function hasCheckout(context: AuthorizedContext, id: string) {
 }
 
 export async function verifyReceivables(context: AuthorizedContext, id: string) {
-  const valid = await context.client.query("SELECT NOT EXISTS(SELECT 1 FROM sales_order_installments i LEFT JOIN receivables r ON r.tenant_id=i.tenant_id AND r.order_id=i.order_id AND r.order_installment_id=i.id WHERE i.tenant_id=$1 AND i.order_id=$2 AND (r.id IS NULL OR r.status='cancelled' OR r.amount_cents<>i.amount_cents OR r.due_date<>i.due_on)) AND NOT EXISTS(SELECT 1 FROM receivables WHERE tenant_id=$1 AND order_id=$2 AND order_installment_id IS NULL) AND (SELECT sum(amount_cents) FROM sales_order_installments WHERE tenant_id=$1 AND order_id=$2)=(SELECT amount_cents FROM sales_orders WHERE tenant_id=$1 AND id=$2) AS valid", [context.tenantId, id])
+  const valid = await context.client.query("SELECT NOT EXISTS(SELECT 1 FROM sales_order_installments i LEFT JOIN receivables r ON r.tenant_id=i.tenant_id AND r.order_id=i.order_id AND r.order_installment_id=i.id WHERE i.tenant_id=$1 AND i.order_id=$2 AND (r.id IS NULL OR (CASE WHEN r.status='cancelled' THEN 0 ELSE r.amount_cents END)+COALESCE((SELECT sum(a.amount_cents) FROM sales_return_abatements a WHERE a.tenant_id=r.tenant_id AND a.receivable_id=r.id),0)<>i.amount_cents OR r.due_date<>i.due_on)) AND NOT EXISTS(SELECT 1 FROM receivables WHERE tenant_id=$1 AND order_id=$2 AND order_installment_id IS NULL) AND (SELECT sum(amount_cents) FROM sales_order_installments WHERE tenant_id=$1 AND order_id=$2)=(SELECT amount_cents FROM sales_orders WHERE tenant_id=$1 AND id=$2) AS valid", [context.tenantId, id])
   if (!valid.rows[0]?.valid) conflict("Concilie os títulos das parcelas antes de concluir o pedido")
 }
 

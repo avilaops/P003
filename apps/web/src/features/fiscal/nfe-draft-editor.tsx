@@ -7,6 +7,8 @@ import { erpFetch } from "@/lib/api/client"
 import type { Schema } from "@/lib/api/types"
 
 import Link from "next/link"
+import { decimalMicros, type OrderLots, type LotEnvironment } from "./order-lots-model"
+import { withModelReadiness } from "./model-readiness"
 import { useRouter } from "next/navigation"
 import { cloneElement, isValidElement, useEffect, useMemo, useRef, useState, type ReactElement } from "react"
 import { Button } from "@/components/ui/button"
@@ -28,7 +30,7 @@ import { NfeFinancialFields, hasHeaderFiscalReference } from "./nfe-financial-fi
 import { NfeRecipientPicker, NfeMunicipalityLookup } from "./nfe-recipient-picker"
 import { applyMunicipalityCode } from "@/lib/municipality-code"
 import { EmissionActions } from "./emission-actions"
-import { applyRecipientFiscal, applyTaxProfile, blankDraft, blankIbptItem, blankItem, blankTaxDeclaration, blockerLabels, invoiceTotal, productsTotal, submission, type DraftInput, type DraftItem, type FiscalReadiness, type TaxDeclaration } from "./nfe-draft-model"
+import { applyRecipientFiscal, applyTaxProfile, blankDraft, blankIbptItem, blankItem, blankTaxDeclaration, blockerLabels, invoiceTotal, itemTotal, productsTotal, submission, type DraftInput, type DraftItem, type FiscalReadiness, type TaxDeclaration } from "./nfe-draft-model"
 import { IbptDraftFields, IbptSavedSnapshot } from "./ibpt-draft-fields"
 
 type Snapshot = Schema<"DraftSnapshot">
@@ -39,7 +41,7 @@ const stepDescriptions = ["Defina a operação, o modelo e o ambiente da nota.",
 const recipientComplete = (recipient: DraftInput["recipient"]) => !!recipient.taxId && !!recipient.legalName && !!recipient.street && !!recipient.postalCode && !!recipient.municipalityCode && !!recipient.state
 const states = "AC AL AP AM BA CE DF ES GO MA MT MS MG PA PB PR PE PI RJ RN RS RO RR SC SP SE TO".split(" ")
 
-export function NfeDraftEditor({ id, sourceOrderId, initialModel = 55 }: { id?: string; sourceOrderId?: string; initialModel?: 55 | 65 }) {
+export function NfeDraftEditor({ id, sourceOrderId, lotId, lotEnvironment="production", initialModel = 55 }: { id?: string; sourceOrderId?: string; lotId?:string; lotEnvironment?:LotEnvironment; initialModel?: 55 | 65 }) {
   const router = useRouter()
   const [issuerProfile, setIssuerProfile] = useState<Schema<"ProfileInput"> | null>(null)
   const [emissionHeader, setEmissionHeader] = useState<{ number: number; series: number } | null>(null)
@@ -84,6 +86,7 @@ export function NfeDraftEditor({ id, sourceOrderId, initialModel = 55 }: { id?: 
     const read = async () => {
       try {
         const paths = ["/api/erp/me", "/api/erp/fiscal/readiness", ...(id ? [`/api/erp/fiscal/nfe/${id}`] : sourceOrderId ? [`/api/erp/fiscal/order-preparations/${sourceOrderId}`] : [])]
+        if (sourceOrderId && lotId) paths.push(`/api/erp/fiscal/order-lots/${sourceOrderId}?environment=${lotEnvironment}`)
         const responses = await Promise.all(paths.map(path => erpFetch(path, { cache: "no-store", signal: controller.signal })))
         const values = await Promise.all(responses.map(response => response.json()))
         for (const [index, response] of responses.entries()) if (!response.ok) throw new Error(values[index].title || "Não foi possível abrir o rascunho")
@@ -92,13 +95,34 @@ export function NfeDraftEditor({ id, sourceOrderId, initialModel = 55 }: { id?: 
         const current: Snapshot | undefined = id ? origin : undefined
         const proposed: Preparation | undefined = !id && sourceOrderId ? origin : undefined
         if (ready.tenantId !== me.tenant?.id || origin && origin.tenantId !== me.tenant.id) throw new Error("A empresa da sessão mudou. Reabra o rascunho")
-        const input: DraftInput = current ? current.data.input : proposed ? { ...blankDraft(), model: initialModel, sourceOrderId: proposed.orderId, recipient: proposed.recipient, items: proposed.items.map(item => ({ ...blankItem(), code: item.code, description: item.description, additionalInfo: item.additionalInfo || null, unit: item.unit, ncm: item.ncm || "", quantity: item.quantity, unitPrice: item.unitPrice, grossTotal: item.grossTotal })), productsTotal: proposed.productsTotal } : { ...blankDraft(), model: initialModel }
+        const input: DraftInput = current ? {...current.data.input} : proposed ? { ...blankDraft(), model: initialModel, sourceOrderId: proposed.orderId, recipient: proposed.recipient, items: proposed.items.map(item => ({ ...blankItem(), code: item.code, description: item.description, additionalInfo: item.additionalInfo || null, unit: item.unit, ncm: item.ncm || "", quantity: item.quantity, unitPrice: item.unitPrice, grossTotal: item.grossTotal })), productsTotal: proposed.productsTotal } : { ...blankDraft(), model: initialModel }
         if (!current) { input.environment = ready.environment; input.issuedAt = new Date().toISOString(); if (initialModel === 55) input.departureAt = input.issuedAt; input.presenceIndicator = initialModel === 65 ? 1 : 9 }
+        if (lotId && id) {
+          const allocation:OrderLots=values[3]
+          const lot=allocation?.lots.find(l=>l.id===lotId && l.draftId===id)
+          if (!lot || allocation.tenantId!==me.tenant.id || allocation.orderId!==sourceOrderId) throw new Error("O vínculo da nota com o lote mudou. Consulte o pedido.")
+          input.sourceOrderId=allocation.orderId
+        }
+        if (lotId && !id) {
+          const allocation: OrderLots = values[3]
+          const lot = allocation?.lots.find(l=>l.id===lotId)
+          if (!proposed || allocation?.tenantId!==me.tenant.id || allocation.orderId!==sourceOrderId || !lot || lot.status!=="reserved" || lot.environment!==lotEnvironment) throw new Error("O lote mudou. Volte ao pedido para consultar o saldo.")
+          input.model=55
+          input.environment=lot.environment
+          input.items=lot.items.map(line=>{
+            const original=input.items.find(i=>i.code===line.sku)
+            if (!original) throw new Error("Produto do lote indisponível no pedido")
+            const quantity=decimalMicros(line.quantity)
+            return {...original,quantity,grossTotal:itemTotal(quantity,original.unitPrice)}
+          })
+          input.productsTotal=productsTotal(input.items)
+        }
+        const modelReady = await withModelReadiness(ready,input.model,input.environment,controller.signal)
+        if (controller.signal.aborted) return
         setAllocationRules({}); setRecipientExpanded(!recipientComplete(input.recipient)); setPendingAmounts(false); setDraft(input); setBaseline(JSON.stringify(input)); setSnapshot(current || null)
-
         setEmissionHeader(null)
         setPreparation(proposed || null)
-        setTenant(me.tenant.id); setReadiness(ready); setCanEdit(me.permissions.includes("fiscal.nfe.manage") && (!current || current.canEdit))
+        setTenant(me.tenant.id); setReadiness(modelReady); setCanEdit(me.permissions.includes("fiscal.nfe.manage") && (!current || current.canEdit))
         setCanSearchParties(me.permissions.includes("catalog.parties.read"))
         setCanSearch(me.permissions.includes("catalog.products.read")); setEtag(id ? responses[2].headers.get("etag") || "" : "")
         setCanIssue(me.permissions.includes("fiscal.nfe.issue"))
@@ -110,7 +134,7 @@ export function NfeDraftEditor({ id, sourceOrderId, initialModel = 55 }: { id?: 
     }
     void read()
     return () => controller.abort()
-  }, [id, sourceOrderId, initialModel, reload])
+  }, [id, sourceOrderId, initialModel, lotId, lotEnvironment, reload])
   useEffect(() => {
     if (!tenant) return
     let active: AbortController | null = null
@@ -127,14 +151,15 @@ export function NfeDraftEditor({ id, sourceOrderId, initialModel = 55 }: { id?: 
         const certificate = certificateResponse.ok ? await certificateResponse.json() : null
         const profile = profileResponse.ok ? await profileResponse.json() : null
         if (!readyResponse.ok || ready.tenantId !== tenant || certificate && certificate.tenantId !== tenant) return
-        if (!controller.signal.aborted) { setReadiness(ready); setCertificateStatus(certificate?.status); if (profile?.tenantId === tenant) setIssuerProfile(profile.data) }
+        const modelReady = await withModelReadiness(ready,draft.model,draft.environment,controller.signal)
+        if (!controller.signal.aborted) { setReadiness(modelReady); setCertificateStatus(certificate?.status); if (profile?.tenantId === tenant) setIssuerProfile(profile.data) }
       } catch { /* Keep the last confirmed readiness; never infer a missing certificate from network failure. */ }
     }
     const focus = () => { if (document.visibilityState === "visible") void checkReadiness() }
     void checkReadiness()
     window.addEventListener("focus", focus)
     return () => { active?.abort(); window.removeEventListener("focus", focus) }
-  }, [tenant])
+  }, [tenant, draft.model, draft.environment])
   useEffect(() => {
     const warn = (event: BeforeUnloadEvent) => { if (dirty || uncertain || saving) event.preventDefault() }
     window.addEventListener("beforeunload", warn)
@@ -182,9 +207,9 @@ export function NfeDraftEditor({ id, sourceOrderId, initialModel = 55 }: { id?: 
     }
     if (!canEdit || blocked || fiscalLocked || writing.current || uncertain && !!id || !uncertain && !dirty) return
     let body: string
-    try { body = uncertain && command.current ? command.current.body : JSON.stringify(submission(draft)) }
+    try { body = uncertain && command.current ? command.current.body : JSON.stringify(submission(lotId ? {...draft,sourceOrderId:null} : draft)) }
     catch (reason) { setError(reason instanceof Error ? reason.message : "Confira os valores dos itens"); return }
-    if (!id && !command.current) command.current = { key: crypto.randomUUID(), body }
+    if (!id && !command.current) command.current = { key: lotId || crypto.randomUUID(), body }
     writing.current = true; setSaving(true); setError(""); setNotice("")
     const controller = new AbortController(); request.current = controller
     let resolved = false
@@ -201,9 +226,10 @@ export function NfeDraftEditor({ id, sourceOrderId, initialModel = 55 }: { id?: 
         throw new Error(value.title || "Não foi possível salvar o rascunho")
       }
       if (value.tenantId !== tenant || !value.data?.id || !response.headers.get("etag")) { setUncertain(true); throw new Error("Resposta sem confirmação do rascunho. Recarregue os dados do servidor") }
-      setSnapshot(value); setDraft(value.data.input); setBaseline(JSON.stringify(value.data.input)); setEtag(response.headers.get("etag")!)
+      const saved=lotId ? {...value.data.input,sourceOrderId} : value.data.input
+      setSnapshot(value); setDraft(saved); setBaseline(JSON.stringify(saved)); setEtag(response.headers.get("etag")!)
       resolved = true; setUncertain(false); command.current = null; setNotice("Rascunho salvo no servidor. Nenhuma nota foi transmitida.")
-      if (!id) router.replace(`/fiscal/notas-saida/${value.data.id}`)
+      if (!id) router.replace(`/fiscal/notas-saida/${value.data.id}`+(lotId ? `?pedido=${sourceOrderId}&lote=${lotId}&ambiente=${lotEnvironment}` : ""))
     } catch (reason) {
       if (!controller.signal.aborted) {
         if (!resolved) setUncertain(true)
@@ -215,14 +241,14 @@ export function NfeDraftEditor({ id, sourceOrderId, initialModel = 55 }: { id?: 
   const profileReady = readiness?.profileConfigured && !readiness.blockers.includes("company_and_fiscal_profile_inconsistent")
   const emissionBlockers = readiness?.blockers.filter(blocker => draft.environment === "production" || blocker !== "production_emission_disabled") || []
   if (draft.environment === "production" && readiness?.productionEnabled === false && !emissionBlockers.includes("production_emission_disabled")) emissionBlockers.push("production_emission_disabled")
-  const canTransmit = Boolean(readiness?.profileConfigured && readiness.certificateVerified && emissionBlockers.length === 0 && (readiness.canTransmit || draft.environment === "homologation" && readiness.blockers.includes("production_emission_disabled")))
+  const canTransmit = Boolean((draft.model !== 65 || readiness?.model === 65 && readiness.modelEnvironment === draft.environment) && readiness?.profileConfigured && readiness.certificateVerified && emissionBlockers.length === 0 && (readiness.canTransmit || draft.environment === "homologation" && readiness.blockers.includes("production_emission_disabled")))
   let total = "Confira quantidades e preços"
   try { total = `R$ ${productsTotal(draft.items).replace(".", ",")}` } catch { /* Invalid fields remain visible until corrected. */ }
   return <main className="mx-auto max-w-6xl space-y-6 px-4 pb-28 pt-8 lg:px-6">
     <Link className="text-sm text-primary underline" href="/fiscal/notas-saida" onClick={event => { if ((dirty || uncertain || saving) && !window.confirm("Sair sem confirmar esta edição?")) event.preventDefault() }}>Notas fiscais de saída</Link>
     <header><p className="text-sm text-primary">Fiscal / {draft.model === 65 ? "NFC-e" : "NF-e de saída"}</p><PageTitle className="mt-2 text-3xl font-semibold">{id ? `Preparação e emissão de ${draft.model === 65 ? "NFC-e" : "NF-e"}` : `Preparar ${draft.model === 65 ? "NFC-e" : "nota de saída"}`}</PageTitle><p className="mt-3 text-muted-foreground">{draft.environment === "production" ? `Produção · Modelo ${draft.model}` : `Homologação · Modelo ${draft.model} · Sem valor fiscal`}</p>{snapshot && <p className="mt-2 break-all text-xs text-muted-foreground">{snapshot.data.id} · Revisão {snapshot.data.revision} · Emitente: {snapshot.data.issuer.legalName}</p>}</header>
 
-    {draft.sourceOrderId && <section className="rounded-xl border border-primary/30 p-4 text-sm"><p>Origem: <Link className="break-all text-primary underline" href={`/vendas/pedidos/${draft.sourceOrderId}`}>Pedido {draft.sourceOrderId}</Link>{preparation ? ` · Revisão consultada ${preparation.orderRevision}` : ""}</p>{preparation && <Link className="mt-2 inline-block text-primary underline" href={`/cadastros/clientes-fornecedores/${preparation.customerId}`}>Abrir cadastro do cliente</Link>}<p className="mt-2 text-muted-foreground">Esta preparação representa o pedido integral. Código, unidade, quantidade e preço permanecem os registrados na venda. Confira o endereço e informe o código IBGE e a tributação. Salvar não marca o pedido como faturado.</p></section>}
+    {draft.sourceOrderId && <section className="rounded-xl border border-primary/30 p-4 text-sm"><p>Origem: <Link className="break-all text-primary underline" href={`/vendas/pedidos/${draft.sourceOrderId}`}>Pedido {draft.sourceOrderId}</Link>{preparation ? ` · Revisão consultada ${preparation.orderRevision}` : ""}</p>{preparation && <Link className="mt-2 inline-block text-primary underline" href={`/cadastros/clientes-fornecedores/${preparation.customerId}`}>Abrir cadastro do cliente</Link>}<p className="mt-2 text-muted-foreground">{lotId ? "Esta preparação corresponde às quantidades reservadas no lote." : "Esta preparação representa o pedido integral."} Código, unidade, quantidade e preço permanecem os registrados na venda. Confira o endereço e informe o código IBGE e a tributação. Salvar não marca o pedido como faturado.</p></section>}
     {draft.sourceOrderId && tenant && <OrderSerials key={draft.sourceOrderId} id={draft.sourceOrderId} tenant={tenant}/>}
     {loading && <p role="status">Carregando dados fiscais…</p>}
     {readiness && !profileReady && <p role="alert" className="rounded-xl border p-4 text-sm">Preencha ou corrija a <Link className="text-primary underline" href="/preferencias/fiscal" target="_blank" rel="noopener noreferrer">configuração fiscal do emitente</Link> antes de salvar. Depois, recarregue os dados.</p>}
@@ -241,15 +267,15 @@ export function NfeDraftEditor({ id, sourceOrderId, initialModel = 55 }: { id?: 
           <section className="form-section grid gap-4 sm:grid-cols-2" aria-label="Operação fiscal">
             <NfeIdentificationFields draft={draft} change={patch => setDraft(previous => ({ ...previous, ...patch }))} profile={emissionHeader ? { ...(issuerProfile || snapshot?.data.issuer?.profile || readiness), series: emissionHeader.series } : issuerProfile || snapshot?.data.issuer?.profile || readiness} number={emissionHeader?.number} onImport={() => { if ((!dirty && !uncertain) || window.confirm("Sair desta preparação e abrir a importação de XML autorizado?")) router.push("/fiscal/notas-saida/importar") }} />
             <div className="sm:col-span-2">{tenant && <OperationNaturePicker key={`nature-${tenant}`} tenant={tenant} value={draft.operationNature} onChange={operationNature=>setDraft(previous=>({...previous,operationNature}))} onApply={(nature,revision)=>setDraft(previous=>({...previous,operationNature:nature.name,taxRuleReference:`${nature.code} • revisão ${revision}`}))} />}</div>
-            <Field label="Ambiente do rascunho"><select aria-label="Ambiente do rascunho" className="h-10 w-full rounded-lg border bg-background px-3 text-sm" value={draft.environment} onChange={event => setDraft({ ...draft, environment: event.target.value as DraftInput["environment"] })}><option value="homologation">Homologação</option><option value="production">Produção</option></select></Field>
-            {draft.model === 55 && <Field label="Finalidade fiscal"><select aria-label="Finalidade fiscal" disabled={draft.printType === 6 || !!draft.exportation || !!draft.sourceOrderId} className="h-10 w-full rounded-lg border bg-background px-3 text-sm" value={draft.purpose ?? 1} onChange={event => { const purpose = Number(event.target.value); setDraft({ ...draft, purpose, creditType: purpose === 5 ? draft.creditType || null : null, debitType: purpose === 6 ? draft.debitType || null : null, items: draft.items.map(item => ({ ...item, referencedDfe: null })), ...([5, 6].includes(purpose) ? { presenceIndicator: 0, referencedAccessKeys: [] } : {}), ...(purpose !== 4 ? { returnDirection: undefined, sourceReturnId: undefined, sourceReturnKind: undefined, ...(purpose === 1 ? { referencedAccessKeys: [] } : {}) } : {}) }) }}><option value={1}>1 · Normal</option><option value={2}>2: NF-e complementar</option><option value={3}>3: NF-e de ajuste</option><option value={4}>4: Devolução de mercadoria</option><option value={5}>5: Nota de crédito</option><option value={6}>6: Nota de débito</option></select></Field>}
+            <Field label="Ambiente do rascunho"><select disabled={!!lotId} aria-label="Ambiente do rascunho" className="h-10 w-full rounded-lg border bg-background px-3 text-sm" value={draft.environment} onChange={event => setDraft({ ...draft, environment: event.target.value as DraftInput["environment"] })}><option value="homologation">Homologação</option><option value="production">Produção</option></select></Field>
+            {draft.model === 55 && <Field label="Finalidade fiscal"><select aria-label="Finalidade fiscal" disabled={draft.printType === 6 || !!draft.exportation || !!draft.sourceOrderId || draft.sourceReturnKind==="sale_partial_return"} className="h-10 w-full rounded-lg border bg-background px-3 text-sm" value={draft.purpose ?? 1} onChange={event => { const purpose = Number(event.target.value); setDraft({ ...draft, purpose, creditType: purpose === 5 ? draft.creditType || null : null, debitType: purpose === 6 ? draft.debitType || null : null, items: draft.items.map(item => ({ ...item, referencedDfe: null })), ...([5, 6].includes(purpose) ? { presenceIndicator: 0, referencedAccessKeys: [] } : {}), ...(purpose !== 4 ? { returnDirection: undefined, sourceReturnId: undefined, sourceReturnKind: undefined, ...(purpose === 1 ? { referencedAccessKeys: [] } : {}) } : {}) }) }}><option value={1}>1 · Normal</option><option value={2}>2: NF-e complementar</option><option value={3}>3: NF-e de ajuste</option><option value={4}>4: Devolução de mercadoria</option><option value={5}>5: Nota de crédito</option><option value={6}>6: Nota de débito</option></select></Field>}
             <Field label="Referência da instrução fiscal"><Input required maxLength={200} value={draft.taxRuleReference} onChange={event => setDraft({ ...draft, taxRuleReference: event.target.value })} /></Field>
             {draft.model === 65 && <><Field label="Modalidade de emissão NFC-e"><select aria-label="Modalidade de emissão NFC-e" className="h-10 w-full rounded-lg border bg-background px-3 text-sm" value={draft.emissionType ?? "1"} onChange={event => setDraft({ ...draft, emissionType: event.target.value as DraftInput["emissionType"] })}><option value="1">1 · Normal</option><option value="3">3 · Contingência FS-IA</option><option value="4">4 · Contingência EPEC</option><option value="9">9 · Contingência offline</option></select></Field><Field label="Troco da NFC-e (R$)"><Input aria-label="Troco da NFC-e" inputMode="decimal" maxLength={17} value={draft.changeAmount || ""} onChange={event => setDraft({ ...draft, changeAmount: event.target.value || undefined })} /></Field></>}
           </section>
           <NfeExportFields draft={draft} change={patch => setDraft(previous => ({ ...previous, ...patch }))} />
           <NfeFinancialFields draft={draft} change={patch => setDraft(previous => ({ ...previous, ...patch }))} />
           {hasHeaderFiscalReference(draft) && <section className="form-section space-y-3"><h2 className="font-semibold">Documentos referenciados</h2><Field label="Chaves NF-e referenciadas"><Input required={draft.purpose === 2 || draft.purpose === 5} maxLength={draft.purpose === 5 ? 44 : 4454} value={(draft.referencedAccessKeys || []).join(",")} onChange={e => setDraft({ ...draft, referencedAccessKeys: e.target.value.split(",").map(key => key.trim()).filter(Boolean) })} /></Field><p className="text-xs text-muted-foreground">{draft.purpose === 5 ? "Informe a única chave de origem exigida para este subtipo de crédito." : "Informe as chaves de 44 dígitos separadas por vírgula. A nota complementar exige uma NF-e de origem. Na nota de ajuste, declare sem pagamento na etapa Pagamento."}</p></section>}
-          {draft.purpose === 4 && <section className="form-section space-y-4" aria-label="Origem da devolução fiscal"><h2 className="text-lg font-semibold">Origem da devolução fiscal</h2><p className="text-sm text-muted-foreground">A origem comercial deve existir antes da emissão. O ERP não infere o tratamento tributário; informe a direção, a origem persistida e as chaves fiscais autorizadas.</p><div className="grid gap-4 sm:grid-cols-2"><Field label="Tipo da origem"><select aria-label="Tipo da origem" className="h-10 w-full rounded-lg border bg-background px-3 text-sm" value={draft.sourceReturnKind || ""} onChange={event => setDraft({ ...draft, sourceReturnKind: event.target.value as DraftInput["sourceReturnKind"] })}><option value="">Selecione</option><option value="sale_cancellation">Cancelamento de venda · entrada</option><option value="purchase_reversal">Reversão de compra · saída</option></select></Field><Field label="Direção da devolução"><select aria-label="Direção da devolução" className="h-10 w-full rounded-lg border bg-background px-3 text-sm" value={draft.returnDirection || ""} onChange={event => setDraft({ ...draft, returnDirection: event.target.value as DraftInput["returnDirection"] })}><option value="">Selecione</option><option value="incoming">Entrada</option><option value="outgoing">Saída</option></select></Field><Field label="ID da origem comercial"><Input aria-label="ID da origem comercial" required maxLength={36} value={draft.sourceReturnId || ""} onChange={event => setDraft({ ...draft, sourceReturnId: event.target.value || undefined })} /></Field><Field label="Chaves NF-e referenciadas"><Input aria-label="Chaves NF-e referenciadas" required maxLength={44 * 99 + 98} value={(draft.referencedAccessKeys || []).join(",")} onChange={event => setDraft({ ...draft, referencedAccessKeys: event.target.value.split(",").map(value => value.trim()).filter(Boolean) })} /></Field></div><p className="text-xs text-muted-foreground">Informe uma ou mais chaves de 44 dígitos separadas por vírgula. A combinação origem/direção é validada no backend.</p></section>}
+          {draft.purpose === 4 && <section className="form-section space-y-4" aria-label="Origem da devolução fiscal"><h2 className="text-lg font-semibold">Origem da devolução fiscal</h2><p className="text-sm text-muted-foreground">A origem comercial deve existir antes da emissão. O ERP não infere o tratamento tributário; informe a direção, a origem persistida e as chaves fiscais autorizadas.</p><div className="grid gap-4 sm:grid-cols-2"><Field label="Tipo da origem"><select aria-label="Tipo da origem" className="h-10 w-full rounded-lg border bg-background px-3 text-sm" value={draft.sourceReturnKind || ""} onChange={event => setDraft({ ...draft, sourceReturnKind: event.target.value as DraftInput["sourceReturnKind"] })}><option value="">Selecione</option>{draft.sourceReturnKind==="sale_partial_return" && <option value="sale_partial_return">Devolução parcial de venda</option>}<option value="sale_cancellation">Cancelamento de venda · entrada</option><option value="purchase_reversal">Reversão de compra · saída</option></select></Field><Field label="Direção da devolução"><select disabled={snapshot?.data.input.sourceReturnKind==="sale_partial_return"} aria-label="Direção da devolução" className="h-10 w-full rounded-lg border bg-background px-3 text-sm" value={draft.returnDirection || ""} onChange={event => setDraft({ ...draft, returnDirection: event.target.value as DraftInput["returnDirection"] })}><option value="">Selecione</option><option value="incoming">Entrada</option><option value="outgoing">Saída</option></select></Field><Field label="ID da origem comercial"><Input readOnly={snapshot?.data.input.sourceReturnKind==="sale_partial_return"} aria-label="ID da origem comercial" required maxLength={36} value={draft.sourceReturnId || ""} onChange={event => setDraft({ ...draft, sourceReturnId: event.target.value || undefined })} /></Field><Field label="Chaves NF-e referenciadas"><Input readOnly={snapshot?.data.input.sourceReturnKind==="sale_partial_return"} aria-label="Chaves NF-e referenciadas" required maxLength={44 * 99 + 98} value={(draft.referencedAccessKeys || []).join(",")} onChange={event => setDraft({ ...draft, referencedAccessKeys: event.target.value.split(",").map(value => value.trim()).filter(Boolean) })} /></Field></div><p className="text-xs text-muted-foreground">Informe uma ou mais chaves de 44 dígitos separadas por vírgula. A combinação origem/direção é validada no backend.</p></section>}
           </div>
           <div hidden={step !== 1} data-editor-step="1" className="space-y-4">
           <section className="form-section space-y-4" aria-label="Destinatário"><h2 className="text-lg font-semibold">Destinatário</h2><div className="grid gap-3 sm:grid-cols-2"><Field label="Vendedor"><Input maxLength={200} value={draft.salesperson || ""} onChange={e => setDraft({ ...draft, salesperson: e.target.value || null })} /></Field></div><label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={draft.finalConsumer ?? draft.taxDeclaration?.finalConsumer ?? true} disabled={draft.model === 65 || draft.printType === 6} onChange={e => setDraft({ ...draft, finalConsumer: e.target.checked, ...(draft.taxDeclaration ? { taxDeclaration: { ...draft.taxDeclaration, finalConsumer: e.target.checked } } : {}) })} />Consumidor final</label>{canSearchParties && !draft.sourceOrderId && draft.recipient.state !== "EX" && <NfeRecipientPicker tenant={tenant} onApply={(recipient, fiscal) => { setRecipientExpanded(!recipientComplete(recipient)); setDraft(previous => applyRecipientFiscal({ ...previous, recipient }, fiscal, issuerProfile?.crt || readiness?.crt || null)) }} />}{canSearchParties && draft.recipient.state !== "EX" && <NfeMunicipalityLookup tenant={tenant} recipient={draft.recipient} onResolveMunicipality={(expected, code) => setDraft(previous => { const recipient = applyMunicipalityCode(previous.recipient, expected, code); return recipient === previous.recipient ? previous : { ...previous, recipient } })} />}{draft.recipient.state === "EX" ? <NfeForeignRecipientFields draft={draft} change={patch => setDraft(previous => ({ ...previous, ...patch }))} /> : <><div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border p-3"><div className="text-sm"><strong>{draft.recipient.legalName || "Destinatário não selecionado"}</strong><p>{draft.recipient.taxId}</p><p className="text-xs text-muted-foreground">{[draft.recipient.street, draft.recipient.number, draft.recipient.cityName, draft.recipient.state].filter(Boolean).join(" • ")}</p></div><Button type="button" variant="outline" onClick={() => setRecipientExpanded(value => !value)}>{recipientExpanded ? "Concluir edição do destinatário" : "Editar dados desta nota"}</Button></div><div hidden={editable && !recipientExpanded && recipientComplete(draft.recipient)} className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -352,7 +378,7 @@ export function NfeDraftEditor({ id, sourceOrderId, initialModel = 55 }: { id?: 
       <div hidden={step !== 5} className="space-y-4">
       {snapshot?.data.ibptSnapshot && <IbptSavedSnapshot snapshot={snapshot.data.ibptSnapshot} revision={snapshot.data.revision} dirty={dirty} />}
       {readiness && !canTransmit && <section className="form-section space-y-2"><h2 className="font-semibold">Pendências para emitir</h2>{emissionBlockers.length ? emissionBlockers.map(blocker => <p key={blocker} className="text-sm">{blocker === "a1_certificate_missing_expired_or_unavailable" ? certificateMessage(certificateStatus, readiness.certificateVerified) : blockerLabels[blocker] || "Confira a configuração fiscal para esta operação"}</p>) : <p className="text-sm">Não foi possível confirmar a liberação fiscal. Atualize a configuração antes de transmitir.</p>}</section>}
-      {id && snapshot && <EmissionActions key={`${id}:${snapshot.data.revision}`} id={id} tenantId={tenant} draftRevision={snapshot.data.revision} environment={snapshot.data.input.environment} model={snapshot.data.input.model === 65 ? 65 : 55} canIssue={canIssue} canTransmit={canTransmit} canCancel={canCancel} canCorrect={canCorrect} dirty={!!allocationError || loading || dirty || saving || uncertain} onLocked={setFiscalLocked} onDocument={setEmissionHeader} />}
+      {id && snapshot && <EmissionActions key={`${id}:${snapshot.data.revision}`} id={id} tenantId={tenant} draftRevision={snapshot.data.revision} environment={snapshot.data.input.environment} model={snapshot.data.input.model === 65 ? 65 : 55} emissionType={snapshot.data.input.emissionType} canIssue={canIssue} canTransmit={canTransmit} canCancel={canCancel} canCorrect={canCorrect} dirty={!!allocationError || loading || dirty || saving || uncertain} onLocked={setFiscalLocked} onDocument={setEmissionHeader} />}
       </div>
     </>}
   </main>

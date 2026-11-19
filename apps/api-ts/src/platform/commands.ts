@@ -9,11 +9,13 @@ export function commandKey(value: string | string[] | undefined) {
   if (!parsed.success) throw new Problem(422, "invalid_input", "Idempotency-Key deve ser UUID")
   return parsed.data
 }
-export async function replay(context: AuthorizedContext, key: string, scope: string, input: unknown) {
-  const result = await context.client.query<{ scope: string; request: unknown; result: Record<string, unknown> }>("SELECT scope,request,result FROM domain_commands WHERE tenant_id=$1 AND auth_subject=$2 AND command_key=$3", [context.tenantId, context.authSubject, key])
+type SavedCommand = { scope: string; request: unknown; result: Record<string, unknown> }
+export async function replay(context: AuthorizedContext, key: string, scope: string, input: unknown, compatible?: (saved: SavedCommand) => boolean) {
+  const result = await context.client.query<SavedCommand>("SELECT scope,request,result FROM domain_commands WHERE tenant_id=$1 AND auth_subject=$2 AND command_key=$3", [context.tenantId, context.authSubject, key])
   if (!result.rows[0]) return undefined
-  if (result.rows[0].scope !== scope || !sameJson(result.rows[0].request, input)) throw new Problem(409, "domain_conflict", "Esta chave de idempotência já foi usada com outros dados")
-  return result.rows[0].result
+  const saved = result.rows[0]
+  if (saved.scope === scope && sameJson(saved.request,input) || compatible?.(saved)) return saved.result
+  throw new Problem(409, "domain_conflict", "Esta chave de idempotência já foi usada com outros dados")
 }
 export async function remember(context: AuthorizedContext, key: string, scope: string, input: unknown, result: unknown) {
   await context.client.query("INSERT INTO domain_commands(tenant_id,auth_subject,command_key,scope,request,result) VALUES($1,$2,$3,$4,$5,$6)", [context.tenantId, context.authSubject, key, scope, input, result])

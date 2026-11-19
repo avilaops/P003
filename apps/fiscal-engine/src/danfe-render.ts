@@ -3,6 +3,7 @@ import type { ServerResponse } from "node:http";
 import { DOMParser, type Element } from "@xmldom/xmldom";
 import { fiscalMcpEndpoint, rpcResponse } from "./danfe-mcp.ts";
 import { verifyDanfeSignature } from "./lib/fiscal/danfe-signature.ts";
+import {renderNfceReceipt} from "./lib/fiscal/nfce-receipt.ts";
 import { accessKeyDigit } from "./lib/fiscal/nfe.ts";
 
 const namespace = "http://www.portalfiscal.inf.br/nfe";
@@ -26,9 +27,9 @@ function layout(xml: string, key: string, issuer: string, ambient: string) {
   const protocol = direct(direct(root, "protNFe"), "infProt");
   const ds = "http://www.w3.org/2000/09/xmldsig#";
   const reference = direct(direct(direct(nfe, "Signature", ds), "SignedInfo", ds), "Reference", ds);
-  if (info.getAttribute("Id") !== "NFe" + key || direct(ide, "mod").textContent !== "55" ||
+  if (info.getAttribute("Id") !== "NFe" + key || direct(ide, "mod").textContent !== key.slice(20,22) ||
       direct(direct(info, "emit"), issuer.length === 11 ? "CPF" : "CNPJ").textContent !== issuer ||
-      key.slice(6,20) !== issuer.padStart(14,"0") || key.slice(20,22) !== "55" ||
+      key.slice(6,20) !== issuer.padStart(14,"0") || !["55","65"].includes(key.slice(20,22)) ||
       accessKeyDigit(key.slice(0,43)) !== key[43] || direct(ide, "tpAmb").textContent !== ambient ||
       direct(protocol, "tpAmb").textContent !== ambient || direct(protocol, "chNFe").textContent !== key ||
       !["100","150"].includes(direct(protocol, "cStat").textContent ?? "") || !/^\d{15}$/.test(direct(protocol, "nProt").textContent ?? "") ||
@@ -73,9 +74,17 @@ export async function renderAuthorizedDanfe(input: unknown, response: ServerResp
     headers.set("mcp-protocol-version",init.protocolVersion);
     await rpc("notifications/initialized");
     const schema = await tool(2,"validar_xml_fiscal",{ xml_content:xml, tipo:"nfe" });
-    if (schema.valido !== true || schema.documento !== "nfeProc" || schema.modelo !== "55" || schema.tipo !== "nfe" || schema.chave_acesso !== accessKey) throw invalid();
+    if (schema.valido !== true || schema.documento !== "nfeProc" || schema.modelo !== accessKey.slice(20,22) || schema.tipo !== "nfe" || schema.chave_acesso !== accessKey) throw invalid();
     const renderer = layout(xml,accessKey,issuerTaxId,ambient);
     if (!await verifyDanfeSignature(xml,null)) throw invalid();
+    if(accessKey.slice(20,22)==="65"){
+      const pdf=await renderNfceReceipt(xml,accessKey);
+      if(pdf.length>8*1024*1024)throw invalid();
+      response.writeHead(200,{"content-type":"application/pdf","cache-control":"no-store","x-nfe-environment":ambient,
+        "content-disposition":'attachment; filename="DANFE-'+accessKey+'.pdf"',"x-xml-sha256":hash(xml),"x-pdf-sha256":hash(pdf)});
+      response.end(pdf);
+      return;
+    }
     const document = await tool(3,renderer,{ xml_content:xml },24 * 1024 * 1024);
     if (document.chave_acesso !== accessKey || document.modelo !== 55 || typeof document.pdf_base64 !== "string" ||
         document.pdf_base64.length > Math.ceil(8 * 1024 * 1024 / 3) * 4) throw invalid();

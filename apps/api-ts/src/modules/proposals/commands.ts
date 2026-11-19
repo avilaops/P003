@@ -1,3 +1,5 @@
+import {loadTerm,paymentSchedule,verifyPaymentTerm} from "../commercial/payment-term.js"
+import { linkNewProposal, preserveLinkedCustomer } from "../opportunities/documents.js"
 import { randomUUID } from "node:crypto"
 import type { FastifyInstance, FastifyRequest } from "fastify"
 import type { AppDependencies } from "../../app.js"
@@ -26,6 +28,8 @@ export function registerProposalCommands(app: FastifyInstance, dependencies: App
       const previous = existingId ? await loadProposal(context, existingId) : undefined
       if (previous && previous.data.revision !== expected) throw new Problem(412, "revision_conflict", "Outra pessoa alterou o cadastro. Sua edição foi preservada")
       if (previous && (previous.data.status !== "draft" || previous.data.orderId !== null)) throw new Problem(409, "domain_conflict", "Somente rascunhos podem ser editados")
+      if (parsed.data.opportunity && existingId) throw new Problem(422,"invalid_input","O vínculo de oportunidade é definido ao criar a proposta")
+      if (existingId) await preserveLinkedCustomer(context,existingId,parsed.data.customerId)
       const prepared = await prepareProposal(context, parsed.data, previous), id = existingId ?? randomUUID(), version = previous?.data.version ?? 1, next = expected === null ? 1 : nextRevision(expected)
       const { client, tenantId } = context
       if (!existingId) {
@@ -36,8 +40,20 @@ export function registerProposalCommands(app: FastifyInstance, dependencies: App
         await client.query("DELETE FROM sales_proposal_lines WHERE tenant_id=$1 AND proposal_id=$2 AND version=$3", [tenantId, id, version])
         await client.query("UPDATE sales_proposals SET revision=$3,updated_at=now() WHERE tenant_id=$1 AND id=$2", [tenantId, id, next])
       }
+      const previousTerm = previous && "paymentTerm" in previous ? previous.paymentTerm : null
+      const kept = previousTerm && previous?.data.customerId === parsed.data.customerId && previous?.data.paymentTerms === prepared.payment
+      const checkout = parsed.data.checkout ?? (kept ? previous?.checkout : null)
+      const reference = checkout?.paymentTerm
+      const frozenTerm = reference ? kept && previousTerm.id===reference.id && previousTerm.revision===reference.revision && previousTerm.start===reference.start ? previousTerm : await loadTerm(context,reference) : null
+      if(frozenTerm && checkout){
+        const plan=paymentSchedule(prepared.total,frozenTerm)
+        verifyPaymentTerm(prepared.total,BigInt(plan.entryCents),frozenTerm,checkout)
+        const totalDue=(checkout.installments as {amountCents:number|string}[]).reduce((sum,row)=>sum+BigInt(row.amountCents),0n)
+        if(totalDue+BigInt(plan.entryCents)!==prepared.total || prepared.commercial && plan.entryCents!==prepared.commercial.prepared.sale.downPaymentCents) throw new Problem(409,"domain_conflict","Confira a entrada, as parcelas e a cotação da proposta")
+      }
+      if (parsed.data.opportunity) await linkNewProposal(context,request.headers,parsed.data.opportunity,id,parsed.data.customerId)
       await storeProposalLines(context, id, version, prepared.lines)
-      await client.query("UPDATE sales_proposal_versions SET commercial_public=$4,commercial_private=$5,customer_snapshot=$6,checkout_snapshot=$7,commercial_approval=NULL WHERE tenant_id=$1 AND proposal_id=$2 AND version=$3", [tenantId, id, version, prepared.commercial?.public ?? null, prepared.commercial?.private ?? null, prepared.commercial?.customer ?? null, parsed.data.checkout ?? null])
+      await client.query("UPDATE sales_proposal_versions SET commercial_public=$4,commercial_private=$5,customer_snapshot=$6,checkout_snapshot=$7,requested_by=$8,payment_term_snapshot=$9,commercial_approval=NULL WHERE tenant_id=$1 AND proposal_id=$2 AND version=$3", [tenantId, id, version, prepared.commercial?.public ?? null, prepared.commercial?.private ?? null, prepared.commercial?.customer ?? null, checkout ?? null,context.authSubject,frozenTerm])
       await record(context, request.headers, "sales_proposal", id, existingId ? "proposal.updated" : "proposal.created", { revision: next, version, amount: decimal(prepared.total, 2), items: prepared.lines.length })
       const body = await loadProposal(context, id)
       await remember(context, key, scope, input, body)

@@ -4,7 +4,7 @@ import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { createRequire } from 'node:module';
-import { discover, analyze, normalizedRoute, routePattern, rustRoutes } from '../discovery.mjs';
+import { discover, analyze, normalizedRoute, publicApiRoutes, routePattern, rustRoutes } from '../discovery.mjs';
 
 const typescript = createRequire(new URL('../../apps/web/package.json', import.meta.url))('typescript');
 
@@ -78,9 +78,15 @@ test('real AST discovery links page to BFF and backend and marks inline no-ops w
     for (const [file, source] of Object.entries(files)) { await mkdir(path.dirname(path.join(root, file)), { recursive: true }); await writeFile(path.join(root, file), source); }
     const inventory = await discover(root, { typescript });
     const findings = analyze(inventory);
-    assert.equal(inventory.pages.length, 1); assert.equal(inventory.bff.length, 1); assert.equal(inventory.api.length, 1);
-    assert.deepEqual(inventory.api[0].methods, ['GET', 'POST']);
-    assert.equal(inventory.api[0].file, 'apps/api-ts/src/modules/document-endpoints.json');
+    assert.equal(inventory.pages.length, 1);
+    assert.equal(inventory.bff.length, 1);
+    const publicRoutes = publicApiRoutes(inventory.api);
+    assert.equal(publicRoutes.size, 1);
+    const items = publicRoutes.get('/api/v1/items');
+    assert.deepEqual([...items.methods].sort(), ['GET', 'POST']);
+    assert.deepEqual([...items.files].sort(), ['apps/api-ts/src/modules/document-endpoints.json', 'apps/api/src/router.rs']);
+    assert.deepEqual(inventory.api.find(route => route.file.endsWith('router.rs')).methods, ['POST']);
+    assert.deepEqual(inventory.api.find(route => route.file.endsWith('document-endpoints.json')).methods, ['GET', 'POST']);
     const page = inventory.pages[0];
     assert.equal(page.path, '/items'); assert.equal(page.runtimeVerdict, 'not_verified_per_route');
     assert.equal(page.dependencies.length, 3); assert.equal(page.emptyActions.length, 1);
@@ -137,4 +143,15 @@ test('catch-all resources do not alias a scalar parameter and declared methods r
   assert.deepEqual(analyze(inventory, catalogue).map(finding => finding.code), ['bff_target_missing']);
   catalogue.actions.pop();
   assert.deepEqual(analyze(inventory, catalogue).map(finding => finding.code), ['bff_dispatch_method_unmapped']);
+});
+
+test('partial migration retains both methods while duplicates inside one service remain detectable', () => {
+  const route = '/api/v1/categories';
+  const original = { path: route, methods: ['GET','POST'], file: 'apps/api/src/finance.rs' };
+  const migrated = { path: route, methods: ['GET'], file: 'apps/api-ts/src/modules/sales-endpoints.json' };
+  const handler = { path: '/api/erp/categories', methods: ['GET','POST'], forwards: [{path: route}], file: 'handler' };
+  const inventory = { pages: [], bff: [handler], api: [original, migrated] };
+  assert.deepEqual(analyze(inventory), []);
+  inventory.api.push({ ...migrated, file: 'apps/api-ts/src/modules/document-endpoints.json' });
+  assert.deepEqual(analyze(inventory).map(item => item.code), ['duplicate_route']);
 });

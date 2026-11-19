@@ -1,3 +1,4 @@
+import { catalogPriceSources } from "../commercial/price-origin.js"
 import type { AuthorizedContext } from "../../platform/access.js"
 import { Problem } from "../../platform/problem.js"
 import { fixed, validateDate } from "../sales/fixed.js"
@@ -8,7 +9,7 @@ function invalid(message: string): never { throw new Problem(422, "invalid_input
 function conflict(message: string): never { throw new Problem(409, "domain_conflict", message) }
 export { selectColor } from "../sales/finishes.js"
 import { loadSaleProduct, selectFinishes } from "../sales/finishes.js"
-export async function prepareOrder(context: AuthorizedContext, input: OrderInput, previous?: Awaited<ReturnType<typeof loadOrder>>) {
+export async function prepareOrder(context: AuthorizedContext, input: OrderInput, previous?: Awaited<ReturnType<typeof loadOrder>>, channel?:string) {
   const { client, tenantId } = context
   const due = validateDate(input.dueDate)
   if (input.items.length === 0 || input.items.length > 100) invalid("Pedido exige de 1 a 100 itens")
@@ -16,6 +17,7 @@ export async function prepareOrder(context: AuthorizedContext, input: OrderInput
   const customer = customers.rows[0] ?? conflict("Selecione um cliente ativo desta empresa")
   const preserveCustomer = previous?.data.customerId === input.customerId
   const lines = [], seen = new Set<string>()
+  const origins = await catalogPriceSources(context,input.items.map(i=>i.productId),input.customerId,channel)
   let total = 0n
   for (const item of input.items) {
     if (seen.has(item.productId)) invalid("Agrupe a quantidade de cada produto em um único item")
@@ -31,15 +33,17 @@ export async function prepareOrder(context: AuthorizedContext, input: OrderInput
     if (product.status !== "active") conflict("Produto arquivado não pode compor um rascunho")
     if (saved && saved.unit !== product.unit) conflict("Unidade do produto mudou no catálogo. Substitua o item ou crie outro pedido")
     const { structure, swing, holderColor, holderType, upholstery } = selectFinishes(item, product, saved)
-    const price = saved ? fixed(String(saved.unitPrice), 2) : BigInt(product.price_cents)
+    const currentOrigin = origins.get(item.productId)
+    const priceOrigin = saved && preserveCustomer ? saved.priceOrigin : currentOrigin
+    const price = saved && preserveCustomer ? fixed(String(saved.unitPrice), 2) : BigInt(currentOrigin?.baseCents ?? product.price_cents)
     const amount = (price * quantity + 500000n) / 1000000n
     total += amount
     if (amount > 9223372036854775807n || total > 99999999999999n) invalid("Total fora do limite")
-    lines.push({ productId: item.productId, sku: saved?.sku ?? product.sku, name: saved?.name ?? product.name, unit: product.unit, quantity, price, amount, structure, swing, holderColor, holderType, upholstery })
+    lines.push({ productId: item.productId, sku: saved?.sku ?? product.sku, name: saved?.name ?? product.name, unit: product.unit, quantity, priceOrigin, price, amount, structure, swing, holderColor, holderType, upholstery })
   }
   if (total === 0n) invalid("Pedido precisa ter valor comercial positivo")
   return { customerName: preserveCustomer ? previous!.data.customerName : customer.legal_name, customerTaxId: preserveCustomer ? previous!.data.customerTaxId : customer.tax_id, due, total, lines }
 }
 export async function storeLines(context: AuthorizedContext, orderId: string, lines: Awaited<ReturnType<typeof prepareOrder>>["lines"]) {
-  for (const [index, line] of lines.entries()) await context.client.query("INSERT INTO sales_order_lines(tenant_id,order_id,line_number,product_id,sku,name,unit,quantity_micros,price_cents,amount_cents,structure_color,plate_holder_color,plate_holder_type,upholstery_color,swing_arm_color) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)", [context.tenantId, orderId, index + 1, line.productId, line.sku, line.name, line.unit, line.quantity, line.price, line.amount, line.structure, line.holderColor, line.holderType, line.upholstery, line.swing])
+  for (const [index, line] of lines.entries()) await context.client.query("INSERT INTO sales_order_lines(tenant_id,order_id,line_number,product_id,sku,name,unit,quantity_micros,price_cents,amount_cents,structure_color,plate_holder_color,plate_holder_type,upholstery_color,swing_arm_color,price_origin) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)", [context.tenantId, orderId, index + 1, line.productId, line.sku, line.name, line.unit, line.quantity, line.price, line.amount, line.structure, line.holderColor, line.holderType, line.upholstery, line.swing,line.priceOrigin])
 }
