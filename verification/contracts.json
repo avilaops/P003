@@ -39690,6 +39690,84 @@
       }
     },
     {
+      "id": "product-catalog-pending",
+      "flow": "products",
+      "status": "implemented",
+      "operation": {
+        "method": "GET",
+        "path": "/api/v1/products/catalog-pending"
+      },
+      "actor": "active_tenant_member",
+      "permissions": [
+        "catalog.products.read"
+      ],
+      "input": {
+        "headers": [
+          "Authorization",
+          "X-Tenant-Id"
+        ],
+        "pathParameters": [],
+        "body": null,
+        "query": null
+      },
+      "preconditions": [
+        "Produtos ativos da empresa e suas fichas técnicas."
+      ],
+      "transition": {
+        "from": "Estado atual da empresa selecionada",
+        "to": "Estado de negócio preservado"
+      },
+      "effects": {
+        "writes": [],
+        "external": [],
+        "excludes": []
+      },
+      "concurrency": {
+        "revision": false,
+        "idempotency": false,
+        "rule": "A requisição lê o estado atual da empresa."
+      },
+      "response": {
+        "successStatuses": [
+          200
+        ],
+        "errorStatuses": [
+          401,
+          403,
+          503
+        ],
+        "action": "Listar produtos ativos com campos de cadastro vazios"
+      },
+      "recovery": "Conferir empresa e acesso antes de repetir a consulta.",
+      "ui": {
+        "pages": [
+          "/cadastros/produtos/pendencias"
+        ],
+        "bff": {
+          "method": "GET",
+          "path": "/api/erp/products/catalog-pending"
+        },
+        "gap": null
+      },
+      "sources": [
+        "apps/api-ts/src/modules/catalog-profile/pending.ts",
+        "apps/web/src/app/api/erp/products/catalog-pending/route.ts"
+      ],
+      "verification": {
+        "status": "not_verified_by_catalog",
+        "criteria": [
+          "interface",
+          "request",
+          "authorization",
+          "domain",
+          "persistence",
+          "effects",
+          "failure",
+          "response"
+        ]
+      }
+    },
+    {
       "id": "post-integrations-browser-use-runs",
       "flow": "system-configuration",
       "status": "implemented",

@@ -1,5 +1,6 @@
 import "server-only"
 import { currentSession, erpConfiguration } from "@/server/auth/erp-session"
+import { selectErpBackend } from "@/server/bff/erp-backend"
 
 export async function forwardCatalogMedia(request: Request, id: string, mediaId: string) {
   const headers = { "Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff" }
@@ -7,7 +8,12 @@ export async function forwardCatalogMedia(request: Request, id: string, mediaId:
   const session = await currentSession()
   if (!session) return new Response(null, { status: 401, headers })
   try {
-    const upstream = await fetch(`${erpConfiguration().api}/api/v1/products/${id}/media/${mediaId}`, {
+    // Same backend selection as the generic proxy, so the photo follows the module that owns the route.
+    const { origin } = selectErpBackend("GET", `/products/${id}/media/${mediaId}`, erpConfiguration().api, {
+      ERP_TYPESCRIPT_API_URL: process.env.ERP_TYPESCRIPT_API_URL,
+      ERP_TYPESCRIPT_MODULES: process.env.ERP_TYPESCRIPT_MODULES,
+    })
+    const upstream = await fetch(`${origin}/api/v1/products/${id}/media/${mediaId}`, {
       headers: { Authorization: `Bearer ${session.accessToken}`, "X-Tenant-Id": session.tenantId },
       cache: "no-store", redirect: "error", signal: AbortSignal.timeout(25000),
     })

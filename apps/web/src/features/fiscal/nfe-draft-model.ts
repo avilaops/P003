@@ -163,6 +163,14 @@ export const blockerLabels: Record<string, string> = {
 }
 
 
+/** Fills every item's CFOP from the chosen operation nature, by comparing the issuer and recipient states; unknown states keep the CFOPs as typed. */
+export function applyNatureCfop(draft: DraftInput, nature: { internalCfop: string; interstateCfop: string; foreignCfop: string }, issuerState: string | null | undefined): DraftInput {
+ const recipientState = draft.recipient.state
+ if (!issuerState || !recipientState) return draft
+ const cfop = recipientState === "EX" ? nature.foreignCfop : recipientState === issuerState ? nature.internalCfop : nature.interstateCfop
+ return cfop ? { ...draft, items: draft.items.map(item => ({ ...item, cfop })) } : draft
+}
+
 /** Copies only accountant-declared defaults; all other fiscal decisions stay unchanged. */
 export function applyTaxProfile(draft: DraftInput, profile: TaxProfile, revision: number, scenario?: FiscalScenario): DraftInput {
  const taxes = draft.taxDeclaration || blankTaxDeclaration()
