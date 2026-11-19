@@ -11,6 +11,7 @@ import { decimal, fixed, validateDate } from "../sales/fixed.js"
 import { conflict, manage, notFound, prefix, signedId } from "./received.js"
 import { ensureInvoiceOperable } from "./purchase.js"
 import { invalid } from "./xml.js"
+import { purchaseApprovalGate } from "../finance-wallets/purchase-orders.js"
 
 const receiveRights = ["purchasing.receipts.create", "inventory.stock.manage", "finance.payables.originate"]
 const receiptInput = z.strictObject({
@@ -149,7 +150,7 @@ export function registerFiscalPurchaseReceipt(app:FastifyInstance,deps:AppDepend
         if(revisionValue(order.revision)!==rev) throw new Problem(412,"revision_conflict","A compra mudou. Atualize o recebimento")
         await ensureInvoiceOperable(c,{key:String(order.access_key),environment:Number(order.environment)})
         let status="confirmed",receiptId:string|undefined
-        if(confirming)await confirm(c,order)
+        if(confirming){await confirm(c,order);if((await purchaseApprovalGate(c,req.headers,String(order.id),BigInt(String(order.amount_cents)),String(order.supplier_name))).status==="pending")status="awaiting_approval"}
         else {
           const result=await receive(c,req.headers,order,data.data as Receipt)
           status=result.status

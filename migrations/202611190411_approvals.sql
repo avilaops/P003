@@ -74,3 +74,8 @@ BEGIN
   END IF;
  END LOOP;
 END $$;
+
+-- Compra acima da alçada fica aguardando aprovação: não segue ao fornecedor nem é recebida.
+ALTER TABLE purchase_orders DROP CONSTRAINT purchase_orders_status_check;
+ALTER TABLE purchase_orders ADD CONSTRAINT purchase_orders_status_check
+ CHECK (status IN ('draft','awaiting_approval','confirmed','partially_received','received','cancelled','closed'));

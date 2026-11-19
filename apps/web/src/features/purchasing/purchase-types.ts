@@ -9,7 +9,7 @@ export type PurchaseList = Schema<"PurchaseList">
 export type Receipt = Schema<"ReceiptSummary">
 export type ReceiptDetail = Schema<"ReceiptSnapshot">
 export type ReceiptList = Schema<"ReceiptList">
-export const purchaseLabels: Record<string, string> = { draft: "Rascunho", confirmed: "Confirmado", partially_received: "Recebido parcialmente", received: "Recebido", closed: "Saldo encerrado", cancelled: "Cancelado" }
+export const purchaseLabels: Record<string, string> = { draft: "Rascunho", awaiting_approval: "Aguardando aprovação", confirmed: "Confirmado", partially_received: "Recebido parcialmente", received: "Recebido", closed: "Saldo encerrado", cancelled: "Cancelado" }
 export const purchaseLink = "font-medium text-primary underline underline-offset-4"
 export const purchaseSelect = "block h-10 w-full min-w-0 rounded-lg border border-input bg-background px-3"
 
