@@ -57,9 +57,12 @@ import { registerFinancialEmails } from "./modules/document-copies/financial-rou
 import { registerContractPackage } from "./modules/document-copies/contract-package-routes.js"
 import { registerQualifiedReissue } from "./modules/contract-signatures/reissue.js"
 import { registerContractTemplateArchive } from "./modules/contract-templates/archive.js"
+import { registerSystemConfigRoutes, type SystemConfigDependencies } from "./modules/system-config/routes.js"
+import { registerPlatformAdminRoutes, type PlatformAdminDependencies } from "./modules/platform-admin/routes.js"
+import { registerCompanyAccountRoutes, type CompanyAccountDependencies } from "./modules/company-account/routes.js"
 import { registerBrowserUseRoutes, type BrowserUseDependencies } from "./modules/browser-use/routes.js"
 
-export type AppDependencies = AccessDependencies & { fiscalVault?:import("./modules/outgoing-nfse/certificate-vault.js").FiscalCertificateVault; fiscalOperations?:FiscalOperations; outgoingNfse?: OutgoingNfseDependencies; nfeEmail?: NfeEmailIO; documentCopies?: DocumentCopyIO; browserUse?: BrowserUseDependencies }
+export type AppDependencies = AccessDependencies & { fiscalVault?:import("./modules/outgoing-nfse/certificate-vault.js").FiscalCertificateVault; fiscalOperations?:FiscalOperations; outgoingNfse?: OutgoingNfseDependencies; nfeEmail?: NfeEmailIO; documentCopies?: DocumentCopyIO; browserUse?: BrowserUseDependencies; systemConfig?: SystemConfigDependencies; platformAdmin?: PlatformAdminDependencies; companyAccount?: CompanyAccountDependencies }
 
 export function buildApp(_dependencies: AppDependencies): FastifyInstance {
   const app = Fastify({ logger: false, bodyLimit: 65_536 })
@@ -166,5 +169,8 @@ export function buildApp(_dependencies: AppDependencies): FastifyInstance {
   registerContractTemplateArchive(app, _dependencies)
   registerParticipantRoutes(app, _dependencies)
   registerBrowserUseRoutes(app, _dependencies, _dependencies.browserUse)
+  registerSystemConfigRoutes(app, _dependencies, _dependencies.systemConfig)
+  registerPlatformAdminRoutes(app, _dependencies, _dependencies.platformAdmin)
+  registerCompanyAccountRoutes(app, _dependencies, _dependencies.companyAccount)
   return app
 }
