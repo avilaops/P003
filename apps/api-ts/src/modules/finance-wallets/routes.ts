@@ -51,12 +51,14 @@ const credential = z.strictObject({
 const approvalColumns = `id,title_revision::text AS "titleRevision",status,intent,reasons,requested_by AS "requestedBy",requested_at::text AS "requestedAt",decided_by AS "decidedBy",decided_at::text AS "decidedAt",reason`
 import { registerPurchaseOrders } from "./purchase-orders.js"
 import { registerPurchaseOverview } from "./purchase-overview.js"
+import { registerPurchaseSuggestions } from "./purchase-suggestions.js"
 import { registerPayroll } from "./payroll.js"
 import { registerPurchaseReceipts } from "./purchase-receipts.js"
 
 export function registerFinanceWalletRoutes(app: FastifyInstance, deps: AppDependencies) {
   registerPurchaseOrders(app, deps)
   registerPurchaseOverview(app, deps)
+  registerPurchaseSuggestions(app, deps)
   registerPayroll(app, deps)
   registerPurchaseReceipts(app, deps)
   registerDocumentRoutes(app, deps)

@@ -23,7 +23,7 @@ function readAccess(context:AuthorizedContext) {
 }
 const micros=(value:unknown)=>decimal(BigInt(String(value)),6)
 
-async function position(context:AuthorizedContext,query:z.output<typeof querySchema>,id?:string) {
+export async function position(context:AuthorizedContext,query:z.output<typeof querySchema>,id?:string) {
   const {rows}=await context.client.query(`
     WITH demand AS (
       SELECT l.product_id,coalesce(sum(l.quantity_micros) FILTER(WHERE o.status='confirmed'),0) reserved,
