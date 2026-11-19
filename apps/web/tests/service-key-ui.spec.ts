@@ -89,6 +89,7 @@ test("administrator creates, sees once, dismisses and revokes a tenant service k
   const errors: string[] = []
   page.on("pageerror", (error) => errors.push(error.message))
   page.on("console", (message) => { if (message.type() === "error") errors.push(message.text()) })
+  await page.route("**/api/erp/pos/settings", route => route.fulfill({ json: { tenantId: tenant, data: { enabled: true, revision: 1 } } }))
   await page.goto("/preferencias/integracoes/lojas")
   await expect(page.getByRole("heading", { name: "Integração com Lojas" })).toBeVisible()
   await expect(page.getByText("Lojas produção", { exact: true })).toBeVisible()

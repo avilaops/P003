@@ -1,7 +1,6 @@
 // Reviewed previews without a persistent operation. Keep operational routes outside this list.
 export const demonstrationRoutes = [
   "/aplicativos",
-  "/compras/notas-entrada/[id]",
   "/estoque/lancamentos/[id]",
   "/eventos",
   "/eventos/[id]",

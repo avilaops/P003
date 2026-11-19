@@ -49,6 +49,7 @@ test("fiscal integrado mantém listagem e preparação do pedido fora das prévi
   await page.route("**/api/erp/fiscal/readiness", route => route.fulfill({ json: ready }))
   await page.route("**/api/erp/fiscal/nfe?*", route => route.fulfill({ json: { tenantId: tenant, data: [], nextCursor: null } }))
   await page.route("**/api/erp/fiscal/issued-nfes?*", route => route.fulfill({ json: { tenantId: tenant, data: [], nextCursor: null } }))
+  await page.route("**/api/erp/fiscal/outgoing-documents?*", route => route.fulfill({ json: { tenantId: tenant, data: [], nextCursor: null } }))
   const input = { ...blankDraft(), recipient: { taxId: "52998224725", legalName: "Cliente da fixture", state: "SP", municipalityCode: "3550308", postalCode: "01001000", street: "Rua de teste", number: "1", district: "Centro" }, items: [{ ...blankItem(), code: "SKU-1", description: "Produto da fixture", unit: "UN", ncm: "00000000", quantity: "3.0000", unitPrice: "0.3333333333", grossTotal: "1.00" }], productsTotal: "1.00" }
   await page.route("**/api/erp/fiscal/order-preparations/" + record, route => route.fulfill({ json: { tenantId: tenant, orderId: record, orderRevision: 2, customerId: record, recipient: input.recipient, items: input.items, productsTotal: input.productsTotal } }))
   await page.goto("/fiscal")
@@ -56,7 +57,7 @@ test("fiscal integrado mantém listagem e preparação do pedido fora das prévi
   await expect(fiscalLink).toContainText("Preparar e consultar notas de saída", { timeout: process.env.ERP_BROWSER_DEV === "1" ? 30_000 : 5_000 })
   await fiscalLink.click()
   await expect(page).toHaveTitle("NF-e de saída • ERP")
-  await expect(page.getByText("Nenhuma nota fiscal cadastrada nesta empresa.", { exact: true })).toBeVisible()
+  await expect(page.getByText(/^Nenhuma .+ encontrada para esta consulta\.$/)).toBeVisible()
   await expect(page.getByRole("heading", { name: "Prévia de interface", exact: true })).toHaveCount(0)
   await page.goto("/fiscal/notas-saida/nova?pedido=" + record)
   await expect(page).toHaveTitle("Nova NF-e de saída • ERP")
