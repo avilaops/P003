@@ -1,11 +1,10 @@
 import assert from "node:assert/strict"
 import { randomUUID } from "node:crypto"
 import test from "node:test"
-import { Pool } from "pg"
 import { runServiceBilling } from "../src/modules/services/contracts/billing.js"
 import { addMonths, adjustItems, requiredCycles, schedule } from "../src/modules/services/contracts/schedule.js"
 import type { ReceivableRequest, ServiceInvoiceRequest, ServicePorts } from "../src/modules/services/ports.contract.js"
-import { PgClientAdapter } from "../src/platform/database.js"
+import { runtimePool } from "./services-support.js"
 import { databaseTestOptions, withTestContext, type TestContext } from "./support/test-context.js"
 
 const permissions = ["service.contracts.read", "service.contracts.manage"]
@@ -18,20 +17,6 @@ async function customer(ctx: TestContext, tenant = ctx.tenant, tax = "5299822472
   const id = randomUUID()
   await ctx.seed.query("INSERT INTO parties(id,tenant_id,person_type,legal_name,tax_id,is_customer,is_supplier,status) VALUES($1,$2,'fisica','Cliente','" + tax + "',true,false,'active')", [id, tenant])
   return id
-}
-// Em produção o GRANT vai para `erp_next_app` (migração); aqui o papel de teste recebe o mesmo direito.
-// Pool próprio: `SET ROLE` não pode vazar para a conexão de preparação (`ctx.seed`).
-function runtimePool(ctx: TestContext) {
-  const url = new URL(process.env.API_TS_TEST_ADMIN_URL!); url.pathname = "/" + ctx.database
-  const pool = new Pool({ connectionString: url.href, max: 3 })
-  return { async connect() {
-    const client = await pool.connect()
-    await client.query(`SET ROLE ${ctx.role}`)
-    await ctx.seed.query(`GRANT EXECUTE ON FUNCTION erp_service_billing_due_tenants(date) TO ${ctx.role}`)
-    const adapter = new PgClientAdapter(client)
-    adapter.release = () => client.release(true)
-    return adapter
-  } }
 }
 function fakePorts() {
   const invoices: ServiceInvoiceRequest[] = [], titles: ReceivableRequest[] = []
