@@ -34,6 +34,12 @@ export function applyRecipientFiscal(draft: DraftInput, fiscal: PartyFiscal | nu
   if (draft.model === 65) return { ...draft, taxDeclaration: { ...declaration, recipientTaxpayerIndicator: "9", recipientTaxpayer: false, recipientStateRegistration: null } }
   return { ...draft, taxDeclaration: { ...declaration, recipientTaxpayerIndicator: fiscal?.taxpayerIndicator, recipientTaxpayer: fiscal ? fiscal.taxpayerIndicator !== "9" : null, recipientStateRegistration: fiscal?.stateRegistration || null } }
 }
+/** Fills the transport net and gross weight with the order's equipment weight, never overwriting a value already typed. */
+export function applySuggestedWeight(draft: DraftInput, weightKg: string | null | undefined): DraftInput {
+  if (!weightKg) return draft
+  const transport = { ...emptyTransport(), ...draft.transport }
+  return { ...draft, transport: { ...transport, netWeight: transport.netWeight || weightKg, grossWeight: transport.grossWeight || weightKg } }
+}
 export const blankIbptItem = (): IbptDraftItem => ({ ex: "", origin: "", version: null })
 
 export function fixed(value: string, scale: number, wholeDigits: number): string {

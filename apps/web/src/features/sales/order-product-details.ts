@@ -14,6 +14,8 @@ export type ProductFinishes = {
   plateHolderColors: string[]
   plateHolderTypes: string[]
   weight: string | null
+  /** Length, width and height in millimetres; absent while older API versions answer. */
+  dimensionsMm?: number[] | null
 }
 
 type DetailsState = {
@@ -31,6 +33,7 @@ function isProductFinishes(value: unknown): value is ProductFinishes {
   return typeof row.id === "string" && guid.test(row.id) && typeof row.name === "string"
     && typeof row.finishingPalette === "string" && typeof row.upholsteryConfigurable === "boolean"
     && (row.weight === null || typeof row.weight === "string")
+    && (row.dimensionsMm === undefined || row.dimensionsMm === null || Array.isArray(row.dimensionsMm) && row.dimensionsMm.every(size => typeof size === "number"))
     && ["structureColors", "swingArmColors", "upholsteryColors", "plateHolderColors", "plateHolderTypes"]
       .every(key => Array.isArray(row[key]) && (row[key] as unknown[]).every(color => typeof color === "string"))
 }

@@ -43,7 +43,7 @@ test("order detail preserves optional finishes, read-only access and saved check
   const body = response.json()
   assert.equal(body.canEdit, false)
   assert.equal(body.pricingOrigin, true)
-  assert.deepEqual(body.items[0], { productId: id, sku: "LD-1", name: "Banco", unit: "UN", quantity: "1.000000", unitPrice: "100.00", amount: "100.00", equipmentWeight: null, structureColor: "Preto" })
+  assert.deepEqual(body.items[0], { productId: id, sku: "LD-1", name: "Banco", unit: "UN", quantity: "1.000000", unitPrice: "100.00", amount: "100.00", equipmentWeight: null, equipmentDimensions: null, structureColor: "Preto" })
   assert.equal(body.checkout.confirmationCreatesReceivables, false)
   assert.equal(body.checkout.entry.dueOn, "2026-12-02")
   assert.equal(body.checkout.entry.amountCents, 2000)

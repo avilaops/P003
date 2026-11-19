@@ -18,6 +18,7 @@ import { quantity, useCommand, useResource } from "@/hooks/use-operation"
 import { ColorChoice, Lookup, PlateHolderChoice, type Choice } from "./orders"
 import { ProposalDocument, type ProposalIssuer } from "./proposal-document"
 import { ProposalEmail } from "./proposal-email"
+import { OrderWeightSummary } from "./order-weight-summary"
 import { catalogPaletteFor } from "@/features/catalog/catalog-color-photo-model"
 import { CatalogPaletteReference } from "@/features/catalog/catalog-color-photos"
 import {PaymentTermPicker,type AppliedTerm} from "./payment-term-picker"
@@ -140,6 +141,7 @@ function ProposalForm({ initial, tenantId, etag, reload, source }: { source?:Pro
               <CatalogPaletteReference palette={catalogPaletteFor(item.finishingPalette)} />
             </details>}
           </section>)}
+          <OrderWeightSummary tenantId={tenantId} items={items.map(item => ({ productId: item.id, quantity: item.quantity }))} />
           <PaymentTermPicker tenant={tenantId} customer={customer?.id} disabled={frozen} total={pricing.status==="ready"?pricing.quote.sale.totalCents:proposalCatalogTotal(items)} apply={p=>{setTermPlan(p);setPaymentTerms(p.term.name+" • Entrada "+money((p.entryCents/100).toFixed(2))+" • "+p.installments.map(i=>i.dueOn.split("-").reverse().join("/")+" "+money((i.amountCents/100).toFixed(2))).join(" • "));setDirty(true)}}/>
           <ProposalCommercialFields entryCents={termPlan?.entryCents} tenantId={tenantId} customerId={customer?.id} items={items} initial={initial?.commercial} disabled={frozen} onChange={setPricing} />
           <details className="min-w-0 border-y py-2" onInvalidCapture={event => { event.currentTarget.open = true }}>

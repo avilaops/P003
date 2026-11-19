@@ -54,22 +54,30 @@ export async function sourcePreparation(c:AuthorizedContext,id:string) {
     nullif(concat_ws('; ',CASE WHEN s.structure_color<>'' THEN 'Estrutura: '||s.structure_color END,
       CASE WHEN s.swing_arm_color<>'' THEN 'Braços: '||s.swing_arm_color END,
       CASE WHEN s.plate_holder_type<>'' THEN 'Tipo de anilheiro: '||s.plate_holder_type END,
-      CASE WHEN s.upholstery_color<>'' THEN 'Estofado: '||s.upholstery_color END),'') AS info
+      CASE WHEN s.upholstery_color<>'' THEN 'Estofado: '||s.upholstery_color END),'') AS info,
+    CASE WHEN s.technical_snapshot IS NULL THEN (SELECT c.weight FROM product_catalog_profiles c WHERE c.tenant_id=s.tenant_id AND c.product_id=s.product_id)
+      ELSE s.technical_snapshot->>'weight' END AS equipment_weight
     FROM sales_order_lines s JOIN products p ON p.id=s.product_id AND p.tenant_id=s.tenant_id
     LEFT JOIN product_costs pc ON pc.tenant_id=s.tenant_id AND pc.product_id=s.product_id
     WHERE s.tenant_id=$1 AND s.order_id=$2 ORDER BY s.line_number`,[c.tenantId,id])
   let cents=0n
+  // Suggested NF-e net and gross weight: sum of each line's equipment weight × quantity, only when every line has a valid weight.
+  let weightMicros: bigint | null = 0n
   const items=result.rows.map(r=>{
     const qty=BigInt(String(r.quantity_micros))
     if (qty%100n || r.price==null || String(r.sku).length>60) conflict("Confira a precisão, o SKU e o preço fiscal das linhas da venda")
     const price=BigInt(String(r.price)),gross=(qty*price+500000n)/1000000n
     cents+=gross
+    const kg=/^(\d+)(?:[,.](\d{1,6}))?$/.exec(String(r.equipment_weight ?? "").trim().replace(/\s*kg$/i,""))
+    const unitMicros=kg ? BigInt(kg[1]! + (kg[2] ?? "").padEnd(6,"0")) : 0n
+    weightMicros = weightMicros === null || !unitMicros ? null : weightMicros + unitMicros*qty/1000000n
     return {productId:r.product_id,code:r.sku,description:r.name,unit:r.unit,ncm:r.ncm,quantity:decimal(qty/100n,4),unitPrice:decimal(price,2),grossTotal:decimal(gross,2),additionalInfo:r.info}
   })
   // NF-e origin follows the product's registered commercial line (1 direct import, 0 national); unregistered stays for manual choice.
   items.forEach((item,index)=>{ const line=result.rows[index]!.product_line; Object.assign(item,{origin:line==="imported" ? 1 : line==="national" ? 0 : null}) })
   if(!items.length) conflict("O pedido precisa de itens para preparação fiscal")
-  return {tenantId:c.tenantId,customerId:o.customer_id,orderId:id,orderRevision:revisionValue(o.revision),recipient,items,productsTotal:decimal(cents,2),...await orderPayments(c,id)}
+  const weightKg=weightMicros === null ? null : decimal((weightMicros+500n)/1000n,3)
+  return {tenantId:c.tenantId,customerId:o.customer_id,orderId:id,orderRevision:revisionValue(o.revision),recipient,items,productsTotal:decimal(cents,2),weightKg,...await orderPayments(c,id)}
 }
 export async function checkOrderSource(c:AuthorizedContext,draft:DraftInput) {
   if (!draft.sourceOrderId) return
