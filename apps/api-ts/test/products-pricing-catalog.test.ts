@@ -173,7 +173,7 @@ test("perfil de catálogo e mídias do produto", databaseTestOptions, async t =>
   const read: string[] = []
   await withTestContext({}, async ctx => {
     const { p1, p2, foreign, userIdentity, tenant, other } = await seedProducts(ctx)
-    const media: CatalogMedia = { tenantId: tenant, async publish() {}, async readPrivate(key: string) { read.push(key); return Buffer.from("RIFF") } }
+    const media: CatalogMedia = { tenantId: tenant, async publish() {}, async upload() {}, async readPrivate(key: string) { read.push(key); return Buffer.from("RIFF") } }
     // O app do contexto não tem canal de mídia; este usa o mesmo banco com o stub configurado para a empresa A.
     const app = buildApp({ ...appDependencies(ctx), catalogMedia: media }), unconfigured = ctx.app, H = headers(tenant)
     try {
