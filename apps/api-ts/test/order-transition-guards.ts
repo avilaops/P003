@@ -64,6 +64,15 @@ export async function verifyTransitionGuards(app: FastifyInstance, seed: Pool, t
   await seed.query("UPDATE sales_settings SET minimum_order_amount_cents=999999 WHERE tenant_id=$1", [tenant])
   const fulfilled = await transition(paid, "confirm", 2)
   assert.equal(fulfilled.statusCode, 200, fulfilled.body)
+  // The NF-e preparation proposes the customer contact, the dated duplicates and the payment grouped by tPag.
+  await seed.query("UPDATE parties SET phone='(17) 99781-1471' WHERE tenant_id=$1 AND id=$1", [tenant])
+  const preparation = await app.inject({ method: "GET", url: `/api/v1/fiscal/order-preparations/${paid}`, headers })
+  assert.equal(preparation.statusCode, 200, preparation.body)
+  const proposed = preparation.json()
+  assert.equal(proposed.recipient.email, "cliente@example.test")
+  assert.equal(proposed.recipient.phone, "17997811471")
+  assert.deepEqual(proposed.installments, [{ number: "001", dueDate: "2027-01-01", amount: "100.00" }])
+  assert.deepEqual(proposed.payments, [{ code: "17", amount: "100.00" }])
   const cancelled = await transition(paid, "cancel", 3)
   assert.equal(cancelled.statusCode, 200, cancelled.body)
 

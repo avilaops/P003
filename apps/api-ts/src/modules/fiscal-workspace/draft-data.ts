@@ -14,9 +14,33 @@ export function decimalValue(value:string,scale:number) {
   if (!new RegExp("^\\d{1,13}\\.\\d{"+scale+"}$").test(value)) invalid("Valor decimal fora da precisão fiscal")
   return BigInt(value.replace(".",""))
 }
+/** NF-e accepts dest/email up to 60 characters and dest/fone with 6 to 14 digits; anything else is left for the user. */
+function recipientEmail(value:unknown){const email=typeof value==="string" ? value.trim() : "";return email.length<=60 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ? email : null}
+function recipientPhone(value:unknown){const digits=typeof value==="string" ? value.replace(/\D/g,"") : "";return /^\d{6,14}$/.test(digits) ? digits : null}
+/** Payment modality of the order → tPag of the NF-e. "other" (cheque, financing, on delivery) is declared as 99 with the method name. */
+const paymentCodes:Record<string,string>={cash:"01",credit_card:"03",debit_card:"04",boleto:"15",pix:"17",bank_transfer:"18"}
+/**
+ * Confirmed orders already carry dated installments: the entry receives the confirmation date when it had none.
+ * They become the NF-e duplicates (cobr) and the declared payments, grouped by tPag. The user still reviews both.
+ */
+async function orderPayments(c:AuthorizedContext,id:string){
+  const rows=(await c.client.query<{due_on:string|null;amount_cents:string;modality:string|null;name:string|null}>(`SELECT i.due_on::text,i.amount_cents,i.payment_method->>'modality' AS modality,i.payment_method->>'name' AS name
+    FROM sales_order_installments i WHERE i.tenant_id=$1 AND i.order_id=$2 ORDER BY i.number`,[c.tenantId,id])).rows
+  if(!rows.length || rows.some(r=>!r.due_on)) return {}
+  const grouped=new Map<string,{code:string;amount:bigint;description:string|null}>()
+  for(const r of rows){
+    const code=paymentCodes[r.modality ?? ""] ?? "99",description=code==="99" ? (r.name?.trim().slice(0,60) || "Outros") : null,key=code+"|"+(description ?? "")
+    const current=grouped.get(key) ?? {code,amount:0n,description}
+    current.amount+=BigInt(r.amount_cents);grouped.set(key,current)
+  }
+  return {
+    installments:rows.map((r,index)=>({number:String(index+1).padStart(3,"0"),dueDate:r.due_on!,amount:decimal(BigInt(r.amount_cents),2)})),
+    payments:[...grouped.values()].map(p=>({code:p.code,amount:decimal(p.amount,2),...(p.description ? {description:p.description} : {})})),
+  }
+}
 export async function sourcePreparation(c:AuthorizedContext,id:string) {
   for(const perm of ["sales.orders.read","catalog.parties.read","catalog.products.read","fiscal.nfe.manage"]) requirePermission(c,perm)
-  const o=(await c.client.query(`SELECT o.customer_id,o.customer_name,o.customer_tax_id,o.status,o.revision,p.tax_id,p.addresses FROM sales_orders o
+  const o=(await c.client.query(`SELECT o.customer_id,o.customer_name,o.customer_tax_id,o.status,o.revision,p.tax_id,p.addresses,p.email,p.phone FROM sales_orders o
     LEFT JOIN parties p ON p.tenant_id=o.tenant_id AND p.id=o.customer_id AND p.is_customer AND p.status='active'
     WHERE o.tenant_id=$1 AND o.id=$2`,[c.tenantId,id])).rows[0]
   if (!o) throw new Problem(404,"not_found","Pedido não encontrado")
@@ -24,7 +48,8 @@ export async function sourcePreparation(c:AuthorizedContext,id:string) {
   const addresses=Array.isArray(o.addresses) ? o.addresses as ObjectData[] : []
   const address=addresses.find(a=>a.primary===true) ?? (addresses.length===1 ? addresses[0] : undefined)
   const recipient={taxId:String(o.customer_tax_id),legalName:o.customer_name,state:address?.state ?? "",municipalityCode:address?.municipalityCode ?? "",postalCode:address?.postalCode ?? "",
-    street:address?.street ?? "",number:address?.number ?? "",district:address?.district ?? "",complement:address?.complement ?? null,cityName:address?.city ?? null}
+    street:address?.street ?? "",number:address?.number ?? "",district:address?.district ?? "",complement:address?.complement ?? null,cityName:address?.city ?? null,
+    email:recipientEmail(o.email),phone:recipientPhone(o.phone)}
   const result=await c.client.query(`SELECT s.product_id,s.sku,s.name,s.unit,p.ncm,s.quantity_micros,order_line_fiscal_price(s) AS price,
     nullif(concat_ws('; ',CASE WHEN s.structure_color<>'' THEN 'Estrutura: '||s.structure_color END,
       CASE WHEN s.swing_arm_color<>'' THEN 'Braços: '||s.swing_arm_color END,
@@ -41,7 +66,7 @@ export async function sourcePreparation(c:AuthorizedContext,id:string) {
     return {productId:r.product_id,code:r.sku,description:r.name,unit:r.unit,ncm:r.ncm,quantity:decimal(qty/100n,4),unitPrice:decimal(price,2),grossTotal:decimal(gross,2),additionalInfo:r.info}
   })
   if(!items.length) conflict("O pedido precisa de itens para preparação fiscal")
-  return {tenantId:c.tenantId,customerId:o.customer_id,orderId:id,orderRevision:revisionValue(o.revision),recipient,items,productsTotal:decimal(cents,2)}
+  return {tenantId:c.tenantId,customerId:o.customer_id,orderId:id,orderRevision:revisionValue(o.revision),recipient,items,productsTotal:decimal(cents,2),...await orderPayments(c,id)}
 }
 export async function checkOrderSource(c:AuthorizedContext,draft:DraftInput) {
   if (!draft.sourceOrderId) return
