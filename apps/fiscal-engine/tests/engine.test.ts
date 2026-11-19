@@ -40,6 +40,18 @@ test("prepare maps exact draft amounts, uses IBGE name, signs and passes the pin
   assert.doesNotMatch(JSON.stringify(result), /PRIVATE KEY|senha-de-teste|pkcs12Base64/);
 });
 
+test("enderEmit/fone vem do telefone da empresa (ou celular) e é omitido quando inválido", async () => {
+  const base = preparation();
+  const withPhone = { ...base, issuer: { ...base.issuer, company: { ...base.issuer.company, phone: "(17) 9721-8555" } } };
+  assert.equal(mapDraft(withPhone).issuer.phone, "1797218555");
+  assert.match(String((await dispatch("prepare", withPhone)).signedXml), /<enderEmit>.*<fone>1797218555<\/fone><\/enderEmit>/);
+  const mobileOnly = { ...base, issuer: { ...base.issuer, company: { ...base.issuer.company, phone: "", mobile: "17 99781-1471" } } };
+  assert.equal(mapDraft(mobileOnly).issuer.phone, "17997811471");
+  const invalid = { ...base, issuer: { ...base.issuer, company: { ...base.issuer.company, phone: "123" } } };
+  assert.equal(mapDraft(invalid).issuer.phone, undefined);
+  assert.doesNotMatch(String((await dispatch("prepare", invalid)).signedXml), /<enderEmit>.*<fone>/);
+});
+
 test("NFC-e de SP • prepara, assina e usa os serviços do modelo 65 nos dois ambientes com transporte local", async () => {
   // Catálogo público de endereços da SEFAZ-SP https://portal.fazenda.sp.gov.br/servicos/nfce/Paginas/WebServices.aspx
   for (const environment of ["homologation", "production"]) {

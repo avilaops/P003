@@ -34,7 +34,9 @@ import { applyRecipientFiscal, applyTaxProfile, blankDraft, blankIbptItem, blank
 import { IbptDraftFields, IbptSavedSnapshot } from "./ibpt-draft-fields"
 
 type Snapshot = Schema<"DraftSnapshot">
-type Preparation = Schema<"OrderPreparation">
+// The TypeScript API also proposes the order's dated installments and payments (grouped by tPag).
+// They are optional here until the generated contract (still sourced from the Rust schema) describes them.
+type Preparation = Schema<"OrderPreparation"> & { installments?: NonNullable<DraftInput["installments"]>; payments?: NonNullable<DraftInput["payments"]> }
 const editorSteps = ["Dados da nota", "Destinatário", "Produtos", "Tributação", "Pagamento", "Revisão e emissão"]
 const stepDescriptions = ["Defina a operação, o modelo e o ambiente da nota.", "Selecione o cliente e confira o endereço de entrega fiscal.", "Inclua os produtos, as quantidades, os preços e o frete.", "Confira os códigos fiscais de cada item e os tributos da operação.", "Informe como o valor da nota será pago.", "Confira os dados, salve o rascunho e acompanhe a emissão."]
 /** A complete recipient starts as a summary; an incomplete one keeps its fields open until the user closes them. */
@@ -95,7 +97,7 @@ export function NfeDraftEditor({ id, sourceOrderId, lotId, lotEnvironment="produ
         const current: Snapshot | undefined = id ? origin : undefined
         const proposed: Preparation | undefined = !id && sourceOrderId ? origin : undefined
         if (ready.tenantId !== me.tenant?.id || origin && origin.tenantId !== me.tenant.id) throw new Error("A empresa da sessão mudou. Reabra o rascunho")
-        const input: DraftInput = current ? {...current.data.input} : proposed ? { ...blankDraft(), model: initialModel, sourceOrderId: proposed.orderId, recipient: proposed.recipient, items: proposed.items.map(item => ({ ...blankItem(), code: item.code, description: item.description, additionalInfo: item.additionalInfo || null, unit: item.unit, ncm: item.ncm || "", quantity: item.quantity, unitPrice: item.unitPrice, grossTotal: item.grossTotal })), productsTotal: proposed.productsTotal } : { ...blankDraft(), model: initialModel }
+        const input: DraftInput = current ? {...current.data.input} : proposed ? { ...blankDraft(), model: initialModel, sourceOrderId: proposed.orderId, recipient: proposed.recipient, items: proposed.items.map(item => ({ ...blankItem(), code: item.code, description: item.description, additionalInfo: item.additionalInfo || null, unit: item.unit, ncm: item.ncm || "", quantity: item.quantity, unitPrice: item.unitPrice, grossTotal: item.grossTotal })), productsTotal: proposed.productsTotal, ...(proposed.installments?.length ? { installments: proposed.installments } : {}), ...(proposed.payments?.length ? { payments: proposed.payments } : {}) } : { ...blankDraft(), model: initialModel }
         if (!current) { input.environment = ready.environment; input.issuedAt = new Date().toISOString(); if (initialModel === 55) input.departureAt = input.issuedAt; input.presenceIndicator = initialModel === 65 ? 1 : 9 }
         if (lotId && id) {
           const allocation:OrderLots=values[3]

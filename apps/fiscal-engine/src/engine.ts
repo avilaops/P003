@@ -229,6 +229,15 @@ function assertExactTaxes(mapped: NfeInput, declaredProducts: bigint): void {
 
 /** Only explicit, uniform tax classifications are mapped. No NCM, recipient
  * or rate is used to infer the choices of the responsible fiscal operator. */
+/** enderEmit/fone: the company phone (or mobile) when it has 6 to 14 digits; otherwise the tag is omitted. */
+function issuerPhone(company: ObjectValue): string | undefined {
+  for (const raw of [company.phone, company.mobile]) {
+    const digits = typeof raw === "string" ? raw.replace(/\D/g, "") : "";
+    if (/^\d{6,14}$/.test(digits)) return digits;
+  }
+  return undefined;
+}
+
 export function mapDraft(value: unknown): NfeInput {
   const input = object(value), environment = fiscalEnvironment(input);
   const issuer = object(input.issuer), company = object(issuer.company), profile = object(issuer.profile), draft = object(input.draft);
@@ -387,7 +396,7 @@ export function mapDraft(value: unknown): NfeInput {
     exportation: exportation as NfeInput["exportation"],
     environment, model, purpose, creditType, debitType, presenceIndicator, printType, departureAt, returnDirection, referencedAccessKeys, emissionType: emissionType as NfeInput["emissionType"], changeAmount, freightMode: freightMode as NfeInput["freightMode"], transport: { carrier: null, volumes: null, volumeKind: null, netWeight: null, grossWeight: null }, delivery: null,
     series: whole(profile.series, 999), number: whole(input.number, 999_999_999), randomCode: text(input.randomCode, "Código aleatório", 8), issuedAt,
-    issuer: { cnpj: taxId, legalName: text(company.legalName, "Razão social", 60), stateRegistration: text(profile.stateRegistration, "IE", 14), taxRegime: normal ? 3 : 1, street: text(company.street), number: text(company.number), district: text(company.district), cityCode: text(profile.municipalityCode), city: city("SP", profile.municipalityCode), uf: "SP", cep: text(company.postalCode, "CEP", 8) },
+    issuer: { cnpj: taxId, legalName: text(company.legalName, "Razão social", 60), stateRegistration: text(profile.stateRegistration, "IE", 14), taxRegime: normal ? 3 : 1, street: text(company.street), number: text(company.number), district: text(company.district), cityCode: text(profile.municipalityCode), city: city("SP", profile.municipalityCode), uf: "SP", cep: text(company.postalCode, "CEP", 8), phone: issuerPhone(company) },
     recipient: { foreignId: foreign ? String(recipient.foreignId) : undefined, countryCode: foreign ? String(recipient.countryCode) : undefined, countryName: foreign ? String(recipient.countryName) : undefined, complement, phone, email, kind: recipientTaxId.length === 11 ? "PF" : "PJ", document: recipientTaxId, name: text(recipient.legalName, "Destinatário", 60), stateRegistration, taxpayer, street: text(recipient.street), number: text(recipient.number), district: text(recipient.district), cityCode: text(recipient.municipalityCode), city: foreign ? text(recipient.cityName, "Cidade exterior", 60) : city(state, recipient.municipalityCode), uf: state, cep: foreign ? "" : text(recipient.postalCode, "CEP", 8) },
     rules: { operationNature: text(draft.operationNature, "Natureza", 60), cfopInternal: foreign ? cfop : `${incoming ? "1" : "5"}${cfop.slice(1)}`, cfopInterstate: foreign ? cfop : `${incoming ? "2" : "6"}${cfop.slice(1)}`, cfopInterstateNonTaxpayer: foreign ? cfop : `${incoming ? "2" : "6"}${cfop.slice(1)}`, icmsCode: String(normal ? first.icmsCst : first.csosn), ipiCst, ipiFrameCode, pisCst: String(first.pisCst), pisRate, cofinsCst: String(first.cofinsCst), cofinsRate, finalConsumer: effectiveFinalConsumer, ipiInIcmsBase: declaration ? declaredBoolean(declaration, "ipiInIcmsBase") : false, icmsOutOfContributions: declaration ? declaredBoolean(declaration, "icmsOutOfContributions") : false, additionalInfo: draft.additionalInformation ? text(draft.additionalInformation, "Informações complementares", 5000) : null, ibsCbs },
     items, icmsRate, destination: { internalIcms: destinationIcms, fcp: destinationFcp },
