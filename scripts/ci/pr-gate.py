@@ -8,7 +8,7 @@ import re
 import subprocess
 import sys
 
-DOMAINS = ("web", "api", "fiscal")
+DOMAINS = ("web", "api", "fiscal", "mobile")
 def signature_path(path):
     return path.startswith(('apps/contract-signature-validator/', 'apps/contract-signature-service/',
                             'deploy/contracts-validator/')) or path in (
@@ -30,8 +30,13 @@ def plan(paths):
             "Cargo.toml", "Cargo.lock", "rust-toolchain.toml"
         ):
             scope["api"] = True
+            if path == "apps/api-ts/openapi.json":
+                scope["mobile"] = True
         elif path.startswith(("apps/fiscal-engine/", "apps/fiscal-mcp/", "scripts/fiscal/", "integrations/fiscal/")):
             scope["fiscal"] = True
+        elif path.startswith("apps/mobile/") or path == ".github/workflows/_validate-mobile.yml":
+            # Apps nativos têm CI próprio (Gradle e xcodebuild) e não reconstroem web/API/fiscal.
+            scope["mobile"] = True
         else:
             # Unknown/new infrastructure must not silently bypass validation.
             scope = dict.fromkeys(DOMAINS, True)
@@ -41,7 +46,7 @@ def plan(paths):
 def native_api_required(paths):
     # SQL migrations are applied and checked by the TypeScript image. Changes to
     # native tooling, native queries or unknown build inputs retain the native gate.
-    typescript_paths = ("apps/api-ts/", "apps/web/", "apps/fiscal-engine/", "apps/fiscal-mcp/",
+    typescript_paths = ("apps/api-ts/", "apps/web/", "apps/fiscal-engine/", "apps/fiscal-mcp/", "apps/mobile/",
                         "migrations/", "docs/", "architecture/", "packages/", "scripts/fiscal/",
                         "scripts/deploy/", "scripts/contracts/published/")
     platform_files = {
@@ -56,6 +61,7 @@ def native_api_required(paths):
         "scripts/ci/test_typescript_api.py", "scripts/ci/test_published_components.py",
         ".github/workflows/ci.yml", ".github/workflows/_validate-project.yml",
         ".github/workflows/_validate-api.yml", ".github/workflows/_validate-fiscal.yml", ".github/workflows/_validate-web.yml",
+        ".github/workflows/_validate-mobile.yml",
         ".github/workflows/release.yml", ".github/workflows/regression.yml",
     }
     for path in paths:

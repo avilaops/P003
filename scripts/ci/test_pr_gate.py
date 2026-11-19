@@ -42,11 +42,11 @@ class ScopeTests(unittest.TestCase):
         self.assertTrue(all(gate.plan(['scripts/contracts/verify-signature-validator.py-unrelated']).values()))
 
     def test_frontend_does_not_rebuild_api(self):
-        self.assertEqual(gate.plan(["apps/web/src/page.tsx"]), {"web": True, "api": False, "fiscal": False})
+        self.assertEqual(gate.plan(["apps/web/src/page.tsx"]), {"web": True, "api": False, "fiscal": False, "mobile": False})
 
     def test_typescript_api_does_not_rebuild_unrelated_domains_or_rust(self):
         for path in ("apps/api-ts/src/modules/proposals/commands.ts", "apps/api-ts/test/commercial-proposal-cases.ts"):
-            self.assertEqual(gate.plan([path]), {"web": False, "api": True, "fiscal": False})
+            self.assertEqual(gate.plan([path]), {"web": False, "api": True, "fiscal": False, "mobile": False})
             self.assertFalse(gate.native_api_required([path]))
 
     def test_native_and_shared_integration_changes_keep_rust_validation(self):
@@ -62,7 +62,7 @@ class ScopeTests(unittest.TestCase):
     def test_migrations_and_rust_select_api(self):
         for path in ("migrations/123.sql", "apps/api/src/main.rs", "Cargo.lock", "queries/users.sql"):
             with self.subTest(path=path):
-                self.assertEqual(gate.plan([path]), {"web": False, "api": True, "fiscal": False})
+                self.assertEqual(gate.plan([path]), {"web": False, "api": True, "fiscal": False, "mobile": False})
 
     def test_contract_catalogue_and_scanners_keep_project_validation_without_native_build(self):
         for path in ("verification/contracts.json", "verification/contracts.mjs", "verification/discovery.mjs",
@@ -75,7 +75,7 @@ class ScopeTests(unittest.TestCase):
 
     def test_fiscal_and_shared_packages(self):
         self.assertEqual(gate.plan(["apps/fiscal-engine/src/main.ts", "packages/shared/test.ts"]),
-                         {"web": True, "api": False, "fiscal": True})
+                         {"web": True, "api": False, "fiscal": True, "mobile": False})
 
     def test_unknown_and_ci_paths_require_all(self):
         for path in (".github/workflows/ci.yml", "scripts/ci/pr-gate.py", "new-service/main.py", "pnpm-lock.yaml"):
@@ -89,22 +89,33 @@ class ScopeTests(unittest.TestCase):
         for path, selected in (("apps/web/prompts/runtime.md", "web"), ("apps/api/prompts/runtime.md", "api")):
             self.assertEqual(gate.plan([path]), {domain: domain == selected for domain in gate.DOMAINS})
 
+    def test_mobile_apps_have_own_scope_without_native_api(self):
+        for path in ("apps/mobile/android/app/build.gradle.kts", "apps/mobile/ios/ErpMobile/Auth/Session.swift",
+                     "apps/mobile/contract/operations.json", ".github/workflows/_validate-mobile.yml"):
+            self.assertEqual(gate.plan([path]), {"web": False, "api": False, "fiscal": False, "mobile": True}, path)
+            self.assertFalse(gate.native_api_required([path]), path)
+
+    def test_typescript_contract_also_checks_the_mobile_clients(self):
+        self.assertEqual(gate.plan(["apps/api-ts/openapi.json"]), {"web": False, "api": True, "fiscal": False, "mobile": True})
+        self.assertFalse(gate.plan(["apps/api-ts/src/app.ts"])["mobile"])
+
     def test_python_mcp_selects_fiscal(self):
-        self.assertEqual(gate.plan(["apps/fiscal-mcp/src/server.py"]), {"web": False, "api": False, "fiscal": True})
+        self.assertEqual(gate.plan(["apps/fiscal-mcp/src/server.py"]), {"web": False, "api": False, "fiscal": True, "mobile": False})
 
 
 class GateTests(unittest.TestCase):
     def jobs(self):
-        return {"changes": {"result": "success", "outputs": {"web": "true", "api": "false", "fiscal": "false"}},
-                "web": {"result": "success"}, "api": {"result": "skipped"}, "fiscal": {"result": "skipped"}}
+        return {"changes": {"result": "success", "outputs": {"web": "true", "api": "false", "fiscal": "false", "mobile": "false"}},
+                "web": {"result": "success"}, "api": {"result": "skipped"}, "fiscal": {"result": "skipped"},
+                "mobile": {"result": "skipped"}}
 
     def test_explicit_unselected_skips_pass(self):
         self.assertTrue(gate.verdict(self.jobs())[0])
 
     def test_all_scope_and_outcome_combinations(self):
         # Every failure/cancellation must fail, including nonselected jobs.
-        for selected in itertools.product((False, True), repeat=3):
-            for statuses in itertools.product(("success", "failure", "cancelled", "skipped"), repeat=4):
+        for selected in itertools.product((False, True), repeat=len(gate.DOMAINS)):
+            for statuses in itertools.product(("success", "failure", "cancelled", "skipped"), repeat=len(gate.DOMAINS) + 1):
                 jobs = {"changes": {"result": statuses[0], "outputs": dict(zip(
                     gate.DOMAINS, (str(value).lower() for value in selected)))}}
                 jobs.update({name: {"result": result} for name, result in zip(gate.DOMAINS, statuses[1:])})
