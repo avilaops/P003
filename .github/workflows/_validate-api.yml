@@ -95,7 +95,7 @@ jobs:
           --env ERP_BACKGROUND_WORKERS_ENABLED=false --env API_TS_PORT=18080 erp-next-api:ci
         trap 'docker rm -f api-image >/dev/null' EXIT
         curl --fail --silent --show-error --retry 20 --retry-all-errors --retry-delay 1 http://127.0.0.1:18080/health/ready
-        test "$(curl --silent --output /dev/null --write-out '%{http_code}' http://127.0.0.1:18080/api/v1/staff)" = 404
+        test "$(curl --silent --output /dev/null --write-out '%{http_code}' http://127.0.0.1:18080/api/v1/rota-sem-porte)" = 404
     - name: Publish the API image by immutable digest
       id: image
       if: inputs.publish
