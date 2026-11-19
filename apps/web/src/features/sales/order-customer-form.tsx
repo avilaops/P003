@@ -55,7 +55,7 @@ export function OrderCustomerForm({ initialCustomerId, ref, tenantId, disabled, 
   const [focusField, setFocusField] = useState<{ field: string } | null>(null)
   const [attempted, setAttempted] = useState(false)
   const [touched, setTouched] = useState<string[]>([])
-  const [duplicate, setDuplicate] = useState<{ id: string; name: string } | null>(null)
+  const [duplicate, setDuplicate] = useState<{ document: string; id: string; name: string } | null>(null)
   const [editorOpen, setEditorOpen] = useState(false)
   const [searchOpen, setSearchOpen] = useState(true)
   const progressCallback = useRef(onProgressChange)
@@ -302,11 +302,13 @@ export function OrderCustomerForm({ initialCustomerId, ref, tenantId, disabled, 
     <label className="order-customer-exempt"><input type="checkbox" checked={draft.stateRegistration.trim().toUpperCase() === "ISENTO"} disabled={frozen} onChange={event => change("stateRegistration", event.target.checked ? "ISENTO" : "")} /><span>Isento de inscrição estadual</span></label>
     <p className="text-xs text-muted-foreground">IE ou ISENTO será usado nas condições deste pedido.</p>
   </div>
-  const documentField = <label className="grid min-w-0 gap-1"><span>{draft.personType === "juridica" ? "CNPJ" : "CPF"}{required}</span><Input {...validationProps("taxId")} aria-label={draft.personType === "juridica" ? "CNPJ" : "CPF"} name="order-customer-taxId" required maxLength={30} inputMode={draft.personType === "fisica" ? "numeric" : "text"} autoCapitalize="characters" value={draft.taxId} disabled={!editable} onChange={event => change("taxId", event.target.value)} onBlur={() => format("taxId")} />{inlineError("taxId")}{duplicate && <span role="alert" className="grid gap-1 text-xs text-destructive">Já existe um cadastro com este {draft.personType === "fisica" ? "CPF" : "CNPJ"}: {duplicate.name}.<Button type="button" variant="outline" className="h-9 w-fit px-3" onClick={() => void selectCustomer({ id: duplicate.id, legalName: duplicate.name })}>Usar este cliente</Button></span>}</label>
   const documentValid = !issues.some(issue => issue.field === "taxId")
+  // The match belongs to the document it was found for; any edit hides it until the next lookup answers.
+  const visibleDuplicate = duplicate && editorOpen && !requestedId && documentValid && duplicate.document === normalizeOrderCustomerDocument(draft.taxId) ? duplicate : null
+  const documentField = <label className="grid min-w-0 gap-1"><span>{draft.personType === "juridica" ? "CNPJ" : "CPF"}{required}</span><Input {...validationProps("taxId")} aria-label={draft.personType === "juridica" ? "CNPJ" : "CPF"} name="order-customer-taxId" required maxLength={30} inputMode={draft.personType === "fisica" ? "numeric" : "text"} autoCapitalize="characters" value={draft.taxId} disabled={!editable} onChange={event => change("taxId", event.target.value)} onBlur={() => format("taxId")} />{inlineError("taxId")}{visibleDuplicate && <span role="alert" className="grid gap-1 text-xs text-destructive">Já existe um cadastro com este {draft.personType === "fisica" ? "CPF" : "CNPJ"}: {visibleDuplicate.name}.<Button type="button" variant="outline" className="h-9 w-fit px-3" onClick={() => void selectCustomer({ id: visibleDuplicate.id, legalName: visibleDuplicate.name })}>Usar este cliente</Button></span>}</label>
   useEffect(() => {
     const document = normalizeOrderCustomerDocument(draft.taxId)
-    if (!editorOpen || requestedId || !documentValid || !document) { setDuplicate(null); return }
+    if (!editorOpen || requestedId || !documentValid || !document) return
     const controller = new AbortController()
     const timer = window.setTimeout(async () => {
       try {
@@ -315,7 +317,7 @@ export function OrderCustomerForm({ initialCustomerId, ref, tenantId, disabled, 
         const reply = await response.json() as { tenantId?: string; data?: (Choice & { taxId?: string })[] }
         if (!response.ok || reply.tenantId !== tenantId) return
         const match = reply.data?.find(item => normalizeOrderCustomerDocument(item.taxId ?? "") === document)
-        setDuplicate(match ? { id: match.id, name: match.legalName || match.name || "cliente cadastrado" } : null)
+        setDuplicate(match ? { document, id: match.id, name: match.legalName || match.name || "cliente cadastrado" } : null)
       } catch { /* The server still rejects duplicates when the order is saved. */ }
     }, 500)
     return () => { controller.abort(); clearTimeout(timer) }
