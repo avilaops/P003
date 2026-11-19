@@ -11,6 +11,7 @@ import { nextRevision, revisionValue, type Revision } from "../../platform/revis
 import { checkoutInputSchema, saveCheckout } from "../orders/checkout-save.js"
 import { storeLines } from "../orders/prepare.js"
 import { decimal, validateDate } from "../sales/fixed.js"
+import { assertPaymentTermLimit } from "../orders/payment-term-limit.js"
 import { quoteLines, storeQuote } from "./quote-document.js"
 import { customerSnapshotSql, validateFiscalCustomer } from "../sales/customer-fiscal.js"
 import { negotiationInputSchema, type NegotiationInput } from "./negotiation-model.js"
@@ -45,6 +46,7 @@ export function registerCommercialConversion(app: FastifyInstance, dependencies:
       const prepared = mixed ? await prepareMixed(context, input.simulation as MixedInput) : await prepareNegotiation(context, input.simulation as NegotiationInput)
       if (prepared.digest !== input.digest) throw new Problem(412, "revision_conflict", "Outra pessoa alterou o cadastro. Sua edição foi preservada")
       const due = validateDate(input.dueDate), { client, tenantId } = context
+      await assertPaymentTermLimit(context, due)
       const customer = (await client.query("SELECT legal_name,tax_id FROM parties WHERE tenant_id=$1 AND id=$2 AND is_customer AND status='active'", [tenantId, input.customerId])).rows[0]
       if (!customer) throw new Problem(409, "domain_conflict", "Selecione um cliente ativo desta empresa")
       const fiscalCustomer = (await client.query<{ data: Record<string, unknown> }>(customerSnapshotSql, [tenantId, input.customerId])).rows[0]?.data

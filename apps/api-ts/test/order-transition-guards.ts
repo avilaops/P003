@@ -22,6 +22,12 @@ export async function verifyTransitionGuards(app: FastifyInstance, seed: Pool, t
   assert.equal((await transition(id, "confirm")).statusCode, 409, "Minimum amount must apply")
   await seed.query("UPDATE sales_settings SET minimum_order_amount_cents=0,maximum_payment_term_days=0 WHERE tenant_id=$1", [tenant])
   assert.equal((await transition(id, "confirm")).statusCode, 409, "Payment term must apply")
+  // Saving a draft enforces the same limit, before the order reaches confirmation.
+  const save = (dueDate: string) => app.inject({ method: "PUT", url: `/api/v1/orders/${id}`, headers: { ...headers, "idempotency-key": randomUUID(), "if-match": '"1"' }, payload: { customerId: tenant, dueDate, items: [{ productId: product, quantity: "1.000000" }] } })
+  const lateDraft = await save("2027-01-01")
+  assert.equal(lateDraft.statusCode, 409, lateDraft.body)
+  assert.equal(lateDraft.json().title, "Vencimento excede o prazo máximo configurado em Preferências / Vendas")
+  assert.equal((await seed.query("SELECT revision::int AS revision FROM sales_orders WHERE id=$1", [id])).rows[0].revision, 1)
   await seed.query("UPDATE sales_settings SET maximum_payment_term_days=3650,require_customer_contact=true WHERE tenant_id=$1", [tenant])
   await seed.query("UPDATE parties SET email=NULL,phone=NULL WHERE tenant_id=$1 AND id=$1", [tenant])
   assert.equal((await transition(id, "confirm")).statusCode, 409, "Contact is required by saved settings")
