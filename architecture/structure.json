@@ -46,10 +46,8 @@
     "pos": "Operação do PDV, sessões de caixa, fechamento e histórico, com autorização no backend."
   },
   "routeSurface": {
-    "count": 567,
-    "sha256": "4622cf76988e69715ae368f92dfd8a5ce204d2cc031f75418382016ba15cc47b"
-    "count": 536,
-    "sha256": "d0c67158ceef18b56067c18686aa15e3f8874bf7a0f8dc2c41c1b5e7066fec31"
+    "count": 568,
+    "sha256": "3b80b6cea878425e9dd91fbf89739d9ea33be6e05472d3d99c374bab8433d622"
   },
   "retiredPaths": [
     "apps/web/src/lib/erp-session.ts",
