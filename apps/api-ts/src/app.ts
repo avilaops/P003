@@ -60,13 +60,16 @@ import { registerFinancialEmails } from "./modules/document-copies/financial-rou
 import { registerContractPackage } from "./modules/document-copies/contract-package-routes.js"
 import { registerQualifiedReissue } from "./modules/contract-signatures/reissue.js"
 import { registerContractTemplateArchive } from "./modules/contract-templates/archive.js"
+import { registerContractTemplateDrafts } from "./modules/contract-templates/routes.js"
+import { registerCommercialContracts } from "./modules/commercial-contracts/routes.js"
+import type { ContractPortal } from "./modules/company-account/contract-webhook.js"
 import { registerSystemConfigRoutes, type SystemConfigDependencies } from "./modules/system-config/routes.js"
 import { registerPlatformAdminRoutes, type PlatformAdminDependencies } from "./modules/platform-admin/routes.js"
 import { registerCompanyAccountRoutes, type CompanyAccountDependencies } from "./modules/company-account/routes.js"
 import { trackRoutes } from "./platform/openapi.js"
 import { registerBrowserUseRoutes, type BrowserUseDependencies } from "./modules/browser-use/routes.js"
 
-export type AppDependencies = AccessDependencies & { fiscalVault?:import("./modules/outgoing-nfse/certificate-vault.js").FiscalCertificateVault; fiscalOperations?:FiscalOperations; outgoingNfse?: OutgoingNfseDependencies; nfeEmail?: NfeEmailIO; documentCopies?: DocumentCopyIO; browserUse?: BrowserUseDependencies; catalogMedia?: import("./platform/catalog-media.js").CatalogMedia; systemConfig?: SystemConfigDependencies; platformAdmin?: PlatformAdminDependencies; companyAccount?: CompanyAccountDependencies }
+export type AppDependencies = AccessDependencies & { fiscalVault?:import("./modules/outgoing-nfse/certificate-vault.js").FiscalCertificateVault; fiscalOperations?:FiscalOperations; outgoingNfse?: OutgoingNfseDependencies; nfeEmail?: NfeEmailIO; documentCopies?: DocumentCopyIO; browserUse?: BrowserUseDependencies; catalogMedia?: import("./platform/catalog-media.js").CatalogMedia; systemConfig?: SystemConfigDependencies; platformAdmin?: PlatformAdminDependencies; companyAccount?: CompanyAccountDependencies; contracts?: ContractPortal | null }
 
 export function buildApp(_dependencies: AppDependencies): FastifyInstance {
   const app = Fastify({ logger: false, bodyLimit: 65_536 })
@@ -175,6 +178,8 @@ export function buildApp(_dependencies: AppDependencies): FastifyInstance {
   registerContractPackage(app, _dependencies, _dependencies.documentCopies, _dependencies.nfeEmail?.render)
   registerQualifiedReissue(app, _dependencies)
   registerContractTemplateArchive(app, _dependencies)
+  registerContractTemplateDrafts(app, _dependencies, _dependencies.contracts)
+  registerCommercialContracts(app, _dependencies, _dependencies.contracts)
   registerParticipantRoutes(app, _dependencies)
   registerBrowserUseRoutes(app, _dependencies, _dependencies.browserUse)
   registerSystemConfigRoutes(app, _dependencies, _dependencies.systemConfig)

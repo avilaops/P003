@@ -7,18 +7,31 @@ import { canonicalJson, sameJson } from "../../platform/json.js"
 import { Problem } from "../../platform/problem.js"
 import { conflict, invalid } from "../../platform/domain.js"
 
+export type ProviderMethod = "GET" | "POST" | "PUT"
+
 /** Provedor de assinatura (DocuSeal) atrás de interface: o webhook só conhece este contrato. */
 export interface ContractProvider {
   verifyWebhook(candidate: string): boolean
-  request(method: "GET", path: string): Promise<any>
+  request(method: ProviderMethod, path: string, body?: unknown): Promise<any>
   pdf(url: string): Promise<Buffer>
+}
+
+/** O que as rotas de contratos e modelos usam além do webhook: modelos atribuídos e e-mail validado. */
+export interface ContractPortal extends ContractProvider {
+  emailReady(): boolean
+  templateIds(tenant: string): number[]
 }
 
 const unconfirmed = () => conflict("Não foi possível confirmar o resultado no serviço de contratos. Atualize o andamento; não gere outro envio")
 const sha256 = (value: string | Buffer) => createHash("sha256").update(value).digest("hex")
 
-export class DocuSeal implements ContractProvider {
-  constructor(private readonly base: URL, private readonly token: string, private readonly secret: string, private readonly http: typeof fetch = fetch) {}
+export type DocuSealOptions = { templates?: Record<string, number[]>; emailReady?: boolean }
+
+export class DocuSeal implements ContractPortal {
+  constructor(private readonly base: URL, private readonly token: string, private readonly secret: string, private readonly http: typeof fetch = fetch,
+    private readonly options: DocuSealOptions = {}) {}
+  emailReady() { return this.options.emailReady === true }
+  templateIds(tenant: string) { return this.options.templates?.[tenant.toLowerCase()] ?? [] }
   verifyWebhook(candidate: string) {
     // Compara resumos de tamanho fixo, sem saída antecipada.
     return timingSafeEqual(createHash("sha256").update(candidate).digest(), createHash("sha256").update(this.secret).digest())
@@ -29,8 +42,10 @@ export class DocuSeal implements ContractProvider {
     if (bytes.length > limit) throw conflict("Resposta do provedor excede o limite permitido")
     return bytes
   }
-  async request(method: "GET", path: string) {
-    const response = await this.http(new URL(`api/${path}`, this.base), { method, headers: { "X-Auth-Token": this.token }, redirect: "error", signal: AbortSignal.timeout(15_000) }).catch(() => { throw unconfirmed() })
+  async request(method: ProviderMethod, path: string, body?: unknown) {
+    const headers: Record<string, string> = { "X-Auth-Token": this.token }
+    if (body !== undefined) headers["content-type"] = "application/json"
+    const response = await this.http(new URL(`api/${path}`, this.base), { method, headers, ...(body === undefined ? {} : { body: JSON.stringify(body) }), redirect: "error", signal: AbortSignal.timeout(15_000) }).catch(() => { throw unconfirmed() })
     try { return JSON.parse((await this.bounded(response, 4 * 1024 * 1024)).toString("utf8")) } catch (error) { throw error instanceof Problem ? error : unconfirmed() }
   }
   async pdf(raw: string) {
@@ -54,13 +69,24 @@ export function docusealFromEnv(env: NodeJS.ProcessEnv = process.env): DocuSeal 
   const secret = env.DOCUSEAL_WEBHOOK_SECRET
   if (!secret) throw new Error("DOCUSEAL_WEBHOOK_SECRET required")
   if (token.length < 16 || secret.length < 32) throw new Error("Invalid DocuSeal credentials")
-  return new DocuSeal(base, token, secret)
+  return new DocuSeal(base, token, secret, fetch, { templates: tenantTemplates(env.DOCUSEAL_TENANT_TEMPLATES), emailReady: env.DOCUSEAL_EMAIL_READY === "true" })
 }
 
-type Contract = { id: string; tenant_id: string; template_id: string; recipients: { role: string; email: string }[]; external_id: string | null; status: string; progress: unknown; problem: string | null }
+const assignment = z.record(z.guid(), z.array(z.number().int().positive()).min(1).max(20))
+/** Modelos do portal explicitamente atribuídos a cada empresa (`{"<tenant>":[1,2]}`). */
+function tenantTemplates(raw: string | undefined) {
+  if (raw === undefined) return {}
+  let parsed: unknown
+  try { parsed = JSON.parse(raw) } catch { throw new Error("Invalid tenant template assignment") }
+  const checked = assignment.safeParse(parsed)
+  if (!checked.success) throw new Error("Invalid tenant template assignment")
+  return Object.fromEntries(Object.entries(checked.data).map(([tenant, ids]) => [tenant.toLowerCase(), ids]))
+}
+
+export type ReconcileContract = { id: string; tenant_id: string; template_id: string; recipients: { role: string; email: string }[]; external_id: string | null; status: string; progress: unknown; problem: string | null }
 const correlation = (tenant: string, id: string, index: number) => `erp:${tenant}:${id}:${index}`
 
-async function preserve(client: DatabaseClient, provider: ContractProvider, contract: Contract, kind: string, position: number, url: string) {
+async function preserve(client: DatabaseClient, provider: ContractProvider, contract: ReconcileContract, kind: string, position: number, url: string) {
   const exists = await client.query("SELECT 1 FROM commercial_contract_files WHERE tenant_id=$1 AND contract_id=$2 AND kind=$3 AND position=$4", [contract.tenant_id, contract.id, kind, position])
   if (exists.rows.length) return
   const content = await provider.pdf(url)
@@ -68,7 +94,7 @@ async function preserve(client: DatabaseClient, provider: ContractProvider, cont
 }
 
 /** Ignora ordem e alegações do evento: consulta o estado autenticado atual no provedor. */
-export async function reconcile(client: DatabaseClient, contract: Contract, provider: ContractProvider) {
+export async function reconcile(client: DatabaseClient, contract: ReconcileContract, provider: ContractProvider) {
   let external: number
   if (contract.external_id !== null) external = Number(contract.external_id)
   else {
@@ -150,7 +176,7 @@ export function registerContractWebhook(app: FastifyInstance, pool: DatabasePool
     try {
       await client.query("BEGIN")
       await client.query("SELECT set_config('app.tenant_id',$1,true)", [tenantId])
-      const found = await client.query<Contract>("SELECT id,tenant_id,template_id::text,recipients,external_id::text,status,progress,problem FROM commercial_contracts WHERE tenant_id=$1 AND external_id=$2 FOR UPDATE", [tenantId, external])
+      const found = await client.query<ReconcileContract>("SELECT id,tenant_id,template_id::text,recipients,external_id::text,status,progress,problem FROM commercial_contracts WHERE tenant_id=$1 AND external_id=$2 FOR UPDATE", [tenantId, external])
       // O webhook de criação pode chegar antes da resposta da criação: o provedor repete depois.
       if (!found.rows[0]) { await client.query("COMMIT"); return reply.code(503).header("retry-after", "30").send() }
       const contract = found.rows[0]
