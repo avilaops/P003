@@ -30,7 +30,7 @@ import { NfeFinancialFields, hasHeaderFiscalReference } from "./nfe-financial-fi
 import { NfeRecipientPicker, NfeMunicipalityLookup } from "./nfe-recipient-picker"
 import { applyMunicipalityCode } from "@/lib/municipality-code"
 import { EmissionActions } from "./emission-actions"
-import { applyRecipientFiscal, applyTaxProfile, blankDraft, blankIbptItem, blankItem, blankTaxDeclaration, blockerLabels, invoiceTotal, itemTotal, productsTotal, submission, type DraftInput, type DraftItem, type FiscalReadiness, type TaxDeclaration } from "./nfe-draft-model"
+import { applyRecipientFiscal, applySuggestedWeight, applyTaxProfile, blankDraft, blankIbptItem, blankItem, blankTaxDeclaration, blockerLabels, invoiceTotal, itemTotal, productsTotal, submission, type DraftInput, type DraftItem, type FiscalReadiness, type TaxDeclaration } from "./nfe-draft-model"
 import { IbptDraftFields, IbptSavedSnapshot } from "./ibpt-draft-fields"
 
 type Snapshot = Schema<"DraftSnapshot">
@@ -95,7 +95,10 @@ export function NfeDraftEditor({ id, sourceOrderId, lotId, lotEnvironment="produ
         const current: Snapshot | undefined = id ? origin : undefined
         const proposed: Preparation | undefined = !id && sourceOrderId ? origin : undefined
         if (ready.tenantId !== me.tenant?.id || origin && origin.tenantId !== me.tenant.id) throw new Error("A empresa da sessão mudou. Reabra o rascunho")
-        const input: DraftInput = current ? {...current.data.input} : proposed ? { ...blankDraft(), model: initialModel, sourceOrderId: proposed.orderId, recipient: proposed.recipient, items: proposed.items.map(item => ({ ...blankItem(), code: item.code, description: item.description, additionalInfo: item.additionalInfo || null, unit: item.unit, ncm: item.ncm || "", quantity: item.quantity, unitPrice: item.unitPrice, grossTotal: item.grossTotal })), productsTotal: proposed.productsTotal } : { ...blankDraft(), model: initialModel }
+        // The preparation's weightKg (sum of the order lines) is newer than the generated contract type.
+        const suggestedWeight = (proposed as (Preparation & { weightKg?: string | null }) | undefined)?.weightKg
+        const prepared: DraftInput = current ? {...current.data.input} : proposed ? { ...blankDraft(), model: initialModel, sourceOrderId: proposed.orderId, recipient: proposed.recipient, items: proposed.items.map(item => ({ ...blankItem(), code: item.code, description: item.description, additionalInfo: item.additionalInfo || null, unit: item.unit, ncm: item.ncm || "", quantity: item.quantity, unitPrice: item.unitPrice, grossTotal: item.grossTotal })), productsTotal: proposed.productsTotal } : { ...blankDraft(), model: initialModel }
+        const input: DraftInput = current ? prepared : applySuggestedWeight(prepared, suggestedWeight)
         if (!current) { input.environment = ready.environment; input.issuedAt = new Date().toISOString(); if (initialModel === 55) input.departureAt = input.issuedAt; input.presenceIndicator = initialModel === 65 ? 1 : 9 }
         if (lotId && id) {
           const allocation:OrderLots=values[3]
