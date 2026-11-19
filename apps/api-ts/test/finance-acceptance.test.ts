@@ -305,6 +305,73 @@ test("Financeiro • aceite do backlog D05", databaseTestOptions, async (t) => {
       assert.equal(cents(position.unbilled), sum(orders.map((o) => o.amount)), "não faturado = soma dos pedidos listados")
       assert.equal(position.unbilled, "425.50")
     })
+
+    await t.test("FI3 • O saldo projetado do último dia = saldo atual + a receber − a pagar do período", async () => {
+      const account = await bankAccount(ctx, "999")
+      const seeded = await ctx.as("user").post("/api/v1/financial-account-entries", {
+        body: { accountId: account, direction: "credit", amount: "1000.00", occurredOn: "2026-01-02", description: "Saldo inicial" },
+      })
+      assert.equal(seeded.statusCode, 201, seeded.body)
+      const flowBefore = await ctx.as("user").get("/api/v1/finance/cashflow", {
+        query: { from: "2099-01-01", to: "2099-01-10", interval: "day" },
+      })
+      assert.equal(flowBefore.statusCode, 200, flowBefore.body)
+      const base = flowBefore.json().data as { projected: string; opening: string }[]
+      const baseLast = BigInt(base.at(-1)!.projected.replace(".", ""))
+      await seedReceivable(ctx, 50000, "2099-01-08")
+      await seedPayable(ctx, 12000, "2099-01-09")
+      const url = "/api/v1/finance/cashflow"
+      const query = { from: "2099-01-01", to: "2099-01-10", interval: "day" }
+      assert.equal((await ctx.as("anonymous").get(url, { query })).statusCode, 401)
+      assert.equal((await ctx.as("denied").get(url, { query })).statusCode, 403)
+      assert.equal((await ctx.as("user").get(url, { query: { ...query, from: "2099-02-01" } })).statusCode, 422)
+      assert.equal((await ctx.as("user").get(url, { query: { ...query, interval: "year" } })).statusCode, 422)
+      const flow = await ctx.as("user").get(url, { query })
+      assert.equal(flow.statusCode, 200, flow.body)
+      const days = flow.json().data as { date: string; forecastIn: string; forecastOut: string; projected: string }[]
+      assert.equal(days.length, 10)
+      const delta = BigInt(days.at(-1)!.projected.replace(".", "")) - baseLast
+      assert.equal(delta, 50000n - 12000n, "projetado = saldo + a receber − a pagar")
+      assert.equal(days.find((d) => d.date === "2099-01-08")!.forecastIn, "500.00")
+      assert.equal(days.find((d) => d.date === "2099-01-09")!.forecastOut, "120.00")
+    })
+
+    await t.test("FI4 • Extrato importado concilia automaticamente os lançamentos com mesmo valor e data, e mostra os pendentes", async () => {
+      const account = await bankAccount(ctx, "55555")
+      const post = (body: object) => ctx.as("user").post("/api/v1/financial-account-entries", { body })
+      for (const amount of ["100.00", "30.00"])
+        assert.equal(
+          (await post({ accountId: account, direction: "credit", amount, occurredOn: "2026-01-30", description: "Lançamento " + amount })).statusCode,
+          201,
+        )
+      const line = (fit: string, amount: string) =>
+        `<STMTTRN><TRNTYPE>CREDIT<DTPOSTED>20260130<TRNAMT>${amount}<FITID>${fit}<NAME>Crédito ${fit}</STMTTRN>`
+      const ofx = (lines: string) =>
+        `<OFX><STMTRS><CURDEF>BRL<BANKACCTFROM><BANKID>364<ACCTID>55555</BANKACCTFROM><BANKTRANLIST><DTSTART>20260130<DTEND>20260131${lines}</BANKTRANLIST><LEDGERBAL><BALAMT>130.00<DTASOF>20260131</LEDGERBAL></STMTRS></OFX>`
+      const content = ofx(line("F1", "100.00") + line("F2", "30.00") + line("F3", "77.00"))
+      const url = "/api/v1/finance-treasury/import-ofx"
+      const body = { accountId: account, content, autoMatch: true }
+      assert.equal((await ctx.as("anonymous").post(url, { body })).statusCode, 401)
+      assert.equal((await ctx.as("denied").post(url, { body })).statusCode, 403)
+      assert.equal((await ctx.as("user").post(url, { body: { accountId: account, content: "curto" } })).statusCode, 422)
+      assert.equal(
+        (await ctx.as("user").post(url, { body: { ...body, accountId: await bankAccount(ctx, "00001") } })).statusCode,
+        409,
+        "extrato de outra conta bancária",
+      )
+      const imported = await ctx.as("user").post(url, { body })
+      assert.equal(imported.statusCode, 201, imported.body)
+      assert.equal(imported.json().data.imported, 3)
+      assert.equal(imported.json().data.matched, 2, "valor e data iguais conciliam sozinhos")
+      const again = await ctx.as("user").post(url, { body })
+      assert.equal(again.json().data.duplicate, true, "reimportar preserva os registros")
+      const view = await ctx.as("user").get("/api/v1/finance-treasury/reconciliation", { query: { accountId: account } })
+      assert.equal(view.statusCode, 200, view.body)
+      const lines = view.json().data.lines as { state: string; cents: string }[]
+      const pending = lines.filter((l) => l.state === "pending")
+      assert.deepEqual(pending.map((l) => l.cents), ["7700"], "a linha sem correspondência fica pendente")
+      assert.equal(lines.filter((l) => l.state === "matched").length, 2)
+    })
   } finally {
     await ctx.close()
   }
