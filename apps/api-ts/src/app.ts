@@ -65,8 +65,16 @@ import { registerPlatformAdminRoutes, type PlatformAdminDependencies } from "./m
 import { registerCompanyAccountRoutes, type CompanyAccountDependencies } from "./modules/company-account/routes.js"
 import { trackRoutes } from "./platform/openapi.js"
 import { registerBrowserUseRoutes, type BrowserUseDependencies } from "./modules/browser-use/routes.js"
+import { registerAccessRoutes } from "./modules/access/routes.js"
+import { registerCompanyRoutes } from "./modules/company/routes.js"
+import { registerInvitationRoutes, type InvitationDependencies } from "./modules/invitations/routes.js"
+import { registerStaffRoutes } from "./modules/staff/routes.js"
+import { registerRegistryLookupRoutes, type RegistryLookupDependencies } from "./modules/registry-lookup/routes.js"
+import { registerPriceListRoutes } from "./modules/price-lists/routes.js"
+import { registerDataTransferRoutes } from "./modules/data-transfer/routes.js"
+import { registerProductCatalogRoutes } from "./modules/catalog-publication/product-routes.js"
 
-export type AppDependencies = AccessDependencies & { fiscalVault?:import("./modules/outgoing-nfse/certificate-vault.js").FiscalCertificateVault; fiscalOperations?:FiscalOperations; outgoingNfse?: OutgoingNfseDependencies; nfeEmail?: NfeEmailIO; documentCopies?: DocumentCopyIO; browserUse?: BrowserUseDependencies; catalogMedia?: import("./platform/catalog-media.js").CatalogMedia; systemConfig?: SystemConfigDependencies; platformAdmin?: PlatformAdminDependencies; companyAccount?: CompanyAccountDependencies }
+export type AppDependencies = AccessDependencies & { fiscalVault?:import("./modules/outgoing-nfse/certificate-vault.js").FiscalCertificateVault; fiscalOperations?:FiscalOperations; outgoingNfse?: OutgoingNfseDependencies; nfeEmail?: NfeEmailIO; documentCopies?: DocumentCopyIO; browserUse?: BrowserUseDependencies; catalogMedia?: import("./platform/catalog-media.js").CatalogMedia; systemConfig?: SystemConfigDependencies; platformAdmin?: PlatformAdminDependencies; companyAccount?: CompanyAccountDependencies; invitations?: InvitationDependencies; registryLookup?: RegistryLookupDependencies }
 
 export function buildApp(_dependencies: AppDependencies): FastifyInstance {
   const app = Fastify({ logger: false, bodyLimit: 65_536 })
@@ -180,5 +188,13 @@ export function buildApp(_dependencies: AppDependencies): FastifyInstance {
   registerSystemConfigRoutes(app, _dependencies, _dependencies.systemConfig)
   registerPlatformAdminRoutes(app, _dependencies, _dependencies.platformAdmin)
   registerCompanyAccountRoutes(app, _dependencies, _dependencies.companyAccount)
+  registerAccessRoutes(app, _dependencies)
+  registerCompanyRoutes(app, _dependencies)
+  registerInvitationRoutes(app, _dependencies, _dependencies.invitations)
+  registerStaffRoutes(app, _dependencies)
+  registerRegistryLookupRoutes(app, _dependencies, _dependencies.registryLookup)
+  registerPriceListRoutes(app, _dependencies)
+  registerDataTransferRoutes(app, _dependencies)
+  registerProductCatalogRoutes(app, _dependencies)
   return app
 }
