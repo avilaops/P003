@@ -91,7 +91,7 @@ class WorkflowTests(unittest.TestCase):
 
     def test_only_three_entry_points_and_internal_reusable_workflows(self):
         files = self.workflows()
-        self.assertEqual({name for name in files if not name.startswith('_')}, {'ci.yml', 'release.yml', 'regression.yml'})
+        self.assertEqual({name for name in files if not name.startswith('_')}, {'ci.yml', 'release.yml', 'regression.yml', 'claude.yml'})
         for name, workflow in files.items():
             if name.startswith('_'):
                 self.assertEqual(set(self.triggers(workflow)), {'workflow_call'})
@@ -119,6 +119,21 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(deploy['environment'], 'production')
         self.assertIn('evidence', deploy['needs'])
 
+    def test_claude_agent_cannot_publish_or_reach_main(self):
+        workflow = self.workflows()['claude.yml']
+        triggers = self.triggers(workflow)
+        self.assertNotIn('push', triggers)
+        self.assertNotIn('pull_request_target', triggers)
+        self.assertNotIn('schedule', triggers)
+        self.assertFalse(workflow['concurrency']['cancel-in-progress'])
+        for job in workflow['jobs'].values():
+            self.assertNotIn('environment', job)
+            self.assertNotEqual(job.get('with', {}).get('publish'), True)
+            self.assertIn('author_association', job['if'])
+            for step in job.get('steps', []):
+                self.assertNotIn('docker/build-push-action', step.get('uses', ''))
+                self.assertNotIn('docker/login-action', step.get('uses', ''))
+
     def test_regression_has_no_production_deployment(self):
         workflow = self.workflows()['regression.yml']
         self.assertIn('schedule', self.triggers(workflow))
@@ -143,11 +158,10 @@ class WorkflowTests(unittest.TestCase):
                 if job.get('uses', '').startswith('./'):
                     self.assertTrue((ROOT / job['uses'][2:]).is_file(), job['uses'])
 
-    def test_contract_consumers_receive_both_rust_exports(self):
+    def test_contract_consumers_receive_both_published_contracts(self):
         api = self.workflows()['_validate-api.yml']['jobs']['api']
-        export = next(step['run'] for step in api['steps'] if step.get('name') == 'Test and export the exact source contract')
-        self.assertIn('ERP_OPENAPI_OUTPUT=', export)
-        self.assertIn('ERP_COMPANY_CONTRACT_OUTPUT=', export)
+        restore = next(step['run'] for step in api['steps'] if step.get('name') == 'Restore and verify the published contract')
+        self.assertIn('published-components.py restore', restore)
         paths = [step['with']['path'] for step in api['steps']
                  if step.get('uses', '').startswith('actions/upload-artifact@')
                  and step['with']['name'].startswith('erp-openapi-')]
@@ -182,8 +196,6 @@ class WorkflowTests(unittest.TestCase):
         for filename, jobname, producer in (
             ('release.yml', 'deploy', 'needs.evidence.outputs.manifest_artifact_name'),
             ('_validate-web.yml', 'web', 'inputs.openapi_artifact_name'),
-            ('_validate-project.yml', 'baseline', 'inputs.openapi_artifact_name'),
-            ('_validate-project.yml', 'contracts', 'needs.baseline.outputs.contract_artifact_name'),
         ):
             steps = files[filename]['jobs'][jobname]['steps']
             names = [step['with']['name'] for step in steps if step.get('uses', '').startswith('actions/download-artifact@')]

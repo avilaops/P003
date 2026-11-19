@@ -49,7 +49,7 @@ def native_api_required(paths):
         "deploy/migrate-release.py", "deploy/release-retention.py", "deploy/production-deploy.sh", "deploy/compose.yaml",
         "deploy/fiscal-compose.yaml", "deploy/api-ts.env.example", "scripts/ci/pr-gate.py",
         "scripts/architecture/report-model.test.mjs",
-        "verification/contracts.json", "verification/discovery.mjs", "verification/stock-route-discovery.mts",
+        "verification/contracts.json", "verification/discovery.mjs", "verification/ts-migration-baseline.json",
         "verification/ts-migration-inventory.mjs",
         "verification/test/contracts.test.mjs", "verification/test/product-context.test.mjs",
         "scripts/ci/published-components.py", "scripts/ci/test_pr_gate.py", "scripts/ci/test_workflows.py",

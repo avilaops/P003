@@ -6,7 +6,7 @@ fluxos de entrada, imagens GHCR por digest e limpeza restrita aos recursos do ER
 ## CI e publicação
 
 O workflow `CI` valida PRs pelo escopo alterado: lint e testes de modelo da web,
-formatação e testes Rust com PostgreSQL para API/migrations e testes npm do motor
+typecheck e testes do `api-ts` com PostgreSQL para API/migrations (o Rust não é mais compilado) e testes npm do motor
 fiscal. O check obrigatório continua sendo `gate`; skips só são aceitos quando o
 planejador exclui explicitamente o componente, e o artefato registra esse escopo.
 Mudanças em infraestrutura desconhecida executam os três componentes. Não há

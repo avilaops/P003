@@ -4,11 +4,11 @@ const countBy = (items, key) => Object.fromEntries([...new Set(items.map(item =>
 
 export function summary(report) {
   const { inventory } = report;
-  const legacy = inventory.api.filter(item => item.file?.endsWith('.rs'));
+  const legacy = inventory.api.filter(item => item.legacy);
   const api = [...publicApiRoutes(inventory.api).values()];
   const operations = paths => paths.reduce((sum, item) => sum + item.methods.length, 0);
   return { pages: inventory.pages.length, nextHandlers: inventory.bff.length, apiPaths: api.length,
-    apiOperations: operations(api), rustPaths: legacy.length, rustOperations: operations(legacy),
+    apiOperations: operations(api), nativeOnlyPaths: legacy.length, nativeOnlyOperations: operations(legacy),
     possibleHttpLinks: inventory.pages.filter(item => item.staticLinks.length).length,
     browserTestFiles: inventory.browserTests.length, findings: countBy(report.findings, 'severity'),
     probes: countBy(report.runtime, 'verdict'), suites: report.suites.map(({ id, verdict }) => ({ id, verdict })),

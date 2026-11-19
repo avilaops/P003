@@ -162,10 +162,10 @@ test("busca distingue módulos, configurações e operações financeiras", asyn
   }
 })
 
-test("importação indisponível não oferece seleção de arquivo ou relatório", async ({ page }) => {
+test("importação de pedidos é uma tela operacional, sem relatório demonstrativo", async ({ page }) => {
   await page.goto("/vendas/importacao")
-  await expect(page.getByRole("heading", { name: "Importação indisponível", exact: true })).toBeVisible()
-  await expect(page.locator('input[type="file"]')).toHaveCount(0)
+  await expect(page.getByRole("heading", { name: "Importar pedidos", exact: true })).toBeVisible()
+  await expect(page.getByRole("heading", { name: "Importação indisponível", exact: true })).toHaveCount(0)
   await expect(page.getByRole("button", { name: "Baixar relatório demonstrativo", exact: true })).toHaveCount(0)
 })
 

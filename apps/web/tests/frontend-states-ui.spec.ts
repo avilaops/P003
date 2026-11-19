@@ -72,7 +72,7 @@ test("dashboard usa a resposta da empresa e os indicadores cabem na largura disp
 
 test("metas e prévias não apresentam números fixos nem controles simulados", async ({ page }, testInfo) => {
   await page.goto("/dashboards/metas")
-  await expect(page.getByRole("heading", { name: "Metas ainda não cadastradas", exact: true })).toBeVisible()
+  await expect(page.getByRole("heading", { name: "Relatório de vendas", exact: true })).toBeVisible()
   await expect(page.locator("main").getByText(/220 mil|83,9%|35,4 mil|Tendência positiva/)).toHaveCount(0)
   await expect(page.getByRole("button", { name: "Exportar visão" })).toHaveCount(0)
   await expect(page.getByRole("combobox", { name: "Período do dashboard" })).toHaveCount(0)
@@ -81,7 +81,7 @@ test("metas e prévias não apresentam números fixos nem controles simulados", 
   await expect(page.getByRole("heading", { name: "Integração com Lojas", exact: true })).toBeVisible()
   await expect(page.getByText(/Criar uma chave não configura automaticamente o Lojas/)).toBeVisible()
   await expect(page.locator("main").getByText(/4821|10:42|Conexão saudável|Sincronizar estoque/)).toHaveCount(0)
-  for (const [path, title] of [["/eventos", "Eventos"], ["/novidades", "Novidades"], ["/vendas/loja-virtual", "Loja virtual"]]) {
+  for (const [path, title] of [["/eventos", "Eventos"], ["/novidades", "Novidades"], ["/logistica/envios", "Envios"]]) {
     await page.goto(path)
     await expect(page.getByRole("heading", { name: title, exact: true, level: 1 })).toBeVisible()
     await expect(page.getByText("Ainda indisponível nesta empresa", { exact: true })).toBeVisible()
@@ -143,8 +143,7 @@ test("cadastro de tags mantém controles e nomes longos dentro da largura do cel
 
 test("importação de produtos aceita CSV sem inventar resultados", async ({ page }) => {
   await page.goto("/vendas/importacao")
-  await expect(page.getByRole("heading", { name: "Importação indisponível", exact: true })).toBeVisible()
-  await expect(page.locator('input[type="file"]')).toHaveCount(0)
+  await expect(page.getByRole("heading", { name: "Importar pedidos", exact: true })).toBeVisible()
   await page.goto("/preferencias/dados/importacao")
   await expect(page.getByRole("heading", { name: "Importação de produtos", exact: true })).toBeVisible()
   await expect(page.getByRole("alert").filter({ hasText: "Consulta indisponível no teste" })).toBeVisible()
@@ -157,8 +156,8 @@ test("importação de produtos aceita CSV sem inventar resultados", async ({ pag
 
 test("funcionalidade sem integração não monta dados ou operações fictícias", async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 390, height: 844 })
-  await page.goto("/vendas/loja-virtual")
-  await expect(page.getByRole("heading", { name: "Loja virtual", exact: true, level: 1 })).toBeVisible()
+  await page.goto("/logistica/envios")
+  await expect(page.getByRole("heading", { name: "Envios", exact: true, level: 1 })).toBeVisible()
   await expect(page.locator("main button")).toHaveCount(0)
   await expect(page.locator("main").getByText(/R\$|Academia Horizonte|PV-1048/)).toHaveCount(0)
   await expect(page.getByRole("navigation", { name: "Operações disponíveis" })).toBeVisible()
@@ -169,15 +168,15 @@ test("funcionalidade sem integração não monta dados ou operações fictícias
 
 test("navegação entre funcionalidade indisponível e cadastro preserva as operações reais", async ({ page }) => {
   await page.route("**/api/erp/products?*", route => route.fulfill({ json: { tenantId: tenant, canEdit: true, data: [], total: 0 } }))
-  await page.goto("/vendas/loja-virtual")
-  await expect(page.getByRole("heading", { name: "Loja virtual", exact: true, level: 1 })).toBeVisible()
+  await page.goto("/logistica/envios")
+  await expect(page.getByRole("heading", { name: "Envios", exact: true, level: 1 })).toBeVisible()
   await page.getByRole("button", { name: "Buscar no ERP", exact: true }).click()
   await page.getByRole("dialog").getByRole("combobox").fill("Produtos")
   await page.getByRole("option", { name: /^Produtos\b/ }).click()
-  await expect(page.getByRole("heading", { name: "Loja virtual", exact: true, level: 1 })).toHaveCount(0)
+  await expect(page.getByRole("heading", { name: "Envios", exact: true, level: 1 })).toHaveCount(0)
   await expect(page.locator("main").getByRole("button", { name: "Buscar", exact: true })).toBeEnabled()
   await page.goBack()
-  await expect(page.getByRole("heading", { name: "Loja virtual", exact: true, level: 1 })).toBeVisible()
+  await expect(page.getByRole("heading", { name: "Envios", exact: true, level: 1 })).toBeVisible()
   await expect(page.locator("main button")).toHaveCount(0)
 })
 
