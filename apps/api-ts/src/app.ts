@@ -82,7 +82,7 @@ export function buildApp(_dependencies: AppDependencies): FastifyInstance {
     const requestId = Array.isArray(provided) ? provided[0] ?? "" : provided ?? randomUUID()
     request.headers["x-request-id"] = requestId
     reply.header("x-request-id", requestId)
-    if (request.routeOptions.url?.startsWith("/api/v1/") && !request.routeOptions.url.startsWith("/api/v1/integrations/nfse/")) {
+    if (request.routeOptions.url?.startsWith("/api/v1/") && !request.routeOptions.url.startsWith("/api/v1/integrations/nfse/") && !request.routeOptions.url.startsWith("/api/v1/webhooks/contracts/")) {
       reply.header("x-erp-backend", "typescript")
       if (!channelServiceRoute(request.method,request.routeOptions.url)) await authenticateRequest(request, _dependencies)
     }
