@@ -173,7 +173,7 @@ function Editor({ kind, initial, tenantId, etag, reload }: { kind: ReferenceKind
   function change(key: string, value: string | number | null) { setDraft(previous => ({ ...previous, [key]: value, ...(key === "direction" && previous.direction !== value ? { parentId: null } : {}) })); setDirty(true) }
   function input(key: string, label: string, max: number, required = false) { return <label key={key} className="block min-w-0 space-y-2">{label}<Input required={required} maxLength={max} value={String(draft[key] ?? "")} onChange={event => change(key, event.target.value || (required ? "" : null))} /></label> }
   function select(key: string, label: string, options: Record<string, string>) { return <label className="block min-w-0 space-y-2">{label}<select className={selectClass} value={String(draft[key])} onChange={event => change(key, event.target.value)}>{Object.entries(options).map(([value, text]) => <option key={value} value={value}>{text}</option>)}</select></label> }
-  return <><PageHeader eyebrow={kind === "depositos" ? config.title : `Cadastros · ${config.title}`}
+  return <><PageHeader breadcrumbs={kind === "depositos" ? undefined : referenceCrumbs(kind, ...(initial ? [{ label: String(initial.data.name), href: `${referencePath(kind)}/${initial.data.id}` }, { label: "Editar" }] : [{ label: "Novo cadastro" }]))} eyebrow={kind === "depositos" ? config.title : undefined}
     title={kind === "depositos" && !initial ? config.create : `${initial ? "Editar" : "Novo cadastro de"} ${config.singular}`} description={config.description} />
     <Link className={linkClass} href={initial ? `${referencePath(kind)}/${initial.data.id}` : referencePath(kind)}>Voltar</Link>
     <section className="compact-records form-section mt-3 min-w-0 space-y-3">
