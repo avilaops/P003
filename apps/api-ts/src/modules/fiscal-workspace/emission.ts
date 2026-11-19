@@ -121,7 +121,7 @@ export function registerEmission(app:FastifyInstance,deps:AppDependencies) {
       if(material.issuerTaxId!==draft.issuer.taxId)conflict("O certificado precisa pertencer ao emitente")
       let nfce:ObjectData|undefined
       if(action==="issue" && !d?.signed_xml) {
-        const fresh=await validateDraft(c,draft.input)
+        const fresh=await validateDraft(c,draft.input,true)
         if(fresh.issuer.companyRevision!==draft.issuer.companyRevision || fresh.issuer.profileRevision!==draft.issuer.profileRevision)conflict("Atualize o rascunho após alterar a empresa ou seu perfil fiscal")
         if(draft.input.model===65)nfce=await flow.nfceSecret(c,draft.input.environment)
       }

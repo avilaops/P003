@@ -10,6 +10,7 @@ import { Problem } from "../../platform/problem.js"
 import { checkOrderSource,conflict,decimalValue,guid,invalid,issuerData,loadDraft,sourcePreparation,type ObjectData } from "./draft-data.js"
 import { ibptSnapshot,ibptQuote } from "./ibpt.js"
 import { draftInputSchema,type DraftInput } from "./draft-schema.js"
+import { applyOperationType } from "../fiscal/operation-types/model.js"
 
 export async function certificateStatus(c:AuthorizedContext,deps:AppDependencies) {
   const row=(await c.client.query<{tax_id:string;revision:string|null;metadata:ObjectData|null}>(`SELECT t.tax_id,a.revision,a.metadata FROM tenants t LEFT JOIN fiscal_a1_certificates a ON a.tenant_id=t.id WHERE t.id=$1`,[c.tenantId])).rows[0]!
@@ -29,11 +30,13 @@ export async function certificateStatus(c:AuthorizedContext,deps:AppDependencies
     companyTaxId:row.tax_id,status,data:meta}
 }
 
-export async function validateDraft(c:AuthorizedContext,draft:DraftInput) {
+export async function validateDraft(c:AuthorizedContext,draft:DraftInput,transmit=false) {
   const issuer=await issuerData(c)
   if (!issuer || !issuer.valid) throw new Problem(409,"invalid_issuer","Confira o cadastro e a configuração fiscal do emitente")
   const profile={...issuer.profile,environment:draft.environment,crt:draft.crt ?? issuer.profile.crt,series:draft.series ?? issuer.profile.series}
   if (![55,65].includes(draft.model) || !["homologation","production"].includes(draft.environment) || !draft.items.length || !draft.operationNature.trim() || !draft.taxRuleReference.trim()) invalid("Confira o modelo, o ambiente e a instrução fiscal")
+  // F1: o tipo de operação define CFOP e CSTs; ao transmitir, tipo incompleto bloqueia com mensagem clara.
+  await applyOperationType(c,draft,String(issuer.profile.state),transmit)
   if (!/^\d{11}(\d{3})?$/.test(draft.recipient.taxId) && !(draft.recipient.state==="EX" && draft.recipient.foreignId)) invalid("Confira o documento do destinatário")
   if(draft.departureAt && (!draft.issuedAt || !Number.isFinite(Date.parse(draft.departureAt)) || Date.parse(draft.departureAt)<Date.parse(draft.issuedAt))) invalid("A saída deve ocorrer na data de emissão ou depois")
   if(draft.model===65 && (draft.departureAt || draft.finalConsumer===false || draft.purpose && draft.purpose!==1 || draft.sourceOrderId)) invalid("Dados incompatíveis com o modelo 65")

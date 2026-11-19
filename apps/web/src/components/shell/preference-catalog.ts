@@ -50,7 +50,7 @@ export const preferenceCategories: PreferenceCategory[] = [
       { label: "Configurações de NFC-e", href: "/preferencias/fiscal/nfce" }, { label: "E-mail e acesso ao XML", href: "/preferencias/fiscal/delivery" }, { label: "Configurações de NF-e", href: "/preferencias/fiscal" },
     ] },
     { title: "Tabelas e configurações adicionais", items: [
-      { label: "Consulta de inutilizações de NF-es", href: "/preferencias/fiscal/inutilizacoes" }, { label: "Consulta de correções de NF-es", href: "/preferencias/fiscal/correcoes" }, { label: "Naturezas de operação", href: "/preferencias/fiscal/naturezas" },
+      { label: "Consulta de inutilizações de NF-es", href: "/preferencias/fiscal/inutilizacoes" }, { label: "Consulta de correções de NF-es", href: "/preferencias/fiscal/correcoes" }, { label: "Naturezas de operação", href: "/preferencias/fiscal/naturezas" }, { label: "Tipos de operação", href: "/preferencias/fiscal/tipos-operacao" },
     ] },
   ] },
   { id: "certificado-digital", label: "Certificado Digital", sections: [

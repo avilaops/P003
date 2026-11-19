@@ -7,6 +7,7 @@ import {registerFiscalSettings} from "./modules/fiscal-workspace/settings.js"
 import {registerOutgoingImports} from "./modules/fiscal-workspace/outgoing-imports.js"
 import { registerEmissionEvents } from "./modules/fiscal-workspace/emission-events.js"
 import { registerEmission } from "./modules/fiscal-workspace/emission.js"
+import { registerOperationTypes } from "./modules/fiscal/operation-types/routes.js"
 import { registerFiscalDrafts } from "./modules/fiscal-workspace/drafts.js"
 import type { FiscalOperations } from "./modules/fiscal-workspace/engine.js"
 import { registerFiscalIncoming } from "./modules/fiscal-workspace/incoming.js"
@@ -116,6 +117,7 @@ export function buildApp(_dependencies: AppDependencies): FastifyInstance {
       .header("cache-control", "no-store")
       .send(problem.toJSON())
   })
+  registerOperationTypes(app, _dependencies)
   registerFiscalOutgoing(app, _dependencies)
   registerFiscalDrafts(app,_dependencies)
   registerEmission(app,_dependencies)

@@ -14,6 +14,7 @@ import { loadOrder } from "./snapshot.js"
 import { canReadRealizedMargin } from "./realized-margin.js"
 import { allocateOrderAdvances } from "../finance-insights/operations.js"
 import { freezeOrderPolicies, onInvoicedOrder } from "../finance-management/accrual.js"
+import { orderEffects } from "../fiscal/operation-types/model.js"
 
 const targets = { accept: "accepted", confirm: "confirmed", cancel: "cancelled", complete: "completed" } as const
 export function registerOrderTransitions(app: FastifyInstance, dependencies: AppDependencies) {
@@ -35,6 +36,8 @@ export function registerOrderTransitions(app: FastifyInstance, dependencies: App
           return visible
         }
         const current = await loadOrder(context, id), status = String(current.data.status)
+        // F1: o tipo de operação do pedido decide estoque, títulos e comissão (sem tipo, venda padrão).
+        const effects = await orderEffects(context, id)
         if (current.data.revision !== expected) throw new Problem(412, "revision_conflict", "Outra pessoa alterou o cadastro. Sua edição foi preservada")
         if ((action === "accept" && status === "draft") || (action === "confirm" && ["draft", "accepted"].includes(status))) {
           const credit = await checkOrderCredit(context, request.headers, id, String(current.data.customerId), expected, status)
@@ -44,7 +47,7 @@ export function registerOrderTransitions(app: FastifyInstance, dependencies: App
           if (status !== "draft") conflict("Somente pedidos em rascunho podem ser aceitos")
           if (!current.checkout) conflict("Aceitar encomenda exige condições completas de entrada e parcelas")
           await validateAcceptance(context, current)
-          await originateSchedule(context, request.headers, id, true)
+          if (effects.generatesFinance) await originateSchedule(context, request.headers, id, true)
         } else {
           const allowed = action === "complete" ? status === "confirmed" : (action === "confirm" ? ["draft", "accepted"] : ["draft", "accepted", "confirmed"]).includes(status)
           if (!allowed) conflict("Transição não permitida para a situação atual do pedido")
@@ -54,16 +57,16 @@ export function registerOrderTransitions(app: FastifyInstance, dependencies: App
             if (action === "confirm") {
               if (status === "draft") await validateAcceptance(context, current)
               else await validateProducts(context, current)
-              await reserveOrder(context, current)
-            } else await issueOrder(context, request.headers, current)
+              if (effects.movesStock) await reserveOrder(context, current)
+            } else if (effects.movesStock) await issueOrder(context, request.headers, current)
           }
-          if (action === "confirm") {
+          if (action === "confirm" && effects.generatesFinance) {
             if (status === "accepted") await verifyReceivables(context, id)
             else await originateSchedule(context, request.headers, id, false)
           }
-          if (action === "complete") await originateOnCompletion(context, request.headers, id)
+          if (action === "complete" && effects.generatesFinance) await originateOnCompletion(context, request.headers, id)
         }
-        if ((action === "accept" || action === "confirm") && status === "draft") await freezeOrderPolicies(context, id)
+        if ((action === "accept" || action === "confirm") && status === "draft" && effects.generatesCommission) await freezeOrderPolicies(context, id)
         const next = nextRevision(expected)
         if (action === "cancel") {
           await cancelUnpaid(context, request.headers, id)
@@ -71,7 +74,7 @@ export function registerOrderTransitions(app: FastifyInstance, dependencies: App
         }
         await context.client.query("UPDATE sales_orders SET status=$3,revision=$4,updated_at=now() WHERE tenant_id=$1 AND id=$2", [context.tenantId, id, target, next])
         await record(context, request.headers, "sales_order", id, `order.${target}`, { previousRevision: expected, revision: next, previousStatus: status, status: target })
-        if (action === "complete") {
+        if (action === "complete" && effects.generatesFinance) {
           await onInvoicedOrder(context, request.headers, id)
           await allocateOrderAdvances(context, request.headers, id)
         }
