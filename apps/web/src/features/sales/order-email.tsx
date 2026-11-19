@@ -67,7 +67,7 @@ function OrderEmailComposer({ id, number, tenantId, etag, onReload, onClose }: {
     <p className="rounded-lg border bg-muted/30 p-3 text-xs text-muted-foreground">Anexo: documento do pedido em PDF, com cliente, itens, acabamentos, peso e valores. Contrato para assinatura: use “Pedido e contratos”.</p>
     {command.error && <p role="alert"><RequestError message={command.error} status={command.status} /></p>}
     {command.stale && <Button type="button" variant="outline" onClick={() => { command.reset(); onReload(); resource.reload() }}>Recarregar pedido</Button>}
-    {receipt && <p role="status" className="text-sm">{deliveryLabels[receipt.status]} · {receipt.recipient}{receipt.status === "sent" ? ". A entrega na caixa do destinatário depende do provedor." : "."}</p>}
+    {receipt && <p role="status" className="text-sm">{deliveryLabels[receipt.status]} · {receipt.recipient}.</p>}
     {pendingDelivery && <p role="status">Há um envio sem confirmação definitiva. Consulte o histórico e confirme com o provedor antes de realizar outro envio.</p>}
     {command.uncertain && <p role="status">Resultado ainda não confirmado. A consulta abaixo repete o mesmo comando, sem criar um novo envio.</p>}
     <div className="flex flex-col gap-2 sm:flex-row-reverse">
