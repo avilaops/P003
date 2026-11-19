@@ -35,7 +35,7 @@ export function registerReceivedNfse(app: FastifyInstance, deps: AppDependencies
     authorizedDomain(req, deps, READ, IMPORT, false, async (c, canImport) => {
       const q = page.safeParse(req.query)
       if (!q.success) throw invalid("Limite deve estar entre 1 e 100")
-      const data = (await c.client.query(`SELECT ${columns} FROM fiscal_received_nfses WHERE tenant_id=$1 ORDER BY id DESC LIMIT $2 OFFSET $3`, [c.tenantId, q.data.limit, q.data.offset])).rows
+      const data = (await c.client.query(`SELECT ${columns} FROM fiscal_received_nfses WHERE tenant_id=$1 ORDER BY created_at DESC,id DESC LIMIT $2 OFFSET $3`, [c.tenantId, q.data.limit, q.data.offset])).rows
       const total = (await c.client.query("SELECT count(*)::int AS n FROM fiscal_received_nfses WHERE tenant_id=$1", [c.tenantId])).rows[0]!.n
       return reply.header("cache-control", "no-store").send({ tenantId: c.tenantId, canImport: canImport && !!deps.fiscalOperations, data, total })
     }))

@@ -78,7 +78,7 @@ export function registerCteDistribution(app: FastifyInstance, deps: AppDependenc
       const q = page.safeParse(req.query)
       if (!q.success) throw invalid("Limite deve estar entre 1 e 100")
       const data = (await c.client.query(`SELECT ${documentColumns},created_at AS "createdAt" FROM fiscal_cte_distribution_documents
-        WHERE tenant_id=$1 AND environment=2 ORDER BY id DESC LIMIT $2 OFFSET $3`, [c.tenantId, q.data.limit, q.data.offset])).rows
+        WHERE tenant_id=$1 AND environment=2 ORDER BY created_at DESC,id DESC LIMIT $2 OFFSET $3`, [c.tenantId, q.data.limit, q.data.offset])).rows
       const total = (await c.client.query("SELECT count(*)::int AS n FROM fiscal_cte_distribution_documents WHERE tenant_id=$1 AND environment=2", [c.tenantId])).rows[0]!.n
       return reply.header("cache-control", "no-store").send({ tenantId: c.tenantId, environment: "homologation", data, total })
     }))
