@@ -1,6 +1,7 @@
 import { advanceLinkedProposal } from "../opportunities/documents.js"
 import { randomUUID } from "node:crypto"
 import {saveCheckout} from "../orders/checkout-save.js"
+import { assertPaymentTermLimit } from "../orders/payment-term-limit.js"
 import {paymentSchedule,type FrozenTerm} from "../commercial/payment-term.js"
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify"
 import { z } from "zod"
@@ -29,6 +30,7 @@ async function revise(context: AuthorizedContext, id: string, version: number, n
 
 async function convert(context: AuthorizedContext, headers: CommandHeaders, current: Awaited<ReturnType<typeof loadProposal>>, due: string, approve: boolean, next: Revision) {
   const { client, tenantId } = context, id = current.data.id, version = current.data.version
+  await assertPaymentTermLimit(context, due)
   const active = (await client.query("SELECT EXISTS(SELECT 1 FROM parties WHERE tenant_id=$1 AND id=$2 AND status='active' AND is_customer) AS active", [tenantId, current.data.customerId])).rows[0]?.active
   const invalid = (await client.query("SELECT EXISTS(SELECT 1 FROM sales_proposal_lines l JOIN products p ON p.tenant_id=l.tenant_id AND p.id=l.product_id WHERE l.tenant_id=$1 AND l.proposal_id=$2 AND l.version=$3 AND (p.status<>'active' OR p.unit<>l.unit)) AS invalid", [tenantId, id, version])).rows[0]?.invalid
   if (!active || invalid) throw new Problem(409, "domain_conflict", "Cliente ou produtos mudaram; revise os cadastros antes de converter")

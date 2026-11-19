@@ -11,7 +11,7 @@ export type DocumentMail = {
 }
 
 export const documentMailLimit = 10 * 1024 * 1024
-const allowedType = /^(?:application\/(?:pdf|xml)|text\/(?:xml|html))(?:\s*;\s*charset=utf-8)?$/i
+const allowedType = /^(?:application\/(?:pdf|xml|vnd\.openxmlformats-officedocument\.spreadsheetml\.sheet)|text\/(?:xml|html|csv))(?:\s*;\s*charset=utf-8)?$/i
 const recipient = z.email().max(254)
 
 function configuration(env: NodeJS.ProcessEnv) {

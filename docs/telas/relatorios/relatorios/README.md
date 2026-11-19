@@ -15,6 +15,7 @@ Consultar as visões executiva, comercial, de estoque, financeira, de serviços 
 
 - Selecionar a visão
 - Conferir filtros e resultados
+- Montar relatórios configuráveis em `/relatorios/configuraveis`: colunas, agrupamentos, totais, exportação CSV/XLSX/PDF e envio agendado por e-mail com histórico ([como declarar uma fonte](../../../relatorios.md))
 
 ## Regras e limites
 
