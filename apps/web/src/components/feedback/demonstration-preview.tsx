@@ -18,7 +18,7 @@ export function DemonstrationPreview({ children }: { children: ReactNode }) {
     <h1 id="unavailable-feature-title" className="text-3xl font-semibold">{feature.title}</h1>
     <p className="text-muted-foreground">{feature.purpose} Esta função ainda não está disponível e não mostra dados de exemplo.</p>
     <nav aria-label="Operações disponíveis">
-      <Link className="inline-flex min-h-11 items-center rounded-lg border bg-card px-4 py-2 font-medium text-primary hover:bg-accent" href={href}>Ir para {label}</Link>
+      <Link className="inline-flex min-h-9 items-center rounded-lg border bg-card px-4 py-2 font-medium text-primary hover:bg-accent" href={href}>Ir para {label}</Link>
     </nav>
   </section>
 }

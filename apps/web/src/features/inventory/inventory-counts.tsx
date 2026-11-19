@@ -105,7 +105,7 @@ function CountForm({ tenant, data }: { tenant: string; data: CountList }) {
         {data.warehouses.length > 0 && (
           <label>
             Depósito
-            <select required name="warehouseId" defaultValue="" className="block min-h-11 w-full rounded border px-2">
+            <select required name="warehouseId" defaultValue="" className="block min-h-9 w-full rounded border px-2">
               <option value="">Selecione o depósito</option>
               {data.warehouses.map((w) => (
                 <option key={w.id} value={w.id}>
@@ -117,7 +117,7 @@ function CountForm({ tenant, data }: { tenant: string; data: CountList }) {
         )}
         <label>
           Categoria
-          <select name="categoryId" className="block min-h-11 w-full rounded border px-2">
+          <select name="categoryId" className="block min-h-9 w-full rounded border px-2">
             <option value="">Todas as categorias</option>
             {data.categories.map((c) => (
               <option key={c.id} value={c.id}>

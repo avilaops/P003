@@ -162,7 +162,7 @@ function CountSession({ detail, reload, loading }: { detail: CountDetail; reload
             <label>
               {recount ? "Segunda contagem" : "Quantidade contada"}
               <Input
-                className="h-12 text-lg"
+                className="h-9 text-lg"
                 ref={quantityInput}
                 required
                 inputMode="decimal"

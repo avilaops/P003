@@ -24,7 +24,7 @@
 .sales-customer-name { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
 .sales-value-column { width: 164px; text-align: right; white-space: nowrap; }
 .sales-action-column { width: 96px; text-align: right; }
-.sales-record-action { display: inline-flex; min-height: 44px; align-items: center; justify-content: center; padding: 6px 10px; border: 1px solid var(--border); border-radius: 8px; font-weight: 500; background: var(--card); }
+.sales-record-action { display: inline-flex; min-height: 36px; align-items: center; justify-content: center; padding: 6px 10px; border: 1px solid var(--border); border-radius: 8px; font-weight: 500; background: var(--card); }
 .sales-record-action:hover { background: var(--muted); }
 .sales-record-action:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
 .sales-mobile-customer, .sales-mobile-status, .sales-mobile-date { display: none; }

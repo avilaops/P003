@@ -44,7 +44,7 @@ export function FiscalEvents({ kind }: { kind: "correcao" | "inutilizacao" }) {
       {item.request.text && <p className="break-words whitespace-pre-wrap text-sm">{item.request.text}</p>}
       {(item.result.code || item.result.reason) && <p className="break-words text-sm">Retorno: {item.result.code} {item.result.reason}</p>}
       {item.result.protocol && <p className="break-all text-sm">Protocolo: {item.result.protocol}</p>}
-      {item.documentId && <Link href={`/fiscal/notas-saida/${item.documentId}`} className="inline-flex min-h-11 items-center text-sm text-primary underline">Abrir NF-e e seus eventos</Link>}
+      {item.documentId && <Link href={`/fiscal/notas-saida/${item.documentId}`} className="inline-flex min-h-9 items-center text-sm text-primary underline">Abrir NF-e e seus eventos</Link>}
     </article>)}</div>
     {page?.cursor && <Button variant="outline" disabled={loading} onClick={()=>{setLoading(true);setRequest({cursor:page.cursor!})}}>Carregar mais eventos</Button>}
   </main>

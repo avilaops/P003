@@ -157,7 +157,7 @@ export function RegistrationSettings({ section }: { section: Section }) {
                   atuais são preservados.
                 </p>
                 {fields[section].map(([key, label]) => (
-                  <label key={key} className="flex min-h-11 items-center gap-3">
+                  <label key={key} className="flex min-h-9 items-center gap-3">
                     <input
                       type="checkbox"
                       checked={key === "upholsteryConfigurable" ? data[key] !== false : !!data[key]}

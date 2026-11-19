@@ -259,7 +259,7 @@ export function NfeDraftEditor({ id, sourceOrderId, lotId, lotEnvironment="produ
     {!loading && <>
       {!canEdit && !error && <p className="text-sm">Seu acesso permite somente consultar este rascunho.</p>}
       <nav aria-label="Etapas da nota fiscal" className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
-        {editorSteps.map((label, index) => <Button key={label} type="button" variant={step === index ? "default" : "outline"} className="h-auto min-h-11 justify-start whitespace-normal px-3 py-2 text-left" aria-current={step === index ? "step" : undefined} onClick={() => setStep(index)}>{index + 1}. {label}</Button>)}
+        {editorSteps.map((label, index) => <Button key={label} type="button" variant={step === index ? "default" : "outline"} className="h-auto min-h-9 justify-start whitespace-normal px-3 py-2 text-left" aria-current={step === index ? "step" : undefined} onClick={() => setStep(index)}>{index + 1}. {label}</Button>)}
       </nav>
       <p role="status" className="text-sm text-muted-foreground">Etapa {step + 1} de {editorSteps.length} · {editorSteps[step]}</p>
       <p className="text-sm text-muted-foreground">{stepDescriptions[step]}</p>
@@ -365,7 +365,7 @@ export function NfeDraftEditor({ id, sourceOrderId, lotId, lotEnvironment="produ
           <div className="flex flex-wrap gap-3">
             {pendingAmounts && <p role="status" className="text-sm">Volte à etapa Produtos para aplicar ou descartar os totais digitados antes de salvar.</p>}
             {canEdit && <Button type="submit" disabled={!!allocationError || pendingAmounts || loading || saving || blocked || fiscalLocked || !profileReady || !!id && (!etag || uncertain) || !uncertain && !dirty}>{saving ? "Confirmando gravação…" : uncertain && !id ? "Confirmar mesma solicitação" : "Salvar rascunho"}</Button>}
-            {!id && <Button className="h-auto min-h-11 max-w-full whitespace-normal text-center" type="button" disabled>Transmitir {draft.model === 65 ? "NFC-e" : "NF-e"} à SEFAZ em {draft.environment === "production" ? "produção" : "homologação"}</Button>}
+            {!id && <Button className="h-auto min-h-9 max-w-full whitespace-normal text-center" type="button" disabled>Transmitir {draft.model === 65 ? "NFC-e" : "NF-e"} à SEFAZ em {draft.environment === "production" ? "produção" : "homologação"}</Button>}
             <Button type="button" variant="outline" disabled={saving || loading} onClick={refresh}>Recarregar dados do servidor</Button>
           </div>
           {!id && <p className="text-sm text-muted-foreground">Salve o rascunho para habilitar a transmissão à SEFAZ.</p>}

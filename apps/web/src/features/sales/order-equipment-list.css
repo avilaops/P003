@@ -18,7 +18,7 @@
 }
 
 .order-equipment-list-tools input { flex: 1 1 140px; max-width: 22rem; }
-.order-equipment-list-tools button, .order-equipment-list-error button { min-height: 44px; padding-inline: 10px; }
+.order-equipment-list-tools button, .order-equipment-list-error button { min-height: 36px; padding-inline: 10px; }
 .order-equipment-list-summary, .order-equipment-list-error p, .order-equipment-list-empty { color: var(--muted-foreground); font-size: 13px; }
 .order-equipment-list-summary { flex: 1 1 190px; overflow-wrap: anywhere; }
 .order-equipment-list-error { padding: 2px 8px; border: 1px solid var(--border); border-radius: 8px; }
@@ -184,10 +184,10 @@
 .order-finishes-choice { display: grid; min-width: 0; gap: 6px; }
 .order-finishes-choice > p, .order-finishes-choices label { font-size: 13px; font-weight: 500; }
 .order-finishes-choice label { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
-.order-finishes-choices select { min-height: 44px; }
-.order-finishes-apply { width: 100%; height: auto; min-height: 44px; padding: 8px; text-align: center; white-space: normal; }
+.order-finishes-choices select { min-height: 36px; }
+.order-finishes-apply { width: 100%; height: auto; min-height: 36px; padding: 8px; text-align: center; white-space: normal; }
 .order-finishes-feedback:empty { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
-.order-finishes-skipped summary { display: flex; min-height: 44px; align-items: center; cursor: pointer; color: var(--primary); text-decoration: underline; }
+.order-finishes-skipped summary { display: flex; min-height: 36px; align-items: center; cursor: pointer; color: var(--primary); text-decoration: underline; }
 .order-finishes-skipped ul { padding-inline-start: 1.25rem; list-style: disc; overflow-wrap: anywhere; }
 .order-finishes-error { display: grid; justify-items: start; gap: 8px; }
 
@@ -245,12 +245,12 @@
 
   .order-equipment-list .order-equipment-compact-row .order-equipment-finishes-action,
   .order-equipment-list .order-equipment-compact-row .order-equipment-remove-cell button,
-  .order-equipment-list .order-equipment-compact-row .order-equipment-compact-quantity > * { min-height: 44px; height: 44px; }
+  .order-equipment-list .order-equipment-compact-row .order-equipment-compact-quantity > * { min-height: 36px; height: 36px; }
   .order-equipment-list .order-equipment-compact-row .order-equipment-remove-cell button { width: 44px; }
   .order-equipment-chip:nth-child(n+2), .order-equipment-extra-chips { display: none; }
   .order-equipment-extra-chips-mobile { display: inline; }
   .order-equipment-compact-quantity { width: 154px; grid-template-columns: 44px minmax(0, 1fr) 44px; margin-inline: 0; }
-  .order-equipment-list .order-equipment-compact-row .order-equipment-compact-quantity input { font-size: 16px; }
+  .order-equipment-list .order-equipment-compact-row .order-equipment-compact-quantity input { font-size: 14px; }
 
   .order-equipment-amount { display: flex; justify-content: flex-end; gap: 4px; font-size: var(--workspace-font-auxiliary); line-height: 1.2; }
   .order-equipment-amount > small { display: inline; flex-shrink: 0; color: var(--muted-foreground); font-size: 10px; }

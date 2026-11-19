@@ -181,10 +181,10 @@ export function ReceivedMonitor({origin = "fiscal"}:{origin?:MonitorOrigin}) {
       <h2 id="import-title" className="flex items-center gap-2 text-lg font-semibold"><Upload className="size-5 text-primary" />Importar NF-e recebida</h2>
       <p className="text-sm text-muted-foreground">Selecione o XML completo da NF-e, com protocolo de autorização e destinado à empresa ativa.</p>
       <form className="flex flex-wrap items-end gap-3" onSubmit={importXml}>
-        <label className="min-w-0 flex-1 space-y-2 text-sm">XML da NF-e<input ref={fileInput} type="file" accept=".xml,application/xml,text/xml" className="block min-h-11 w-full min-w-0 rounded-lg border p-2" disabled={loading || !!busy || !result?.canImport} onChange={event => { setFile(event.target.files?.[0] || null); setNotice(""); setError("") }} /></label>
+        <label className="min-w-0 flex-1 space-y-2 text-sm">XML da NF-e<input ref={fileInput} type="file" accept=".xml,application/xml,text/xml" className="block min-h-9 w-full min-w-0 rounded-lg border p-2" disabled={loading || !!busy || !result?.canImport} onChange={event => { setFile(event.target.files?.[0] || null); setNotice(""); setError("") }} /></label>
         <Button type="submit" disabled={!file || loading || !!busy || !result?.canImport}>{busy === "import" ? "Importando XML…" : "Importar XML"}</Button>
       </form>
-      <details className="text-sm text-muted-foreground"><summary className="flex min-h-11 cursor-pointer items-center">Sobre a importação</summary><p>A importação confere a estrutura e a coerência do protocolo declarado. Não comprova a assinatura digital nem a situação atual na SEFAZ. Compras, estoque e financeiro não são alterados por esta ação. O XML fica disponível para consulta e download.</p></details>
+      <details className="text-sm text-muted-foreground"><summary className="flex min-h-9 cursor-pointer items-center">Sobre a importação</summary><p>A importação confere a estrutura e a coerência do protocolo declarado. Não comprova a assinatura digital nem a situação atual na SEFAZ. Compras, estoque e financeiro não são alterados por esta ação. O XML fica disponível para consulta e download.</p></details>
     </section>}
   </div>
 }

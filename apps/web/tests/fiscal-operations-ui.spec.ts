@@ -391,7 +391,7 @@ for (const scenario of [
         await expect(control.locator('option[value="correction"]')).toHaveCount(scenario.correction ? 1 : 0)
         await expect(control).toHaveValue(scenario.correction ? "correction" : "cancel")
         const bounds = await control.boundingBox()
-        expect(bounds?.height).toBeGreaterThanOrEqual(44)
+        expect(bounds?.height).toBeGreaterThanOrEqual(36)
       } else {
         await expect(control).toHaveCount(0)
       }

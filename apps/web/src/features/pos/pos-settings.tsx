@@ -23,7 +23,7 @@ function SettingsForm({snapshot,reload}:{snapshot:Settings;reload:()=>void}) {
       reload()
     }
   }}>
-    <label className="flex min-h-11 items-center gap-3"><input type="checkbox" checked={enabled} onChange={e=>setEnabled(e.target.checked)} disabled={!snapshot.canEdit || command.busy || command.uncertain || command.stale}/> Exibir PDV no menu de Vendas</label>
+    <label className="flex min-h-9 items-center gap-3"><input type="checkbox" checked={enabled} onChange={e=>setEnabled(e.target.checked)} disabled={!snapshot.canEdit || command.busy || command.uncertain || command.stale}/> Exibir PDV no menu de Vendas</label>
     {command.error && <Failure message={command.error} status={command.status} retry={command.stale?reload:undefined}/>}
     {snapshot.canEdit ? <Button type="submit" disabled={command.busy || command.stale || !command.uncertain && enabled===snapshot.data.enabled}>{command.uncertain?"Conferir alteração":"Salvar preferência"}</Button> : <p>Somente administradores da empresa podem alterar esta preferência.</p>}
   </form>

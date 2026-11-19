@@ -19,7 +19,7 @@ export function HelpCenter() {
     <label className="relative block max-w-2xl">
       <Search className="absolute left-3 top-3 size-4 text-muted-foreground" />
       <span className="sr-only">Buscar na ajuda</span>
-      <Input className="min-h-11 pl-9" value={query} onChange={event => setQuery(event.target.value)} placeholder="Como podemos ajudar?" />
+      <Input className="min-h-9 pl-9" value={query} onChange={event => setQuery(event.target.value)} placeholder="Como podemos ajudar?" />
     </label>
     <div className="mt-5 grid gap-4 md:grid-cols-2">
       {topics.map(({ id, title, summary, Content }) => <article key={id} className="min-w-0 rounded-2xl border bg-card p-5">

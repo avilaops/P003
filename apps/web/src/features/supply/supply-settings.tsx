@@ -74,11 +74,11 @@ export function SupplySettings({ kind }: { kind: Kind }) {
     } finally { pending.current = false; setBusy(false) }
   }
   function booleanField(key: string, label: string, yes: string, no: string) {
-    return <label className="block space-y-2">{label}<select className="min-h-11 w-full rounded-lg border bg-background px-3" required value={draft[key]} onChange={event => change(key, event.target.value)}><option value="">Selecione</option><option value="true">{yes}</option><option value="false">{no}</option></select></label>
+    return <label className="block space-y-2">{label}<select className="min-h-9 w-full rounded-lg border bg-background px-3" required value={draft[key]} onChange={event => change(key, event.target.value)}><option value="">Selecione</option><option value="true">{yes}</option><option value="false">{no}</option></select></label>
   }
   return <div className="mx-auto max-w-4xl space-y-6 px-4 pb-28 pt-8 lg:px-6">
     <PageHeader eyebrow="Preferências / Suprimentos" title={config.title} description={config.description} />
-    <Link className="inline-flex min-h-11 items-center text-primary underline" href="/preferencias?categoria=suprimentos">Voltar às preferências de suprimentos</Link>
+    <Link className="inline-flex min-h-9 items-center text-primary underline" href="/preferencias?categoria=suprimentos">Voltar às preferências de suprimentos</Link>
     {resource.loading && <p role="status">Carregando configurações…</p>}
     {resource.error && <div role="alert"><RequestError message={resource.error} status={resource.status} /><Button variant="outline" onClick={reload}>Tentar novamente</Button></div>}
     {resource.value && <form className="form-section space-y-5" onSubmit={save}>

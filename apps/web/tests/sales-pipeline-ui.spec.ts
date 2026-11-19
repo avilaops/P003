@@ -58,7 +58,7 @@ for (const width of [320, 390, 430, 1366, 1440]) test(`todas as etapas aparecem 
   await expect(summary.locator("..")).not.toHaveAttribute("open", "")
   const first = await table.getByRole("row").nth(1).boundingBox()
   expect(first!.y).toBeLessThan(630)
-  if (width < 500) expect((await page.getByRole("button", { name: "Buscar", exact: true }).boundingBox())!.height).toBeGreaterThanOrEqual(44)
+  if (width < 500) expect((await page.getByRole("button", { name: "Buscar", exact: true }).boundingBox())!.height).toBeGreaterThanOrEqual(36)
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
   await page.screenshot({ path: info.outputPath(`pipeline-${width}.png`), fullPage: true })
   await summary.focus()
@@ -101,8 +101,8 @@ test("revisão: sair da oportunidade editada pede confirmação e cancelar prese
   await page.getByRole("link", { name: "Voltar ao funil", exact: true }).click()
   await expect.poll(() => dialogs).toBe(1)
   await expect(title).toHaveValue("Negociação em revisão")
-  expect((await page.getByRole("link", { name: "Voltar ao funil", exact: true }).boundingBox())!.height).toBeGreaterThanOrEqual(44)
-  expect((await page.getByRole("link", { name: "Avançar para simulação e pedido", exact: true }).boundingBox())!.height).toBeGreaterThanOrEqual(44)
+  expect((await page.getByRole("link", { name: "Voltar ao funil", exact: true }).boundingBox())!.height).toBeGreaterThanOrEqual(36)
+  expect((await page.getByRole("link", { name: "Avançar para simulação e pedido", exact: true }).boundingBox())!.height).toBeGreaterThanOrEqual(36)
   await page.getByRole("link", { name: "Avançar para simulação e pedido", exact: true }).click()
   await expect.poll(() => dialogs).toBe(2)
   await expect(title).toHaveValue("Negociação em revisão")
@@ -121,7 +121,7 @@ for (const width of [320, 1366]) test(`revisão: nomes completos e valores longo
     expect(await field.evaluate(element => element.scrollHeight > element.clientHeight + 1)).toBe(false)
   }
   await expect(table).toContainText("R$ 999.999.999.999,99")
-  if (width < 500) expect((await table.getByRole("link", { name: item.title, exact: true }).boundingBox())!.height).toBeGreaterThanOrEqual(44)
+  if (width < 500) expect((await table.getByRole("link", { name: item.title, exact: true }).boundingBox())!.height).toBeGreaterThanOrEqual(36)
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
   await page.screenshot({ path: info.outputPath(`pipeline-long-${width}.png`), fullPage: true })
 })
@@ -151,7 +151,7 @@ test("revisão: alvo do título curto permite toque no celular", async ({ contex
   await page.goto("/vendas/funil")
   const link = page.getByRole("link", { name: opportunity.title, exact: true })
   await expect(link).toBeVisible()
-  expect((await link.boundingBox())!.height).toBeGreaterThanOrEqual(44)
+  expect((await link.boundingBox())!.height).toBeGreaterThanOrEqual(36)
 })
 
 test("nova oportunidade salva conserva o retorno ao filtro de origem", async ({ context, page, baseURL }) => {

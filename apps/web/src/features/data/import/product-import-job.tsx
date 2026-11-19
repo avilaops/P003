@@ -59,7 +59,7 @@ export function ProductImportJob({ id, tenant, initialPending, canReadCatalog }:
   }
   return <section aria-label="Prévia da importação" className="min-w-0 space-y-3 rounded-lg border bg-card p-3 text-sm">
     {phase && <p role="status">{phase === "loading" ? "Conferindo prévia e resultado…" : "Confirmando importação…"}</p>}
-    {error && <p role="alert" className="text-destructive [&_a]:inline-flex [&_a]:min-h-11 [&_a]:items-center"><RequestError message={error} status={status} /></p>}
+    {error && <p role="alert" className="text-destructive [&_a]:inline-flex [&_a]:min-h-9 [&_a]:items-center"><RequestError message={error} status={status} /></p>}
     {uncertain && <p role="status" className="rounded-md border p-3">Ainda não foi possível confirmar o resultado. Confira o resultado ou repita a confirmação deste mesmo arquivo.</p>}
     {preview && <>
       <h2 className="break-words font-semibold [overflow-wrap:anywhere]">{preview.filename}</h2>
@@ -67,14 +67,14 @@ export function ProductImportJob({ id, tenant, initialPending, canReadCatalog }:
       {preview.status === "imported" ? <p role="status" className="rounded-md border p-3">{preview.result!.imported} de {preview.result!.total} produto(s) importado(s). Resultado consultável ao reabrir esta página.</p> : <p className="text-xs text-muted-foreground">Somente as linhas válidas e sem conflito serão importadas. SKUs existentes não são substituídos.</p>}
       <div role="region" aria-label="Linhas do arquivo" tabIndex={0} className="max-h-72 overflow-y-auto rounded-md border"><DataTable className="table-fixed"><caption className="sr-only">Prévia das linhas do CSV</caption><thead className="bg-muted/40"><tr><th scope="col" className="w-3/5 p-2">Produto</th><th scope="col" className="p-2">Conferência</th></tr></thead><tbody>{preview.rows.map(row => <tr key={row.line} className="border-t align-top"><td className="p-2 [overflow-wrap:anywhere]"><p>{row.input.name}</p><p className="mt-1 text-xs text-muted-foreground">Linha {row.line} · {row.input.sku}</p></td><td className="p-2 text-xs [overflow-wrap:anywhere]">{row.error || (row.conflict ? "SKU conflitante" : "Válida")}{row.error && row.conflict && <p>SKU conflitante</p>}</td></tr>)}</tbody></DataTable></div>
       {preview.status === "previewed" && preview.valid > 0 && <form className="space-y-2" onSubmit={event => { event.preventDefault(); void confirm() }}>
-        <label className="flex min-h-11 cursor-pointer items-center gap-2"><input type="checkbox" required checked={checked} disabled={!!phase} onChange={event => setChecked(event.target.checked)} />Conferi a prévia e quero importar as linhas válidas.</label>
+        <label className="flex min-h-9 cursor-pointer items-center gap-2"><input type="checkbox" required checked={checked} disabled={!!phase} onChange={event => setChecked(event.target.checked)} />Conferi a prévia e quero importar as linhas válidas.</label>
         <Button type="submit" disabled={!!phase || !checked}>{phase === "confirming" ? "Confirmando…" : uncertain ? "Repetir confirmação" : "Confirmar importação"}</Button>
       </form>}
     </>}
     <nav aria-label="Ações da importação" className="flex flex-wrap items-center gap-x-4 gap-y-2">
       <Button type="button" variant="outline" disabled={!!phase} onClick={reload}>Conferir resultado</Button>
-      {!uncertain && <Link className="inline-flex min-h-11 items-center text-primary underline" href="/preferencias/dados/importacao">Importar outro arquivo</Link>}
-      {canReadCatalog && <Link className="inline-flex min-h-11 items-center text-primary underline" href="/cadastros/produtos">Consultar produtos</Link>}
+      {!uncertain && <Link className="inline-flex min-h-9 items-center text-primary underline" href="/preferencias/dados/importacao">Importar outro arquivo</Link>}
+      {canReadCatalog && <Link className="inline-flex min-h-9 items-center text-primary underline" href="/cadastros/produtos">Consultar produtos</Link>}
     </nav>
   </section>
 }

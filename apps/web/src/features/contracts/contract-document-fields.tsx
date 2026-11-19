@@ -47,7 +47,7 @@ export function ContractDocumentFields({ fields, defaults, values, onChange }: C
         <label className="block break-words text-sm font-medium" htmlFor={controlId}>{label}{isRequired && <span> *</span>}</label>
         <select
           id={controlId}
-          className="block h-11 w-full min-w-0 rounded-lg border border-input bg-background px-3 text-base disabled:bg-muted/40 md:text-sm"
+          className="block h-9 w-full min-w-0 rounded-lg border border-input bg-background px-3 text-base disabled:bg-muted/40 md:text-sm"
           value={selected[0]?.name || ""}
           required={isRequired}
           disabled={isLocked}

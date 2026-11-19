@@ -69,7 +69,7 @@ function FiscalOverview() {
               {shortcuts.map(([label, href, description]) => (
                 <li key={href}>
                   <Link
-                    className="flex min-h-11 flex-wrap items-center justify-between gap-x-3 gap-y-1 px-3 py-2 text-sm hover:bg-muted/50 focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-primary"
+                    className="flex min-h-9 flex-wrap items-center justify-between gap-x-3 gap-y-1 px-3 py-2 text-sm hover:bg-muted/50 focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-primary"
                     href={href}
                   >
                     <span className="font-medium">{label}</span>

@@ -58,7 +58,7 @@ body:has(.erp-workspace) {
 .erp-content :where(input:not([type=checkbox], [type=radio], [type=range], [type=color], [type=file], [type=hidden]), select) { height: var(--workspace-control-height); }
 .erp-content :where(textarea) { min-height: 64px; padding: 8px; }
 .erp-content [data-slot=button][data-size=default] { height: auto; min-height: var(--workspace-control-height); padding-block: 6px; font-size: 14px; }
-.erp-content select.workspace-fiscal-event { min-height: 44px; }
+.erp-content select.workspace-fiscal-event { min-height: 36px; }
 .erp-content :where(input, select, textarea):disabled { cursor: not-allowed; background-color: var(--muted); color: var(--muted-foreground); }
 .erp-content :where(input, select, textarea)[aria-invalid=true] { border-color: var(--destructive); }
 .erp-content :where(table) { width: 100%; border-collapse: collapse; font-size: 14px; font-variant-numeric: tabular-nums; }
@@ -119,7 +119,7 @@ body:has(.erp-workspace) {
   /* Keep native iOS date controls inside their grid cell. */
   .erp-content input[type=date] { min-width: 0; max-width: 100%; }
   .erp-content input[type=date]::-webkit-date-and-time-value { min-width: 0; text-align: start; }
-  .erp-content :is(input:not([type=checkbox], [type=radio], [type=range], [type=color], [type=hidden]), select, textarea) { font-size: 18px; }
+  .erp-content :is(input:not([type=checkbox], [type=radio], [type=range], [type=color], [type=hidden]), select, textarea) { font-size: 14px; }
   .erp-content .form-actions { bottom: max(12px, env(safe-area-inset-bottom)); }
 }
 @media (max-width: 767px) {
