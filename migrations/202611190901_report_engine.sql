@@ -8,14 +8,29 @@ ALTER TABLE system_config.report_definitions DROP CONSTRAINT report_definitions_
     ADD COLUMN totals jsonb NOT NULL DEFAULT '[]'::jsonb CHECK (jsonb_typeof(totals) = 'array' AND jsonb_array_length(totals) <= 20),
     ADD COLUMN required_permissions text[] NOT NULL DEFAULT '{}';
 
-UPDATE system_config.report_definitions SET required_permissions = CASE
-    WHEN dataset = 'products' THEN ARRAY['catalog.products.read']
-    WHEN dataset = 'parties' THEN ARRAY['catalog.parties.read']
-    WHEN dataset = 'sales_orders' THEN ARRAY['sales.orders.read']
-    WHEN dataset = 'audit_log' THEN ARRAY['platform.audit.read']
-    WHEN dataset IN ('stock_divergences','stock_accuracy','stock_count_progress') THEN ARRAY['inventory.stock.read','inventory.counts.read']
-    WHEN dataset = 'stock_production_progress' THEN ARRAY['inventory.stock.read','production.read']
-    ELSE ARRAY['inventory.stock.read'] END;
+-- Definições gravadas fora da API (fixtures e dados anteriores) sem permissões explícitas herdam o
+-- mapeamento das fontes antigas. Fonte desconhecida sem permissão continua barrada pela restrição abaixo.
+CREATE FUNCTION system_config.default_report_permissions() RETURNS trigger
+LANGUAGE plpgsql SET search_path = pg_catalog AS $$
+BEGIN
+    IF cardinality(NEW.required_permissions) = 0 THEN
+        NEW.required_permissions := CASE
+            WHEN NEW.dataset = 'products' THEN ARRAY['catalog.products.read']
+            WHEN NEW.dataset = 'parties' THEN ARRAY['catalog.parties.read']
+            WHEN NEW.dataset = 'sales_orders' THEN ARRAY['sales.orders.read']
+            WHEN NEW.dataset = 'audit_log' THEN ARRAY['platform.audit.read']
+            WHEN NEW.dataset IN ('stock_divergences','stock_accuracy','stock_count_progress') THEN ARRAY['inventory.stock.read','inventory.counts.read']
+            WHEN NEW.dataset = 'stock_production_progress' THEN ARRAY['inventory.stock.read','production.read']
+            WHEN NEW.dataset IN ('stock_movements','stock_position','stock_kardex','stock_turnover','stock_idle','stock_abc',
+                'stock_movement_activity','stock_movement_ledger') THEN ARRAY['inventory.stock.read']
+            ELSE '{}'::text[] END;
+    END IF;
+    RETURN NEW;
+END $$;
+REVOKE ALL ON FUNCTION system_config.default_report_permissions() FROM PUBLIC;
+CREATE TRIGGER report_definitions_default_permissions BEFORE INSERT OR UPDATE ON system_config.report_definitions
+    FOR EACH ROW EXECUTE FUNCTION system_config.default_report_permissions();
+UPDATE system_config.report_definitions SET required_permissions = '{}';
 
 ALTER TABLE system_config.report_definitions
     ADD CONSTRAINT report_definitions_permissions_present CHECK (cardinality(required_permissions) BETWEEN 1 AND 5);
