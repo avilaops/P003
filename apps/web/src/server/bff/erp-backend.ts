@@ -82,6 +82,12 @@ const routes: { module: MigratedModule; methods: readonly string[]; path: RegExp
   { module: "reports", methods: ["GET"], path: /^\/dashboard$/ },
   { module: "reports", methods: ["GET", "POST"], path: /^\/system\/custom-reports$/ },
   { module: "reports", methods: ["PUT"], path: new RegExp(`^/system/custom-reports/${uuid}$`, "i") },
+  { module: "reports", methods: ["GET"], path: /^\/reports\/sources$/ },
+  { module: "reports", methods: ["POST"], path: /^\/reports\/preview$/ },
+  { module: "reports", methods: ["GET"], path: new RegExp(`^/reports/definitions/${uuid}/run$`, "i") },
+  { module: "reports", methods: ["GET", "POST"], path: new RegExp(`^/reports/definitions/${uuid}/schedules$`, "i") },
+  { module: "reports", methods: ["PUT"], path: new RegExp(`^/reports/schedules/${uuid}$`, "i") },
+  { module: "reports", methods: ["GET"], path: new RegExp(`^/reports/runs/${uuid}/file$`, "i") },
 ]
 export function typescriptOrigin(environment: BackendEnvironment) {
   if (!environment.ERP_TYPESCRIPT_API_URL) throw Error("API TypeScript não configurada para o módulo ativo")
