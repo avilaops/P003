@@ -95,7 +95,7 @@ class TypeScriptComposeTests(unittest.TestCase):
             path = Path(directory) / 'compose.json'
             token = 'previous-private-token-with-24-or-more'
             path.write_text(json.dumps({'services': {
-                'api': {'image': 'rust', 'ports': ['127.0.0.1:3141:8080'], 'environment': {'DATABASE_URL': 'postgresql://app:fixture@db/test', 'SMTP_PASSWORD': 'MAIL', 'DOCUSEAL_URL': 'https://contrato.test', 'DOCUSEAL_API_TOKEN': 'seal'}},
+                'api': {'image': 'rust', 'ports': ['127.0.0.1:3141:8080'], 'environment': {'DATABASE_URL': 'postgresql://app:fixture@db/test', 'SMTP_PASSWORD': 'MAIL', 'DOCUSEAL_URL': 'https://contrato.test', 'DOCUSEAL_API_TOKEN': 'seal', 'DOCUSEAL_WEBHOOK_SECRET': 'hook', 'DOCUSEAL_TENANT_TEMPLATES': '{}', 'DOCUSEAL_EMAIL_READY': 'true'}},
                 'api-ts': {'image': 'web', 'environment': {'BROWSER_USE_API_KEY': 'bu_previous', 'ERP_FISCAL_ENGINE_URL': 'http://127.0.0.1:8091', 'ERP_FISCAL_ENGINE_TOKEN': token, 'FISCAL_A1_KEYRING': '{"k":1}'}},
                 'web': {'image': 'web', 'environment': {'AUTH_ISSUER': 'https://auth.test'}},
                 'fiscal-engine': {'image': 'fiscal', 'environment': {}, 'healthcheck': {}},
@@ -108,6 +108,8 @@ class TypeScriptComposeTests(unittest.TestCase):
             self.assertEqual(services['api']['environment']['BROWSER_USE_API_KEY'], 'bu_previous')
             self.assertEqual(services['api']['environment']['ERP_FISCAL_ENGINE_TOKEN'], token)
             self.assertEqual(services['api']['environment']['DOCUSEAL_API_TOKEN'], 'seal')
+            for key, value in (('DOCUSEAL_WEBHOOK_SECRET', 'hook'), ('DOCUSEAL_TENANT_TEMPLATES', '{}'), ('DOCUSEAL_EMAIL_READY', 'true')):
+                self.assertEqual(services['api']['environment'][key], value)
             self.assertNotIn('SMTP_PASSWORD', services['api']['environment'])
 
 
