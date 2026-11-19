@@ -152,12 +152,11 @@ export function CompanyDataForm({ initial, canEdit, saving, conflict, onSave, te
             <input
               name="legalName"
               defaultValue={initial.legalName}
-              required
-            />
+              required autoComplete="organization" />
           </label>
           <label className="field span-2">
             Nome fantasia
-            <input name="tradeName" defaultValue={initial.tradeName} />
+            <input name="tradeName" defaultValue={initial.tradeName} autoComplete="off" />
           </label>
           <label className="field">
             Tipo de pessoa
@@ -168,7 +167,7 @@ export function CompanyDataForm({ initial, canEdit, saving, conflict, onSave, te
           </label>
           <label className="field">
             CPF ou CNPJ *
-            <input name="taxId" defaultValue={initial.taxId} required />
+            <input name="taxId" defaultValue={initial.taxId} required autoComplete="off" />
           </label>
           <RegistryLookup kind="cnpj" context="company" tenantId={tenantId} disabled={!canEdit || saving || conflict} readValue={() => readField("taxId")} onApply={applyRegistryFields} />
           <AutomaticCnpj formRef={formRef} tenantId={tenantId} disabled={!canEdit || saving || conflict} onApply={data => {
@@ -184,20 +183,20 @@ export function CompanyDataForm({ initial, canEdit, saving, conflict, onSave, te
         <div className="form-grid">
           <label className="field">
             Inscrição estadual
-            <input name="stateRegistration" defaultValue={initial.stateRegistration} />
+            <input name="stateRegistration" defaultValue={initial.stateRegistration} autoComplete="off" />
           </label>
           <RegistryLookup kind="ie" context="company" tenantId={tenantId} disabled={!canEdit || saving || conflict} readValue={() => readField("taxId")} readState={() => readField("state")} onApply={applyRegistryFields} />
           <label className="field">
             Inscrição municipal
-            <input name="municipalRegistration" defaultValue={initial.municipalRegistration} />
+            <input name="municipalRegistration" defaultValue={initial.municipalRegistration} autoComplete="off" />
           </label>
           <label className="field">
             Inscrição SUFRAMA
-            <input name="suframa" defaultValue={initial.suframa} />
+            <input name="suframa" defaultValue={initial.suframa} autoComplete="off" />
           </label>
           <label className="field">
             CNAE
-            <input name="cnae" defaultValue={initial.cnae} placeholder="Não informado" />
+            <input name="cnae" defaultValue={initial.cnae} placeholder="Não informado" autoComplete="off" />
           </label>
           <label className="field">
             Atividade principal
@@ -229,7 +228,7 @@ export function CompanyDataForm({ initial, canEdit, saving, conflict, onSave, te
           </label>
           <label className="field span-2">
             Descrição da atividade
-            <input name="activityDescription" defaultValue={initial.activityDescription} placeholder="Não informado" />
+            <input name="activityDescription" defaultValue={initial.activityDescription} placeholder="Não informado" autoComplete="off" />
           </label>
         </div>
         <fieldset className="mt-5">
@@ -270,37 +269,36 @@ export function CompanyDataForm({ initial, canEdit, saving, conflict, onSave, te
         />
         <div className="form-grid">
           <label className="field">
-            CEP *<input name="postalCode" defaultValue={initial.postalCode} required />
+            CEP *<input name="postalCode" defaultValue={initial.postalCode} required autoComplete="postal-code" />
           </label>
           <RegistryLookup kind="cep" context="company" tenantId={tenantId} disabled={!canEdit || saving || conflict} readValue={() => readField("postalCode")} onApply={applyRegistryFields} />
           <label className="field">
             UF *
-            <select name="state" defaultValue={initial.state} required>
+            <select name="state" autoComplete="address-level1" defaultValue={initial.state} required>
               <option value="">Selecione</option>
               {brazilianStates.map((state) => <option key={state}>{state}</option>)}
             </select>
           </label>
           <label className="field span-2">
-            Cidade *<input name="city" defaultValue={initial.city} required />
+            Cidade *<input name="city" defaultValue={initial.city} required autoComplete="address-level2" />
           </label>
           <label className="field span-2">
             Endereço *
-            <input name="street" defaultValue={initial.street} required />
+            <input name="street" defaultValue={initial.street} required autoComplete="address-line1" />
           </label>
           <label className="field">
-            Número *<input name="number" defaultValue={initial.number} required />
+            Número *<input name="number" defaultValue={initial.number} required autoComplete="off" />
           </label>
           <label className="field">
             Bairro *
             <input
               name="district"
               defaultValue={initial.district}
-              required
-            />
+              required autoComplete="off" />
           </label>
           <label className="field span-2">
             Complemento
-            <input name="complement" defaultValue={initial.complement} />
+            <input name="complement" defaultValue={initial.complement} autoComplete="address-line2" />
           </label>
         </div>
       </section>
@@ -314,19 +312,19 @@ export function CompanyDataForm({ initial, canEdit, saving, conflict, onSave, te
         <div className="form-grid">
           <label className="field span-2">
             Pessoa de contato
-            <input name="contactName" defaultValue={initial.contactName} />
+            <input name="contactName" defaultValue={initial.contactName} autoComplete="name" />
           </label>
           <label className="field">
             Telefone
-            <input name="phone" type="tel" defaultValue={initial.phone} />
+            <input name="phone" type="tel" defaultValue={initial.phone} autoComplete="tel" />
           </label>
           <label className="field">
             Celular
-            <input name="mobile" type="tel" defaultValue={initial.mobile} placeholder="Não informado" />
+            <input name="mobile" type="tel" defaultValue={initial.mobile} placeholder="Não informado" autoComplete="tel" />
           </label>
           <label className="field">
             E-mail
-            <input name="email" type="email" defaultValue={initial.email} placeholder="Não informado" />
+            <input name="email" type="email" defaultValue={initial.email} placeholder="Não informado" autoComplete="email" />
           </label>
           <label className="field">
             E-mail de cobrança
@@ -334,12 +332,11 @@ export function CompanyDataForm({ initial, canEdit, saving, conflict, onSave, te
               name="billingEmail"
               defaultValue={initial.billingEmail}
               type="email"
-              placeholder="Não informado"
-            />
+              placeholder="Não informado" autoComplete="email" />
           </label>
           <label className="field span-2">
             Site
-            <input name="website" type="url" defaultValue={initial.website} placeholder="Não informado" />
+            <input name="website" type="url" defaultValue={initial.website} placeholder="Não informado" autoComplete="url" />
           </label>
         </div>
       </section>
@@ -356,6 +353,7 @@ export function CompanyDataForm({ initial, canEdit, saving, conflict, onSave, te
               <label className="field">
                 <span>Estado {index + 1}</span>
                 <select
+                  id={`state-registration-state-${index + 1}`}
                   aria-label={`Estado da inscrição ${index + 1}`}
                   value={registration.state}
                   onChange={(event) => setStateRegistrations((current) => current.map((item) => item.id === registration.id ? { ...item, state: event.target.value } : item))}
@@ -366,7 +364,7 @@ export function CompanyDataForm({ initial, canEdit, saving, conflict, onSave, te
               </label>
               <label className="field">
                 <span>Inscrição estadual</span>
-                <input aria-label={`Inscrição estadual ${index + 1}`} value={registration.value} onChange={(event) => setStateRegistrations((current) => current.map((item) => item.id === registration.id ? { ...item, value: event.target.value } : item))} />
+                <input id={`state-registration-value-${index + 1}`} autoComplete="off" aria-label={`Inscrição estadual ${index + 1}`} value={registration.value} onChange={(event) => setStateRegistrations((current) => current.map((item) => item.id === registration.id ? { ...item, value: event.target.value } : item))} />
               </label>
               <Button
                 aria-label={`Excluir inscrição ${index + 1}`}
