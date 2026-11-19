@@ -10,6 +10,7 @@ import { decimal, fixed, validateDate } from "../sales/fixed.js"
 import { pathId } from "./documents.js"
 import { fiscalOrigin, purchaseOrder, purchaseSummary } from "./purchase-receipts.js"
 import { conflict, currentRevision, invalid, missing } from "./snapshot.js"
+import { cancelPendingApproval, onApprovalDecided, submitForApproval } from "../approvals/engine.js"
 
 const read = "purchasing.orders.read",
   manage = "purchasing.orders.manage",
@@ -122,7 +123,36 @@ async function verifyConfirmation(ctx: AuthorizedContext, id: string) {
   if (row.product_invalid) conflict("O produto deve estar ativo e conservar a unidade do pedido")
 }
 
+/** Alçada (C3): decide se a confirmação segue ou fica aguardando aprovação. */
+export async function purchaseApprovalGate(ctx: AuthorizedContext, headers: Parameters<typeof record>[1], id: string, amountCents: bigint, supplierName: string) {
+  const defaults = (
+    await ctx.client.query<{ category: string | null; center: string | null }>(
+      "SELECT purchases_category_id AS category,default_cost_center_id AS center FROM financial_wallet_settings WHERE tenant_id=$1",
+      [ctx.tenantId],
+    )
+  ).rows[0]
+  return submitForApproval(ctx, headers, {
+    documentType: "purchase",
+    documentId: id,
+    amountCents,
+    costCenterId: defaults?.center ?? null,
+    categoryId: defaults?.category ?? null,
+    summary: "Compra de " + supplierName,
+  })
+}
+
 export function registerPurchaseOrders(app: FastifyInstance, deps: AppDependencies) {
+  onApprovalDecided("purchase", async (ctx, headers, request) => {
+    const approved = request.status === "approved",
+      status = approved ? "confirmed" : "draft"
+    const row = (
+      await ctx.client.query<{ revision: string }>(
+        "UPDATE purchase_orders SET status=$3,revision=revision+1,updated_at=now() WHERE tenant_id=$1 AND id=$2 AND status='awaiting_approval' RETURNING revision",
+        [ctx.tenantId, request.documentId, status],
+      )
+    ).rows[0]
+    if (row) await record(ctx, headers, "purchase_order", request.documentId, "purchase." + status, { approvalId: request.id, status })
+  })
   app.get(base, async (req, reply) => {
     const body = await authorizeRequest(req, deps, async (ctx) => {
       requirePermission(ctx, read)
@@ -251,15 +281,19 @@ export function registerPurchaseOrders(app: FastifyInstance, deps: AppDependenci
         if (saved) return saved
         const old = await purchaseOrder(ctx, id)
         currentRevision(old.data.revision, expected)
-        const previousStatus = old.data.status,
-          status = statuses[action]
+        const previousStatus = old.data.status
         if (
           (action === "confirm" && previousStatus !== "draft") ||
-          (action === "cancel" && (!["draft", "confirmed"].includes(previousStatus) || old.receiptCount > 0)) ||
+          (action === "cancel" && (!["draft", "awaiting_approval", "confirmed"].includes(previousStatus) || old.receiptCount > 0)) ||
           (action === "close" && previousStatus !== "partially_received")
         )
           conflict("Transição não permitida na situação atual do pedido")
-        if (action === "confirm") await verifyConfirmation(ctx, id)
+        let status: string = statuses[action]
+        if (action === "confirm") {
+          await verifyConfirmation(ctx, id)
+          if ((await purchaseApprovalGate(ctx, req.headers, id, fixed(String((old.data as { amount?: unknown }).amount), 2), String(old.data.supplierName))).status === "pending") status = "awaiting_approval"
+        }
+        if (action === "cancel") await cancelPendingApproval(ctx, req.headers, "purchase", id)
         const revision = nextRevision(expected)
         await ctx.client.query(
           "UPDATE purchase_orders SET status=$3,revision=$4,updated_at=now() WHERE tenant_id=$1 AND id=$2",

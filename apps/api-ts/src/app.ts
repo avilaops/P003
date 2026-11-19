@@ -24,6 +24,7 @@ import { registerReportRoutes } from "./modules/reports/routes.js"
 import { registerPosSessionRoutes } from "./modules/pos-sessions/routes.js"
 import { registerFinanceInsightRoutes } from "./modules/finance-insights/routes.js"
 import { registerFinanceWalletRoutes } from "./modules/finance-wallets/routes.js"
+import { registerApprovals } from "./modules/approvals/routes.js"
 import { registerFinanceManagementRoutes } from "./modules/finance-management/routes.js"
 import { registerFinanceTreasuryRoutes } from "./modules/finance-treasury/routes.js"
 import { registerCommercialApprovalRoutes } from "./modules/commercial/approvals.js"
@@ -144,6 +145,7 @@ export function buildApp(_dependencies: AppDependencies): FastifyInstance {
   registerPosSessionRoutes(app, _dependencies)
   registerFinanceInsightRoutes(app, _dependencies)
   registerFinanceWalletRoutes(app, _dependencies)
+  registerApprovals(app, _dependencies)
   registerFinanceManagementRoutes(app, _dependencies)
   registerFinanceTreasuryRoutes(app, _dependencies)
   registerCommercialApprovalRoutes(app, _dependencies)
