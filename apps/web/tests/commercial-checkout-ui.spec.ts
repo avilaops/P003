@@ -128,7 +128,7 @@ for (const width of [320, 390, 430, 1366, 1440]) test(`erro abre e foca a parcel
   await expect(page.getByLabel("Valor da parcela 1 (R$)", { exact: true })).toHaveValue("6510,36")
   expect(state.creation()).toBeNull()
   expect(state.writes.filter(write => write.pathname === "/api/erp/commercial/orders")).toHaveLength(0)
-  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+  await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
   for (const link of await page.getByRole("navigation", { name: "Etapas da simulação" }).getByRole("link").all()) {
     if (width < 500) expect((await link.boundingBox())!.height).toBeGreaterThanOrEqual(44)
   }
@@ -401,7 +401,7 @@ for (const width of [320, 390, 430, 1366, 1440]) test(`fechamento compacto mant�
   await page.getByLabel("Forma da parcela 2", { exact: true }).selectOption(pix)
   await second.click()
   await expect(second).toContainText("PIX")
-  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+  await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
   await page.screenshot({ path: info.outputPath(`checkout-compact-${width}.png`), fullPage: true })
 })
 
@@ -526,7 +526,7 @@ for (const width of [390, 1366]) test(`negociação preserva cliente, entrada e 
   await page.locator("summary").filter({ hasText: "Parcela 3 de 3" }).click()
   await page.getByLabel("Valor da parcela 3 (R$)", { exact: true }).fill("2170,12")
   await expect(page.getByText(/Parcelas:.*Soma conferida/)).toBeVisible()
-  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+  await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
   await page.screenshot({ path: info.outputPath(`checkout-ready-${width}.png`), fullPage: true })
   const created = page.waitForResponse(response => new URL(response.url()).pathname === "/api/erp/commercial/orders" && response.request().method() === "POST")
   await page.getByRole("button", { name: "Criar pedido com estas condições", exact: true }).click()
@@ -573,7 +573,7 @@ for (const width of [390, 1366]) test(`negociação preserva cliente, entrada e 
   await expect(plan).not.toContainText("Entrada recebida")
   expect(state.writes.filter(write => write.pathname === "/api/erp/commercial/orders")).toHaveLength(1)
   expect(state.writes.every(write => ["/api/erp/commercial/simulate", "/api/erp/commercial/orders"].includes(write.pathname))).toBe(true)
-  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+  await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
   await page.screenshot({ path: info.outputPath(`checkout-preserved-${width}.png`), fullPage: true })
 })
 
