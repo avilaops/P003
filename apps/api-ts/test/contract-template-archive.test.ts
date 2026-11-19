@@ -107,6 +107,9 @@ test("PostgreSQL archives a model once, keeps versions and audit, and hides it f
     assert.deepEqual(unpublished.archivedTemplates, [])
     assert.deepEqual(await visible(), [pending])
   } finally {
+    // pool.end() resolve antes de os sockets fecharem; o DROP ... WITH (FORCE) encerra esses backends
+    // e o cliente ainda ocioso emitiria "error" sem ouvinte, derrubando o teste já concluído.
+    seed.on("error", () => {})
     await seed.end()
     await admin.query("DROP DATABASE " + db + " WITH (FORCE)")
     await admin.query("DROP ROLE IF EXISTS " + role)
