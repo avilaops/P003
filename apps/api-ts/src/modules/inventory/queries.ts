@@ -2,7 +2,7 @@ import type { AuthorizedContext } from "../../platform/access.js"
 import { Problem } from "../../platform/problem.js"
 import { listQuerySchema, queryInteger } from "../registrations/query.js"
 import { decimal, validateDate } from "../sales/fixed.js"
-import { databaseId } from "../../platform/database-id.js"
+import { databaseId, normalizedDatabaseId } from "../../platform/database-id.js"
 import { z } from "zod"
 import { activeStockLocations } from "./locations.js"
 import { moneyFromMicros, productValue, projectedCosts, unitFromMicros } from "./valuation.js"
@@ -170,4 +170,30 @@ export async function history(context: AuthorizedContext, query: unknown) {
         balanceAfter:cost ? amount(cost.totalAfter) : result.balanceAfter,
         localBalanceAfter:cost && result.warehouseId ? amount(cost.quantityAfter) : result.localBalanceAfter}
     }), total: Number(row.total), offset, limit }
+}
+
+// One movement with its product, location, origin documents, reversal links and projected cost.
+export async function movementDetail(context: AuthorizedContext, rawId: unknown) {
+  const parsed = normalizedDatabaseId.safeParse(rawId)
+  if (!parsed.success) throw new Problem(422, "invalid_input", "Identificador de lançamento inválido")
+  const result = await context.client.query(`
+    SELECT m.*,${occurredAtSql.replaceAll("created_at","m.created_at")} AS occurred_at,i.effective_on::text AS effective_on,
+      p.sku,p.name,p.unit,p.status AS product_status,loc.name AS warehouse_name,loc.code AS warehouse_code,
+      w.case_id,coalesce(m.inventory_count_id::text,origin.inventory_count_id) AS inventory_count_id,origin.return_source_id,
+      r.id AS reversed_by,r.id IS NOT NULL AS reversed
+    FROM stock_movements m JOIN products p ON (p.tenant_id,p.id)=(m.tenant_id,m.product_id)
+    LEFT JOIN stock_cost_inputs i ON (i.tenant_id,i.movement_id)=(m.tenant_id,m.id)
+    LEFT JOIN warehouses loc ON (loc.tenant_id,loc.id)=(m.tenant_id,m.warehouse_id)
+    LEFT JOIN LATERAL (SELECT x.id FROM stock_movements x WHERE x.tenant_id=m.tenant_id AND x.reverses_id=m.id ORDER BY x.created_at,x.id LIMIT 1) r ON true
+    ${movementOriginJoins}
+    WHERE m.tenant_id=$1 AND m.id=$2`, [context.tenantId, parsed.data])
+  const row = result.rows[0]
+  if (!row) throw notFound()
+  const { movements } = await projectedCosts(context, [String(row.product_id)])
+  const cost = movements.get(String(row.id))
+  return { tenantId: context.tenantId, canEdit: context.permissions.includes("inventory.stock.manage"),
+    product: { productId: row.product_id, sku: row.sku, name: row.name, unit: row.unit, status: row.product_status },
+    warehouse: row.warehouse_id ? { id: row.warehouse_id, code: row.warehouse_code, name: row.warehouse_name } : null,
+    movement: { ...movement(row), effectiveDate: cost?.date ?? row.effective_on ?? null, reversedBy: row.reversed_by ?? null,
+      unitCost: unitFromMicros(cost?.unit ?? null), movementValue: moneyFromMicros(cost?.amount ?? null) } }
 }

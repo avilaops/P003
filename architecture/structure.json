@@ -47,7 +47,7 @@
   },
   "routeSurface": {
     "count": 568,
-    "sha256": "3b80b6cea878425e9dd91fbf89739d9ea33be6e05472d3d99c374bab8433d622"
+    "sha256": "41ba6b94e74f1d518236c36d8eba88228963a58c836cee6ed9c36e5c38b16d83"
   },
   "retiredPaths": [
     "apps/web/src/lib/erp-session.ts",
@@ -93,6 +93,6 @@
   "routeSurfaceReview": {
     "previousPolicyCommit": "5f853bcd226a7776573603ae134955699ac82779",
     "reviewedMainCommit": "2a2148f8c2d18a380215928a6c9803de57f3227d",
-    "changes": "Financeiro em TypeScript • BFF autenticado, baixas em lote nas três carteiras, consulta de folha e notificações de cobrança do Mercado Pago."
+    "changes": "Estoque • detalhe de lançamento (GET /stock/movements/{id} e BFF). Anterior: Financeiro em TypeScript • BFF autenticado, baixas em lote nas três carteiras, consulta de folha e notificações de cobrança do Mercado Pago."
   }
 }

@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify"
 import { authorizeRequest, requirePermission, type AccessDependencies } from "../../platform/access.js"
-import { balances, history } from "./queries.js"
+import { balances, history, movementDetail } from "./queries.js"
 import { postMovement } from "./commands.js"
 import { registerManualSettings } from "./manual-settings.js"
 import { registerPeriods } from "./periods.js"
@@ -21,6 +21,13 @@ export function registerStockRoutes(app: FastifyInstance, dependencies: AccessDe
       })
     })
   }
+  app.get<{ Params: { id: string } }>("/api/v1/stock/movements/:id", async (request, reply) => {
+    reply.header("cache-control", "no-store")
+    return authorizeRequest<unknown>(request, dependencies, context => {
+      requirePermission(context, "inventory.stock.read")
+      return movementDetail(context, request.params.id)
+    })
+  })
   app.post("/api/v1/stock/movements", async (request, reply) => {
     const result = await authorizeRequest(request, dependencies, context => postMovement(context, request.headers, request.body))
     return reply.code(201).header("cache-control", "no-store").send(result)

@@ -56,5 +56,6 @@ test("inventário de páginas exige título e preserva rotas operacionais nas pr
   }
   expect(isDemonstrationRoute("/preferencias/integracoes/lojas")).toBe(false)
   expect(isDemonstrationRoute("/estoque/lancamentos/novo")).toBe(false)
+  expect(isDemonstrationRoute("/estoque/lancamentos/0b6f8d2e-3c1a-4e7b-9f10-2a3b4c5d6e7f")).toBe(false)
   expect(isDemonstrationRoute("/fiscal/notas-saida")).toBe(false)
 })

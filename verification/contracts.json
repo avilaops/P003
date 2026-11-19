@@ -35038,6 +35038,24 @@
       "verification": {"status": "not_verified_by_catalog", "criteria": ["interface", "request", "authorization", "domain", "persistence", "effects", "failure", "response"]}
     },
     {
+      "id": "get-api-v1-stock-movements-id",
+      "flow": "stock",
+      "status": "implemented",
+      "operation": {"method": "GET", "path": "/api/v1/stock/movements/{id}"},
+      "actor": "active_tenant_member",
+      "permissions": ["inventory.stock.read"],
+      "input": {"headers": ["Authorization", "X-Tenant-Id"], "pathParameters": ["id"], "body": null, "query": null},
+      "preconditions": ["Sessão autenticada e vínculo ativo com a empresa."],
+      "transition": {"from": "Empresa selecionada", "to": "Estado preservado"},
+      "effects": {"writes": [], "external": [], "excludes": ["Consulta não altera saldos, custos nem o histórico de movimentos."]},
+      "concurrency": {"revision": false, "idempotency": false, "rule": "Leitura com a empresa ativa."},
+      "response": {"successStatuses": [200], "errorStatuses": [401, 403, 404, 422, 503], "action": "Consultar o detalhe de um lançamento de estoque"},
+      "recovery": "Repetir a leitura preservando a empresa; lançamento de outra empresa responde 404.",
+      "ui": {"pages": ["/estoque/lancamentos/[id]"], "bff": {"method": "GET", "path": "/api/erp/stock/movements/[id]"}, "gap": null},
+      "sources": ["apps/api-ts/src/modules/inventory/routes.ts", "apps/api-ts/src/modules/inventory/queries.ts"],
+      "verification": {"status": "not_verified_by_catalog", "criteria": ["interface", "request", "authorization", "domain", "persistence", "effects", "failure", "response"]}
+    },
+    {
       "id": "get-api-v1-stock-transfers-id",
       "flow": "stock",
       "status": "implemented",
