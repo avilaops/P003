@@ -10,6 +10,7 @@ import { apiErrorMessage } from "@/lib/api/error-message"
 
 const shortcuts = [
   { href: "/servicos/contratos", label: "Contratos", detail: "Vigência e renovação", icon: FileCheck2 },
+  { href: "/servicos/contratos/recorrentes", label: "Contratos recorrentes", detail: "Faturamento, reajuste e aditivos", icon: FileCheck2 },
   { href: "/servicos/ordens", label: "Ordens de serviço", detail: "Execução e assistência", icon: ClipboardList },
   { href: "/servicos/cte", label: "CT-e", detail: "Documentos de transporte recebidos", icon: FileText },
   { href: "/servicos/notas", label: "Notas de serviço", detail: "Documentos recebidos", icon: FileText },
@@ -45,7 +46,7 @@ type ServiceOrder = {
   laborCents: number
 }
 
-export function ServiceOrdersList() {
+export function ServiceOrdersList({ embedded = false }: { embedded?: boolean } = {}) {
   const [orders, setOrders] = useState<ServiceOrder[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
@@ -65,8 +66,9 @@ export function ServiceOrdersList() {
     return () => controller.abort()
   }, [])
 
+  const Frame = embedded ? Inline : Shell
   return (
-    <Shell back="/servicos" title="Ordens de serviço" description="Ordens vinculadas aos protocolos reais de garantia e assistência da empresa ativa.">
+    <Frame back="/servicos" title="Ordens de serviço" description="Ordens vinculadas aos protocolos reais de garantia e assistência da empresa ativa.">
       {loading ? (
         <div className="mt-6 space-y-3"><Skeleton className="h-20" /><Skeleton className="h-20" /></div>
       ) : error ? (
@@ -84,7 +86,7 @@ export function ServiceOrdersList() {
           ))}
         </section>
       )}
-    </Shell>
+    </Frame>
   )
 }
 
@@ -95,6 +97,8 @@ function serviceOrderStatus(status: ServiceOrder["status"]) {
 function formatCurrency(cents: number) {
   return (cents / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })
 }
+
+function Inline({ children }: { title: string; description: string; back?: string; children: React.ReactNode }) { return <div>{children}</div> }
 
 function Shell({ title, description, back, children }: { title: string; description: string; back?: string; children: React.ReactNode }) {
   return (

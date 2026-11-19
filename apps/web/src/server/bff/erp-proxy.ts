@@ -38,6 +38,14 @@ export async function forwardErp(request: Request, resource: string) {
     || request.method === "POST" && resource === "/warranty-equipment"
     || request.method === "POST" && /^\/warranty-(?:policies|cases|cases\/[a-f0-9-]{36}\/(?:transition|assignment|service-order|approval|rma|quarantine)|service-orders\/[a-f0-9-]{36}\/parts|rmas\/[a-f0-9-]{36}\/transition|quarantines\/[a-f0-9-]{36}\/transition)$/.test(resource)
   if (resource.startsWith("/warranty-") && !warrantyResource) return Response.json({ title: "Recurso de garantia inválido" }, { status: 400 })
+  const serviceContractResource = request.method === "GET" && /^\/service-contracts(?:\/alerts|\/[a-f0-9-]{36})?$/i.test(resource)
+    || request.method === "POST" && /^\/service-contracts(?:\/billing-runs|\/[a-f0-9-]{36}\/(?:transition|amendments|adjustments))?$/i.test(resource)
+  const serviceOrderPhoto = request.method === "GET" && /^\/service-order-photos\/[a-f0-9-]{36}\/file$/i.test(resource)
+  const serviceOrderResource = serviceOrderPhoto
+    || request.method === "GET" && /^\/service-orders(?:\/equipment-history|\/[a-f0-9-]{36})?$/i.test(resource)
+    || request.method === "POST" && /^\/service-orders(?:\/[a-f0-9-]{36}\/(?:schedule|start|checklist|hours|parts|photos|close|charge|cancel))?$/i.test(resource)
+  if ((resource.startsWith("/service-orders") || resource.startsWith("/service-order-photos")) && !serviceOrderResource) return Response.json({ title: "Recurso de ordens de serviço inválido" }, { status: 400 })
+  if (resource.startsWith("/service-contracts") && !serviceContractResource) return Response.json({ title: "Recurso de contratos de serviço inválido" }, { status: 400 })
   const payrollResource = request.method === "GET" && /^\/staff-payroll$|^\/staff\/[a-f0-9-]{36}\/payroll$/i.test(resource)
     || request.method === "POST" && /^\/staff-payroll\/(?:generate|salaries)$|^\/staff-payroll\/requests\/[a-f0-9-]{36}\/review$|^\/staff\/[a-f0-9-]{36}\/payroll\/requests$/i.test(resource)
   const registryResource = (resource === "/registry-lookups" || resource === "/company-registration/lookup") && request.method === "POST"
@@ -110,7 +118,7 @@ export async function forwardErp(request: Request, resource: string) {
   const purchaseResource = purchaseCollection || /^\/(?:purchase-orders|purchase-receipts|payables|financial-payables)\/[a-f0-9-]{36}$|^\/purchase-orders\/[a-f0-9-]{36}\/(?:confirm|cancel|close)$|^\/(?:payables|financial-payables)\/[a-f0-9-]{36}\/(?:payments|reverse-payment)$/i.test(resource)
   const financialRoute = financeRoute(request.method, resource)
   if (financialEmailResource && !financialRoute && new URL(request.url).search) return Response.json({ title: "Consulta inválida" }, { status: 400 })
-  if (!financialRoute && !stockLocationPath(resource, request.method) && !(resource === "/sales/overview" && request.method === "GET") && !salesImportResource && !salesPolicy && !orderAcceptanceResource && !supportingResource && !platformMailResource && !orderDocumentResource && !posResource && !documentEmailResource && !priceListResource && !opportunityResource && !negotiationResource && !warrantyResource && !simulatorResource && !dashboardResource && !productCostResource && !priceTableResource && !fixedExpenseResource && !commercialResource && !proposalResource && !payrollResource && !registryResource && !salesSettingsResource && !accountResource && !continuityResource && !auditResource && !systemResource && !returnResource && !logisticsResource && !invitationResource && !referenceResource && !financialAccountEntriesResource && !financialAccountTransfersResource && !inventoryCountResource && !serviceKeyResource && !purchaseResource && !productTransferResource && !productCatalogResource && !productFinishesResource && !/^\/(?:me|company|companies|financial-settings|preferences|staff|users|roles|permissions|products|stock|parties|orders|receivables)$|^\/(?:users|roles|products|parties|staff|orders|receivables)\/[a-f0-9-]{36}$|^\/stock\/movements$|^\/orders\/[a-f0-9-]{36}\/(?:confirm|cancel|complete)$|^\/receivables\/[a-f0-9-]{36}\/(?:payments|reverse-payment)$/i.test(resource)) return Response.json({ title: "Recurso inválido" }, { status: 400 })
+  if (!financialRoute && !stockLocationPath(resource, request.method) && !(resource === "/sales/overview" && request.method === "GET") && !salesImportResource && !salesPolicy && !orderAcceptanceResource && !supportingResource && !platformMailResource && !orderDocumentResource && !posResource && !documentEmailResource && !priceListResource && !opportunityResource && !negotiationResource && !warrantyResource && !simulatorResource && !dashboardResource && !productCostResource && !priceTableResource && !fixedExpenseResource && !commercialResource && !proposalResource && !payrollResource && !registryResource && !salesSettingsResource && !accountResource && !continuityResource && !auditResource && !systemResource && !returnResource && !logisticsResource && !invitationResource && !referenceResource && !financialAccountEntriesResource && !financialAccountTransfersResource && !inventoryCountResource && !serviceKeyResource && !purchaseResource && !productTransferResource && !productCatalogResource && !productFinishesResource && !serviceContractResource && !serviceOrderResource && !/^\/(?:me|company|companies|financial-settings|preferences|staff|users|roles|permissions|products|stock|parties|orders|receivables)$|^\/(?:users|roles|products|parties|staff|orders|receivables)\/[a-f0-9-]{36}$|^\/stock\/movements$|^\/orders\/[a-f0-9-]{36}\/(?:confirm|cancel|complete)$|^\/receivables\/[a-f0-9-]{36}\/(?:payments|reverse-payment)$/i.test(resource)) return Response.json({ title: "Recurso inválido" }, { status: 400 })
   try {
     const config = erpConfiguration()
     const session = platformMailResource || resource === "/companies" || resource === "/company-registration/lookup" ? await currentIdentitySession() : await currentSession()
@@ -128,7 +136,7 @@ export async function forwardErp(request: Request, resource: string) {
       const reader = request.body?.getReader()
       const chunks: Uint8Array[] = []
       let size = 0
-      const bodyLimit = /^\/finance-treasury\/(?:import-(?:ofx|cnab|return)|cnab-return)$/.test(resource) ? 2_800_000 : warrantyRecords || supportingDocumentsResource || /^\/(?:receivables|payables|financial-payables)\/(?:[a-f0-9-]{36}\/(?:payments|approvals)|payment-batches)$/i.test(resource) || /^\/products\/[a-f0-9-]{36}\/catalog$/i.test(resource) ? 14_100_000 : /^\/products\/import$/i.test(resource) ? 2_800_000 : /^\/(?:staff|products|company)(?:\/[a-f0-9-]{36})?$/i.test(resource) ? 400_000 : 65_536
+      const bodyLimit = /^\/service-orders\/[a-f0-9-]{36}\/photos$/i.test(resource) ? 8_600_000 : /^\/service-orders\/[a-f0-9-]{36}\/close$/i.test(resource) ? 600_000 : /^\/finance-treasury\/(?:import-(?:ofx|cnab|return)|cnab-return)$/.test(resource) ? 2_800_000 : warrantyRecords || supportingDocumentsResource || /^\/(?:receivables|payables|financial-payables)\/(?:[a-f0-9-]{36}\/(?:payments|approvals)|payment-batches)$/i.test(resource) || /^\/products\/[a-f0-9-]{36}\/catalog$/i.test(resource) ? 14_100_000 : /^\/products\/import$/i.test(resource) ? 2_800_000 : /^\/(?:staff|products|company)(?:\/[a-f0-9-]{36})?$/i.test(resource) ? 400_000 : 65_536
       if (reader) for (;;) {
         const { done, value } = await reader.read()
         if (done) break
@@ -283,6 +291,12 @@ export async function forwardErp(request: Request, resource: string) {
         upstream.searchParams.set(key, value)
       }
     }
+    if ((serviceContractResource || serviceOrderResource) && request.method === "GET" && ["/service-contracts", "/service-orders", "/service-orders/equipment-history"].includes(resource)) {
+      for (const [key, value] of new URL(request.url).searchParams) {
+        if (!["q", "status", "offset", "limit", "technicianId", "serialNumber"].includes(key)) return Response.json({ title: "Filtro inválido" }, { status: 400 })
+        upstream.searchParams.set(key, value)
+      }
+    }
     if (posResource || (documentEmailResource && !financialRoute)) {
       const query = new URL(request.url).searchParams
       const allowed = resource === "/pos/products" ? ["search", "destination", "taxpayer", "offset", "limit"] : resource === "/pos/sessions/current" ? ["register"] : resource === "/pos/sessions" ? ["status", "register", "startDate", "endDate", "offset", "limit"] : resource === "/pos/sales" ? ["sessionId", "status", "offset", "limit"] : []
@@ -300,7 +314,7 @@ export async function forwardErp(request: Request, resource: string) {
     const output = new Headers({ "Cache-Control": "no-store, no-transform", "Content-Type": response.headers.get("content-type") || "application/json" })
     if ((productExportResource || orderDocumentResource) && response.ok) { const disposition = response.headers.get("content-disposition"); if (disposition) output.set("Content-Disposition", disposition) }
     for (const name of ["etag", "x-request-id", "idempotency-replayed", "x-erp-backend"]) { const value = response.headers.get(name); if (value) output.set(name, value) }
-    if ((supportingDownloadResource || warrantyDownload) && response.ok) {
+    if ((supportingDownloadResource || warrantyDownload || serviceOrderPhoto) && response.ok) {
       output.set("X-Content-Type-Options", "nosniff")
       output.set("Content-Disposition", response.headers.get("content-disposition") || "attachment")
       return new Response(response.body, { status: response.status, headers: output })
