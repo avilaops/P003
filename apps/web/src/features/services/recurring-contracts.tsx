@@ -35,7 +35,7 @@ export function RecurringContracts() {
       if (parties.ok) setCustomers((await parties.json()).data ?? [])
     } catch (cause) { setError(apiErrorMessage(cause, "Contratos indisponíveis")) }
   }, [])
-  useEffect(() => { void load() }, [load])
+  useEffect(() => { let live = true; void Promise.resolve().then(() => live && load()); return () => { live = false } }, [load])
 
   async function send(path: string, body: unknown, revision?: number) {
     if (!list) return
