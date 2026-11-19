@@ -4,8 +4,8 @@ import { readFile } from "node:fs/promises";
 import { decodeNfseBytes, nfseMoney, parseNfseDetail, parseNfsePage } from "../src/features/fiscal/nfse-received-model.ts";
 
 const tenant = "11111111-1111-4111-8111-111111111111";
-const xml = await readFile(new URL("../../api/src/http/fixtures/nfse-national.xml", import.meta.url), "utf8");
-const metadata = JSON.parse(await readFile(new URL("../../api/src/http/fixtures/nfse-national-inspection.json", import.meta.url), "utf8"));
+const xml = await readFile(new URL("../../fiscal-engine/tests/fixtures/http/nfse-national.xml", import.meta.url), "utf8");
+const metadata = JSON.parse(await readFile(new URL("../../fiscal-engine/tests/fixtures/http/nfse-national-inspection.json", import.meta.url), "utf8"));
 delete metadata.xml;
 const document = { id: "22222222-2222-4222-8222-222222222222", companyTaxId: "04252011000110", document: metadata, createdAt: "2026-11-03T10:00:00Z" };
 const bytes = text => new TextEncoder().encode(text).buffer;

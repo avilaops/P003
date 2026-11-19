@@ -63,8 +63,8 @@ function cookie(expiresAt = Date.now() + 3600_000) {
 }
 
 test.beforeAll(async () => {
-  xml = await readFile("../api/tests/fixtures/nfe-protocol-synthetic.xml")
-  pdf = Buffer.from(await readFile("../api/tests/fixtures/danfe-provider-synthetic.b64", "utf8"), "base64")
+  xml = await readFile("../api-ts/test/fixtures/nfe-protocol-synthetic.xml")
+  pdf = Buffer.from(await readFile("../api-ts/test/fixtures/danfe-provider-synthetic.b64", "utf8"), "base64")
   await new Promise<void>((resolve, reject) => { upstream.once("error", reject); upstream.listen(33119, "127.0.0.1", resolve) })
 })
 test.afterAll(async () => { if (upstream.listening) await new Promise<void>(resolve => upstream.close(() => resolve())) })

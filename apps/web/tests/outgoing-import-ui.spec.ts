@@ -5,8 +5,8 @@ import { readFile } from "node:fs/promises"
 import { installFrontendFixture, tenant } from "./helpers/frontend-fixture"
 
 // Browser-only fixtures. No fiscal or database service is contacted.
-const xml = readFileSync("../api/tests/fixtures/nfe-protocol-synthetic.xml")
-const pdf = Buffer.from(readFileSync("../api/tests/fixtures/danfe-provider-synthetic.b64", "utf8"), "base64")
+const xml = readFileSync("../api-ts/test/fixtures/nfe-protocol-synthetic.xml")
+const pdf = Buffer.from(readFileSync("../api-ts/test/fixtures/danfe-provider-synthetic.b64", "utf8"), "base64")
 const hash = (value: Buffer) => createHash("sha256").update(value).digest("hex")
 const note = { id: 17, accessKey: "35261004252011000110550010000000011000000017", issuerDocument: "04252011000110", issuerName: "Emitente sintético", recipientDocument: "19131243000197", recipientName: "Cliente sintético", number: 1, series: 1, issuedAt: "2026-10-27T15:00:00Z", totalCents: 1000, itemCount: 1, environment: 2, xmlSha256: hash(xml), createdAt: "2026-11-08T15:00:00Z" }
 let imported = false

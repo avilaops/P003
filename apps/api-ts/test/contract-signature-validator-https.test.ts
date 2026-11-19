@@ -9,7 +9,7 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 import { ContractSignatureValidationError, contractSignatureValidatorFromEnv } from "../src/modules/contract-signatures/validator.js";
 
-const fixture = (name: string) => fileURLToPath(new URL("../../api/tests/fixtures/contract-wire/" + name, import.meta.url));
+const fixture = (name: string) => fileURLToPath(new URL("./fixtures/contract-wire/" + name, import.meta.url));
 const roots = fileURLToPath(new URL("../../../deploy/fiscal/icp-brasil-roots.pem", import.meta.url));
 const offline = (e: unknown) => e instanceof ContractSignatureValidationError && e.statusCode === 503;
 
