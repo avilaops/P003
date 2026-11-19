@@ -2,7 +2,6 @@ import { createHash } from 'node:crypto';
 import { readFile, readdir } from 'node:fs/promises';
 import path from 'node:path';
 import { createRequire } from 'node:module';
-import { stockRoutes } from './stock-route-discovery.mts';
 
 const slash = value => value.split(path.sep).join('/');
 const hash = value => createHash('sha256').update(value).digest('hex');
@@ -94,89 +93,36 @@ function inspectTypeScript(ts, source, filename) {
   return { imports, fetches, unresolvedFetches, forwards, emptyActions, methods: [...new Set(methods)].sort() };
 }
 
-// Preserve offsets while masking Rust comments and string/character literals.
-function rustMask(source) {
-  const chars = source.split('');
-  const blank = (start, end) => { for (let n = start; n < end; n++) if (chars[n] !== '\n') chars[n] = ' '; };
-  for (let i = 0; i < source.length;) {
-    const start = i;
-    if (source.startsWith('//', i)) {
-      i = source.indexOf('\n', i); if (i < 0) i = source.length; blank(start, i);
-    } else if (source.startsWith('/*', i)) {
-      i += 2; let depth = 1;
-      while (i < source.length && depth) {
-        if (source.startsWith('/*', i)) { depth++; i += 2; }
-        else if (source.startsWith('*/', i)) { depth--; i += 2; } else i++;
-      }
-      blank(start, i);
-    } else {
-      const raw = source.slice(i).match(/^r(#{0,20})"/);
-      if (raw) {
-        const endToken = '"' + raw[1];
-        const end = source.indexOf(endToken, i + raw[0].length);
-        i = end < 0 ? source.length : end + endToken.length; blank(start, i);
-      } else if (source[i] === '"' || (source[i] === "'" && /^'(?:[^'\\\n]|\\.)'/.test(source.slice(i)))) {
-        const quote = source[i++];
-        while (i < source.length) { if (source[i] === '\\') i += 2; else if (source[i++] === quote) break; }
-        blank(start, i);
-      } else i++;
-    }
-  }
-  return chars.join('');
-}
+export const contractFile = 'apps/api-ts/openapi.json';
+export const baselineFile = 'verification/ts-migration-baseline.json';
 
-function productionRustMask(source) {
-  let mask = rustMask(source);
-  // Test modules may contain fake Auth servers; they are not application routes.
-  for (const match of mask.matchAll(/#\s*\[\s*cfg\s*\(\s*test\s*\)\s*\]/g)) {
-    const brace = mask.indexOf('{', match.index + match[0].length);
-    const semicolon = mask.indexOf(';', match.index + match[0].length);
-    let end;
-    if (semicolon >= 0 && (brace < 0 || semicolon < brace)) end = semicolon + 1;
-    else {
-      let depth = 1; end = brace + 1;
-      while (end < mask.length && depth) { if (mask[end] === '{') depth++; if (mask[end] === '}') depth--; end++; }
-    }
-    mask = mask.slice(0, match.index) + mask.slice(match.index, end).replace(/[^\n]/g, ' ') + mask.slice(end);
+// The API surface is the versioned OpenAPI contract generated from the routes the
+// TypeScript app registers (pnpm --filter api-ts openapi); its test fails on drift.
+// Operations of the former native backend that are not registered yet come from the
+// frozen migration baseline, flagged `legacy`, so ports shrink that list over time.
+async function apiRoutes(root, files) {
+  const read = async file => {
+    try { const text = await readFile(path.join(root, file), 'utf8'); files.push({ file, hash: hash(text) }); return JSON.parse(text); }
+    catch (error) { if (error.code === 'ENOENT') return null; throw error; }
+  };
+  const contract = await read(contractFile), baseline = await read(baselineFile);
+  const api = [], registered = new Set();
+  for (const [route, operations] of Object.entries(contract?.paths ?? {})) {
+    const methods = Object.keys(operations).map(method => method.toUpperCase()).filter(method => verbs.has(method)).sort();
+    if (!methods.length) continue;
+    for (const method of methods) registered.add(`${method} ${normalizedRoute(route)}`);
+    api.push({ path: route, methods, file: contractFile, typescript: Object.fromEntries(methods.map(method => [method, { file: contractFile }])) });
   }
-  return mask;
-}
-
-export function rustRoutes(source, file) {
-  const mask = productionRustMask(source);
-  const result = [];
-  for (const match of mask.matchAll(/\.route\s*\(/g)) {
-    let depth = 1, end = match.index + match[0].length;
-    const start = end;
-    while (end < mask.length && depth) { if (mask[end] === '(') depth++; if (mask[end] === ')') depth--; end++; }
-    const call = source.slice(start, end - 1);
-    const url = call.match(/^\s*"([^"\\]+)"\s*,/);
-    if (!url) continue;
-    const methods = [...new Set([...call.slice(url[0].length).matchAll(/\b(get|post|put|patch|delete|head|options)\s*\(/g)].map(item => item[1].toUpperCase()))].sort();
-    result.push({ path: url[1], methods, file, line: source.slice(0, match.index).split('\n').length });
+  const pending = new Map();
+  for (const operation of baseline?.operations ?? []) {
+    if (!verbs.has(operation.method) || !operation.path?.startsWith('/')) throw Error('Invalid baseline operation: ' + operation.method + ' ' + operation.path);
+    if (registered.has(`${operation.method} ${normalizedRoute(operation.path)}`)) continue;
+    const entry = pending.get(operation.path) ?? { path: operation.path, methods: [], file: baselineFile, legacy: true };
+    entry.methods.push(operation.method);
+    pending.set(operation.path, entry);
   }
-  return result;
-}
-
-// Follow the ordinary Rust module tree; a file's name does not determine whether
-// it belongs to tests. Keep all files in sourceFiles for provenance below.
-function productionRustFiles(sources, directory) {
-  const entries = ['main.rs', 'lib.rs'].map(file => path.join(directory, file)).filter(file => sources.has(file));
-  if (!entries.length) return new Set([...sources.keys()].filter(file => !/(?:^|_)tests\.rs$/.test(file)));
-  const visited = new Set();
-  function follow(file) {
-    if (visited.has(file)) return;
-    visited.add(file);
-    const base = ['main.rs', 'lib.rs', 'mod.rs'].includes(path.basename(file))
-      ? path.dirname(file) : path.join(path.dirname(file), path.basename(file, '.rs'));
-    for (const declaration of productionRustMask(sources.get(file)).matchAll(/\bmod\s+([A-Za-z_][A-Za-z_0-9]*)\s*;/g)) {
-      const name = declaration[1];
-      const next = [path.join(base, `${name}.rs`), path.join(base, name, 'mod.rs')].find(candidate => sources.has(candidate));
-      if (next) follow(next);
-    }
-  }
-  for (const entry of entries) follow(entry);
-  return visited;
+  api.push(...pending.values());
+  return api;
 }
 
 export async function discover(root, options = {}) {
@@ -216,64 +162,7 @@ export async function discover(root, options = {}) {
       pages.push({ path: pattern, module: pattern.split('/')[1] || 'inicio', file: source.file, dependencies: dependencies.sort(), apiReferences, unresolvedFetches, emptyActions, runtimeVerdict: 'not_verified_per_route' });
     }
   }
-  const api = [], rustSources = new Map();
-  for (const absolute of await walk(path.join(root, 'apps/api/src'))) {
-    if (!absolute.endsWith('.rs')) continue;
-    const content = await readFile(absolute, 'utf8'), file = slash(path.relative(root, absolute));
-    files.push({ file, hash: hash(content) });
-    rustSources.set(absolute, content);
-  }
-  for (const absolute of productionRustFiles(rustSources, path.join(root, 'apps/api/src'))) {
-    api.push(...rustRoutes(rustSources.get(absolute), slash(path.relative(root, absolute))));
-  }
-  for (const file of ['apps/api-ts/src/modules/document-endpoints.json', 'apps/api-ts/src/modules/sales-endpoints.json']) {
-    let registry;
-    try { registry = await readFile(path.join(root, file), 'utf8'); }
-    catch (error) { if (error.code === 'ENOENT') continue; throw error; }
-    files.push({ file, hash: hash(registry) });
-    const routes = new Map();
-    for (const endpoints of Object.values(JSON.parse(registry))) {
-      for (const [method, url] of Object.entries(endpoints)) {
-        if (!verbs.has(method) || !url.startsWith('/api/v1/')) throw Error('Invalid endpoint in ' + file + ': ' + method + ' ' + url);
-        const route = url.replace(/:([a-zA-Z][\w]*)/g, '{$1}');
-        const methods = routes.get(route) || [];
-        if (methods.includes(method)) throw Error('Duplicate endpoint in ' + file + ': ' + method + ' ' + url);
-        methods.push(method);
-        routes.set(route, methods);
-      }
-    }
-    for (const [route, methods] of routes) api.push({ path: route, methods, file });
-  }
-  const financeFile = 'apps/api-ts/src/modules/finance-endpoints.json';
-  let financeRegistry;
-  try { financeRegistry = await readFile(path.join(root, financeFile), 'utf8'); }
-  catch (error) { if (error.code !== 'ENOENT') throw error; }
-  if (financeRegistry) {
-    files.push({ file: financeFile, hash: hash(financeRegistry) });
-    for (const [file, endpoints] of Object.entries(JSON.parse(financeRegistry))) {
-      if (!/^apps\/api-ts\/src\/modules\/finance-[\w-]+\/[\w-]+\.ts$/.test(file)) throw Error('Invalid finance source: ' + file);
-      files.push({ file, hash: hash(await readFile(path.join(root, file), 'utf8')) });
-      for (const endpoint of endpoints) {
-        const [method, url] = endpoint.split(' ');
-        if (!verbs.has(method) || !url?.startsWith('/')) throw Error('Invalid finance endpoint: ' + endpoint);
-        let route = api.find(row => normalizedRoute(row.path) === normalizedRoute(url));
-        if (!route) { route = { path: url, methods: [], file }; api.push(route); }
-        if (route.typescript?.[method]) throw Error('Duplicate finance endpoint: ' + endpoint);
-        if (!route.methods.includes(method)) route.methods.push(method);
-        (route.typescript ??= {})[method] = { file };
-      }
-    }
-  }
-  const stock = await stockRoutes(root, ts);
-  for (const source of stock.sources) files.push({ file: source.file, hash: hash(source.content) });
-  for (const { method, path: url, file, line } of stock.routes) {
-    const existing = api.find(route => route.file.startsWith("apps/api-ts/") && normalizedRoute(route.path) === normalizedRoute(url));
-    if (existing) {
-      if (existing.typescript?.[method]) throw Error('Duplicate Fastify stock operation: ' + method + ' ' + url);
-      if (!existing.methods.includes(method)) existing.methods.push(method);
-      (existing.typescript ??= {})[method] = { file, line };
-    } else api.push({ path: url, methods: [method], file, line, typescript: { [method]: {file,line} } });
-  }
+  const api = await apiRoutes(root, files);
   const testFiles = (await walk(path.join(webRoot, 'tests'))).filter(file => /\.spec\.[cm]?[jt]sx?$/.test(file));
   const browserTests = [];
   for (const absolute of testFiles) {
@@ -287,7 +176,7 @@ export async function discover(root, options = {}) {
     'verification/product-context.mjs', 'verification/product-context-cli.mjs',
     'verification/schemas/product-flow-definitions.schema.json', 'verification/schemas/product-context.schema.json',
     'pnpm-lock.yaml',
-    'package.json', 'Cargo.toml', 'Cargo.lock', 'apps/api/Cargo.toml',
+    'package.json',
     'apps/web/package.json', 'apps/web/tsconfig.json', 'apps/web/playwright.config.ts',
     'apps/web/playwright.company.config.ts', 'apps/web/playwright.danfe.config.ts', 'scripts/verify-company.mjs',
     'apps/api-ts/package.json','apps/api-ts/tsconfig.json','apps/fiscal-engine/package.json','apps/fiscal-engine/package-lock.json',
@@ -309,7 +198,7 @@ export async function discover(root, options = {}) {
   }
   files.sort((a, b) => a.file.localeCompare(b.file));
   for (const collection of [pages, bff, api]) collection.sort((a, b) => a.path.localeCompare(b.path));
-  return { schemaVersion: '1', sourceHash: hash(JSON.stringify(files)), parser: { typescript: ts.version, rust: 'production-module-literal-router-v2' }, pages, bff, api, browserTests, sourceFiles: files };
+  return { schemaVersion: '1', sourceHash: hash(JSON.stringify(files)), parser: { typescript: ts.version, api: 'openapi-from-registered-fastify-routes-v1' }, pages, bff, api, browserTests, sourceFiles: files };
 }
 
 // During a method-by-method migration one public path can be served by both services.

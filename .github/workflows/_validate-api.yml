@@ -67,6 +67,12 @@ jobs:
         python3 scripts/ci/timed.py --label 'api/typescript-install' --output "artifacts/timings/$GITHUB_JOB.jsonl" -- pnpm install --frozen-lockfile --prefer-offline
         python3 scripts/ci/timed.py --label 'api/typescript-typecheck' --output "artifacts/timings/$GITHUB_JOB.jsonl" -- pnpm --filter api-ts typecheck
         python3 scripts/ci/timed.py --label 'api/typescript-tests' --output "artifacts/timings/$GITHUB_JOB.jsonl" -- pnpm --filter api-ts test
+    - name: Verify the TypeScript OpenAPI contract and measure what is left to port
+      run: |
+        python3 scripts/ci/timed.py --label 'api/typescript-openapi-drift' --output "artifacts/timings/$GITHUB_JOB.jsonl" -- pnpm --filter api-ts openapi:check
+        python3 scripts/ci/timed.py --label 'api/typescript-openapi-valid' --output "artifacts/timings/$GITHUB_JOB.jsonl" -- node scripts/contracts/check-api-ts-openapi.mjs
+        python3 scripts/ci/timed.py --label 'api/typescript-route-coverage' --output "artifacts/timings/$GITHUB_JOB.jsonl" -- pnpm --filter api-ts route-coverage
+        python3 scripts/ci/timed.py --label 'api/typescript-migration-inventory' --output "artifacts/timings/$GITHUB_JOB.jsonl" -- pnpm --filter api-ts exec tsx ../../verification/ts-migration-inventory.mjs --summary
     - name: Verify inventory commands and upgrades against PostgreSQL
       env:
         API_TS_TEST_ADMIN_URL: postgres://postgres:ci_isolated_only@127.0.0.1:5432/postgres

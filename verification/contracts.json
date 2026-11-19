@@ -39688,6 +39688,674 @@
           "response"
         ]
       }
+    },
+    {
+      "id": "post-integrations-browser-use-runs",
+      "flow": "system-configuration",
+      "status": "implemented",
+      "operation": {
+        "method": "POST",
+        "path": "/api/v1/integrations/browser-use/runs"
+      },
+      "actor": "company_manager",
+      "permissions": [
+        "platform.company.manage"
+      ],
+      "input": {
+        "headers": [
+          "Authorization",
+          "X-Tenant-Id"
+        ],
+        "pathParameters": [],
+        "body": {
+          "type": "runRequestSchema",
+          "source": "apps/api-ts/src/modules/browser-use/routes.ts"
+        },
+        "query": null
+      },
+      "preconditions": [
+        "Gestão da empresa e integração com o Browser Use configurada."
+      ],
+      "transition": {
+        "from": "Estado atual da empresa selecionada",
+        "to": "Execução de navegador concluída ou cancelada por tempo"
+      },
+      "effects": {
+        "writes": [],
+        "external": [
+          "Browser Use"
+        ],
+        "excludes": []
+      },
+      "concurrency": {
+        "revision": false,
+        "idempotency": false,
+        "rule": "Sem If-Match ou Idempotency-Key neste handler; não inferir garantias ausentes."
+      },
+      "response": {
+        "successStatuses": [
+          200
+        ],
+        "errorStatuses": [
+          401,
+          403,
+          422,
+          502,
+          503,
+          504
+        ],
+        "action": "Executar uma tarefa no Browser Use e devolver o resultado"
+      },
+      "recovery": "Após 502 ou 504 conferir a execução no provedor antes de repetir; a rota não é idempotente.",
+      "ui": {
+        "pages": [],
+        "bff": null,
+        "gap": "Rota de integração entre serviços; não há tela associada."
+      },
+      "sources": [
+        "apps/api-ts/src/modules/browser-use/routes.ts"
+      ],
+      "verification": {
+        "status": "not_verified_by_catalog",
+        "criteria": [
+          "interface",
+          "request",
+          "authorization",
+          "domain",
+          "persistence",
+          "effects",
+          "failure",
+          "response"
+        ]
+      }
+    },
+    {
+      "id": "post-integrations-nfse-issuances",
+      "flow": "fiscal-integrations",
+      "status": "implemented",
+      "operation": {
+        "method": "POST",
+        "path": "/api/v1/integrations/nfse/issuances"
+      },
+      "actor": "tenant_bound_service_key",
+      "permissions": [
+        "fiscal.outgoing_nfse.issue"
+      ],
+      "input": {
+        "headers": [
+          "Authorization",
+          "X-Tenant-Id",
+          "Idempotency-Key"
+        ],
+        "pathParameters": [],
+        "body": null,
+        "query": null
+      },
+      "preconditions": [
+        "Credencial de integração da empresa (service key) não revogada, com o X-Tenant-Id igual ao da credencial.",
+        "Emissão automática habilitada e certificado da empresa disponível."
+      ],
+      "transition": {
+        "from": "Estado atual da empresa selecionada",
+        "to": "Emissão de NFS-e registrada, enviada ao motor fiscal e conciliada"
+      },
+      "effects": {
+        "writes": [
+          "fiscal_outgoing_nfse_issuances"
+        ],
+        "external": [
+          "Motor fiscal NFS-e"
+        ],
+        "excludes": [
+          "Não emite sem habilitação explícita da emissão automática."
+        ]
+      },
+      "concurrency": {
+        "revision": false,
+        "idempotency": true,
+        "rule": "A chave e o conteúdo identificam a operação dentro da empresa."
+      },
+      "response": {
+        "successStatuses": [
+          200,
+          202
+        ],
+        "errorStatuses": [
+          400,
+          401,
+          403,
+          404,
+          409,
+          422,
+          428,
+          500,
+          503,
+          502
+        ],
+        "action": "Emitir NFS-e pelo motor fiscal"
+      },
+      "recovery": "Após 202 ou resposta incerta, consultar a emissão e reconciliar antes de repetir; repetir o mesmo conteúdo com a mesma chave devolve o resultado original.",
+      "ui": {
+        "pages": [],
+        "bff": null,
+        "gap": "Rota de integração entre serviços; não há tela associada."
+      },
+      "sources": [
+        "apps/api-ts/src/modules/outgoing-nfse/routes.ts"
+      ],
+      "verification": {
+        "status": "not_verified_by_catalog",
+        "criteria": [
+          "interface",
+          "request",
+          "authorization",
+          "domain",
+          "persistence",
+          "effects",
+          "failure",
+          "response"
+        ]
+      }
+    },
+    {
+      "id": "post-integrations-nfse-manual-issuances",
+      "flow": "fiscal-integrations",
+      "status": "implemented",
+      "operation": {
+        "method": "POST",
+        "path": "/api/v1/integrations/nfse/manual-issuances"
+      },
+      "actor": "tenant_bound_service_key",
+      "permissions": [
+        "fiscal.outgoing_nfse.issue"
+      ],
+      "input": {
+        "headers": [
+          "Authorization",
+          "X-Tenant-Id",
+          "Idempotency-Key"
+        ],
+        "pathParameters": [],
+        "body": null,
+        "query": null
+      },
+      "preconditions": [
+        "Credencial de integração da empresa (service key) não revogada, com o X-Tenant-Id igual ao da credencial."
+      ],
+      "transition": {
+        "from": "Estado atual da empresa selecionada",
+        "to": "Emissão manual de NFS-e registrada como pendente"
+      },
+      "effects": {
+        "writes": [
+          "fiscal_outgoing_nfse_issuances"
+        ],
+        "external": [],
+        "excludes": []
+      },
+      "concurrency": {
+        "revision": false,
+        "idempotency": true,
+        "rule": "A chave e o conteúdo identificam a operação dentro da empresa."
+      },
+      "response": {
+        "successStatuses": [
+          201
+        ],
+        "errorStatuses": [
+          400,
+          401,
+          403,
+          404,
+          409,
+          422,
+          428,
+          500,
+          503
+        ],
+        "action": "Registrar emissão manual de NFS-e para confirmação por XML"
+      },
+      "recovery": "Repetir o mesmo conteúdo com a mesma chave devolve o registro original.",
+      "ui": {
+        "pages": [],
+        "bff": null,
+        "gap": "Rota de integração entre serviços; não há tela associada."
+      },
+      "sources": [
+        "apps/api-ts/src/modules/outgoing-nfse/routes.ts"
+      ],
+      "verification": {
+        "status": "not_verified_by_catalog",
+        "criteria": [
+          "interface",
+          "request",
+          "authorization",
+          "domain",
+          "persistence",
+          "effects",
+          "failure",
+          "response"
+        ]
+      }
+    },
+    {
+      "id": "get-integrations-nfse-issuances-id",
+      "flow": "fiscal-integrations",
+      "status": "implemented",
+      "operation": {
+        "method": "GET",
+        "path": "/api/v1/integrations/nfse/issuances/{id}"
+      },
+      "actor": "tenant_bound_service_key",
+      "permissions": [
+        "fiscal.outgoing_nfse.read"
+      ],
+      "input": {
+        "headers": [
+          "Authorization",
+          "X-Tenant-Id"
+        ],
+        "pathParameters": [
+          "id"
+        ],
+        "body": null,
+        "query": null
+      },
+      "preconditions": [
+        "Credencial de integração da empresa (service key) não revogada, com o X-Tenant-Id igual ao da credencial."
+      ],
+      "transition": {
+        "from": "Estado atual da empresa selecionada",
+        "to": "Estado de negócio preservado"
+      },
+      "effects": {
+        "writes": [],
+        "external": [],
+        "excludes": []
+      },
+      "concurrency": {
+        "revision": false,
+        "idempotency": false,
+        "rule": "A requisição lê o estado atual da empresa."
+      },
+      "response": {
+        "successStatuses": [
+          200
+        ],
+        "errorStatuses": [
+          400,
+          401,
+          403,
+          404,
+          500
+        ],
+        "action": "Consultar uma emissão de NFS-e"
+      },
+      "recovery": "Repetir a leitura; emissão de outra empresa retorna 404.",
+      "ui": {
+        "pages": [],
+        "bff": null,
+        "gap": "Rota de integração entre serviços; não há tela associada."
+      },
+      "sources": [
+        "apps/api-ts/src/modules/outgoing-nfse/routes.ts"
+      ],
+      "verification": {
+        "status": "not_verified_by_catalog",
+        "criteria": [
+          "interface",
+          "request",
+          "authorization",
+          "domain",
+          "persistence",
+          "effects",
+          "failure",
+          "response"
+        ]
+      }
+    },
+    {
+      "id": "get-integrations-nfse-issuances-id-xml",
+      "flow": "fiscal-integrations",
+      "status": "implemented",
+      "operation": {
+        "method": "GET",
+        "path": "/api/v1/integrations/nfse/issuances/{id}/xml"
+      },
+      "actor": "tenant_bound_service_key",
+      "permissions": [
+        "fiscal.outgoing_nfse.read"
+      ],
+      "input": {
+        "headers": [
+          "Authorization",
+          "X-Tenant-Id"
+        ],
+        "pathParameters": [
+          "id"
+        ],
+        "body": null,
+        "query": null
+      },
+      "preconditions": [
+        "Credencial de integração da empresa (service key) não revogada, com o X-Tenant-Id igual ao da credencial.",
+        "Emissão autorizada com XML persistido."
+      ],
+      "transition": {
+        "from": "Estado atual da empresa selecionada",
+        "to": "Estado de negócio preservado"
+      },
+      "effects": {
+        "writes": [],
+        "external": [],
+        "excludes": []
+      },
+      "concurrency": {
+        "revision": false,
+        "idempotency": false,
+        "rule": "A requisição lê o estado atual da empresa."
+      },
+      "response": {
+        "successStatuses": [
+          200
+        ],
+        "errorStatuses": [
+          400,
+          401,
+          403,
+          404,
+          500
+        ],
+        "action": "Baixar o XML de uma NFS-e autorizada"
+      },
+      "recovery": "Repetir a leitura; emissão de outra empresa retorna 404.",
+      "ui": {
+        "pages": [],
+        "bff": null,
+        "gap": "Rota de integração entre serviços; não há tela associada."
+      },
+      "sources": [
+        "apps/api-ts/src/modules/outgoing-nfse/routes.ts"
+      ],
+      "verification": {
+        "status": "not_verified_by_catalog",
+        "criteria": [
+          "interface",
+          "request",
+          "authorization",
+          "domain",
+          "persistence",
+          "effects",
+          "failure",
+          "response"
+        ]
+      }
+    },
+    {
+      "id": "post-integrations-nfse-issuances-id-manual-confirm",
+      "flow": "fiscal-integrations",
+      "status": "implemented",
+      "operation": {
+        "method": "POST",
+        "path": "/api/v1/integrations/nfse/issuances/{id}/manual-confirm"
+      },
+      "actor": "tenant_bound_service_key",
+      "permissions": [
+        "fiscal.outgoing_nfse.issue"
+      ],
+      "input": {
+        "headers": [
+          "Authorization",
+          "X-Tenant-Id",
+          "Idempotency-Key"
+        ],
+        "pathParameters": [
+          "id"
+        ],
+        "body": {
+          "type": "manualConfirmationSchema",
+          "source": "apps/api-ts/src/modules/outgoing-nfse/routes.ts"
+        },
+        "query": null
+      },
+      "preconditions": [
+        "Credencial de integração da empresa (service key) não revogada, com o X-Tenant-Id igual ao da credencial.",
+        "Emissão manual pendente; XML enviado na confirmação."
+      ],
+      "transition": {
+        "from": "Estado atual da empresa selecionada",
+        "to": "Emissão manual confirmada pelo XML"
+      },
+      "effects": {
+        "writes": [
+          "fiscal_outgoing_nfse_issuances"
+        ],
+        "external": [],
+        "excludes": []
+      },
+      "concurrency": {
+        "revision": false,
+        "idempotency": true,
+        "rule": "A chave e o conteúdo identificam a operação dentro da empresa."
+      },
+      "response": {
+        "successStatuses": [
+          200
+        ],
+        "errorStatuses": [
+          400,
+          401,
+          403,
+          404,
+          409,
+          422,
+          428,
+          500,
+          503
+        ],
+        "action": "Confirmar emissão manual de NFS-e com o XML autorizado"
+      },
+      "recovery": "Repetir o mesmo XML com a mesma chave devolve o resultado original.",
+      "ui": {
+        "pages": [],
+        "bff": null,
+        "gap": "Rota de integração entre serviços; não há tela associada."
+      },
+      "sources": [
+        "apps/api-ts/src/modules/outgoing-nfse/routes.ts"
+      ],
+      "verification": {
+        "status": "not_verified_by_catalog",
+        "criteria": [
+          "interface",
+          "request",
+          "authorization",
+          "domain",
+          "persistence",
+          "effects",
+          "failure",
+          "response"
+        ]
+      }
+    },
+    {
+      "id": "post-integrations-nfse-issuances-id-reconcile",
+      "flow": "fiscal-integrations",
+      "status": "implemented",
+      "operation": {
+        "method": "POST",
+        "path": "/api/v1/integrations/nfse/issuances/{id}/reconcile"
+      },
+      "actor": "tenant_bound_service_key",
+      "permissions": [
+        "fiscal.outgoing_nfse.issue"
+      ],
+      "input": {
+        "headers": [
+          "Authorization",
+          "X-Tenant-Id",
+          "Idempotency-Key"
+        ],
+        "pathParameters": [
+          "id"
+        ],
+        "body": null,
+        "query": null
+      },
+      "preconditions": [
+        "Credencial de integração da empresa (service key) não revogada, com o X-Tenant-Id igual ao da credencial.",
+        "Emissão em processamento ou incerta; reconciliação automática habilitada."
+      ],
+      "transition": {
+        "from": "Estado atual da empresa selecionada",
+        "to": "Situação da NFS-e reconciliada com o motor fiscal"
+      },
+      "effects": {
+        "writes": [
+          "fiscal_outgoing_nfse_issuances"
+        ],
+        "external": [
+          "Motor fiscal NFS-e"
+        ],
+        "excludes": []
+      },
+      "concurrency": {
+        "revision": false,
+        "idempotency": true,
+        "rule": "A chave e o conteúdo identificam a operação dentro da empresa."
+      },
+      "response": {
+        "successStatuses": [
+          200,
+          202
+        ],
+        "errorStatuses": [
+          400,
+          401,
+          403,
+          404,
+          409,
+          422,
+          428,
+          500,
+          503,
+          502
+        ],
+        "action": "Reconciliar emissão de NFS-e incerta"
+      },
+      "recovery": "Se a resposta for 202, consultar novamente antes de qualquer nova emissão.",
+      "ui": {
+        "pages": [],
+        "bff": null,
+        "gap": "Rota de integração entre serviços; não há tela associada."
+      },
+      "sources": [
+        "apps/api-ts/src/modules/outgoing-nfse/routes.ts"
+      ],
+      "verification": {
+        "status": "not_verified_by_catalog",
+        "criteria": [
+          "interface",
+          "request",
+          "authorization",
+          "domain",
+          "persistence",
+          "effects",
+          "failure",
+          "response"
+        ]
+      }
+    },
+    {
+      "id": "post-integrations-nfse-issuances-id-cancel",
+      "flow": "fiscal-integrations",
+      "status": "implemented",
+      "operation": {
+        "method": "POST",
+        "path": "/api/v1/integrations/nfse/issuances/{id}/cancel"
+      },
+      "actor": "tenant_bound_service_key",
+      "permissions": [
+        "fiscal.outgoing_nfse.cancel"
+      ],
+      "input": {
+        "headers": [
+          "Authorization",
+          "X-Tenant-Id",
+          "Idempotency-Key"
+        ],
+        "pathParameters": [
+          "id"
+        ],
+        "body": {
+          "type": "cancelSchema",
+          "source": "apps/api-ts/src/modules/outgoing-nfse/routes.ts"
+        },
+        "query": null
+      },
+      "preconditions": [
+        "Credencial de integração da empresa (service key) não revogada, com o X-Tenant-Id igual ao da credencial.",
+        "NFS-e autorizada; motivo com 15 a 255 caracteres; cancelamento automático habilitado."
+      ],
+      "transition": {
+        "from": "Estado atual da empresa selecionada",
+        "to": "NFS-e cancelada"
+      },
+      "effects": {
+        "writes": [
+          "fiscal_outgoing_nfse_issuances"
+        ],
+        "external": [
+          "Motor fiscal NFS-e"
+        ],
+        "excludes": []
+      },
+      "concurrency": {
+        "revision": false,
+        "idempotency": true,
+        "rule": "A chave e o conteúdo identificam a operação dentro da empresa."
+      },
+      "response": {
+        "successStatuses": [
+          200,
+          202
+        ],
+        "errorStatuses": [
+          400,
+          401,
+          403,
+          404,
+          409,
+          422,
+          428,
+          500,
+          503,
+          502
+        ],
+        "action": "Cancelar NFS-e autorizada"
+      },
+      "recovery": "Após resposta incerta, consultar a emissão antes de repetir o cancelamento.",
+      "ui": {
+        "pages": [],
+        "bff": null,
+        "gap": "Rota de integração entre serviços; não há tela associada."
+      },
+      "sources": [
+        "apps/api-ts/src/modules/outgoing-nfse/routes.ts"
+      ],
+      "verification": {
+        "status": "not_verified_by_catalog",
+        "criteria": [
+          "interface",
+          "request",
+          "authorization",
+          "domain",
+          "persistence",
+          "effects",
+          "failure",
+          "response"
+        ]
+      }
     }
   ],
   "pendingFlows": [
