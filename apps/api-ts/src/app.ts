@@ -11,6 +11,9 @@ import { registerFiscalDrafts } from "./modules/fiscal-workspace/drafts.js"
 import type { FiscalOperations } from "./modules/fiscal-workspace/engine.js"
 import { registerFiscalIncoming } from "./modules/fiscal-workspace/incoming.js"
 import { registerFiscalReceipts } from "./modules/fiscal-incoming/routes.js"
+import { registerFiscalCte } from "./modules/fiscal-cte/routes.js"
+import { registerReceivedNfse } from "./modules/received-nfse/routes.js"
+import { lojasServiceRoute, registerLojasNotes } from "./modules/lojas/routes.js"
 import { registerOrderLots } from "./modules/fiscal-workspace/order-lots.js"
 import { registerFiscalOutgoing } from "./modules/fiscal-workspace/outgoing.js"
 import { registerLocationRoutes } from "./modules/inventory/location-routes.js"
@@ -97,7 +100,7 @@ export function buildApp(_dependencies: AppDependencies): FastifyInstance {
     reply.header("x-request-id", requestId)
     if (request.routeOptions.url?.startsWith("/api/v1/") && !request.routeOptions.url.startsWith("/api/v1/integrations/nfse/") && !request.routeOptions.url.startsWith("/api/v1/webhooks/contracts/")) {
       reply.header("x-erp-backend", "typescript")
-      if (!channelServiceRoute(request.method,request.routeOptions.url)) await authenticateRequest(request, _dependencies)
+      if (!channelServiceRoute(request.method,request.routeOptions.url) && !lojasServiceRoute(request.method,request.routeOptions.url)) await authenticateRequest(request, _dependencies)
     }
   })
   app.get("/health/live", async () => ({ status: "ok" }))
@@ -134,6 +137,9 @@ export function buildApp(_dependencies: AppDependencies): FastifyInstance {
   registerOrderLots(app, _dependencies)
   registerFiscalIncoming(app, _dependencies)
   registerFiscalReceipts(app, _dependencies)
+  registerFiscalCte(app, _dependencies)
+  registerReceivedNfse(app, _dependencies)
+  registerLojasNotes(app, _dependencies)
   app.get("/api/v1/me", async (request, reply) => {
     reply.header("cache-control", "no-store")
     return authorizeRequest(request, _dependencies, async context => {

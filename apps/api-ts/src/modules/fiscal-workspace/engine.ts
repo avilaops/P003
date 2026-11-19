@@ -2,7 +2,7 @@ import type { AuthorizedContext } from "../../platform/access.js"
 import { Problem } from "../../platform/problem.js"
 import type { CertificateMaterial } from "../outgoing-nfse/engine-client.js"
 
-export type FiscalOperation="offline-receipt"|"verify-a1"|"prepare"|"authorize"|"consult"|"event"|"void"|"distribute"|"manifest"
+export type FiscalOperation="offline-receipt"|"verify-a1"|"prepare"|"authorize"|"consult"|"event"|"void"|"distribute"|"manifest"|"distribute-cte"|"inspect-cte"|"inspect-nfse"
 export type FiscalOperations = {
   call(operation:FiscalOperation,input:Record<string,unknown>):Promise<Record<string,unknown>>
   material(c:AuthorizedContext):Promise<{issuerTaxId:string;certificate:CertificateMaterial}>
