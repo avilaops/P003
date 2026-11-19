@@ -265,6 +265,10 @@ test('enabled TypeScript modules receive an isolated private API process without
   assert.equal(withBrowserUse.apiTs.BROWSER_USE_API_KEY, 'bu_fixture');
   assert.equal(withBrowserUse.api.BROWSER_USE_API_KEY, undefined, 'Only the TypeScript API receives the Browser Use key');
   assert.equal(withBrowserUse.web.BROWSER_USE_API_KEY, undefined, 'The web process never receives the Browser Use key');
+  assert.equal(config.processes.apiTs.CATALOG_MEDIA_TOKEN, undefined, 'Catalog publication stays off without its gateway');
+  const withCatalog = runtimeConfiguration({ ...env, CATALOG_MEDIA_ORIGIN: 'https://media.test', CATALOG_MEDIA_TENANT: '11111111-1111-4111-8111-111111111111', CATALOG_MEDIA_TOKEN: 'catalog-fixture' }).processes;
+  assert.equal(withCatalog.apiTs.CATALOG_MEDIA_TOKEN, 'catalog-fixture');
+  assert.equal(withCatalog.web.CATALOG_MEDIA_TOKEN, undefined, 'The web process never receives the catalog token');
 });
 
 test('supervisor waits for both private APIs before starting web and stops all on TS failure', async () => {

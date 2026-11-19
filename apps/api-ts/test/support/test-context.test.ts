@@ -35,3 +35,18 @@ test("GET /api/v1/parties [sucesso] com catalog.parties.read lista as pessoas da
     assert.equal(response.statusCode, 200, response.body)
   })
 })
+
+test("createTestContext [opções] membros extras, identidade sem empresa e dependências com os IDs das empresas", databaseTestOptions, async () => {
+  let seen: { tenant: string; otherTenant: string } | undefined
+  await withTestContext({ members: { reader: ["catalog.parties.read"] }, identitiesWithoutCompany: ["stranger"], dependencies: ids => { seen = ids; return {} } }, async ctx => {
+    assert.deepEqual(seen, { tenant: ctx.tenant, otherTenant: ctx.otherTenant })
+    assert.equal((await ctx.as("reader").get("/api/v1/parties")).statusCode, 200)
+    assert.equal((await ctx.as("user").get("/api/v1/parties")).statusCode, 403)
+    assert.equal((await ctx.as("stranger").get("/api/v1/parties")).statusCode, 403)
+    assert.equal((await ctx.as("reader").get("/api/v1/parties", { tenant: ctx.otherTenant })).statusCode, 403)
+  })
+})
+
+test("createTestContext [opções] nome de membro reservado pelo helper é recusado", databaseTestOptions, async () => {
+  await assert.rejects(createTestContext({ members: { user: [] } }), /reservado/)
+})
