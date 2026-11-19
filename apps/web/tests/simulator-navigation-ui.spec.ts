@@ -64,7 +64,7 @@ for (const width of [320, 390, 768, 1280]) test(`navegação conserva negociaç�
   await expect(page.getByLabel("Vencimento da conta a receber", { exact: true })).toHaveValue("2026-12-30")
   if (width >= 1024) await expect(page.getByRole("heading", { name: "Resultado", exact: true })).toBeInViewport()
   await navigation.getByRole("link", { name: "Resultado", exact: true }).click()
-  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+  await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
   const action = page.getByRole("button", { name: "Simular", exact: true })
   await expect(action).toBeInViewport()
   await expect(action).toBeEnabled()

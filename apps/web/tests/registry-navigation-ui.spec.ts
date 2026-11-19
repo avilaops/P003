@@ -22,7 +22,7 @@ test("pessoas preservam filtros e página ao abrir e voltar de um cadastro",asyn
  await page.getByRole("link",{name:"Fornecedor teste",exact:true}).click()
  await page.getByRole("link",{name:"Voltar às pessoas",exact:true}).click()
  await expect(page.getByLabel("Buscar nome ou documento")).toHaveValue("teste")
- expect(new URL(page.url()).searchParams.get("offset")).toBe("25")
+ await expect.poll(() => new URL(page.url()).searchParams.get("offset")).toBe("25")
 })
 
 for(const width of [320,360,393,1280]) test(`categorias mostram hierarquia sem rolagem horizontal em ${width}px`,async({page},info)=>{
