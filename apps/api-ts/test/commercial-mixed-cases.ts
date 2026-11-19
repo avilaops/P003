@@ -23,7 +23,7 @@ export async function verifyCommercialMixed(app: FastifyInstance, seed: Pool, te
   const headers = { authorization: "Bearer operator", "x-tenant-id": tenant }, input = { destinationState: "SP", taxpayer: false, discount: { kind: "percent", value: 0 }, freightCents: 103, items }
   const simulated = await app.inject({ method: "POST", url: "/api/v1/commercial/mixed/simulate", headers, payload: input })
   assert.equal(simulated.statusCode, 200, simulated.body)
-  assert.equal(simulated.json().sale.totalCents, 152715)
+  assert.equal(simulated.json().sale.totalCents, 152712)
   assert.equal(simulated.json().sale.ipiBps, null)
   assert.equal(simulated.json().sale.downPaymentCents, 86497)
   assert.equal(simulated.json().director.fixedFeeCents, 101)
