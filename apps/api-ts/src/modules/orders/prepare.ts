@@ -2,6 +2,7 @@ import { catalogPriceSources } from "../commercial/price-origin.js"
 import type { AuthorizedContext } from "../../platform/access.js"
 import { Problem } from "../../platform/problem.js"
 import { fixed, validateDate } from "../sales/fixed.js"
+import { assertPaymentTermLimit } from "./payment-term-limit.js"
 import type { OrderInput } from "./schema.js"
 import type { loadOrder } from "./snapshot.js"
 
@@ -12,6 +13,7 @@ import { loadSaleProduct, selectFinishes } from "../sales/finishes.js"
 export async function prepareOrder(context: AuthorizedContext, input: OrderInput, previous?: Awaited<ReturnType<typeof loadOrder>>, channel?:string, allowPublished=false) {
   const { client, tenantId } = context
   const due = validateDate(input.dueDate)
+  await assertPaymentTermLimit(context, due)
   if (input.items.length === 0 || input.items.length > 100) invalid("Pedido exige de 1 a 100 itens")
   const customers = await client.query<{ legal_name: string; tax_id: string }>("SELECT legal_name,tax_id FROM parties WHERE tenant_id=$1 AND id=$2 AND is_customer AND status='active'", [tenantId, input.customerId])
   const customer = customers.rows[0] ?? conflict("Selecione um cliente ativo desta empresa")
