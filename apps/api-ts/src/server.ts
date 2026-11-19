@@ -2,6 +2,7 @@ import { startPayrollWorker } from "./modules/finance-wallets/payroll.js"
 import { buildApp } from "./app.js"
 import { fiscalTransport } from "./modules/fiscal-workspace/engine.js"
 import { startCostWorker } from "./modules/inventory/cost-jobs.js"
+import { startServiceBillingWorker } from "./modules/services/contracts/billing.js"
 import { loadConfiguration } from "./platform/config.js"
 import { PostgresPool } from "./platform/database.js"
 import { FiscalCertificateVault } from "./modules/outgoing-nfse/certificate-vault.js"
@@ -27,6 +28,8 @@ app.addHook("onClose", async () => {
   await pool.close()
 })
 if (workers === "true") startPayrollWorker(app, pool)
+// As portas de NFS-e (#298) e título (#297) entram aqui quando mescladas; sem elas o período fica "aguardando integração".
+if (workers === "true") startServiceBillingWorker(app, pool, {})
 const shutdown = () => { void app.close().catch(() => { process.exitCode = 1 }) }
 process.once("SIGTERM", shutdown)
 process.once("SIGINT", shutdown)

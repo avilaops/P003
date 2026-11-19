@@ -65,8 +65,10 @@ import { registerPlatformAdminRoutes, type PlatformAdminDependencies } from "./m
 import { registerCompanyAccountRoutes, type CompanyAccountDependencies } from "./modules/company-account/routes.js"
 import { trackRoutes } from "./platform/openapi.js"
 import { registerBrowserUseRoutes, type BrowserUseDependencies } from "./modules/browser-use/routes.js"
+import { registerServiceContracts } from "./modules/services/contracts/routes.js"
+import type { ServicePorts } from "./modules/services/ports.contract.js"
 
-export type AppDependencies = AccessDependencies & { fiscalVault?:import("./modules/outgoing-nfse/certificate-vault.js").FiscalCertificateVault; fiscalOperations?:FiscalOperations; outgoingNfse?: OutgoingNfseDependencies; nfeEmail?: NfeEmailIO; documentCopies?: DocumentCopyIO; browserUse?: BrowserUseDependencies; catalogMedia?: import("./platform/catalog-media.js").CatalogMedia; systemConfig?: SystemConfigDependencies; platformAdmin?: PlatformAdminDependencies; companyAccount?: CompanyAccountDependencies }
+export type AppDependencies = AccessDependencies & { fiscalVault?:import("./modules/outgoing-nfse/certificate-vault.js").FiscalCertificateVault; fiscalOperations?:FiscalOperations; outgoingNfse?: OutgoingNfseDependencies; nfeEmail?: NfeEmailIO; documentCopies?: DocumentCopyIO; browserUse?: BrowserUseDependencies; catalogMedia?: import("./platform/catalog-media.js").CatalogMedia; systemConfig?: SystemConfigDependencies; platformAdmin?: PlatformAdminDependencies; companyAccount?: CompanyAccountDependencies; services?: ServicePorts }
 
 export function buildApp(_dependencies: AppDependencies): FastifyInstance {
   const app = Fastify({ logger: false, bodyLimit: 65_536 })
@@ -139,6 +141,7 @@ export function buildApp(_dependencies: AppDependencies): FastifyInstance {
   registerCountRoutes(app, _dependencies)
   registerPartyRoutes(app, _dependencies)
   registerWarranties(app, _dependencies)
+  registerServiceContracts(app, _dependencies)
   registerDashboardRoutes(app, _dependencies)
   registerReportRoutes(app, _dependencies)
   registerPosSessionRoutes(app, _dependencies)

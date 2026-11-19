@@ -10,6 +10,7 @@ import { apiErrorMessage } from "@/lib/api/error-message"
 
 const shortcuts = [
   { href: "/servicos/contratos", label: "Contratos", detail: "Vigência e renovação", icon: FileCheck2 },
+  { href: "/servicos/contratos/recorrentes", label: "Contratos recorrentes", detail: "Faturamento, reajuste e aditivos", icon: FileCheck2 },
   { href: "/servicos/ordens", label: "Ordens de serviço", detail: "Execução e assistência", icon: ClipboardList },
   { href: "/servicos/cte", label: "CT-e", detail: "Documentos de transporte recebidos", icon: FileText },
   { href: "/servicos/notas", label: "Notas de serviço", detail: "Documentos recebidos", icon: FileText },
