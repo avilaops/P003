@@ -45,6 +45,7 @@ test("POST /api/v1/data-quality/merge: a mesclagem preserva os documentos dos do
     const key = randomUUID(), done = await merge(ctx, body, "user", key)
     assert.equal(done.statusCode, 200, done.body)
     assert.equal(done.json().moved["sales_orders.customer_id"], 1)
+    assert.equal(done.headers.etag, `"${done.json().primaryRevision}"`)
     assert.equal((await merge(ctx, body, "user", key)).statusCode, 200, "mesma chave repete o resultado")
 
     const orders = (await ctx.seed.query("SELECT id FROM sales_orders WHERE tenant_id=$1 AND customer_id=$2 ORDER BY number", [ctx.tenant, principal])).rows.map(row => row.id)

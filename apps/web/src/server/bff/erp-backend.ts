@@ -51,6 +51,8 @@ const routes: { module: MigratedModule; methods: readonly string[]; path: RegExp
   { module: "sales", methods: ["GET", "POST"], path: new RegExp(`^/(?:orders|proposals)/${uuid}/email$`, "i") },
   { module: "preferences", methods: ["GET", "PUT"], path: /^\/preferences$/ },
   { module: "registrations", methods: ["GET"], path: /^\/products\/finishes$/ },
+  { module: "registrations", methods: ["GET"], path: /^\/data-quality\/(?:party|product)\/(?:duplicates|completeness)$/ },
+  { module: "registrations", methods: ["POST"], path: /^\/data-quality\/merge$/ },
   { module: "registrations", methods: ["GET", "POST"], path: /^\/(?:parties|products|product-categories|product-groups|tag-groups|tags)$/ },
   { module: "registrations", methods: ["GET", "PUT"], path: new RegExp(`^/(?:parties|products|product-categories|product-groups|tag-groups|tags)/${uuid}$`, "i") },
   { module: "registrations", methods: ["GET", "PUT"], path: /^\/registration-settings\/(?:products|parties|contact-types|tax-profiles)$/ },

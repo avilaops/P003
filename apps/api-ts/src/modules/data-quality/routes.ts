@@ -89,12 +89,13 @@ export function registerDataQualityRoutes(app: FastifyInstance, dependencies: Ap
       const table = entityTable[input.entity]
       if (input.entity === "party") await context.client.query("UPDATE parties p SET is_customer=p.is_customer OR s.is_customer, is_supplier=p.is_supplier OR s.is_supplier, revision=p.revision+1, updated_at=now() FROM parties s WHERE p.tenant_id=$1 AND s.tenant_id=$1 AND p.id=$2 AND s.id=$3", [context.tenantId, input.primaryId, input.secondaryId])
       await context.client.query(`UPDATE ${table} SET status='archived',revision=revision+1,updated_at=now() WHERE tenant_id=$1 AND id=$2`, [context.tenantId, input.secondaryId])
-      const result = { tenantId: context.tenantId, entity: input.entity, primaryId: input.primaryId, secondaryId: input.secondaryId, moved }
+      const primaryRevision = revisionValue((await load(context, input.entity, input.primaryId))!.revision)
+      const result = { tenantId: context.tenantId, entity: input.entity, primaryId: input.primaryId, secondaryId: input.secondaryId, primaryRevision, moved }
       await record(context, request.headers, input.entity, input.primaryId, `${input.entity}.merged`, { absorbed: input.secondaryId, moved })
       await record(context, request.headers, input.entity, input.secondaryId, `${input.entity}.archived_by_merge`, { into: input.primaryId })
       await remember(context, key, scope, input, result)
       return result
     })
-    return reply.header("cache-control", "no-store").send(body)
+    return reply.header("cache-control", "no-store").header("etag", `"${String((body as { primaryRevision: unknown }).primaryRevision)}"`).send(body)
   })
 }
