@@ -285,7 +285,7 @@ function Simulator({ transfer, table: initialTable, initialSourceLine, initialPr
           return
         }
         const selected = await customerForm.current?.save()
-        if (!selected) return
+        if (!selected) { setError("O cliente não foi salvo, por isso o pedido não foi criado. Veja o motivo no bloco Cliente."); focusOrderSection("customer"); return }
         const value = await command.send<{ tenantId: string; id: string }>((orderMode ? "/api/erp/commercial/mixed/orders" : "/api/erp/commercial/orders"), table.tenantId, { ...pendingOrder.current, customerId: selected.id, ...(opportunity ? { opportunityId: opportunity.id, opportunityRevision: opportunity.revision } : {}) }, "", "POST", reply => reply?.tenantId === table.tenantId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(reply.id))
         if (value?.tenantId === table.tenantId && value.id) { setDirty(false); router.push(`/vendas/pedidos/${value.id}`) }
       } finally { converting.current = false; setSavingOrder(false) }
