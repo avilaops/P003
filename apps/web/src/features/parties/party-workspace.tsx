@@ -239,7 +239,12 @@ export function PartyEditor({ id, view = false, draftScope, tenantId }: { id?: s
   }
 
   return <>
-    <PageHeader eyebrow="Cadastros · Clientes e fornecedores" title={view ? snapshot?.data?.legalName || "Pessoa" : id ? "Editar pessoa" : "Nova pessoa"} />
+    <PageHeader breadcrumbs={[
+      { label: "Cadastros", href: "/cadastros" },
+      { label: "Clientes e fornecedores", href: "/cadastros/clientes-fornecedores" },
+      ...(id ? [{ label: snapshot?.data?.legalName || "Pessoa", href: `/cadastros/clientes-fornecedores/${id}` }] : []),
+      ...(!view ? [{ label: id ? "Editar pessoa" : "Nova pessoa" }] : []),
+    ]} title={view ? snapshot?.data?.legalName || "Pessoa" : id ? "Editar pessoa" : "Nova pessoa"} />
     <section className="compact-records form-section min-w-0 space-y-3">
       <Link className={linkClass} href="/cadastros/clientes-fornecedores">Voltar às pessoas</Link>
       {loading ? <p role="status">Carregando cadastro…</p> : !snapshot ? <><p role="alert">{error}</p><Button onClick={reload}>Tentar novamente</Button></> : <>

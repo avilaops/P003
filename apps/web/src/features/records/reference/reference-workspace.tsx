@@ -83,10 +83,10 @@ function RecordAccess({ kind, id, mode }: { kind: ReferenceKind; id?: string; mo
   const config = referenceConfigs[kind]
   const result = useResource<ReferenceSnapshot | ReferenceList>(id ? `/api/erp/${config.endpoint}/${id}` : `/api/erp/${config.endpoint}?limit=1`)
   if (result.loading) return <p role="status">Carregando cadastro e permissões…</p>
-  if (result.error || !result.value) return <><PageHeader eyebrow="Cadastros" title={config.title} description={config.description} /><section className="form-section space-y-3"><p role="alert"><RequestError message={result.error || "Cadastro indisponível"} status={result.status} /></p><Button onClick={result.reload}>Tentar novamente</Button><Link className={linkClass} href={`${referencePath(kind)}`}>Voltar à listagem</Link></section></>
+  if (result.error || !result.value) return <><PageHeader breadcrumbs={kind === "depositos" ? undefined : referenceCrumbs(kind)} eyebrow={kind === "depositos" ? "Cadastros" : undefined} title={config.title} description={config.description} /><section className="form-section space-y-3"><p role="alert"><RequestError message={result.error || "Cadastro indisponível"} status={result.status} /></p><Button onClick={result.reload}>Tentar novamente</Button><Link className={linkClass} href={`${referencePath(kind)}`}>Voltar à listagem</Link></section></>
   const initial = id && !Array.isArray(result.value.data) ? result.value as ReferenceSnapshot : undefined
   if (mode === "view" && initial) return <Detail kind={kind} value={initial} />
-  if (!result.value.canEdit) return <><PageHeader eyebrow="Cadastros" title={config.title} description={config.description} /><section className="form-section space-y-3"><p role="status">Somente consulta. Solicite permissão para alterar este cadastro.</p><Link className={linkClass} href={`${referencePath(kind)}`}>Voltar à listagem</Link></section></>
+  if (!result.value.canEdit) return <><PageHeader breadcrumbs={kind === "depositos" ? undefined : referenceCrumbs(kind)} eyebrow={kind === "depositos" ? "Cadastros" : undefined} title={config.title} description={config.description} /><section className="form-section space-y-3"><p role="status">Somente consulta. Solicite permissão para alterar este cadastro.</p><Link className={linkClass} href={`${referencePath(kind)}`}>Voltar à listagem</Link></section></>
   return <Editor key={`${id || "new"}:${result.etag}`} kind={kind} initial={initial} tenantId={result.value.tenantId} etag={result.etag} reload={result.reload} />
 }
 
@@ -94,6 +94,12 @@ function ParentName({ kind, id }: { kind: ReferenceKind; id: string }) {
   const result = useResource<ReferenceSnapshot>(`/api/erp/${referenceConfigs[kind].endpoint}/${id}`)
   return <span className="break-words">{result.loading ? "Consultando categoria…" : result.error ? `Categoria indisponível (${id})` : result.value?.data.name}</span>
 }
+
+const referenceCrumbs = (kind: ReferenceKind, ...tail: { label: string; href?: string }[]) => [
+  { label: "Cadastros", href: "/cadastros" },
+  { label: referenceConfigs[kind].title, href: referencePath(kind) },
+  ...tail,
+]
 
 function Detail({ kind, value }: { kind: ReferenceKind; value: ReferenceSnapshot }) {
   const config = referenceConfigs[kind], data = value.data
@@ -103,7 +109,7 @@ function Detail({ kind, value }: { kind: ReferenceKind; value: ReferenceSnapshot
   if (kind === "categorias-financeiras") values.push(["Natureza", data.direction === "income" ? "Receita" : "Despesa"])
   if (kind === "contas-financeiras") values.push(["Tipo de conta", accountTypes[data.accountType as keyof typeof accountTypes]], ["Banco", String(data.bank || "Não informado")], ["Agência", String(data.branch || "Não informada")], ["Número da conta", String(data.accountNumber || "Não informado")])
   if (kind === "formas-pagamento") values.push(["Modalidade", modalities[data.modality as keyof typeof modalities]], ["Prazo de referência (dias)", String(data.settlementDays)])
-  return <><PageHeader eyebrow={kind === "depositos" ? config.title : `Cadastros · ${config.title}`} title={data.name} description={config.description}
+  return <><PageHeader breadcrumbs={kind === "depositos" ? undefined : referenceCrumbs(kind, { label: data.name })} eyebrow={kind === "depositos" ? config.title : undefined} title={data.name} description={config.description}
     actions={kind === "depositos" && <WarehouseStockLinks tenant={value.tenantId} warehouseId={data.id} />} /><Link className={linkClass} href={`${referencePath(kind)}`}>Voltar à listagem</Link><section className="compact-records form-section mt-3 min-w-0 space-y-3">
     <RecordCompany key={value.tenantId} tenantId={value.tenantId} />
     <dl className="grid min-w-0 gap-4 sm:grid-cols-2">{values.map(([label, text]) => <div className="min-w-0" key={label}><dt className="text-sm text-muted-foreground">{label}</dt><dd className="mt-1 whitespace-pre-wrap break-words">{kind === "contas-financeiras" && label === "Banco" && data.bank ? <BankIdentity value={String(data.bank)} /> : text}</dd></div>)}
