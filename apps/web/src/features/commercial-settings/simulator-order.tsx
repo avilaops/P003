@@ -45,7 +45,7 @@ export function SimulationOrder({ value, equipment, line, onLocked }: {
           <ColorChoice part="structure" palette={catalogPaletteFor(equipment.finishingPalette)} label="Cor da estrutura" options={equipment.structureColors} value={structure} onChange={setStructure} />
           <ColorChoice part="swingArm" palette={catalogPaletteFor(equipment.finishingPalette)} label="Cor dos braços" options={equipment.swingArmColors} value={swingArm} onChange={setSwingArm} />
           {equipment.upholsteryConfigurable !== false && <ColorChoice part="upholstery" palette={catalogPaletteFor(equipment.finishingPalette)} label="Cor do estofado" options={equipment.upholsteryColors} value={upholstery} onChange={setUpholstery} />}
-          <PlateHolderChoice label="Tipo de anilheiro" value={plateHolderType} onChange={setPlateHolderType} />
+          <PlateHolderChoice label="Tipo de anilheiro" options={equipment.plateHolderTypes} value={plateHolderType} onChange={setPlateHolderType} />
         </div>
         <CatalogPaletteReference palette={catalogPaletteFor(equipment.finishingPalette)} />
       </fieldset>

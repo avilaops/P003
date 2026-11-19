@@ -47,11 +47,15 @@ export type Choice = { id: string; legalName?: string; name?: string; sku?: stri
 type SelectedItem = Choice & { quantity: string; preserved: boolean; structureColor: string; swingArmColor: string; upholsteryColor: string; plateHolderColor: string; plateHolderType: string }
 const linkClass = "font-medium text-primary underline underline-offset-4"
 
-export function PlateHolderChoice({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) {
+// Only products registered with plate holder types offer the choice; a value already saved on a document stays visible.
+export function PlateHolderChoice({ label, value, options = [], onChange }: { label: string; value: string; options?: string[]; onChange: (value: string) => void }) {
   const id = useId()
+  const registered = value && value !== "Não se aplica" && !options.includes(value) ? value : ""
+  if (!options.length && !registered) return null
   return <div className="grid min-w-0 gap-1 text-sm"><label htmlFor={id}>{label}</label><select id={id} className="h-9 min-h-9 w-full min-w-0 rounded-lg border border-input bg-background px-2" value={value === "Não se aplica" ? "" : value} onChange={event => onChange(event.target.value)}>
-    <option value="">Não se aplica</option><option value="Standard">Standard</option><option value="Olímpico">Olímpico</option>
-    {value && !["Não se aplica", "Standard", "Olímpico"].includes(value) && <option value={value}>{value} · registrado</option>}
+    <option value="">Não se aplica</option>
+    {options.map(option => <option key={option} value={option}>{option}</option>)}
+    {registered && <option value={registered}>{registered} · registrado</option>}
   </select></div>
 }
 
@@ -214,7 +218,7 @@ function OrderForm({ initial, etag, tenantId, reload }: { initial?: Detail; etag
                   <ColorChoice part="structure" palette={catalogPaletteFor(item.finishingPalette)} label={`Cor da estrutura de ${item.name}`} catalog={{ productId: item.id, tenantId, field: "structureColors" }} options={item.structureColors} value={item.structureColor} onChange={color => { setItems(previous => previous.map(value => value.id === item.id ? { ...value, structureColor: color } : value)); setDirty(true) }} />
                   <ColorChoice part="swingArm" optional={Boolean(initial?.items.some(line => line.productId === item.id && !line.swingArmColor))} palette={catalogPaletteFor(item.finishingPalette)} label={`Cor dos braços de ${item.name}`} catalog={{ productId: item.id, tenantId, field: "swingArmColors" }} options={item.swingArmColors} value={item.swingArmColor} onChange={color => { setItems(previous => previous.map(value => value.id === item.id ? { ...value, swingArmColor: color } : value)); setDirty(true) }} />
                   {(item.upholsteryConfigurable !== false || item.upholsteryColor) && <ColorChoice part="upholstery" palette={catalogPaletteFor(item.finishingPalette)} label={`Cor do estofado de ${item.name}`} catalog={{ productId: item.id, tenantId, field: "upholsteryColors" }} options={item.upholsteryConfigurable === false ? [] : item.upholsteryColors} value={item.upholsteryColor} onChange={color => { setItems(previous => previous.map(value => value.id === item.id ? { ...value, upholsteryColor: color } : value)); setDirty(true) }} />}
-                  <PlateHolderChoice label={`Tipo de anilheiro de ${item.name}`} value={item.plateHolderType} onChange={plateHolderType => { setItems(previous => previous.map(value => value.id === item.id ? { ...value, plateHolderType } : value)); setDirty(true) }} />
+                  <PlateHolderChoice label={`Tipo de anilheiro de ${item.name}`} options={item.plateHolderTypes} value={item.plateHolderType} onChange={plateHolderType => { setItems(previous => previous.map(value => value.id === item.id ? { ...value, plateHolderType } : value)); setDirty(true) }} />
                 </div>
                 <CatalogPaletteReference palette={catalogPaletteFor(item.finishingPalette)} />
               <p className="text-xs text-muted-foreground">O acabamento fica registrado neste item. O saldo de estoque continua controlado por produto.</p></details>
