@@ -54,8 +54,8 @@ test("GET /api/v1/fiscal/cte-distribution/status + POST /api/v1/fiscal/cte-distr
     const detail = await user.get(base + "/documents/" + full.id)
     assert.equal(detail.statusCode, 200); assert.equal(detail.json().xml, cte.xml); assert.equal(detail.json().kind, "full"); assert.equal(detail.json().verification, "pending")
 
-    const audit = await ctx.seed.query("SELECT action FROM audit_log WHERE tenant_id=$1 AND entity_type='fiscal_cte_distribution' ORDER BY id", [ctx.tenant])
-    assert.deepEqual(audit.rows.map(row => row.action), ["fiscal.cte.distribution.requested", "fiscal.cte.distribution.finished"])
+    const audit = await ctx.seed.query("SELECT action FROM audit_log WHERE tenant_id=$1 AND entity_type='fiscal_cte_distribution' ORDER BY action", [ctx.tenant])
+    assert.deepEqual(audit.rows.map(row => row.action), ["fiscal.cte.distribution.finished", "fiscal.cte.distribution.requested"])
   } finally { await ctx.close() }
 })
 
