@@ -2,6 +2,7 @@ import { startPayrollWorker } from "./modules/finance-wallets/payroll.js"
 import { buildApp } from "./app.js"
 import { fiscalTransport } from "./modules/fiscal-workspace/engine.js"
 import { startCostWorker } from "./modules/inventory/cost-jobs.js"
+import { startReportScheduler } from "./modules/reports/engine/schedule.js"
 import { loadConfiguration } from "./platform/config.js"
 import { PostgresPool } from "./platform/database.js"
 import { FiscalCertificateVault } from "./modules/outgoing-nfse/certificate-vault.js"
@@ -22,8 +23,10 @@ const app = buildApp({ ...(vault?{fiscalVault:vault}:{}), ...(fiscalOperations ?
 const workers = process.env.ERP_BACKGROUND_WORKERS_ENABLED ?? "true"
 if (workers !== "false" && workers !== "true") throw new Error("ERP_BACKGROUND_WORKERS_ENABLED must be true or false")
 const stopCostWorker = workers === "true" ? startCostWorker(pool) : undefined
+const stopReportScheduler = workers === "true" ? startReportScheduler(pool, undefined, (err, tenantId) => app.log.error({ err, tenantId }, "Falha no envio agendado de relatório")) : undefined
 app.addHook("onClose", async () => {
   await stopCostWorker?.()
+  await stopReportScheduler?.()
   await pool.close()
 })
 if (workers === "true") startPayrollWorker(app, pool)
