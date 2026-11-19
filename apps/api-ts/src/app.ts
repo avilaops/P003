@@ -65,6 +65,7 @@ import { registerPlatformAdminRoutes, type PlatformAdminDependencies } from "./m
 import { registerCompanyAccountRoutes, type CompanyAccountDependencies } from "./modules/company-account/routes.js"
 import { trackRoutes } from "./platform/openapi.js"
 import { registerBrowserUseRoutes, type BrowserUseDependencies } from "./modules/browser-use/routes.js"
+import { registerLogisticsRoutes } from "./modules/logistics/routes.js"
 
 export type AppDependencies = AccessDependencies & { fiscalVault?:import("./modules/outgoing-nfse/certificate-vault.js").FiscalCertificateVault; fiscalOperations?:FiscalOperations; outgoingNfse?: OutgoingNfseDependencies; nfeEmail?: NfeEmailIO; documentCopies?: DocumentCopyIO; browserUse?: BrowserUseDependencies; catalogMedia?: import("./platform/catalog-media.js").CatalogMedia; systemConfig?: SystemConfigDependencies; platformAdmin?: PlatformAdminDependencies; companyAccount?: CompanyAccountDependencies }
 
@@ -180,5 +181,6 @@ export function buildApp(_dependencies: AppDependencies): FastifyInstance {
   registerSystemConfigRoutes(app, _dependencies, _dependencies.systemConfig)
   registerPlatformAdminRoutes(app, _dependencies, _dependencies.platformAdmin)
   registerCompanyAccountRoutes(app, _dependencies, _dependencies.companyAccount)
+  registerLogisticsRoutes(app, _dependencies)
   return app
 }
