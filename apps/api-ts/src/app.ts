@@ -19,6 +19,7 @@ import { registerStockRoutes } from "./modules/inventory/routes.js"
 import { registerProduction } from "./modules/production/routes.js"
 import { registerPartyRoutes } from "./modules/parties/routes.js"
 import { registerWarranties } from "./modules/warranties/routes.js"
+import { registerLogisticsShipments } from "./modules/logistics-shipments/routes.js"
 import { registerDashboardRoutes } from "./modules/dashboard/routes.js"
 import { registerReportRoutes } from "./modules/reports/routes.js"
 import { registerPosSessionRoutes } from "./modules/pos-sessions/routes.js"
@@ -131,6 +132,7 @@ export function buildApp(_dependencies: AppDependencies): FastifyInstance {
   registerCountRoutes(app, _dependencies)
   registerPartyRoutes(app, _dependencies)
   registerWarranties(app, _dependencies)
+  registerLogisticsShipments(app, _dependencies)
   registerDashboardRoutes(app, _dependencies)
   registerReportRoutes(app, _dependencies)
   registerPosSessionRoutes(app, _dependencies)

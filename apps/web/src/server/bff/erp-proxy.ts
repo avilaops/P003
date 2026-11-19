@@ -102,8 +102,8 @@ export async function forwardErp(request: Request, resource: string) {
   const productTransferResource = /^\/products\/(?:import|export)(?:\/[a-f0-9-]{36}\/confirm|\/[a-f0-9-]{36})?$/i.test(resource)
   const returnResource = /^\/orders\/[a-f0-9-]{36}\/(?:cancel-completed|cancellations)$|^\/purchase-receipts\/[a-f0-9-]{36}\/(?:reverse|reversals)$/i.test(resource)
   if (returnResource && (resource.endsWith("/cancellations") || resource.endsWith("/reversals") ? request.method !== "GET" : request.method !== "POST")) return Response.json({ title: "Método inválido" }, { status: 405 })
-  const logisticsResource = request.method === "GET" && (/^\/logistics\/postings(?:\/[a-f0-9-]{36})?$/i.test(resource) || resource === "/logistics/labels" || /^\/logistics\/checkouts(?:\/[a-f0-9-]{36}(?:\/labels)?)?$/i.test(resource))
-    || request.method === "POST" && (/^\/logistics\/postings$/i.test(resource) || /^\/logistics\/postings\/[a-f0-9-]{36}\/(?:status|packages)$/i.test(resource) || /^\/logistics\/checkouts(?:\/[a-f0-9-]{36}(?:\/(?:complete|labels|lines\/\d+\/check|packages(?:\/[a-f0-9-]{36}\/status)?))?)?$/i.test(resource))
+  const logisticsResource = request.method === "GET" && (/^\/logistics\/postings(?:\/[a-f0-9-]{36})?$/i.test(resource) || resource === "/logistics/labels" || /^\/logistics\/shipments(?:\/[a-f0-9-]{36})?$/i.test(resource) || /^\/logistics\/checkouts(?:\/[a-f0-9-]{36}(?:\/labels)?)?$/i.test(resource))
+    || request.method === "POST" && (/^\/logistics\/shipments(?:\/[a-f0-9-]{36}\/status)?$/i.test(resource) || /^\/logistics\/postings$/i.test(resource) || /^\/logistics\/postings\/[a-f0-9-]{36}\/(?:status|packages)$/i.test(resource) || /^\/logistics\/checkouts(?:\/[a-f0-9-]{36}(?:\/(?:complete|labels|lines\/\d+\/check|packages(?:\/[a-f0-9-]{36}\/status)?))?)?$/i.test(resource))
   const purchaseCollection = /^\/(?:purchase-orders|payables|financial-payables)$|^\/purchase-orders\/[a-f0-9-]{36}\/receipts$/i.test(resource)
   const orderAcceptanceResource = /^\/orders\/[a-f0-9-]{36}\/accept$/i.test(resource)
   if (orderAcceptanceResource && request.method !== "POST") return Response.json({ title: "Método inválido" }, { status: 405 })
@@ -253,7 +253,7 @@ export async function forwardErp(request: Request, resource: string) {
     }
     if (logisticsResource) {
       const query = new URL(request.url).searchParams
-      const allowed = resource === "/logistics/postings" ? ["q", "status", "limit", "offset"] : []
+      const allowed = resource === "/logistics/postings" ? ["q", "status", "limit", "offset"] : resource === "/logistics/shipments" ? ["orderId", "status", "limit", "offset"] : []
       for (const [key, value] of query) {
         if (!allowed.includes(key) || query.getAll(key).length !== 1) return Response.json({ title: "Filtro inválido" }, { status: 400 })
         upstream.searchParams.set(key, value)
