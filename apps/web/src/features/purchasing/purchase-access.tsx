@@ -1,4 +1,3 @@
-import Link from "next/link"
 import { Suspense } from "react"
 import { connection } from "next/server"
 import { PageHeader } from "@/components/page-header"
@@ -7,7 +6,7 @@ import { Payables } from "./payables"
 import { PurchaseDetail, PurchaseReceipt } from "./purchase-detail"
 import { PurchaseEditor } from "./purchase-editor"
 import { PurchaseList } from "./purchase-list"
-import { purchaseLink } from "./purchase-types"
+import { PurchaseOverview } from "./purchase-overview"
 
 type View = "overview" | "orders" | "create" | "detail" | "edit" | "receipts" | "receipt" | "payables"
 type Props = { view: View; params?: Promise<{ id: string }> }
@@ -20,9 +19,8 @@ async function AuthorizedPurchase({ view, params }: Props) {
   const id = params ? (await params).id : undefined
   return <div className="workspace-page-frame">
     {!access.session ? <><PageHeader eyebrow={view === "payables" ? "Financeiro" : "Compras"} title={view === "payables" ? "Contas a pagar" : "Compras"} description="Operações da empresa ativa." /><WorkspaceAccessNotice state={access.state} /></> : view === "overview" ? <>
-      <PageHeader eyebrow="Compras" title="Compras e recebimentos" description="Do pedido ao recebimento dos produtos e à obrigação financeira." />
-      <section className="form-section space-y-4"><Link className={`${purchaseLink} block`} href="/compras/pedidos">Pedidos de compra</Link><Link className={`${purchaseLink} block`} href="/compras/recebimentos">Recebimentos de compras</Link><Link className={`${purchaseLink} block`} href="/financeiro/contas-pagar">Contas a pagar</Link><p className="text-sm text-muted-foreground">A entrada física é registrada no recebimento. O pagamento é declarado no financeiro, sem transferência bancária.</p></section>
-      <section className="form-section mt-5 space-y-3"><h2 className="font-semibold">Outras áreas de compras</h2><Link className={`${purchaseLink} mr-4`} href="/compras/notas-entrada">Notas de entrada</Link><Link className={purchaseLink} href="/compras/sugestoes">Sugestões de compra</Link></section>
+      <PageHeader eyebrow="Compras" title="Visão geral" description="Pedidos, recebimentos e contas a pagar da empresa ativa." />
+      <PurchaseOverview />
     </> : view === "payables" ? <Payables id={id} /> : view === "create" || view === "edit" ? <PurchaseEditor id={id} /> : view === "detail" && id ? <PurchaseDetail key={id} id={id} /> : view === "receipt" && id ? <PurchaseReceipt key={id} id={id} /> : <PurchaseList receiving={view === "receipts"} />}
   </div>
 }
