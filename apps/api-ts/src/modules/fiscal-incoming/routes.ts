@@ -5,6 +5,7 @@ import { registerDistribution } from "./distribution.js"
 import { registerManifestations } from "./manifestations.js"
 import { registerInvoicePurchases } from "./purchase.js"
 import { registerFiscalPurchaseReceipt } from "./receipt.js"
+import { registerEntrySettings } from "./entry-settings.js"
 
 export function registerFiscalReceipts(app:FastifyInstance,deps:AppDependencies) {
   registerReceivedImport(app,deps)
@@ -12,4 +13,5 @@ export function registerFiscalReceipts(app:FastifyInstance,deps:AppDependencies)
   registerManifestations(app,deps)
   registerInvoicePurchases(app,deps)
   registerFiscalPurchaseReceipt(app,deps)
+  registerEntrySettings(app,deps)
 }

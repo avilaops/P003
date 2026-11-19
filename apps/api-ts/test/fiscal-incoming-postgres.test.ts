@@ -17,7 +17,7 @@ function proof(key:string,env=2,event="210210"){
   return `<procEventoNFe xmlns="${ns}"><evento><infEvento Id="ID${event}${key}01">${data}<CNPJ>${tax}</CNPJ></infEvento></evento><retEvento><infEvento>${data}<cStat>135</cStat><nProt>135260000000123</nProt></infEvento></retEvento></procEventoNFe>`
 }
 
-test("entrada fiscal TS confere XML, concilia compra e cursor, recupera manifestação sem retransmitir",{skip:!process.env.API_TS_TEST_ADMIN_URL},async()=>{
+test("Uma nota com divergência de preço acima da tolerância fica bloqueada; entrada fiscal TS confere XML, concilia compra e cursor, recupera manifestação sem retransmitir",{skip:!process.env.API_TS_TEST_ADMIN_URL},async()=>{
   const calls:string[]=[],one=invoice(105),two=invoice(106),prod=invoice(107,1)
   let production=false,batch:Record<string,unknown>={},eventResponse:Record<string,unknown>={}
   const engine:FiscalOperations={call:async(operation,input)=>{calls.push(operation+":"+input.environment);return operation==="distribute"?batch:eventResponse},material:async()=>({issuerTaxId:tax,certificate:{pkcs12Base64:"fixture",password:"fixture"}}),production:()=>false,productionRecipient:()=>production,nfceSecret:async()=>({})}
@@ -70,6 +70,23 @@ test("entrada fiscal TS confere XML, concilia compra e cursor, recupera manifest
     const match="received-nfes/"+second.id+"/purchase/",mapping={purchaseOrderId:existing,purchaseRevision:1,items:mapped}
     assert.deepEqual(ok(await req("GET",match+"options?limit=10")).data.map((p:{id:string})=>p.id),[existing])
     assert.equal(ok(await req("POST",match+"preview",mapping)).canConfirm,false)
+    // C5: tolerância parametrizável (custo 1000 × nota 1100 = 10%), com liberação por aprovação acima dela.
+    await seed.query("INSERT INTO purchase_entry_settings(tenant_id,price_tolerance_bps) VALUES($1,1500)",[tenant])
+    const within=ok(await req("POST",match+"preview",mapping))
+    assert.equal(within.canConfirm,true)
+    assert.ok(within.differences.some((d:{code:string;blocking:boolean})=>d.code==="unit_cost_within_tolerance"&&!d.blocking))
+    await seed.query("UPDATE purchase_entry_settings SET price_tolerance_bps=500 WHERE tenant_id=$1",[tenant])
+    assert.equal(ok(await req("POST",match+"preview",mapping)).canConfirm,false,"divergência acima da tolerância bloqueia")
+    ok(await req("POST",match+"approval",mapping),409) // sem alçada de entrada configurada
+    await seed.query("INSERT INTO approval_rules(id,tenant_id,document_type,name,threshold_cents,approver_role_id) VALUES($1,$2,'purchase_entry','Entrada com divergência',0,$3)",[randomUUID(),tenant,clerk])
+    const asked=ok(await req("POST",match+"approval",mapping))
+    assert.equal(asked.approvalStatus,"pending")
+    assert.equal(ok(await req("POST",match+"preview",mapping)).canConfirm,false,"pendente continua bloqueada")
+    const who=(await seed.query("SELECT id FROM identities LIMIT 1")).rows[0].id
+    await seed.query("UPDATE approval_steps SET status='approved',decided_by=$2,decided_at=now() WHERE tenant_id=$1",[tenant,who])
+    await seed.query("UPDATE approval_requests SET status='approved',decided_at=now() WHERE tenant_id=$1 AND id=$2",[tenant,asked.approvalId])
+    assert.equal(ok(await req("POST",match+"preview",mapping)).canConfirm,true,"aprovada libera a divergência")
+    await seed.query("DELETE FROM purchase_entry_settings WHERE tenant_id=$1",[tenant])
     await seed.query("UPDATE purchase_order_lines SET cost_cents=1100,amount_cents=2200 WHERE tenant_id=$1 AND order_id=$2",[tenant,existing])
     assert.equal(ok(await req("POST",match+"preview",mapping)).canConfirm,true)
     ok(await req("POST",match+"match",mapping,1))

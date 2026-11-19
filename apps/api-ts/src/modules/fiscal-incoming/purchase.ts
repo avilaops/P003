@@ -10,6 +10,8 @@ import { decimal } from "../sales/fixed.js"
 import { conflict,manage,notFound,prefix,recipient,signedId } from "./received.js"
 import { invalid,purchaseItems } from "./xml.js"
 import { storedEvidence } from "./evidence.js"
+import { entryTolerance } from "./entry-settings.js"
+import { documentHistory, submitForApproval } from "../approvals/engine.js"
 
 const mapping=z.array(z.strictObject({itemNumber:z.number().int().min(1).max(990),productId:z.guid()})).min(1).max(100)
 const create=z.strictObject({supplierId:z.guid(),dueDate:z.iso.date(),items:mapping})
@@ -36,8 +38,15 @@ export async function ensureInvoiceOperable(c:AuthorizedContext,s:Pick<Source,"e
 async function preview(c:AuthorizedContext,s:Source,input:Match,id:string) {
   const order=(await c.client.query("SELECT supplier_id,supplier_tax_id,status,revision FROM purchase_orders WHERE tenant_id=$1 AND id=$2",[c.tenantId,input.purchaseOrderId])).rows[0]??notFound()
   if(revisionValue(order.revision)!==input.purchaseRevision) throw new Problem(412,"revision_conflict","A compra mudou. Atualize a prévia")
-  const differences:{code:string;itemNumber:number|null;blocking:boolean;message:string}[]=[]
-  const add=(code:string,message:string,itemNumber:number|null=null,blocking=true)=>differences.push({code,message,itemNumber,blocking})
+  const differences:{code:string;itemNumber:number|null;blocking:boolean;approvable:boolean;message:string}[]=[]
+  const tolerance=await entryTolerance(c)
+  const invoiceTotal=pairs(s,input.items).reduce((sum,i)=>sum+i.landedCents,0n)
+  const [lastApproval]=await documentHistory(c,"purchase_entry",id)
+  const released=lastApproval?.status==="approved"&&BigInt(lastApproval.amount.replace(".",""))>=invoiceTotal
+  const add=(code:string,message:string,itemNumber:number|null=null,blocking=true,approvable=false)=>{
+    const exempt=approvable&&released
+    differences.push({code,message:exempt?message+" (liberado por aprovação)":message,itemNumber,blocking:blocking&&!exempt,approvable})
+  }
   const linked=(await c.client.query("SELECT 1 FROM fiscal_received_purchase_links WHERE tenant_id=$1 AND (purchase_order_id=$2 OR received_nfe_id=$3)",[c.tenantId,input.purchaseOrderId,id])).rows.length
   if(linked)add("already_linked","A nota ou a compra já tem vínculo fiscal")
   const supplier=(await c.client.query("SELECT 1 FROM parties WHERE tenant_id=$1 AND id=$2 AND tax_id=$3 AND is_supplier AND status='active'",[c.tenantId,order.supplier_id,s.issuer])).rows.length
@@ -52,13 +61,25 @@ async function preview(c:AuthorizedContext,s:Source,input:Match,id:string) {
     if(!p?.ordered_unit) add("product_not_in_purchase","Produto ausente da compra",i.number)
     else {
       if(p.ordered_unit!==i.unit) add("unit_mismatch","Unidade comercial divergente",i.number)
-      if(i.quantityMicros>remaining) add("quantity_exceeded","Quantidade supera o saldo da compra",i.number)
-      if(cost!==i.unitCostCents) add("unit_cost_mismatch","Custo posto diverge do aprovado",i.number)
+      if(i.quantityMicros>remaining+remaining*BigInt(tolerance.quantityToleranceBps)/10000n) add("quantity_exceeded","Quantidade supera o saldo da compra acima da tolerância",i.number,true,true)
+      if(cost!==null){
+        const gap=i.unitCostCents>cost?i.unitCostCents-cost:cost-i.unitCostCents
+        if(gap*10000n>cost*BigInt(tolerance.priceToleranceBps)) add("unit_cost_mismatch","Custo da nota diverge do pedido acima da tolerância",i.number,true,true)
+        else if(gap>0n) add("unit_cost_within_tolerance","Custo da nota diverge do pedido dentro da tolerância",i.number,false)
+      }
     }
     if(p && p.ncm!==i.ncm) add(p.ncm?"ncm_mismatch":"ncm_missing","Confira o NCM cadastrado para este produto",i.number,false)
     items.push({itemNumber:i.number,productId:i.productId,name:i.name,unit:i.unit,ncm:i.ncm,invoiceQuantityMicros:i.quantityMicros,remainingQuantityMicros:remaining,invoiceUnitCostCents:i.unitCostCents,purchaseUnitCostCents:cost,landedCents:i.landedCents,components:i.components})
   }
   return {supplier:String(order.supplier_id),lines,body:{receivedNfeId:BigInt(id),purchaseOrderId:input.purchaseOrderId,purchaseRevision:input.purchaseRevision,canConfirm:!differences.some(d=>d.blocking),invoiceTotalCents:lines.reduce((sum,i)=>sum+i.landedCents,0n),differences,items}}
+}
+/** Pede aprovação para a nota com divergência acima da tolerância (motor de alçadas, tipo purchase_entry). */
+async function requestEntryApproval(c:AuthorizedContext,headers:Parameters<typeof record>[1],id:string,prepared:Awaited<ReturnType<typeof preview>>) {
+  const blocked=prepared.body.differences.filter(d=>d.blocking&&d.approvable)
+  if(!blocked.length||prepared.body.differences.some(d=>d.blocking&&!d.approvable)) conflict("A nota não tem divergência liberável por aprovação")
+  const outcome=await submitForApproval(c,headers,{documentType:"purchase_entry",documentId:id,amountCents:prepared.body.invoiceTotalCents,summary:"Divergência na nota de entrada "+id})
+  if(outcome.status==="not_required") conflict("Nenhuma alçada de entrada configurada para liberar a divergência")
+  return {receivedNfeId:BigInt(id),approvalStatus:outcome.status,approvalId:outcome.request?.id??null}
 }
 export function registerInvoicePurchases(app:FastifyInstance,deps:AppDependencies) {
   const url=prefix+"/received-nfes/:id/purchase"
@@ -68,6 +89,16 @@ export function registerInvoicePurchases(app:FastifyInstance,deps:AppDependencie
     const costs=(await c.client.query(`SELECT item_number AS "itemNumber",product_id AS "productId",unit,quantity_micros AS "quantityMicros",unit_cost_cents AS "unitCostCents",merchandise_cents AS "merchandiseCents",landed_cents AS "landedCents",components FROM fiscal_received_item_costs WHERE tenant_id=$1 AND received_nfe_id=$2 ORDER BY item_number`,[c.tenantId,id])).rows
     return reply.header("etag",'"'+revision+'"').header("cache-control","no-store").send({receivedNfeId:BigInt(id),revision,purchaseOrderId:s.link,costs,items:s.items,canConvert:c.permissions.includes(manage)&&c.permissions.includes("purchasing.orders.manage")&&c.permissions.includes("purchasing.orders.read")})
   }))
+  app.post<{Params:{id:string}}>(url+"/approval",async(req,reply)=>{
+    const result=await authorizeRequest(req,deps,async c=>{
+      requirePermission(c,manage);requirePermission(c,"purchasing.orders.read");requirePermission(c,"purchasing.orders.manage")
+      const id=signedId(req.params.id),parsed=match.safeParse(req.body)
+      if(!parsed.success) invalid("Informe todos os itens e a revisão da compra")
+      const s=await source(c,id);await ensureInvoiceOperable(c,s)
+      return requestEntryApproval(c,req.headers,id,await preview(c,s,parsed.data,id))
+    })
+    return reply.code(200).header("cache-control","no-store").send(result)
+  })
   for(const action of ["create","preview","match"] as const) app.post<{Params:{id:string}}>(url+(action==="create"?"":"/"+action),async(req,reply)=>{
     const result=await authorizeRequest(req,deps,async c=>{
       requirePermission(c,manage);requirePermission(c,"purchasing.orders.read");requirePermission(c,"purchasing.orders.manage")
