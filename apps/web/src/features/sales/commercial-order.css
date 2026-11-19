@@ -84,7 +84,7 @@
 .order-totals .order-total-strong, .order-totals .order-total-final { font-weight: 600; }
 .order-totals .order-total-final { margin-top: 4px; padding-top: 14px; border-top: 1px solid var(--border); }
 .order-total-final dt { color: var(--foreground); }
-.order-total-final dd { font-size: 15px; }
+.order-total-final dd { font-size: 16px; }
 .order-totals > p { margin-top: 12px; font-size: 12px; color: var(--muted-foreground); }
 .order-save-area { display: grid; gap: 10px; padding: 16px; border: 1px solid var(--border); border-radius: 10px; background: var(--card); }
 .order-save-area > button { width: fit-content; }

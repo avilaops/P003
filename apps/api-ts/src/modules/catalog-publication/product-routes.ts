@@ -5,7 +5,8 @@ import type { AppDependencies } from "../../app.js"
 import { authorizeRequest, requirePermission } from "../../platform/access.js"
 import { record } from "../../platform/commands.js"
 import { databaseId } from "../../platform/database-id.js"
-import { Problem } from "../../platform/problem.js"
+import { Problem } from "../../platform/problem.js"
+import { storePhoto } from "../catalog-profile/images.js"
 import { parseRevision, revisionValue } from "../../platform/revision.js"
 
 const MAX_IMAGE_BYTES = 20_000_000
@@ -93,22 +94,27 @@ export function registerProductCatalogRoutes(app: FastifyInstance, dependencies:
       const current = (await context.client.query<{ revision: string | number }>("SELECT revision FROM product_catalog_profiles WHERE tenant_id=$1 AND product_id=$2 FOR UPDATE", [context.tenantId, id])).rows[0]
       const stored = current ? revisionValue(current.revision) : 0
       if (stored !== expected) throw new Problem(412, "revision_conflict", "Outra pessoa alterou o cadastro. Sua edição foi preservada")
-      // Photo processing (resize and R2 upload) is not ported; see the PR notes.
-      if (input.newImage) throw invalid("O envio de nova foto ainda não está disponível nesta API")
-      if (input.mainMediaId && !(await context.client.query("SELECT 1 FROM product_media_assets m JOIN system_config.files f ON (f.tenant_id,f.id)=(m.tenant_id,m.file_id) WHERE m.tenant_id=$1 AND m.product_id=$2 AND m.id=$3 AND m.variant IN ('webp','black','thumbnail') AND f.status='available'", [context.tenantId, id, input.mainMediaId])).rows[0]) throw invalid("Selecione uma imagem de apresentação deste produto")
+      // A new photo is resized to lossless WebP, stored in R2 and linked as the presentation image.
+      let mainMediaId = input.mainMediaId
+      if (input.newImage) {
+        const gateway = dependencies.catalogMedia
+        if (!gateway?.upload || gateway.tenantId !== context.tenantId) throw new Problem(409, "domain_conflict", "Publicação não configurada para esta empresa")
+        mainMediaId = await storePhoto(context, gateway.upload, id, input.collection, input.newImage)
+      }
+      if (mainMediaId && !(await context.client.query("SELECT 1 FROM product_media_assets m JOIN system_config.files f ON (f.tenant_id,f.id)=(m.tenant_id,m.file_id) WHERE m.tenant_id=$1 AND m.product_id=$2 AND m.id=$3 AND m.variant IN ('webp','black','thumbnail') AND f.status='available'", [context.tenantId, id, mainMediaId])).rows[0]) throw invalid("Selecione uma imagem de apresentação deste produto")
       const sources = input.catalogSources ? JSON.stringify(input.catalogSources) : null
       const group = input.muscleGroup.trim(), category = input.technicalCategory.trim()
       const next = Number(expected) + 1
       if (!current) {
         const path = `/${input.collection === "core" ? "core" : "loja"}/product-${id}/`
         await context.client.query("INSERT INTO product_catalog_profiles(tenant_id,product_id,collection,muscle_group,technical_category,dimensions_mm,description,weight,weight_stack,main_media_id,public_path,manufacturer,manufacturer_model,catalog_product_name,live_area,catalog_sources) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)",
-          [context.tenantId, id, input.collection, group, category, input.dimensionsMm, input.description, input.weight, input.weightStack, input.mainMediaId, path, input.manufacturer ?? "", input.manufacturerModel ?? "", input.catalogProductName ?? "", input.liveArea ?? "", sources ?? "[]"])
+          [context.tenantId, id, input.collection, group, category, input.dimensionsMm, input.description, input.weight, input.weightStack, mainMediaId, path, input.manufacturer ?? "", input.manufacturerModel ?? "", input.catalogProductName ?? "", input.liveArea ?? "", sources ?? "[]"])
       } else {
         await context.client.query("UPDATE product_catalog_profiles SET collection=$4,muscle_group=$5,technical_category=$6,dimensions_mm=$7,description=$8,weight=$9,weight_stack=$10,main_media_id=$11,manufacturer=COALESCE($12,manufacturer),manufacturer_model=COALESCE($13,manufacturer_model),catalog_product_name=COALESCE($14,catalog_product_name),live_area=COALESCE($15,live_area),catalog_sources=COALESCE($16::jsonb,catalog_sources),revision=revision+1,updated_at=now() WHERE tenant_id=$1 AND product_id=$2 AND revision=$3",
-          [context.tenantId, id, expected, input.collection, group, category, input.dimensionsMm, input.description, input.weight, input.weightStack, input.mainMediaId, input.manufacturer ?? null, input.manufacturerModel ?? null, input.catalogProductName ?? null, input.liveArea ?? null, sources])
+          [context.tenantId, id, expected, input.collection, group, category, input.dimensionsMm, input.description, input.weight, input.weightStack, mainMediaId, input.manufacturer ?? null, input.manufacturerModel ?? null, input.catalogProductName ?? null, input.liveArea ?? null, sources])
       }
       await record(context, request.headers, "product", id, current ? "catalog.profile.updated" : "catalog.profile.created", { revision: next })
-      return { saved: true, revision: next, mainMediaId: input.mainMediaId }
+      return { saved: true, revision: next, mainMediaId: mainMediaId }
     })
     return reply.header("cache-control", "no-store").header("etag", `"${body.revision}"`).send(body)
   })
