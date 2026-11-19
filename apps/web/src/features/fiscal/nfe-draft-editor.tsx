@@ -31,8 +31,8 @@ import { NfeRecipientPicker, NfeMunicipalityLookup } from "./nfe-recipient-picke
 import { applyMunicipalityCode } from "@/lib/municipality-code"
 import { EmissionActions } from "./emission-actions"
 import { applyRecipientFiscal, applyTaxProfile, blankDraft, blankIbptItem, blankItem, blankTaxDeclaration, blockerLabels, invoiceTotal, itemTotal, productsTotal, submission, type DraftInput, type DraftItem, type FiscalReadiness, type TaxDeclaration } from "./nfe-draft-model"
-import { applyNatureCfop } from "./nfe-draft-model"
 import { IbptDraftFields, IbptSavedSnapshot } from "./ibpt-draft-fields"
+import { applyNatureCfop } from "./nfe-draft-model"
 
 type Snapshot = Schema<"DraftSnapshot">
 // The TypeScript API adds the origin registered for each product line; the generated contract predates it.
