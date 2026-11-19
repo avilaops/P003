@@ -67,11 +67,10 @@ jobs:
     - name: Run Claude Code
       uses: anthropics/claude-code-action@v1
       with:
-        # Configure um dos dois segredos no repositório (Settings > Secrets and variables > Actions):
-        #   CLAUDE_CODE_OAUTH_TOKEN  -> usa a assinatura Claude (gerado com `claude setup-token`)
-        #   ANTHROPIC_API_KEY        -> cobra pela API
+        # Usa somente a assinatura Claude (Pro/Max), sem cobrança de API.
+        # Segredo CLAUDE_CODE_OAUTH_TOKEN, gerado com `claude setup-token`.
+        # Não há chave de API aqui de propósito: o uso conta no limite da assinatura.
         claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-        anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
         additional_permissions: |
           actions: read
         claude_args: |
