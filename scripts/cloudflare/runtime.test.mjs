@@ -40,10 +40,12 @@ test('only required runtime secrets reach each process, with private loopback AP
     CLOUDFLARE_API_TOKEN: 'CF', NODE_OPTIONS: '--inspect=0.0.0.0', SMTP_PASSWORD: 'MAIL',
     ERP_API_URL: 'https://wrong.invalid', API_BIND_ADDRESS: '0.0.0.0:9999' };
   const split = childEnvironments(env);
-  assert.equal(split.api.API_BIND_ADDRESS, '127.0.0.1:8080');
+  assert.equal(split.api.API_TS_HOST, '127.0.0.1');
+  assert.equal(split.api.API_TS_PORT, '8080');
+  assert.equal(split.api.API_BIND_ADDRESS, undefined);
   assert.equal(split.web.ERP_API_URL, 'http://127.0.0.1:8080');
   assert.equal(split.web.PORT, '3000');
-  assert.equal(split.api.SMTP_PASSWORD, 'MAIL');
+  assert.equal(split.api.SMTP_PASSWORD, undefined);
   assert.equal(split.web.SMTP_PASSWORD, undefined);
   assert.equal(split.api.ERP_SESSION_SECRET, undefined);
   assert.equal(split.web.DATABASE_URL, undefined);
@@ -206,23 +208,23 @@ function supervisorFixture(fetchImpl = async () => Response.json({ status: 'read
   return { supervisor, children, launches };
 }
 
-test('supervisor starts API without migration and waits before spawning web', async () => {
+test('supervisor starts the TypeScript API without migration and waits before spawning web', async () => {
   let release;
   const gate = new Promise(resolve => { release = resolve; });
   const f = supervisorFixture(async () => { await gate; return Response.json({ status: 'ready' }); });
   assert.equal(f.launches.length, 1);
-  assert.deepEqual(f.launches[0].args, []);
-  assert.equal(f.launches[0].command, '/usr/local/bin/erp-next-api');
+  assert.deepEqual(f.launches[0].args, ['apps/api-ts/dist/server.js']);
+  assert.notEqual(f.launches[0].command, '/usr/local/bin/erp-next-api');
+  assert.equal(f.launches[0].options.env.API_TS_PORT, '8080');
   release();
   await f.supervisor.ready;
-  assert.equal(f.launches.length, 3);
-  assert.deepEqual(f.launches[1].args, ['apps/api-ts/dist/server.js']);
-  assert.deepEqual(f.launches[2].args, ['apps/web/server.js']);
+  assert.equal(f.launches.length, 2);
+  assert.deepEqual(f.launches[1].args, ['apps/web/server.js']);
   f.supervisor.stop();
   assert.equal(await f.supervisor.done, 0);
 });
 
-test('failed API readiness stops the native process and never starts web', async () => {
+test('failed API readiness stops the API process and never starts web', async () => {
   const f = supervisorFixture(async () => new Response('', { status: 503 }));
   await assert.rejects(f.supervisor.ready);
   assert.equal(await f.supervisor.done, 1);
@@ -243,48 +245,36 @@ test('graceful shutdown stops all processes without restart or migration', async
   await f.supervisor.ready;
   f.supervisor.stop();
   assert.equal(await f.supervisor.done, 0);
-  assert.equal(f.launches.length, 3);
+  assert.equal(f.launches.length, 2);
   assert.ok(f.children.every(child => child.kills.length === 1));
 });
 
-test('enabled TypeScript modules receive an isolated private API process without web secrets', () => {
+test('the TypeScript API receives an isolated private process without web secrets', () => {
   const env = { ...environment(), ERP_TYPESCRIPT_MODULES: 'preferences,sales', SMTP_PASSWORD: 'MAIL', ERP_CERT_KEY: 'CERT', ERP_TYPESCRIPT_API_URL: 'https://wrong.invalid' };
   const config = runtimeConfiguration(env);
   assert.ok(config);
-  assert.equal(config.processes.apiTs.API_TS_HOST, '127.0.0.1');
-  assert.equal(config.processes.apiTs.API_TS_PORT, '8081');
-  assert.equal(config.processes.apiTs.DATABASE_URL, env.DATABASE_URL);
-  assert.equal(config.processes.apiTs.AUTH_USERINFO_URL, env.AUTH_USERINFO_URL);
-  for (const key of ['SMTP_PASSWORD', 'ERP_CERT_KEY', 'ERP_SESSION_SECRET', 'ERP_AUTH_CLIENT_SECRET']) assert.equal(config.processes.apiTs[key], undefined);
-  assert.equal(config.processes.web.ERP_TYPESCRIPT_API_URL, 'http://127.0.0.1:8081');
-  assert.equal(config.processes.api.ERP_TYPESCRIPT_API_URL, 'http://127.0.0.1:8081');
+  assert.equal(config.processes.api.API_TS_HOST, '127.0.0.1');
+  assert.equal(config.processes.api.API_TS_PORT, '8080');
+  assert.equal(config.processes.api.DATABASE_URL, env.DATABASE_URL);
+  assert.equal(config.processes.api.AUTH_USERINFO_URL, env.AUTH_USERINFO_URL);
+  for (const key of ['SMTP_PASSWORD', 'ERP_CERT_KEY', 'ERP_SESSION_SECRET', 'ERP_AUTH_CLIENT_SECRET']) assert.equal(config.processes.api[key], undefined);
+  assert.equal(config.processes.apiTs, undefined, 'There is a single API process');
+  assert.equal(config.processes.web.ERP_API_URL, 'http://127.0.0.1:8080');
+  assert.equal(config.processes.web.ERP_TYPESCRIPT_API_URL, 'http://127.0.0.1:8080');
   assert.equal(config.processes.web.ERP_TYPESCRIPT_MODULES, undefined);
-  for (const modules of ['', 'unknown', 'sales,sales', 'sales,']) assert.ok(runtimeConfiguration({ ...env, ERP_TYPESCRIPT_MODULES: modules }).processes.apiTs);
-  assert.equal(config.processes.apiTs.BROWSER_USE_API_KEY, undefined, 'Browser Use stays off without a key');
+  assert.equal(config.processes.api.BROWSER_USE_API_KEY, undefined, 'Browser Use stays off without a key');
   const withBrowserUse = runtimeConfiguration({ ...env, BROWSER_USE_API_KEY: 'bu_fixture' }).processes;
-  assert.equal(withBrowserUse.apiTs.BROWSER_USE_API_KEY, 'bu_fixture');
-  assert.equal(withBrowserUse.api.BROWSER_USE_API_KEY, undefined, 'Only the TypeScript API receives the Browser Use key');
+  assert.equal(withBrowserUse.api.BROWSER_USE_API_KEY, 'bu_fixture');
   assert.equal(withBrowserUse.web.BROWSER_USE_API_KEY, undefined, 'The web process never receives the Browser Use key');
 });
 
-test('supervisor waits for both private APIs before starting web and stops all on TS failure', async () => {
+test('TypeScript API failure after startup stops web and the API', async () => {
   const probes = [];
-  const f = supervisorFixture(async url => { probes.push(url); return Response.json({ status: 'ready' }); }, { ERP_TYPESCRIPT_MODULES: 'sales' });
+  const f = supervisorFixture(async url => { probes.push(url); return Response.json({ status: 'ready' }); });
   await f.supervisor.ready;
-  assert.equal(f.launches.length, 3);
-  assert.deepEqual(f.launches[1].args, ['apps/api-ts/dist/server.js']);
-  assert.deepEqual(f.launches[2].args, ['apps/web/server.js']);
-  assert.ok(probes.includes('http://127.0.0.1:8081/health/ready'));
-  f.children[1].emit('exit', 1, null);
-  assert.equal(await f.supervisor.done, 1);
-  assert.deepEqual(f.children[0].kills, ['SIGTERM']);
-  assert.deepEqual(f.children[2].kills, ['SIGTERM']);
-});
-
-test('unready TypeScript API prevents web startup and stops both API processes', async () => {
-  const f = supervisorFixture(async url => Response.json({ status: url.includes(':8080/') ? 'ready' : 'unavailable' }), { ERP_TYPESCRIPT_MODULES: 'sales' });
-  await assert.rejects(f.supervisor.ready);
-  assert.equal(await f.supervisor.done, 1);
   assert.equal(f.launches.length, 2);
-  assert.ok(f.children.every(child => child.kills.length === 1));
+  assert.ok(probes.every(url => url === 'http://127.0.0.1:8080/health/ready'));
+  f.children[0].emit('exit', 1, null);
+  assert.equal(await f.supervisor.done, 1);
+  assert.deepEqual(f.children[1].kills, ['SIGTERM']);
 });
