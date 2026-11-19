@@ -104,7 +104,11 @@ jobs:
         script_file=$(mktemp)
         trap 'rm -f -- "$script_file"' EXIT
         cat > "$script_file" <<'ERP_TIMED_ac05e919a9c58614'
-        xcodebuild test -project ErpMobile.xcodeproj -scheme ErpMobile -destination 'platform=iOS Simulator,name=iPhone 16,OS=latest' CODE_SIGNING_ALLOWED=NO
+        xcrun simctl list runtimes available
+        runtime=$(xcrun simctl list runtimes available -j | python3 -c "import json,sys; r=[x for x in json.load(sys.stdin)['runtimes'] if x['platform']=='iOS']; print(sorted(r, key=lambda x: [int(n) for n in x['version'].split('.')])[-1]['identifier'])")
+        device=$(xcrun simctl list devicetypes -j | python3 -c "import json,sys; print([x['identifier'] for x in json.load(sys.stdin)['devicetypes'] if 'iPhone' in x['name']][-1])")
+        udid=$(xcrun simctl create erp-ci "$device" "$runtime")
+        xcodebuild test -project ErpMobile.xcodeproj -scheme ErpMobile -destination "id=$udid" CODE_SIGNING_ALLOWED=NO
         ERP_TIMED_ac05e919a9c58614
         python3 "$GITHUB_WORKSPACE/scripts/ci/timed.py" --label '_validate-mobile/ios: xcodebuild test' --output "$GITHUB_WORKSPACE/artifacts/timings/$GITHUB_JOB.jsonl" -- bash --noprofile --norc -e -o pipefail "$script_file"
       working-directory: apps/mobile/ios
