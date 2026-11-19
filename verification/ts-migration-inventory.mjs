@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { readdir, readFile } from 'node:fs/promises';
+import { appendFile, readdir, readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import { baselineFile } from './discovery.mjs';
@@ -73,5 +73,12 @@ export async function inventory() {
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  process.stdout.write(`${JSON.stringify(await inventory(), null, 2)}\n`);
+  const result = await inventory();
+  if (process.argv.includes('--summary')) {
+    // CI: show what is left to port (native_only) in the job summary; PRs 04 to 10 must reduce this number.
+    const { total, nativeOnly, registeredUnverified } = result.counts;
+    const line = `Falta portar (native_only): ${nativeOnly} de ${total} operações; ${registeredUnverified} já registradas no Fastify.`;
+    console.log(line);
+    if (process.env.GITHUB_STEP_SUMMARY) await appendFile(process.env.GITHUB_STEP_SUMMARY, `### Migração para TypeScript\n\n- **native_only: ${nativeOnly}** (total ${total}, registradas ${registeredUnverified})\n`);
+  } else process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
 }
