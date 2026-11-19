@@ -16,6 +16,7 @@ export const serviceParameters = {
   "services.billing.interval_minutes": { default: 60, min: 5, max: 1440, description: "Intervalo do job de faturamento recorrente (minutos)" },
   /** Prazo de vencimento da cobrança gerada no fechamento de OS fora da garantia. */
   "services.orders.charge_due_days": { default: 10, min: 0, max: 120, description: "Prazo de vencimento da cobrança de OS (dias)" },
+  "services.orders.default_sla_hours": { default: 48, min: 1, max: 8760, description: "Prazo padrão de SLA da ordem de serviço (horas)" },
 } as const
 
 export type ServiceParameter = keyof typeof serviceParameters

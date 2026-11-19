@@ -13,7 +13,7 @@ function units(raw:string) {
   const [whole,fraction=""]=raw.split(".")
   return BigInt(whole!+fraction.padEnd(6,"0"))
 }
-type PartSerials = {tracked:boolean; numbers:string[]}
+export type PartSerials = {tracked:boolean; numbers:string[]}
 async function partWarehouse(ctx:AuthorizedContext, product:string, quantity:bigint, parts:PartSerials) {
   if (!parts.tracked) {
     if (parts.numbers.length) invalid("Este produto não é controlado por série")
@@ -31,7 +31,7 @@ async function partWarehouse(ctx:AuthorizedContext, product:string, quantity:big
   if (rows.some(row=>row.warehouseId!==warehouse)) conflict("Informe séries de um único depósito por lançamento")
   return warehouse
 }
-async function movement(ctx:AuthorizedContext, product: string, quantity:bigint, reason:string, reverses:string|null=null, parts?:PartSerials) {
+export async function movement(ctx:AuthorizedContext, product: string, quantity:bigint, reason:string, reverses:string|null=null, parts?:PartSerials) {
   const row=(await ctx.client.query("SELECT quantity_micros FROM stock_balances WHERE tenant_id=$1 AND product_id=$2 FOR UPDATE",[ctx.tenantId,product])).rows[0]
   if (!row) return conflict("Saldo de estoque não encontrado")
   const balance=BigInt(String(row.quantity_micros))
