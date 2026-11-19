@@ -97,12 +97,14 @@ export function contextSourcePaths(catalogue, inventory, definitions) {
     'verification/schemas/product-flow-definitions.schema.json', 'verification/schemas/product-context.schema.json',
     'verification/mcp/central-tools.json', 'verification/mcp/protocol-actions.json',
     'verification/product-context-publish.mjs',
-    'package.json', 'pnpm-lock.yaml', 'Cargo.toml', 'Cargo.lock', 'apps/api/Cargo.toml', 'apps/web/package.json',
+    'package.json', 'pnpm-lock.yaml', 'apps/web/package.json',
     ...definitions.flatMap(flow => flow.additionalSources || []),
   ]);
+  // Legacy .rs references document where behaviour came from; they are not context sources.
+  const readable = file => !file.endsWith('.rs');
   for (const action of actions) {
-    for (const file of action.sources) paths.add(file);
-    if (action.input.body) paths.add(action.input.body.source);
+    for (const file of action.sources) if (readable(file)) paths.add(file);
+    if (action.input.body && readable(action.input.body.source)) paths.add(action.input.body.source);
     for (const page of action.ui.pages) {
       for (const item of inventory.pages.filter(item => normalizedRoute(item.path) === normalizedRoute(page))) {
         paths.add(item.file);
@@ -154,7 +156,7 @@ export function buildProductContext(catalogue, inventory, source, target = null)
       'Metadados, relações e declarações de implementação extraídos do catálogo e das fontes locais.',
       'Página e BFF mapeados não comprovam interação, persistência ou execução do fluxo.',
       'Publicação e execução não são inferidas do commit, de nomes de arquivos ou do catálogo.',
-      'As fontes de contexto incluem referências do catálogo e dependências TypeScript resolvidas estaticamente; não são um grafo completo de dependências Rust ou de execução.',
+      'As fontes de contexto incluem referências do catálogo e dependências TypeScript resolvidas estaticamente; não são um grafo completo de dependências de execução.',
       'Nenhum modelo de ML foi executado para produzir este contexto.',
     ],
   };

@@ -1,13 +1,11 @@
-import { createRequire } from 'node:module';
 import { createHash } from 'node:crypto';
 import { readdir, readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
-import { discover } from './discovery.mjs';
+import { baselineFile } from './discovery.mjs';
 import { buildApp } from '../apps/api-ts/src/app.ts';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
-const typescript = createRequire(path.join(root, 'apps/api-ts/package.json'))('typescript');
 
 async function registrationHash(directory) {
   const hash = createHash('sha256');
@@ -52,15 +50,17 @@ export async function inventory() {
   });
   try {
     await app.ready();
-    const source = await discover(root, { typescript });
-    // Keep the migration denominator stable when adding TypeScript-only operations.
-    const baseline = source.api.filter(route => route.file.endsWith('.rs') || route.file.endsWith('/document-endpoints.json'));
+    const text = await readFile(path.join(root, baselineFile), 'utf8');
+    // Frozen list of the former native backend's operations: the migration denominator.
+    const baseline = JSON.parse(text).operations.map(item => ({
+      path: item.path, methods: [item.method], file: item.legacySources[0]?.split(':')[0] ?? baselineFile, line: Number(item.legacySources[0]?.split(':')[1] ?? 0),
+    }));
     const operations = classifyOperations(baseline, app);
     return {
       schemaVersion: 1,
-      sourceHash: source.sourceHash,
+      baselineHash: createHash('sha256').update(text).digest('hex'),
       registrationSourceHash: await registrationHash(path.join(root, 'apps/api-ts/src')),
-      scope: 'Production native HTTP operations and the registered document endpoint baseline. Excludes new TypeScript-only stock and financial routes, dynamic MCP dispatch and non-HTTP workers.',
+      scope: 'Frozen baseline of the former native HTTP operations (verification/ts-migration-baseline.json). Excludes TypeScript-only routes, dynamic MCP dispatch and non-HTTP workers.',
       limitation: 'registered_unverified means Fastify has a handler, not that behavior, authorization, persistence or production parity has been verified.',
       counts: {
         total: operations.length,

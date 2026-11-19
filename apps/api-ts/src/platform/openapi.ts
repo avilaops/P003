@@ -38,7 +38,9 @@ export function trackRoutes(app: FastifyInstance) {
     for (const method of [route.method].flat()) {
       if (method === "HEAD") continue // Fastify cria HEAD automático para cada GET.
       const documentation = route.config?.openapi
-      routes.push({ method, path: route.url, ...(documentation ? { documentation } : {}) })
+      // `/x/:id?` atende `/x` e `/x/:id`: o contrato lista as duas operações.
+      const optional = route.url.match(/^(.*)\/:\w+\?$/)
+      for (const path of optional ? [optional[1] || "/", route.url.replace(/\?$/, "")] : [route.url]) routes.push({ method, path, ...(documentation ? { documentation } : {}) })
     }
   })
 }
