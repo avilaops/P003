@@ -8,6 +8,7 @@ import type { AppDependencies } from "../../app.js"
 import { authorizeRequest, requirePermission, type AuthorizedContext } from "../../platform/access.js"
 import { Problem } from "../../platform/problem.js"
 import { sameJson } from "../../platform/json.js"
+import { diffChanges } from "../../platform/change-diff.js"
 import { integer, queryInteger, searchQuery } from "../registrations/query.js"
 import { partyInputSchema, type PartyInput } from "./schema.js"
 
@@ -111,7 +112,7 @@ export function registerPartyRoutes(app: FastifyInstance, dependencies: AppDepen
       const addresses = input.addresses ?? old.addresses, contacts = input.contacts ?? old.contacts, fiscal = Object.hasOwn(input, "fiscal") ? input.fiscal ?? null : old.fiscal
       await context.client.query("UPDATE parties SET person_type=$3,legal_name=$4,trade_name=$5,tax_id=$6,email=$7,phone=$8,is_customer=$9,is_supplier=$10,status=$11,revision=$12,addresses=$13,contacts=$14,fiscal=$15,updated_at=now() WHERE tenant_id=$1 AND id=$2 AND revision=$16", [context.tenantId, request.params.id, input.personType, input.legalName, input.tradeName, input.taxId, input.email, input.phone, input.isCustomer, input.isSupplier, input.status, next, JSON.stringify(addresses), JSON.stringify(contacts), fiscal, expected])
       const loaded = await context.client.query(`SELECT ${projection} FROM parties WHERE tenant_id=$1 AND id=$2`, [context.tenantId, request.params.id])
-      await context.client.query("INSERT INTO audit_log(tenant_id,identity_id,action,entity_type,entity_id,request_id,details) SELECT $1,id,'party.updated','party',$3,$4,$5 FROM identities WHERE auth_subject=$2", [context.tenantId, context.identity.subject, request.params.id, header(request.headers["x-request-id"]) ?? null, { previousRevision: expected, revision: next, isCustomer: input.isCustomer, isSupplier: input.isSupplier }])
+      await context.client.query("INSERT INTO audit_log(tenant_id,identity_id,action,entity_type,entity_id,request_id,details) SELECT $1,id,'party.updated','party',$3,$4,$5 FROM identities WHERE auth_subject=$2", [context.tenantId, context.identity.subject, request.params.id, header(request.headers["x-request-id"]) ?? null, { previousRevision: expected, revision: next, isCustomer: input.isCustomer, isSupplier: input.isSupplier, changes: diffChanges(old, party(loaded.rows[0]!)) }])
       await context.client.query("INSERT INTO outbox_events(tenant_id,aggregate_type,aggregate_id,event_type,payload) VALUES($1,'party',$2,'party.updated',$3)", [context.tenantId, request.params.id, { previousRevision: expected, revision: next, isCustomer: input.isCustomer, isSupplier: input.isSupplier }])
       return { tenantId: context.tenantId, canEdit: true, data: party(loaded.rows[0]!) }
     })

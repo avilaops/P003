@@ -22,6 +22,7 @@ import { Button } from "@/components/ui/button"
 import { SearchInput } from "@/components/search-input"
 import { Input } from "@/components/ui/input"
 
+import { RecordHistory } from "@/features/records/record-history"
 import { PartyComplements } from "./party-complements"
 import { RegistryLookup } from "@/features/records/registry-lookup"
 import { CnpjRegistrationCheck } from "@/features/records/cnpj-registration-check"
@@ -258,6 +259,7 @@ export function PartyEditor({ id, view = false, draftScope, tenantId }: { id?: s
           <dl className="grid min-w-0 grid-cols-2 gap-2">{[["Tipo", draft.personType === "fisica" ? "Pessoa física" : "Pessoa jurídica"], ["CPF ou CNPJ", formatTaxId(draft.taxId)], ["Nome fantasia", draft.tradeName || "Não informado"], ["E-mail", draft.email || "Não informado"], ["Telefone", formatPhone(draft.phone) || "Não informado"], ["Relacionamento", relationship(draft)], ["Situação no ERP", draft.status === "active" ? "Ativo" : "Arquivado"]].map(([label, value]) => <div className={`min-w-0 ${label === "E-mail" ? "col-span-2" : ""}`} key={label}><dt className="text-xs text-muted-foreground">{label}</dt><dd className="mt-1 font-medium [overflow-wrap:anywhere]">{value}</dd></div>)}</dl>
           {draft.personType === "juridica" && <CnpjRegistrationCheck value={draft.taxId} tenantId={snapshot.tenantId} />}
           <PartyComplements addresses={draft.addresses} contacts={draft.contacts} />
+          {id && <RecordHistory entity="party" id={id} />}
           <dl className="grid min-w-0 grid-cols-2 gap-2"><div><dt className="text-xs text-muted-foreground">Classificação ICMS</dt><dd>{draft.fiscal ? fiscalLabels[draft.fiscal.taxpayerIndicator] : "Não informada"}</dd></div><div><dt className="text-xs text-muted-foreground">Inscrição estadual</dt><dd>{draft.fiscal?.stateRegistration || "Não informada"}</dd></div></dl>
           {snapshot.canEdit && <Link className={linkClass} href={`/cadastros/clientes-fornecedores/${id}/editar`}>Editar pessoa</Link>}
         </> : <form className="space-y-3" onSubmit={save}>

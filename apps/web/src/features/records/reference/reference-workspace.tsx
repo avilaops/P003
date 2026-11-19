@@ -19,6 +19,7 @@ import { Button } from "@/components/ui/button"
 import { SearchInput } from "@/components/search-input"
 import { Input } from "@/components/ui/input"
 import { useCommand, useResource } from "@/hooks/use-operation"
+import { RecordHistory } from "@/features/records/record-history"
 import { accountTypes, modalities, referenceConfigs, referencePath, type ReferenceKind, type ReferenceFields, type ReferenceList, type ReferenceSnapshot } from "./reference-config"
 
 const linkClass = "font-medium text-primary underline underline-offset-4"
@@ -116,7 +117,7 @@ function Detail({ kind, value }: { kind: ReferenceKind; value: ReferenceSnapshot
       {(kind === "categorias-produtos" || kind === "categorias-financeiras") && <div><dt className="text-sm text-muted-foreground">Categoria superior</dt><dd className="mt-1">{data.parentId ? <Link className={linkClass} href={`${referencePath(kind)}/${data.parentId}`}><ParentName kind={kind} id={String(data.parentId)} /></Link> : "Nenhuma"}</dd></div>}
       {kind === "tags" && <div><dt className="text-sm text-muted-foreground">Grupo de tags</dt><dd>{data.groupId ? <ParentName kind="grupos-tags" id={String(data.groupId)} /> : "Sem grupo"}</dd></div>}
     </dl>{value.canEdit ? <Link className={linkClass} href={`${referencePath(kind)}/${data.id}/editar`}>Editar cadastro</Link> : <p>Somente consulta.</p>}
-  </section></>
+  </section><RecordHistory entity={config.endpoint} id={String(data.id)} /></>
 }
 
 function ParentPicker({ kind, id, selected, disabled, choose, tenantId, direction }: { kind: ReferenceKind; id?: string; selected: string | null; disabled: boolean; choose: (id: string | null) => void; tenantId: string; direction?: string | null }) {

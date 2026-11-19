@@ -9,6 +9,7 @@ import { authorizeRequest, requirePermission, type AuthorizedContext } from "../
 import { databaseId } from "../../platform/database-id.js"
 import { Problem } from "../../platform/problem.js"
 import { sameJson } from "../../platform/json.js"
+import { diffChanges } from "../../platform/change-diff.js"
 import { integer, parseListQuery } from "../registrations/query.js"
 
 const definitions = {
@@ -21,6 +22,9 @@ const definitions = {
   "tag-groups": { table: "tag_groups", event: "tag_group", read: "catalog.products.read", manage: "catalog.products.manage", extras: [] },
   tags: { table: "tags", event: "tag", read: "catalog.products.read", manage: "catalog.products.manage", extras: ["group_id"] },
 } as const
+
+/** Histórico genérico: tipo de entidade gravado no audit_log e permissão de leitura de cada cadastro de referência. */
+export const referenceAudit = Object.fromEntries(Object.entries(definitions).map(([resource, definition]) => [resource, { entityType: definition.table, read: definition.read }])) as Record<string, { entityType: string; read: string }>
 
 const baseInput = z.object({
   code: z.string().trim().min(1).max(40).regex(/^[A-Za-z0-9][A-Za-z0-9._/-]*$/).transform(value => value.toUpperCase()),
@@ -189,13 +193,14 @@ export function registerReferenceRoutes(app: FastifyInstance, dependencies: AppD
         const values = parsed.data as Record<string, unknown>
         await validateRelations(context, resource, request.params.id, values)
         const assignments = ["code", "name", "status", "notes", ...definition.extras]
+        const previousRow = await load(context.client, context.tenantId, request.params.id)
         const updateValues = assignments.map(column => values[fieldName(column)])
         const updated = await context.client.query(`UPDATE ${definition.table} SET ${assignments.map((column, index) => `${column}=$${index + 3}`).join(",")},revision=revision+1,updated_at=now() WHERE tenant_id=$1 AND id=$2 AND revision=$${updateValues.length + 3} RETURNING 1 AS affected`, [context.tenantId, request.params.id, ...updateValues, expected])
         if (!updated.rows[0]) throw new Problem(412, "revision_conflict", "O cadastro foi alterado por outra pessoa")
         const row = await load(context.client, context.tenantId, request.params.id)
         if (!row) throw new Problem(404, "not_found", "Registro não encontrado nesta empresa")
         const result = { tenantId: context.tenantId, canEdit: true, data: output(row, definition.extras) }
-        const details = { revision: nextRevision(expected), previousRevision: expected, status: parsed.data.status }
+        const details = { revision: nextRevision(expected), previousRevision: expected, status: parsed.data.status, changes: previousRow ? diffChanges(output(previousRow, definition.extras) as Record<string, unknown>, result.data as Record<string, unknown>) : {} }
         await context.client.query("INSERT INTO audit_log(tenant_id,identity_id,action,entity_type,entity_id,request_id,details) SELECT $1,id,$3,$4,$5,$6,$7 FROM identities WHERE auth_subject=$2", [context.tenantId, context.identity.subject, scope, definition.table, request.params.id, singleHeader(request.headers["x-request-id"]) ?? null, details])
         await context.client.query("INSERT INTO outbox_events(tenant_id,aggregate_type,aggregate_id,event_type,payload) VALUES($1,$2,$3,$4,$5)", [context.tenantId, definition.table, request.params.id, scope, details])
         await context.client.query("INSERT INTO domain_commands(tenant_id,auth_subject,command_key,scope,request,result) VALUES($1,$2,$3,$4,$5,$6)", [context.tenantId, context.identity.subject, key, scope, commandRequest, result])

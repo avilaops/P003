@@ -32,6 +32,7 @@ import { registerCommercialConversion } from "./modules/commercial/conversion.js
 import { registerCommercialTables } from "./modules/commercial/tables.js"
 import { registerCommercialPricingSettings } from "./modules/commercial/pricing-inputs.js"
 import { channelServiceRoute } from "./modules/commercial/channel-service.js"
+import { registerHistoryRoutes } from "./modules/history/routes.js"
 import { registerDataQualityRoutes } from "./modules/data-quality/routes.js"
 import { registerSalesPolicies } from "./modules/commercial/policy-routes.js"
 import { registerOpportunityRoutes } from "./modules/opportunities/routes.js"
@@ -140,6 +141,7 @@ export function buildApp(_dependencies: AppDependencies): FastifyInstance {
   registerCountRoutes(app, _dependencies)
   registerPartyRoutes(app, _dependencies)
   registerDataQualityRoutes(app, _dependencies)
+  registerHistoryRoutes(app, _dependencies)
   registerWarranties(app, _dependencies)
   registerDashboardRoutes(app, _dependencies)
   registerReportRoutes(app, _dependencies)
