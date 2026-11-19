@@ -52,6 +52,10 @@ export function ReportsHub() {
           <span><strong className="block text-lg">{executiveReport.title}</strong><span className="mt-1 block text-sm text-muted-foreground">{executiveReport.description}</span><span className="mt-3 inline-block text-sm font-medium text-primary">Abrir visão executiva →</span></span>
         </Link>
       </section>
+      <section className="mt-4 flex flex-wrap items-center justify-between gap-2 rounded-lg border px-4 py-2 text-sm">
+        <span><strong className="font-medium">Relatórios configuráveis</strong> <span className="text-muted-foreground">• colunas, agrupamentos, totais, exportação CSV/XLSX/PDF e envio agendado por e-mail</span></span>
+        <Link className="text-sm font-medium text-primary underline" href="/relatorios/configuraveis">Abrir</Link>
+      </section>
       <h2 className="mt-8 text-xl font-semibold">Relatórios por área</h2>
       <section className="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
         {reports.map(({ icon: Icon, ...report }) => (

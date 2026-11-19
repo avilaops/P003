@@ -79,3 +79,15 @@ test("enabled routes fail closed on missing or invalid TypeScript configuration"
   for (const modules of ["", "unknown", "sales,sales", "sales,"]) assert.equal(selectErpBackend("POST", "/orders", rust, { ...environment, ERP_TYPESCRIPT_MODULES: modules }).origin, typescript, "Retired flags cannot switch command ownership");
   assert.equal(selectErpBackend("POST", "/orders", rust, { ERP_TYPESCRIPT_MODULES: "sales", ERP_TYPESCRIPT_API_URL: "https://api.internal.example" }).origin, "https://api.internal.example");
 });
+
+test("motor de relatórios (G3) usa a API TypeScript e recusa métodos fora do contrato", () => {
+  for (const [method, resource] of [["GET", "/reports/sources"], ["POST", "/reports/preview"], ["GET", `/reports/definitions/${id}/run`],
+    ["GET", `/reports/definitions/${id}/schedules`], ["POST", `/reports/definitions/${id}/schedules`], ["PUT", `/reports/schedules/${id}`], ["GET", `/reports/runs/${id}/file`]]) {
+    const selected = selectErpBackend(method, resource, rust, environment);
+    assert.equal(selected.origin, typescript, `${method} ${resource}`);
+    assert.equal(selected.module, "reports");
+  }
+  for (const [method, resource] of [["DELETE", `/reports/schedules/${id}`], ["POST", "/reports/sources"], ["GET", "/reports/preview"], ["GET", "/reports/definitions/x/run"]]) {
+    assert.equal(selectErpBackend(method, resource, rust, environment).backend, "rust", `${method} ${resource} não é rota do motor`);
+  }
+});

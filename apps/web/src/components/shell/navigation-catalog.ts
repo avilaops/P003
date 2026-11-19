@@ -65,7 +65,7 @@ export const desktopMenus = [
   {
     label: "Relatórios",
     columns: [
-      { title: "", items: [{ label: "Visão executiva", href: "/relatorios/executivo" }, { label: "Todos os relatórios", href: "/relatorios" }, { label: "Vendas", href: "/relatorios/vendas" }, { label: "Estoque", href: "/relatorios/estoque" }, { label: "Financeiro", href: "/relatorios/financeiro" }] },
+      { title: "", items: [{ label: "Visão executiva", href: "/relatorios/executivo" }, { label: "Todos os relatórios", href: "/relatorios" }, { label: "Configuráveis", href: "/relatorios/configuraveis" }, { label: "Vendas", href: "/relatorios/vendas" }, { label: "Estoque", href: "/relatorios/estoque" }, { label: "Financeiro", href: "/relatorios/financeiro" }] },
       { title: "Operação", items: [{ label: "Serviços", href: "/relatorios/servicos" }, { label: "Auditoria", href: "/relatorios/auditoria" }] },
     ],
   },
