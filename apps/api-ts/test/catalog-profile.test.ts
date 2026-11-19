@@ -71,7 +71,7 @@ test("ficha técnica e fotos do catálogo do produto", { skip: !adminUrl }, asyn
   const sheet = { collection: "core", muscleGroup: "Pernas e glúteos", technicalCategory: "Peso livre", dimensionsMm: [1200, 1000, 900], description: "Texto informado pelo usuário", weight: "50 kg", weightStack: "", mainMediaId: null }
 
   await t.test("PUT /api/v1/products/{id}/catalog [sucesso] envia a foto, grava as versões e liga a foto principal", async () => {
-    await seed.query("INSERT INTO product_catalog_profiles(tenant_id,product_id,collection,muscle_group,technical_category,dimensions_mm,description,weight,weight_stack,public_path) VALUES($1,$2,'core','Pernas','Peso livre',ARRAY[1,1,1],'','','','/x/')", [tenant, bare])
+    await seed.query("INSERT INTO product_catalog_profiles(tenant_id,product_id,collection,muscle_group,technical_category,dimensions_mm,description,weight,weight_stack,public_path) VALUES($1,$2,'core','Pernas','Peso livre',ARRAY[1,1,1],'','','','/core/product-sem-ficha/')", [tenant, bare])
     const photo = await sharp({ create: { width: 2400, height: 1200, channels: 3, background: { r: 30, g: 30, b: 30 } } }).png().toBuffer()
     const stored = await call("PUT", `/api/v1/products/${bare}/catalog`, "manager", { "if-match": '"1"' }, { ...sheet, newImage: `data:image/png;base64,${photo.toString("base64")}` })
     assert.equal(stored.statusCode, 200, stored.body)
@@ -102,8 +102,9 @@ test("ficha técnica e fotos do catálogo do produto", { skip: !adminUrl }, asyn
     assert.equal(body.canEdit, false)
     assert.equal(body.activeProducts, 2)
     const bySku = Object.fromEntries(body.data.map((row: { sku: string; missing: string[] }) => [row.sku, row.missing]))
-    assert.deepEqual(bySku["LD-WH001"], ["manufacturerModel", "ncm"])
-    assert.deepEqual(bySku["LD-WH002"], ["manufacturerModel", "liveArea", "ncm"])
+    assert.deepEqual(bySku["LD-WH001"], ["manufacturerModel", "description", "liveArea", "photo", "ncm"])
+    // O PUT do teste anterior gravou foto principal, descrição e peso; o resto segue vazio.
+    assert.deepEqual(bySku["LD-WH002"], ["manufacturer", "manufacturerModel", "liveArea", "ncm"])
     assert.equal(body.totals.ncm, 2)
   })
 
