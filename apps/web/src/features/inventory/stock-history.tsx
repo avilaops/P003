@@ -14,7 +14,7 @@ import { StockMovementForm } from "./stock-movement-form"
 import { StockAnalysisLink } from "./stock-analysis-link"
 import { stockMoney } from "./stock-model"
 
-const origins = [
+export const movementOrigins = [
   ["sourceOrderId", "Pedido", "/vendas/pedidos/"], ["sourcePurchaseReceiptId", "Recebimento", "/compras/recebimentos/"],
   ["productionOrderId", "Ordem de produção", "/estoque/ordens-producao/"], ["sourcePosSaleId", "Venda no PDV", "/vendas/pdv/historico?venda="],
   ["sourceWarrantyCaseId", "Garantia", "/vendas/garantias/"], ["sourceInventoryCountId", "Inventário", "/estoque/inventarios/"],
@@ -103,7 +103,7 @@ export function StockHistory({ productId, tenant, manual }: { productId: string;
         {history.data.length ? <ol className="divide-y border-y">{history.data.map(movement => <li key={movement.id} className="min-w-0 space-y-1 py-3 [overflow-wrap:anywhere]">
           <p>Data efetiva • {movement.effectiveDate?.split("-").reverse().join("/") || "Anterior ao controle"}</p>
           <strong>{movement.direction === "receipt" ? "Entrada" : "Saída"} de {commercialQuantity(movement.quantity)} {history.product.unit}</strong>
-          {origins.map(([key,label,base]) => movement[key] && <p key={key}>
+          {movementOrigins.map(([key,label,base]) => movement[key] && <p key={key}>
             <GuardedLink className={textLink} href={base+encodeURIComponent(movement[key])}>{label} • {movement[key]}</GuardedLink></p>)}
           {movement.transferId && <GuardedLink className={textLink} href={"/estoque/transferencias?documento="+movement.transferId}>Transferência • {movement.transferId}</GuardedLink>}
           <p>{movement.reason}</p><p>Saldo após o movimento • {commercialQuantity(warehouseId && movement.localBalanceAfter ? movement.localBalanceAfter : movement.balanceAfter)} {history.product.unit}</p>
@@ -112,7 +112,8 @@ export function StockHistory({ productId, tenant, manual }: { productId: string;
           {history.canEdit && movement.direction==="receipt" && !movement.transferId && !movement.reversesId && <GuardedLink className={textLink}
             href={stockUrl("/estoque/fechamento",{tenant,productId,movementId:movement.id})}>Conferir composição do custo</GuardedLink>}
           <p>Registrado em <time dateTime={movement.occurredAt}>{new Date(movement.occurredAt).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" })}</time></p>
-          <p className="text-xs text-muted-foreground">ID • {movement.id}</p>
+          <p className="text-xs text-muted-foreground">ID • <GuardedLink className={textLink} href={stockUrl(historyPath+"/"+movement.id,{tenant})}
+            aria-label={"Detalhe do lançamento "+movement.id}>{movement.id}</GuardedLink></p>
           {movement.returnSourceId && <p>Origem da devolução • {movement.returnSourceId}</p>}
           {movement.reversesId && <p>Estorno do movimento • {movement.reversesId}</p>}
           {manual && history.canEdit && movement.canReverse && <Button variant="outline" disabled={locked || history.product.status !== "active"}

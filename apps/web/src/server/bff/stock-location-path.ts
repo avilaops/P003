@@ -2,6 +2,7 @@ import "server-only"
 const id = "[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}"
 const detail = new RegExp("^/stock/transfers/" + id + "$", "i")
 const reverse = new RegExp("^/stock/transfers/" + id + "/reverse$", "i")
+const movement = new RegExp("^/stock/movements/" + id + "$", "i")
 const rule = new RegExp("^/stock/replenishment/" + id + "$","i")
 
 export function stockLocationPath(resource: string, method: string) {
@@ -13,6 +14,7 @@ export function stockLocationPath(resource: string, method: string) {
   if (resource === "/stock/serials/configure" || resource === "/stock/serials/assign") return method === "POST"
   if (resource === "/stock/reports") return method === "GET"
   if (resource === "/stock/replenishment") return method === "GET"
+  if (movement.test(resource)) return method === "GET"
   if (rule.test(resource)) return method === "GET" || method === "PUT"
   if (resource === "/inventory-settings") return method === "GET" || method === "PUT"
   if (resource === "/stock/locations") return method === "GET" || method === "PUT"
