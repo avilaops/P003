@@ -24,3 +24,22 @@ Remover do CI e dos scripts de pipeline tudo que compila ou executa Rust. O cód
 - O passo `Publish api by immutable digest` constrói a imagem a partir do binário Rust. Neste PR ele pode ser desligado; a nova imagem vem no PR 02.
 - Depende da PR #277 estar mesclada (ela alterou os mesmos workflows). Se ainda não estiver, parta da branch dela.
 
+
+## O que foi feito neste PR
+- `_validate-api.yml` reescrito sem nenhum passo de Rust: toolchain, `cargo fmt/clippy/test/build`, cache e verificação do release nativo, "Compare native and TypeScript HTTP contracts" e a publicação da imagem Rust saíram. Ficam: contrato publicado e verificado, typecheck e testes do `api-ts` com PostgreSQL, testes de inventário, migrador SQL e a checagem da imagem publicada.
+- `_validate-project.yml`: removidos os jobs `baseline` e `contracts` (captura com `cargo` e comparação `oasdiff`) e o input `typescript_only`; no `contract-tests` saíram o `oasdiff` e os testes do `capture.py`.
+- `ci.yml` e `release.yml`: removidos `typescript_only`, `force_native_rebuild`, `native_api` e a variável do Cargo. O release exige sempre a imagem publicada e só reconstrói o fiscal MCP se `apps/fiscal-mcp` mudou (`reuse_mcp`).
+- `scripts/ci/published-components.py`: a compatibilidade agora olha só o histórico SQL (somente acréscimo); mudanças em `apps/api` deixam de invalidar o reuso. Nova função `mcp_unchanged` e saída `reuse_mcp`.
+- `readOpenApi` foi extraído de `gate.mjs` para `scripts/contracts/openapi-reader.mjs` (usado pelo gerador do cliente web e pelo consumidor).
+- Removidos: `gate.mjs` e seus testes, `capture.py` e `test_capture.py`, `package-test-binary.py`, `run-test-binaries.py`, `install-oasdiff.sh`, as baselines e correções revisadas, `native-release-cache.*`, `apps/api-ts/scripts/contract-tests.mjs` e o script `test:contracts`.
+- Testes de `scripts/ci` reescritos: nenhum workflow pode conter `cargo`, toolchain Rust ou cache nativo.
+- Docs: `docs/tecnica/OPENAPI-CI.md` reescrito; ajustes em `deploy/README.md` e `deploy/CI-CD.md`.
+
+## Verificado localmente
+- `python -m unittest discover -s scripts/ci` (62 testes) e `-s scripts/deploy` (48, 8 pulados): ok.
+- `node --test scripts/contracts/test/*.test.mjs`, `scripts/ci/*.test.mjs`, `scripts/mlops/*.test.mjs`: ok.
+- Todos os workflows carregam como YAML válido.
+
+## Ainda não verificado
+- A execução real dos workflows no GitHub (este PR é a primeira execução).
+- O código Rust permanece no repositório e o release continua usando a imagem nativa publicada até o PR 02.

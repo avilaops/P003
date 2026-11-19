@@ -4,9 +4,6 @@ permissions:
 concurrency:
   group: ci-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
-env:
-  CARGO_INCREMENTAL: 0
-  CARGO_TERM_COLOR: always
 jobs:
   changes:
     runs-on: ubuntu-latest
@@ -14,7 +11,6 @@ jobs:
     outputs:
       web: ${{ steps.scope.outputs.web }}
       api: ${{ steps.scope.outputs.api }}
-      native_api: ${{ steps.scope.outputs.native_api == 'true' || (steps.scope.outputs.api == 'true' && steps.components.outputs.typescript_only != 'true') }}
       fiscal: ${{ steps.scope.outputs.fiscal }}
     steps:
     - uses: actions/checkout@v4
@@ -37,10 +33,6 @@ jobs:
         -- bash --noprofile --norc -e -o pipefail "$script_file"
 
         '
-    - name: Check the published native inputs for a scoped TypeScript validation
-      id: components
-      if: steps.scope.outputs.native_api == 'false' && steps.scope.outputs.api == 'true'
-      run: python3 scripts/ci/published-components.py select --native-only
     - name: Preserve measured script durations
       if: always()
       uses: actions/upload-artifact@v4
@@ -58,7 +50,6 @@ jobs:
       source_sha: ${{ github.sha }}
       full: false
       publish: false
-      typescript_only: ${{ needs.changes.outputs.native_api == 'false' }}
   web:
     needs:
     - changes
@@ -85,7 +76,6 @@ jobs:
       source_sha: ${{ github.sha }}
       full: false
       check_database: ${{ needs.changes.outputs.api == 'true' }}
-      typescript_only: ${{ needs.changes.outputs.native_api == 'false' }}
   gate:
     needs:
     - changes
