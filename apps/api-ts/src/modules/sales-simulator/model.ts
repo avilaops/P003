@@ -32,8 +32,8 @@ export function quote(input: QuoteInput, priceCents: bigint | number, cost: Publ
   const tableTotal = price * q
   limited(tableTotal)
   const factor = bps + BigInt(p.ipiBps)
-  // Published tables round the final unit with IPI upwards; preserve that price at zero discount.
-  const gross = (unit: bigint) => up(unit * factor, bps)
+  // Same half-up rounding as published tables and the NF-e (vIPI = vBC x pIPI), so zero discount keeps the table price.
+  const gross = (unit: bigint) => rounded(unit * factor, bps)
   let unit: bigint
   const value = BigInt(input.discount.value)
   if (input.discount.kind === "percent" && value < 10000n) unit = rounded(price * (bps - value), bps)

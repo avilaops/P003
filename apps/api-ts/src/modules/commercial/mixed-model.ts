@@ -44,7 +44,7 @@ function core(input: MixedInput, policies: Policy[], sources: SourceItem[], rule
   }
   if (groups.some(group => !group.length)) invalid("Política sem itens")
   cents(table)
-  const totalAt = (numerator: bigint, denominator: bigint) => groups.reduce((sum, indexes, group) => sum + indexes.reduce((sum, index) => sum + up(rounded(BigInt(sources[index]!.priceCents) * numerator, denominator) * BigInt(10000 + policies[group]!.parameters.ipiBps), 10000n) * BigInt(input.items[index]!.quantity), 0n), 0n)
+  const totalAt = (numerator: bigint, denominator: bigint) => groups.reduce((sum, indexes, group) => sum + indexes.reduce((sum, index) => sum + rounded(rounded(BigInt(sources[index]!.priceCents) * numerator, denominator) * BigInt(10000 + policies[group]!.parameters.ipiBps), 10000n) * BigInt(input.items[index]!.quantity), 0n), 0n)
   const value = BigInt(input.discount.value)
   let numerator: bigint, denominator: bigint
   if (input.discount.kind === "percent" && value < 10000n) { numerator = 10000n - value; denominator = 10000n }

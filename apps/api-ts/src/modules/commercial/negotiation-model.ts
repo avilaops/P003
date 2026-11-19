@@ -36,7 +36,7 @@ export function calculateNegotiation(p: CommercialParameters, rules: ApprovalRul
     supplierScaled += purchase * BigInt(10000 + p.costSafetyBps) * quantity
   }
   cents(table)
-  const gross = (unit: bigint) => up(unit * BigInt(10000 + p.ipiBps), 10000n)
+  const gross = (unit: bigint) => rounded(unit * BigInt(10000 + p.ipiBps), 10000n)
   let numerator: bigint, denominator: bigint
   const value = BigInt(input.discount.value)
   if (input.discount.kind === "percent" && value < 10000n) { numerator = 10000n - value; denominator = 10000n }
