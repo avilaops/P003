@@ -260,6 +260,11 @@ test('enabled TypeScript modules receive an isolated private API process without
   assert.equal(config.processes.api.ERP_TYPESCRIPT_API_URL, 'http://127.0.0.1:8081');
   assert.equal(config.processes.web.ERP_TYPESCRIPT_MODULES, undefined);
   for (const modules of ['', 'unknown', 'sales,sales', 'sales,']) assert.ok(runtimeConfiguration({ ...env, ERP_TYPESCRIPT_MODULES: modules }).processes.apiTs);
+  assert.equal(config.processes.apiTs.BROWSER_USE_API_KEY, undefined, 'Browser Use stays off without a key');
+  const withBrowserUse = runtimeConfiguration({ ...env, BROWSER_USE_API_KEY: 'bu_fixture' }).processes;
+  assert.equal(withBrowserUse.apiTs.BROWSER_USE_API_KEY, 'bu_fixture');
+  assert.equal(withBrowserUse.api.BROWSER_USE_API_KEY, undefined, 'Only the TypeScript API receives the Browser Use key');
+  assert.equal(withBrowserUse.web.BROWSER_USE_API_KEY, undefined, 'The web process never receives the Browser Use key');
 });
 
 test('supervisor waits for both private APIs before starting web and stops all on TS failure', async () => {

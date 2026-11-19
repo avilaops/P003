@@ -5,7 +5,7 @@
 | Arquivo | Disparo | Resultado |
 | --- | --- | --- |
 | `ci.yml` | PR ou manual | Lint, testes e banco por escopo; sem publicação |
-| `release.yml` | Tag `v*` ou manual na main com SHA completo | Validação completa, imagens GHCR, migração, deploy e conferência pública |
+| `release.yml` | Merge na main, tag `v*` ou manual na main com SHA completo | Validação completa, imagens GHCR, migração, deploy e conferência pública |
 | `regression.yml` | Segunda-feira 04:23 UTC ou manual | Regressão completa; sem publicação do ERP |
 
 Os quatro arquivos `_validate-*.yml` são tarefas reutilizáveis. Não possuem
@@ -28,6 +28,8 @@ A imagem web da mesma revisão inclui `apps/api-ts`, já compilada e com depend�
 No layout de produção `compose.json`, o dispatcher prepara `api-ts` com os parâmetros de banco, autenticação, MCP e motor fiscal. O BFF utiliza a origem privada dessa API. O serviço usa a imagem web validada e a saúde pública verifica as duas APIs.
 
 O envio de documentos pelo n8n usa `ERP_DOCUMENT_MAIL_N8N_URL` e `ERP_DOCUMENT_MAIL_N8N_TOKEN`. Em produção, o dispatcher carrega `/etc/erp-next/document-mail-n8n.env` apenas no serviço `api-ts`. Esse arquivo pertence ao root e usa modo 0600. A credencial do provedor de e-mail fica no n8n. O workflow versionado está em `docs/integrations/n8n-document-mail.json`.
+
+A integração com o Browser Use usa `BROWSER_USE_API_KEY` somente no serviço `api-ts`. No layout Compose, a chave vai em `api-ts.env`. No `compose.json` gerado, o dispatcher a lê do `api-ts` anterior ou do serviço `api` e a conserva entre releases. No runtime Cloudflare, a chave é repassada apenas ao processo TypeScript. A variável é opcional: sem ela, `POST /api/v1/integrations/browser-use/runs` responde 503. Cada execução tem teto de US$ 1. Detalhes em `apps/api-ts/README.md`.
 
 No layout `compose.yaml`, o serviço inicia sem perfil adicional. Antes do primeiro deploy a partir de uma release YAML antiga, prepare obrigatoriamente `api-ts.env` privado a partir de `api-ts.env.example`, com modo 0600 e a mesma role restrita da API. Copie somente as configurações de banco/Auth e a origem MCP; não reutilize o arquivo inteiro da API. O dispatcher conserva esse arquivo nas releases seguintes. O Compose fixa `ERP_TYPESCRIPT_API_URL=http://127.0.0.1:8081` nos serviços API e web. A ausência do arquivo impede a preparação; não deve ser contornada removendo o serviço ou afrouxando a saúde. O layout JSON extrai essa configuração automaticamente e não exige criar o arquivo.
 
@@ -56,21 +58,25 @@ alterar os serviços. O código não instala ferramentas nem compila no servidor
 
 ## Publicar
 
-1. Integrar o PR após os checks exigidos pela política do repositório.
-2. Selecionar **Release / Run workflow**, branch `main`, e informar o SHA completo
-   integrado; alternativamente, criar uma tag de versão `v1.2.3` nesse commit.
+1. Integrar o PR após os checks exigidos pela política do repositório. O merge
+   na `main` dispara o Release automaticamente para o commit resultante.
+2. Para republicar uma revisão específica, selecionar **Release / Run workflow**,
+   branch `main`, e informar o SHA completo integrado; alternativamente, criar
+   uma tag de versão `v1.2.3` nesse commit.
 3. A seleção confirma que a revisão pertence à main. As imagens são construídas
    e testadas no GitHub e o manifesto aceita apenas os quatro digests do ERP.
 4. O ambiente `production` conserva suas proteções. Uma única release executa
-   por vez. O servidor baixa os digests usando sua credencial de leitura.
+   por vez; com vários merges seguidos, fica na fila apenas o mais recente, que
+   já contém os anteriores. O servidor baixa os digests usando sua credencial de leitura.
 5. O helper aplica somente migrações pendentes da imagem candidata antes de
    ativar os serviços. Preserva o cadastro, os segredos e os volumes existentes.
 6. A conferência verifica API, web, página de entrada, mídia e SHA. Falha na
    ativação tenta restaurar o conjunto anterior. Rollback de imagens não desfaz
    automaticamente as migrações do banco.
 
-Pushes e merges comuns na main não disparam publicação. Agrupar alterações
-aprovadas em uma versão permite reduzir builds completos.
+Todo push na main dispara publicação, para que nenhum código integrado fique
+fora de produção. Componentes já publicados com entradas idênticas são
+reaproveitados pela seleção.
 
 ## Retenção no servidor
 

@@ -4,6 +4,7 @@ import { readdir, readFile } from "node:fs/promises"
 import test from "node:test"
 import { Pool } from "pg"
 import { buildApp } from "../src/app.js"
+import { today } from "../src/modules/finance-insights/portfolio.js"
 import { PostgresPool } from "../src/platform/database.js"
 
 test(
@@ -58,15 +59,15 @@ test(
         [customer, tenant],
       )
       const issued = await seed.query(
-        "INSERT INTO sales_orders(id,tenant_id,customer_id,customer_name,customer_tax_id,due_date,amount_cents,status) SELECT gen_random_uuid(),$1,$2,'Cliente piloto','04252011000110',current_date,100000,'completed' FROM generate_series(1,105) RETURNING id",
+        `INSERT INTO sales_orders(id,tenant_id,customer_id,customer_name,customer_tax_id,due_date,amount_cents,status) SELECT gen_random_uuid(),$1,$2,'Cliente piloto','04252011000110',${today},100000,'completed' FROM generate_series(1,105) RETURNING id`,
         [tenant, customer],
       )
       const titles = await seed.query(
-        "INSERT INTO receivables(id,tenant_id,order_id,customer_name,due_date,amount_cents,status) SELECT gen_random_uuid(),$1,id,'Cliente piloto',current_date-3,100000,'open' FROM unnest($2::uuid[]) id RETURNING id",
+        `INSERT INTO receivables(id,tenant_id,order_id,customer_name,due_date,amount_cents,status) SELECT gen_random_uuid(),$1,id,'Cliente piloto',${today}-3,100000,'open' FROM unnest($2::uuid[]) id RETURNING id`,
         [tenant, issued.rows.map((r) => r.id)],
       )
       await seed.query(
-        "INSERT INTO receivable_payments(id,tenant_id,receivable_id,kind,amount_cents,method,reference,occurred_on) VALUES(gen_random_uuid(),$1,$2,'receipt',40000,'other','parcial',current_date)",
+        `INSERT INTO receivable_payments(id,tenant_id,receivable_id,kind,amount_cents,method,reference,occurred_on) VALUES(gen_random_uuid(),$1,$2,'receipt',40000,'other','parcial',${today})`,
         [tenant, titles.rows[0]!.id],
       )
       const headers = { authorization: "Bearer finance-test", "x-tenant-id": tenant }

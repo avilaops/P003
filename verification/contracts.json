@@ -13296,6 +13296,107 @@
       }
     },
     {
+      "id": "contract-template-archive",
+      "flow": "commercial-contracts",
+      "status": "implemented",
+      "operation": {
+        "method": "POST",
+        "path": "/api/v1/contract-template-drafts/{id}/archive"
+      },
+      "actor": "active_tenant_member",
+      "permissions": [
+        "platform.integrations.manage"
+      ],
+      "input": {
+        "headers": [
+          "Authorization",
+          "X-Tenant-Id",
+          "Idempotency-Key",
+          "If-Match"
+        ],
+        "pathParameters": [
+          "id"
+        ],
+        "body": null,
+        "query": null
+      },
+      "preconditions": [
+        "Modelo ativo da empresa na revisão informada, sem publicação pendente de confirmação.",
+        "O BFF recusa o modelo configurado como padrão da empresa nos pedidos."
+      ],
+      "transition": {
+        "from": "modelo ativo",
+        "to": "modelo arquivado"
+      },
+      "effects": {
+        "writes": [
+          "commercial_template_drafts",
+          "domain_commands",
+          "audit_log",
+          "outbox_events"
+        ],
+        "external": [
+          "Arquiva no portal próprio as versões publicadas do modelo antes de arquivar o rascunho."
+        ],
+        "excludes": [
+          "Não apaga versões publicadas, contratos emitidos, arquivos nem auditoria."
+        ]
+      },
+      "concurrency": {
+        "revision": true,
+        "idempotency": true,
+        "rule": "Bloqueia o rascunho na transação; falha do portal reverte a transação; a mesma chave repete a resposta sem nova chamada ao portal."
+      },
+      "response": {
+        "successStatuses": [
+          200
+        ],
+        "errorStatuses": [
+          400,
+          401,
+          403,
+          404,
+          409,
+          412,
+          422,
+          428,
+          500,
+          503
+        ],
+        "action": "Excluir modelo de contrato"
+      },
+      "recovery": "Após timeout, repetir com a mesma chave; o arquivamento no portal é idempotente.",
+      "ui": {
+        "pages": [
+          "/servicos/contratos/modelos"
+        ],
+        "bff": {
+          "method": "POST",
+          "path": "/api/erp/contract-template-drafts/[id]/archive"
+        },
+        "gap": null
+      },
+      "sources": [
+        "apps/api-ts/src/modules/contract-templates/archive.ts",
+        "migrations/202611181900_contract_template_archive.sql",
+        "apps/web/src/server/bff/contracts-proxy.ts",
+        "apps/web/src/features/contracts/templates.tsx"
+      ],
+      "verification": {
+        "status": "not_verified_by_catalog",
+        "criteria": [
+          "interface",
+          "request",
+          "authorization",
+          "domain",
+          "persistence",
+          "effects",
+          "failure",
+          "response"
+        ]
+      }
+    },
+    {
       "id": "contract-template-list",
       "flow": "commercial-contracts",
       "status": "implemented",

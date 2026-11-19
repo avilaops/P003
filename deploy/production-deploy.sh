@@ -142,6 +142,10 @@ if fiscal_url and fiscal_token and fiscal_keyring:
     settings.update({"ERP_FISCAL_ENGINE_URL": fiscal_url, "ERP_FISCAL_ENGINE_TOKEN": fiscal_token,
                      "FISCAL_A1_KEYRING": fiscal_keyring,
                      "NFSE_ISSUANCE_ENABLED": previous_api_ts.get("NFSE_ISSUANCE_ENABLED") or api.get("NFSE_ISSUANCE_ENABLED", "false")})
+# Optional third-party key for the Browser Use route; kept across releases.
+browser_use_key = previous_api_ts.get("BROWSER_USE_API_KEY") or api.get("BROWSER_USE_API_KEY")
+if browser_use_key:
+    settings["BROWSER_USE_API_KEY"] = browser_use_key
 config["services"]["api-ts"] = {
     "image": "erp-next-web:sha-" + sys.argv[2], "restart": "unless-stopped",
     "command": ["node", "apps/api-ts/dist/server.js"], "environment": settings,

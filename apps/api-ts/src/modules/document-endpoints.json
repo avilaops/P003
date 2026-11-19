@@ -11,6 +11,9 @@
     "GET": "/api/v1/commercial-contracts/:id/send-package",
     "POST": "/api/v1/commercial-contracts/:id/send-package"
   },
+  "contract-template-archive": {
+    "POST": "/api/v1/contract-template-drafts/:id/archive"
+  },
   "qualified-reissue": {
     "GET": "/api/v1/commercial-contracts/:id/qualified-reissue",
     "POST": "/api/v1/commercial-contracts/:id/qualified-reissue"
