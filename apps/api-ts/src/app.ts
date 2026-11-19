@@ -77,6 +77,7 @@ import { registerRegistryLookupRoutes, type RegistryLookupDependencies } from ".
 import { registerPriceListRoutes } from "./modules/price-lists/routes.js"
 import { registerDataTransferRoutes } from "./modules/data-transfer/routes.js"
 import { registerProductCatalogRoutes } from "./modules/catalog-publication/product-routes.js"
+import { registerLogisticsRoutes } from "./modules/logistics/routes.js"
 
 export type AppDependencies = AccessDependencies & { fiscalVault?:import("./modules/outgoing-nfse/certificate-vault.js").FiscalCertificateVault; fiscalOperations?:FiscalOperations; outgoingNfse?: OutgoingNfseDependencies; nfeEmail?: NfeEmailIO; documentCopies?: DocumentCopyIO; browserUse?: BrowserUseDependencies; catalogMedia?: import("./platform/catalog-media.js").CatalogMedia; systemConfig?: SystemConfigDependencies; platformAdmin?: PlatformAdminDependencies; companyAccount?: CompanyAccountDependencies; invitations?: InvitationDependencies; registryLookup?: RegistryLookupDependencies }
 
@@ -213,5 +214,6 @@ export function buildApp(_dependencies: AppDependencies): FastifyInstance {
   registerPriceListRoutes(app, _dependencies)
   registerDataTransferRoutes(app, _dependencies)
   registerProductCatalogRoutes(app, _dependencies)
+  registerLogisticsRoutes(app, _dependencies)
   return app
 }
