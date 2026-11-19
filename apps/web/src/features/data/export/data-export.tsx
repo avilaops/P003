@@ -80,9 +80,9 @@ function ProductExportForm() {
     <form className="space-y-3 rounded-lg border bg-card p-3" onSubmit={event => { event.preventDefault(); void download() }}>
       <fieldset disabled={busy} className="grid min-w-0 gap-3 sm:grid-cols-2">
         <label className="grid gap-1 text-sm font-medium">Buscar por SKU ou nome<Input ref={searchInput} type="search" maxLength={160} value={q} onChange={event => { setQ(event.target.value); clearFeedback() }} /></label>
-        <label className="grid gap-1 text-sm font-medium">Situação<select className="h-11 w-full min-w-0 rounded-lg border border-input bg-background px-3 text-base disabled:opacity-50 sm:h-9 sm:text-sm" value={status} onChange={event => { setStatus(event.target.value); clearFeedback() }}><option value="">Todas</option><option value="active">Ativos</option><option value="archived">Arquivados</option></select></label>
+        <label className="grid gap-1 text-sm font-medium">Situação<select className="h-9 w-full min-w-0 rounded-lg border border-input bg-background px-3 text-base disabled:opacity-50 sm:h-9 sm:text-sm" value={status} onChange={event => { setStatus(event.target.value); clearFeedback() }}><option value="">Todas</option><option value="active">Ativos</option><option value="archived">Arquivados</option></select></label>
       </fieldset>
-      {access.loading ? <p role="status" className="text-sm text-muted-foreground">Conferindo acesso…</p> : access.error || !access.value?.tenant?.id ? <div role="alert" className="space-y-2 text-sm [&_a]:inline-flex [&_a]:min-h-11 [&_a]:items-center">
+      {access.loading ? <p role="status" className="text-sm text-muted-foreground">Conferindo acesso…</p> : access.error || !access.value?.tenant?.id ? <div role="alert" className="space-y-2 text-sm [&_a]:inline-flex [&_a]:min-h-9 [&_a]:items-center">
         <RequestError message={access.error || "Selecione uma empresa para exportar produtos."} status={access.status} />
         <Button type="button" variant="outline" onClick={refreshAccess}>Conferir acesso</Button>
       </div> : !canExport ? <div className="space-y-2 text-sm"><p>Seu acesso não permite exportar produtos. Solicite a permissão à gestão.</p><Button type="button" variant="outline" onClick={refreshAccess}>Conferir acesso</Button></div> : null}
@@ -91,12 +91,12 @@ function ProductExportForm() {
         {busy && <Button type="button" variant="outline" onClick={() => { active.current?.abort(); setMessage("Download cancelado. Os filtros foram preservados.") }}>Cancelar download</Button>}
       </div>
       {busy && <p role="status" className="text-sm text-muted-foreground">Gerando arquivo com os filtros escolhidos…</p>}
-      {error && <div role="alert" className="space-y-2 text-sm text-destructive [&_a]:inline-flex [&_a]:min-h-11 [&_a]:items-center"><RequestError message={error} status={responseStatus} />{[401, 403].includes(responseStatus) && <Button type="button" variant="outline" onClick={refreshAccess}>Conferir acesso</Button>}</div>}
+      {error && <div role="alert" className="space-y-2 text-sm text-destructive [&_a]:inline-flex [&_a]:min-h-9 [&_a]:items-center"><RequestError message={error} status={responseStatus} />{[401, 403].includes(responseStatus) && <Button type="button" variant="outline" onClick={refreshAccess}>Conferir acesso</Button>}</div>}
       {message && <p role="status" className="rounded-md border p-3 text-sm">{message}</p>}
       <p className="text-xs text-muted-foreground">CSV UTF-8 com os filtros escolhidos. O navegador recebe o arquivo para você salvar.</p>
       <nav aria-label="Navegação da exportação" className="flex flex-wrap gap-x-4 text-sm">
-        {canReadCatalog && previewHref && <Link className="inline-flex min-h-11 items-center text-primary underline" href={previewHref} target="_blank" rel="noopener noreferrer">Conferir produtos no catálogo</Link>}
-        <Link className="inline-flex min-h-11 items-center text-primary underline" href="/preferencias?categoria=exportacao">Voltar às preferências</Link>
+        {canReadCatalog && previewHref && <Link className="inline-flex min-h-9 items-center text-primary underline" href={previewHref} target="_blank" rel="noopener noreferrer">Conferir produtos no catálogo</Link>}
+        <Link className="inline-flex min-h-9 items-center text-primary underline" href="/preferencias?categoria=exportacao">Voltar às preferências</Link>
       </nav>
     </form>
   </main>

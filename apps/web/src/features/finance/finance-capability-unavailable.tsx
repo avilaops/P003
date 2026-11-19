@@ -16,7 +16,7 @@ export function FinanceCapabilityUnavailable({
         <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
           A integração financeira desta rotina está pendente.
         </p>
-        <Link className="mt-1 inline-flex min-h-11 items-center font-medium text-primary underline" href="/financeiro">
+        <Link className="mt-1 inline-flex min-h-9 items-center font-medium text-primary underline" href="/financeiro">
           Voltar para Financeiro
         </Link>
       </section>

@@ -31,7 +31,7 @@ function ChooseCashSession() {
 
 function SelectedSession({id}:{id:string}) {
   const resource=useResource<Envelope<CashSession>>(`/api/erp/pos/sessions/${encodeURIComponent(id)}`)
-  return <div className="space-y-5"><CashNav id={id}/><Link className="inline-flex min-h-11 items-center text-primary underline" href="/vendas/pdv/fechamento">Selecionar outro caixa</Link>
+  return <div className="space-y-5"><CashNav id={id}/><Link className="inline-flex min-h-9 items-center text-primary underline" href="/vendas/pdv/fechamento">Selecionar outro caixa</Link>
     {resource.loading ? <p role="status">Consultando fechamento…</p> : resource.error || !resource.value ? <Failure message={resource.error || "Caixa indisponível"} status={resource.status} requestId={resource.requestId} retry={resource.reload}/> : <ClosingEditor key={`${resource.value.tenantId}:${resource.value.data.id}:${resource.value.data.revision}`} snapshot={resource.value} reload={resource.reload}/>}
   </div>
 }

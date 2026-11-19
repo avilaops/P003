@@ -8,8 +8,8 @@
 .order-date-control {
   display: block;
   position: relative;
-  min-height: 44px;
-  height: 44px;
+  min-height: 36px;
+  height: 36px;
   padding: 8px 36px 8px 10px;
   border: 1px solid var(--border);
   border-radius: 8px;
@@ -30,7 +30,7 @@
   outline: none;
   color: var(--foreground);
   font: inherit;
-  font-size: 18px;
+  font-size: 14px;
   line-height: 1.25;
   text-align: left;
 }
@@ -48,7 +48,7 @@
 .order-payment-grid .order-payment-full { grid-column: 1 / -1; min-width: 0; }
 .order-payment-grid .order-payment-action { display: grid; align-content: start; gap: 6px; }
 .order-payment-action > button { max-width: 100%; justify-self: start; white-space: normal; }
-.order-payment-pending { min-height: 44px; display: flex; align-items: center; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; color: var(--muted-foreground); font-size: 12px; }
+.order-payment-pending { min-height: 36px; display: flex; align-items: center; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; color: var(--muted-foreground); font-size: 12px; }
 .order-payment-fields .order-entry-values, .order-payment-fields .order-entry-method-date, .order-payment-fields .order-installment-setup { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; grid-column: 1 / -1; }
 .order-payment-fields .order-entry-values > label, .order-payment-fields .order-entry-method-date > label, .order-payment-fields .order-installment-setup > label { grid-column: auto; }
 .order-payment-fields .order-payment-grid > .order-balance-method { grid-column: 1 / -1; }

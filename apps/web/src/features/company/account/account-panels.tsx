@@ -26,10 +26,10 @@ export function PaymentPanel({ account, subscription }: { account: Account; subs
     <div className="rounded-xl border border-border p-5"><div className="flex items-center gap-3"><CreditCard className="size-5 text-primary" /><h3 className="font-semibold">Pagamento pelo Mercado Pago</h3></div>
       <p className="mt-3 text-sm leading-relaxed text-muted-foreground">A forma de pagamento é escolhida no ambiente seguro do Mercado Pago. Os meios disponíveis são apresentados pelo provedor durante a autorização da assinatura.</p>
       <dl className="mt-5 grid gap-4 sm:grid-cols-2"><div><dt className="text-xs text-muted-foreground">Meio confirmado</dt><dd className="mt-1 text-sm">{subscription?.details.paymentMethod || "Ainda não informado pelo Mercado Pago"}</dd></div><div><dt className="text-xs text-muted-foreground">Início da assinatura</dt><dd className="mt-1 text-sm">{date(subscription?.details.startedAt)}</dd></div></dl>
-      {checkout && subscription?.status === "pending" && account.canEdit && <a href={checkout} className="mt-5 inline-flex min-h-11 items-center gap-2 rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground">Autorizar no Mercado Pago<ExternalLink className="size-4" /></a>}
+      {checkout && subscription?.status === "pending" && account.canEdit && <a href={checkout} className="mt-5 inline-flex min-h-9 items-center gap-2 rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground">Autorizar no Mercado Pago<ExternalLink className="size-4" /></a>}
     </div>
     <Notice>Vencimento e situação são consultados no Mercado Pago. Para conferir as cobranças, acesse o <Link href={accountHref("extrato")} className="font-medium text-primary underline">extrato da conta</Link>. A emissão de NFS-e da assinatura ainda não está disponível.</Notice>
-    {!subscription && <Link href={accountHref("plano")} className="inline-flex min-h-11 items-center text-sm font-medium text-primary underline">Conhecer os planos</Link>}
+    {!subscription && <Link href={accountHref("plano")} className="inline-flex min-h-9 items-center text-sm font-medium text-primary underline">Conhecer os planos</Link>}
   </div>
 }
 

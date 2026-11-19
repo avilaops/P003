@@ -25,10 +25,10 @@ export function HeaderTools() {
       <DropdownMenuContent align="end" className="min-w-44" aria-label="Conta • Aparência">
         <DropdownMenuGroup><DropdownMenuLabel>Aparência</DropdownMenuLabel>
           <DropdownMenuRadioGroup value={theme} onValueChange={value => { if (value === "light" || value === "dark" || value === "system" || value === "avila") setTheme(value) }}>
-            <DropdownMenuRadioItem className="min-h-11" value="light">Claro</DropdownMenuRadioItem>
-            <DropdownMenuRadioItem className="min-h-11" value="dark">Escuro</DropdownMenuRadioItem>
-            <DropdownMenuRadioItem className="min-h-11" value="system">Sistema</DropdownMenuRadioItem>
-            <DropdownMenuRadioItem className="min-h-11" value="avila">Ávila</DropdownMenuRadioItem>
+            <DropdownMenuRadioItem className="min-h-9" value="light">Claro</DropdownMenuRadioItem>
+            <DropdownMenuRadioItem className="min-h-9" value="dark">Escuro</DropdownMenuRadioItem>
+            <DropdownMenuRadioItem className="min-h-9" value="system">Sistema</DropdownMenuRadioItem>
+            <DropdownMenuRadioItem className="min-h-9" value="avila">Ávila</DropdownMenuRadioItem>
           </DropdownMenuRadioGroup>
         </DropdownMenuGroup>
       </DropdownMenuContent>

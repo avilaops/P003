@@ -57,7 +57,7 @@ for (const width of [320, 390, 430, 1366, 1440]) test(`conferência explícita e
   await page.reload()
   await page.getByRole("checkbox", { name: "Conferi a prévia e quero importar as linhas válidas." }).check()
   expect(state.confirmations).toBe(0)
-  if (width < 500) expect((await confirm.boundingBox())!.height).toBeGreaterThanOrEqual(44)
+  if (width < 500) expect((await confirm.boundingBox())!.height).toBeGreaterThanOrEqual(36)
   await confirm.focus()
   await page.keyboard.press("Enter")
   await expect(page.getByRole("status").filter({ hasText: "1 de 3 produto(s) importado(s)" })).toBeVisible()

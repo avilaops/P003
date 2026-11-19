@@ -27,7 +27,7 @@
 
 @media (max-width: 639px) {
   .erp-content .catalog-workspace :is(input:not([type=file], [type=hidden]), select, textarea) {
-    font-size: 18px;
+    font-size: 14px;
   }
 
   .erp-content .catalog-workspace .catalog-product-table :is(th, td) {

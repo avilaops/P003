@@ -16,7 +16,7 @@ import { StockAnalysisChart } from "./stock-analysis-chart"
 import { changeAnalysisFilters, hasPeriod, reconcileDefinitionFilters, specificFilter, statusLabel, stockAnalysisQuery, tenantAnalysisParams } from "./stock-analysis-filters"
 
 type Catalog={tenantId:string;sources:Record<string,{label:string}>;warehouses:{id:string;name:string}[]}
-const selectStyle="min-h-11 min-w-0 max-w-full rounded-lg border bg-background px-3 text-sm"
+const selectStyle="min-h-9 min-w-0 max-w-full rounded-lg border bg-background px-3 text-sm"
 const fieldStyle="grid min-w-0 gap-1 text-sm font-medium"
 
 function formatted(key:string,value:string|number|null,dataset=""){

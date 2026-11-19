@@ -42,7 +42,7 @@ function PreviewCapture({ attempt, expanded = false, onRetry }: { attempt: numbe
     </span>}
     {state === "error" && <span role="alert" className="flex min-h-40 flex-col items-center justify-center gap-4 bg-stone-50 p-6 text-center text-sm leading-6 text-stone-700">
       <span>{expanded ? "Não foi possível carregar a prévia." : "Prévia indisponível. Amplie a imagem para tentar novamente."}</span>
-      {expanded && <Button type="button" className="min-h-11" onClick={onRetry}>Tentar novamente</Button>}
+      {expanded && <Button type="button" className="min-h-9" onClick={onRetry}>Tentar novamente</Button>}
     </span>}
   </span>
 }
@@ -87,7 +87,7 @@ export function ErpEntryPreview() {
         className="group mt-5 block w-full cursor-zoom-in overflow-hidden rounded-xl border border-white/20 bg-white text-left text-stone-900 shadow-xl shadow-black/15 focus-visible:ring-white focus-visible:ring-offset-[#134e4a]"
       >
         <PreviewCapture key={captureKey} attempt={attempt} />
-        <span className="flex min-h-12 items-center justify-between gap-3 border-t border-stone-200 px-4 text-xs font-medium transition-colors group-hover:bg-teal-50">
+        <span className="flex min-h-9 items-center justify-between gap-3 border-t border-stone-200 px-4 text-xs font-medium transition-colors group-hover:bg-teal-50">
           Ver tela completa<Expand aria-hidden="true" className="size-4 shrink-0 text-teal-700" />
         </span>
       </DialogTrigger>

@@ -129,7 +129,7 @@ export function CompanyDataForm({ initial, canEdit, saving, conflict, onSave, te
     <form ref={formRef} className="min-w-0 space-y-5" noValidate onChange={markDirty} onSubmit={save}>
       <nav className="erp-section-nav" aria-label="Seções dos dados da empresa">
         {Object.entries(companySections).map(([key, value]) => <button key={key} type="button" aria-pressed={section === key} aria-controls={value.heading}
-          className={`flex min-h-11 items-center rounded-lg px-3 py-2 text-left text-sm transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring ${section === key ? "bg-primary/10 font-semibold text-primary" : "text-muted-foreground"}`}
+          className={`flex min-h-9 items-center rounded-lg px-3 py-2 text-left text-sm transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring ${section === key ? "bg-primary/10 font-semibold text-primary" : "text-muted-foreground"}`}
           onClick={() => openSection(key as CompanySection)}>{value.label}</button>)}
       </nav>
       <div className="min-w-0 space-y-6">
