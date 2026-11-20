@@ -10,7 +10,7 @@ import { sha256 } from "../src/modules/nfe-email/danfe.js"
 export async function verifyNfeEmail(seed: Pool, pool: DatabasePool, tenant: string, other: string, role: string) {
   const id = randomUUID(), key = randomUUID()
   const email = "fiscal@example.test", accessKey = "35261004252011000110550010000000011000000017"
-  const source = await readFile(new URL("../../api/tests/fixtures/nfe-protocol-synthetic.xml", import.meta.url), "utf8")
+  const source = await readFile(new URL("./fixtures/nfe-protocol-synthetic.xml", import.meta.url), "utf8")
   const xml = source.replaceAll("19131243000197", "04252011000110")
   const pdf = Buffer.from("%PDF-mocked DANFE")
   await seed.query("INSERT INTO company_profiles(tenant_id,revision,details) VALUES($1,1,$2)", [tenant, { email }])
@@ -78,7 +78,7 @@ export async function verifyNfeEmail(seed: Pool, pool: DatabasePool, tenant: str
     await seed.query(`INSERT INTO fiscal_nfe_documents(tenant_id,id,model,status,series,number,issued_at,random_code,access_key,signed_xml,authorized_xml,protocol)
       VALUES($1,$2,65,'authorized',1,4,now(),'00000001',$3,'signed-only',$4,'135260000000000')`, [tenant, consumer, consumerKey, consumerXml])
     const received = randomUUID(), outgoing = randomUUID()
-    const fixture = JSON.parse(await readFile(new URL("../../api/src/http/fixtures/nfse-national-inspection.json", import.meta.url), "utf8"))
+    const fixture = JSON.parse(await readFile(new URL("../../fiscal-engine/tests/fixtures/http/nfse-national-inspection.json", import.meta.url), "utf8"))
     const { xml: receivedXml, ...metadata } = fixture
     await seed.query(`INSERT INTO fiscal_received_nfses(tenant_id,id,source,environment,access_key,company_tax_id,xml,xml_sha256,metadata,auth_subject)
       VALUES($1,$2,'nfse_nacional','homologation',$3,$4,$5,$6,$7,'reader')`,

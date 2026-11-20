@@ -17,7 +17,6 @@ apps/fiscal-mcp/src/mcp_fiscal_brasil/schemas/**/*.xsd -text whitespace=-trailin
 # SQLx migrations use identical bytes on Windows and Linux.
 migrations/*.sql text eol=lf whitespace=-blank-at-eof
 # Signed XML fixtures are correlated with SHA-256 metadata; checkout must preserve bytes.
-apps/api/src/http/fixtures/*.xml -text
 # The authorizer matrix and source snapshots are verified by exact SHA-256.
 apps/fiscal-engine/src/lib/fiscal/schemas/nfe-authorizers/** -text
 # Imported bank logos are verified against the sanitized SHA-256 manifest.
@@ -29,3 +28,4 @@ apps/web/public/sitemap.xml text eol=lf
 # Keep the exported strategy document byte-exact.
 docs/strategy/*.pdf binary
 docs/telas/vendas/*.pdf binary
+apps/fiscal-engine/tests/fixtures/http/*.xml -text

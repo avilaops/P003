@@ -51,6 +51,13 @@ export async function forwardErp(request: Request, resource: string) {
     || request.method === "PUT" && /^\/orders\/[a-f0-9-]{36}\/commission$|^\/production\/stages\/[a-f0-9-]{36}$/i.test(resource)
     || request.method === "POST" && /^\/commissions\/[a-f0-9-]{36}\/(?:adjustments|payments)$|^\/production\/(?:orders|stages|structures\/[a-f0-9-]{36})$|^\/production\/orders\/[a-f0-9-]{36}\/(?:stage|postings|consumptions(?:\/[a-f0-9-]{36}\/reverse)?)$/i.test(resource)
   const auditResource = resource === "/audit"
+  // Motor de relatórios (G3): rotas fixas; só `format` na execução; arquivos passam como download.
+  const reportEngineResource = /^\/reports\/(?:sources|preview|definitions\/[a-f0-9-]{36}\/(?:run|schedules)|schedules\/[a-f0-9-]{36}|runs\/[a-f0-9-]{36}\/file)$/i.test(resource)
+  const reportEngineMethods = resource === "/reports/preview" ? ["POST"] : resource.endsWith("/schedules") ? ["GET", "POST"] : resource.startsWith("/reports/schedules/") ? ["PUT"] : ["GET"]
+  if (reportEngineResource && !reportEngineMethods.includes(request.method)) return Response.json({ title: "Método inválido" }, { status: 405 })
+  const reportRunResource = reportEngineResource && resource.endsWith("/run")
+  const reportFileResource = reportEngineResource && (resource.endsWith("/file") || reportRunResource && new URL(request.url).searchParams.get("format") !== null && new URL(request.url).searchParams.get("format") !== "json")
+  if (reportEngineResource && [...new URL(request.url).searchParams].some(([key, value]) => !reportRunResource || key !== "format" || !["json", "csv", "xlsx", "pdf"].includes(value) || new URL(request.url).searchParams.getAll(key).length !== 1)) return Response.json({ title: "Consulta inválida" }, { status: 400 })
   const systemResource = /^\/system\/(?:custom-fields|custom-reports|label-templates|workflows)(?:\/[a-f0-9-]{36}(?:\/(?:publish|archive))?)?$|^\/system\/files(?:\/[a-f0-9-]{36}\/archive)?$/i.test(resource)
   if (systemResource && !(resource === "/system/files" ? request.method === "GET" : resource.endsWith("/archive") || resource.endsWith("/publish") ? request.method === "POST" : ["GET", "POST", "PUT"].includes(request.method))) return Response.json({ title: "Método inválido" }, { status: 405 })
   const dashboardResource = resource === "/dashboard" && request.method === "GET"
@@ -112,7 +119,7 @@ export async function forwardErp(request: Request, resource: string) {
   const purchaseResource = purchaseCollection || /^\/(?:purchase-orders|purchase-receipts|payables|financial-payables)\/[a-f0-9-]{36}$|^\/purchase-orders\/[a-f0-9-]{36}\/(?:confirm|cancel|close)$|^\/(?:payables|financial-payables)\/[a-f0-9-]{36}\/(?:payments|reverse-payment)$/i.test(resource)
   const financialRoute = financeRoute(request.method, resource)
   if (financialEmailResource && !financialRoute && new URL(request.url).search) return Response.json({ title: "Consulta inválida" }, { status: 400 })
-  if (!financialRoute && !stockLocationPath(resource, request.method) && !(resource === "/sales/overview" && request.method === "GET") && !salesImportResource && !salesPolicy && !orderAcceptanceResource && !supportingResource && !platformMailResource && !orderDocumentResource && !posResource && !documentEmailResource && !priceListResource && !opportunityResource && !negotiationResource && !warrantyResource && !simulatorResource && !dashboardResource && !productCostResource && !priceTableResource && !fixedExpenseResource && !commercialResource && !proposalResource && !payrollResource && !registryResource && !salesSettingsResource && !accountResource && !continuityResource && !auditResource && !systemResource && !returnResource && !logisticsResource && !invitationResource && !referenceResource && !financialAccountEntriesResource && !financialAccountTransfersResource && !inventoryCountResource && !serviceKeyResource && !purchaseResource && !productTransferResource && !productCatalogResource && !productFinishesResource && !dataQualityResource && !historyResource && !/^\/(?:me|company|companies|financial-settings|preferences|staff|users|roles|permissions|products|stock|parties|orders|receivables)$|^\/(?:users|roles|products|parties|staff|orders|receivables)\/[a-f0-9-]{36}$|^\/stock\/movements$|^\/orders\/[a-f0-9-]{36}\/(?:confirm|cancel|complete)$|^\/receivables\/[a-f0-9-]{36}\/(?:payments|reverse-payment)$/i.test(resource)) return Response.json({ title: "Recurso inválido" }, { status: 400 })
+  if (!financialRoute && !stockLocationPath(resource, request.method) && !(resource === "/sales/overview" && request.method === "GET") && !salesImportResource && !salesPolicy && !orderAcceptanceResource && !supportingResource && !platformMailResource && !orderDocumentResource && !posResource && !documentEmailResource && !priceListResource && !opportunityResource && !negotiationResource && !warrantyResource && !simulatorResource && !dashboardResource && !productCostResource && !priceTableResource && !fixedExpenseResource && !commercialResource && !proposalResource && !payrollResource && !registryResource && !salesSettingsResource && !accountResource && !continuityResource && !auditResource && !systemResource && !returnResource && !logisticsResource && !invitationResource && !referenceResource && !financialAccountEntriesResource && !financialAccountTransfersResource && !inventoryCountResource && !serviceKeyResource && !purchaseResource && !productTransferResource && !productCatalogResource && !productFinishesResource && !reportEngineResource && !/^\/(?:me|company|companies|financial-settings|preferences|staff|users|roles|permissions|products|stock|parties|orders|receivables)$|^\/(?:users|roles|products|parties|staff|orders|receivables)\/[a-f0-9-]{36}$|^\/stock\/movements$|^\/orders\/[a-f0-9-]{36}\/(?:confirm|cancel|complete)$|^\/receivables\/[a-f0-9-]{36}\/(?:payments|reverse-payment)$/i.test(resource)) return Response.json({ title: "Recurso inválido" }, { status: 400 })
   try {
     const config = erpConfiguration()
     const session = platformMailResource || resource === "/companies" || resource === "/company-registration/lookup" ? await currentIdentitySession() : await currentSession()
@@ -293,6 +300,10 @@ export async function forwardErp(request: Request, resource: string) {
         upstream.searchParams.set(key, value)
       }
     }
+    if (reportEngineResource) {
+      const format = new URL(request.url).searchParams.get("format")
+      if (format) upstream.searchParams.set("format", format)
+    }
     const importBankReturn = resource === "/finance-treasury/import-return" || resource === "/finance-treasury/cnab-return"
     const listBankReports = resource === "/finance-treasury/provider-reports"
     const timeout = AbortSignal.timeout(packageEmailResource || qualifiedResource || importBankReturn ? 105000 : documentEmailResource || orderDocumentResource || listBankReports ? 25000 : invitationResource || accountResource ? 20000 : 10000)
@@ -302,7 +313,7 @@ export async function forwardErp(request: Request, resource: string) {
     const output = new Headers({ "Cache-Control": "no-store, no-transform", "Content-Type": response.headers.get("content-type") || "application/json" })
     if ((productExportResource || orderDocumentResource) && response.ok) { const disposition = response.headers.get("content-disposition"); if (disposition) output.set("Content-Disposition", disposition) }
     for (const name of ["etag", "x-request-id", "idempotency-replayed", "x-erp-backend"]) { const value = response.headers.get(name); if (value) output.set(name, value) }
-    if ((supportingDownloadResource || warrantyDownload) && response.ok) {
+    if ((supportingDownloadResource || warrantyDownload || reportFileResource) && response.ok) {
       output.set("X-Content-Type-Options", "nosniff")
       output.set("Content-Disposition", response.headers.get("content-disposition") || "attachment")
       return new Response(response.body, { status: response.status, headers: output })

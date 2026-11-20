@@ -56,7 +56,7 @@ test("product finishes batches are limited, private and scoped to the active ten
       role_permissions, platform_administrators, permissions, registration_settings TO ${role};
     GRANT SELECT (tenant_id, id, name, structure_colors, swing_arm_colors, finishing_palette,
       upholstery_colors, plate_holder_colors, plate_holder_types, plate_holder_type) ON products TO ${role};
-    GRANT SELECT (tenant_id, product_id, weight) ON product_catalog_profiles TO ${role};
+    GRANT SELECT (tenant_id, product_id, weight, dimensions_mm) ON product_catalog_profiles TO ${role};
   `)
 
   const tenant = randomUUID(), otherTenant = randomUUID()
@@ -112,10 +112,10 @@ test("product finishes batches are limited, private and scoped to the active ten
       data: [
         { id: secondProduct, name: "Barra", structureColors: [], swingArmColors: [],
           finishingPalette: "", upholsteryColors: [], upholsteryConfigurable: false,
-          plateHolderColors: [], plateHolderTypes: ["Standard"], weight: null },
+          plateHolderColors: [], plateHolderTypes: ["Standard"], weight: null, dimensionsMm: null },
         { id: legacyProduct, name: "Banco", structureColors: ["Preto"], swingArmColors: ["Prata"],
           finishingPalette: "dhz-combined", upholsteryColors: ["Azul"], upholsteryConfigurable: false,
-          plateHolderColors: ["Vermelho"], plateHolderTypes: ["Olímpico"], weight: "150 kg" },
+          plateHolderColors: ["Vermelho"], plateHolderTypes: ["Olímpico"], weight: "150 kg", dimensionsMm: [1500, 1200, 1400] },
       ],
       missingIds: [otherProduct, missing],
     })
@@ -126,7 +126,7 @@ test("product finishes batches are limited, private and scoped to the active ten
       tenantId: otherTenant,
       data: [{ id: otherProduct, name: "Nacional", structureColors: [], swingArmColors: [],
         finishingPalette: "", upholsteryColors: [], upholsteryConfigurable: true,
-        plateHolderColors: [], plateHolderTypes: ["Standard"], weight: null }],
+        plateHolderColors: [], plateHolderTypes: ["Standard"], weight: null, dimensionsMm: null }],
       missingIds: [secondProduct, legacyProduct, missing],
     })
   })

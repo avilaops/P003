@@ -46,8 +46,8 @@
     "pos": "Operação do PDV, sessões de caixa, fechamento e histórico, com autorização no backend."
   },
   "routeSurface": {
-    "count": 574,
-    "sha256": "92e61cc84e32cb8fd70f4cb07efc6f9b7dcff6b7778edf6693deb58dbe46c12d"
+    "count": 578,
+    "sha256": "a2803182a0ed7ecc8375869f4ea5555b475570bc16590ea9eb2a766ca4eb8db7"
   },
   "retiredPaths": [
     "apps/web/src/lib/erp-session.ts",
@@ -91,8 +91,8 @@
     "apps/api/src/platform/financial_settings.rs"
   ],
   "routeSurfaceReview": {
-    "previousPolicyCommit": "5f853bcd226a7776573603ae134955699ac82779",
-    "reviewedMainCommit": "2a2148f8c2d18a380215928a6c9803de57f3227d",
-    "changes": "Cadastros D02 • telas Duplicados e qualidade e Condições de pagamento, e BFF de duplicados, completude, mesclagem e histórico. Anterior: Financeiro em TypeScript • BFF autenticado, baixas em lote nas três carteiras, consulta de folha e notificações de cobrança do Mercado Pago."
+    "previousPolicyCommit": "be6ebdbd383022f96e23c6bad203bd34a5eccee6",
+    "reviewedMainCommit": "401eeb5788ca660b8531d74c40919d8e9822db09",
+    "changes": "Cadastros • nova página /cadastros/produtos/pendencias e rota BFF /api/erp/products/catalog-pending com os produtos ativos que têm campos vazios para preenchimento manual."
   }
 }

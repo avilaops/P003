@@ -87,7 +87,7 @@ export function OrderFinishesPanel({ rows, activeIndex, products, disabled, fina
                   onChange={next => { if (!disabled) onUpdate(row.item.productId, { ...row.item, [color.field]: next }) }}
                 />
               </div>)}
-              <PlateHolderChoice label={`Tipo de anilheiro de ${row.name}`} value={row.item.plateHolderType}
+              <PlateHolderChoice label={`Tipo de anilheiro de ${row.name}`} options={row.product.plateHolderTypes} value={row.item.plateHolderType}
                 onChange={value => { if (!disabled) onUpdate(row.item.productId, { ...row.item, plateHolderType: value }) }} />
             </fieldset>
             {choices.length > 0 && <CatalogPaletteReference palette={palette} />}

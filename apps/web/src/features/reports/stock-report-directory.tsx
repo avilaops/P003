@@ -27,7 +27,7 @@ export function StockReportDirectory({ tenant }: { tenant: string }) {
         <h2 className="mb-1 font-semibold">{group.name}</h2>
         <ul className="divide-y divide-border">{allowed.map(id => <li key={id}>
           <GuardedLink href={"/relatorios/estoque/analises?dataset=" + id}
-            className="flex min-h-11 items-center justify-between gap-2 py-2 text-sm font-medium text-primary hover:underline">
+            className="flex min-h-9 items-center justify-between gap-2 py-2 text-sm font-medium text-primary hover:underline">
             {sources[id].label}<ArrowUpRight aria-hidden="true" className="size-4 shrink-0"/>
           </GuardedLink>
         </li>)}</ul>

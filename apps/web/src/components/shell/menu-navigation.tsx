@@ -182,7 +182,7 @@ export function MenuNavigation({ children }: { children: ReactNode }) {
         </div>
         <div className="erp-drawer-search">
           <Search aria-hidden="true" />
-          <input type="search" aria-label="Pesquisar no menu" placeholder="Pesquisa rápida…" value={search} onChange={event => setSearch(event.target.value)} />
+          <input id="menu-search" name="menuSearch" autoComplete="off" type="search" aria-label="Pesquisar no menu" placeholder="Pesquisa rápida…" value={search} onChange={event => setSearch(event.target.value)} />
         </div>
         <nav className="erp-drawer-scroll" aria-label="Módulos e fluxos do ERP">
           {terms.length ? <div aria-label="Resultados do menu">

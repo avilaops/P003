@@ -72,13 +72,13 @@ html { scroll-padding-top: 76px; }
 .erp-content > :is(div, section, main)[class*="max-w-"][class*="px-4"] { padding-inline: 0; padding-top: 0; }
 .erp-page-header { padding-bottom: 24px; border-bottom: 1px solid var(--border); }
 .erp-page-header h1 { line-height: 1.2; text-wrap: balance; }
-.erp-page-back { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; margin-bottom: 16px; color: var(--muted-foreground); font-size: 14px; font-weight: 500; }
+.erp-page-back { display: inline-flex; align-items: center; gap: 8px; min-height: 36px; margin-bottom: 16px; color: var(--muted-foreground); font-size: 14px; font-weight: 500; }
 .erp-page-back:hover { color: var(--primary); }
 .erp-sidebar-scroll, .erp-drawer-scroll { scrollbar-width: thin; scrollbar-color: var(--border) transparent; scrollbar-gutter: stable; }
 .erp-inline-options { padding: 4px 0 12px 18px; }
 .erp-inline-options .erp-module-groups { padding: 8px 0 0 8px; gap: 14px; border-left: 1px solid var(--border); }
 .erp-inline-options .erp-module-groups h3 { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; margin-left: 10px; }
-.erp-inline-options .erp-option { min-height: 40px; font-size: 14px; padding: 8px 10px; }
+.erp-inline-options .erp-option { min-height: 36px; font-size: 14px; padding: 8px 10px; }
 .erp-inline-options .erp-option[aria-current=page] { box-shadow: inset 3px 0 0 var(--primary); }
 .erp-module-button[aria-expanded=true] .erp-module-chevron { transform: rotate(90deg); }
 .erp-content .erp-editor { max-width: 1120px; margin-inline: auto; }
@@ -89,7 +89,7 @@ html { scroll-padding-top: 76px; }
 .erp-global-actions { display: flex; align-items: center; gap: 6px; margin-left: auto; min-width: 0; }
 .erp-header .icon-action { width: 36px; height: 36px; border-radius: 6px; }
 .erp-header .icon-action svg, .erp-company-link svg { width: 18px; height: 18px; }
-.erp-company-link { display: flex; align-items: center; justify-content: center; gap: 10px; min-height: 44px; max-width: clamp(180px, 25vw, 360px); min-width: 0; padding: 0 12px; margin-left: 8px; border-left: 1px solid var(--border); font-size: 14px; }
+.erp-company-link { display: flex; align-items: center; justify-content: center; gap: 10px; min-height: 36px; max-width: clamp(180px, 25vw, 360px); min-width: 0; padding: 0 12px; margin-left: 8px; border-left: 1px solid var(--border); font-size: 14px; }
 .erp-company-link span { min-width: 0; line-height: 1.15; }
 .erp-company-link small { display: block; font-size: 12px; font-weight: 500; color: var(--muted-foreground); }
 .erp-company-link strong { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; font-weight: 600; }
@@ -97,9 +97,9 @@ html { scroll-padding-top: 76px; }
 .erp-search-trigger { display: flex; align-items: center; gap: 10px; width: min(320px, 100%); min-width: 120px; height: 38px; padding: 0 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--sidebar); text-align: left; }
 .erp-search-trigger > span { flex: 1; font-size: 14px; color: var(--muted-foreground); }
 .erp-search-trigger kbd { font-size: 12px; white-space: nowrap; color: var(--muted-foreground); }
-.erp-menu-trigger { display: flex; align-items: center; gap: 8px; flex-shrink: 0; min-height: 44px; font-size: 14px; font-weight: 600; }
+.erp-menu-trigger { display: flex; align-items: center; gap: 8px; flex-shrink: 0; min-height: 36px; font-size: 14px; font-weight: 600; }
 .erp-menu-trigger svg { width: 20px; height: 20px; }
-.erp-module-button, .erp-option { display: flex; align-items: center; width: 100%; min-height: 44px; gap: 10px; padding: 10px 12px; border-radius: 6px; font-size: 14px; line-height: 1.45; text-align: left; color: var(--foreground); }
+.erp-module-button, .erp-option { display: flex; align-items: center; width: 100%; min-height: 36px; gap: 10px; padding: 10px 12px; border-radius: 6px; font-size: 14px; line-height: 1.45; text-align: left; color: var(--foreground); }
 .erp-module-button { position: relative; }
 .erp-module-button > svg { width: 18px; height: 18px; flex-shrink: 0; color: var(--muted-foreground); }
 .erp-module-button > span { flex: 1; }
@@ -110,7 +110,7 @@ html { scroll-padding-top: 76px; }
 .erp-module-button:hover, .erp-option:hover { background: var(--muted); }
 .erp-module-button[data-active=true], .erp-module-button[aria-current=page], .erp-option[aria-current=page] { color: var(--primary); background: var(--accent); font-weight: 600; }
 .erp-module-button[data-active=true] > svg, .erp-module-button[aria-current=page] > svg { color: var(--primary); }
-.erp-category-button { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 48px; padding: 12px 16px; border-radius: 0; text-align: left; font-size: 14px; font-weight: 500; color: var(--foreground); transition: background-color .15s, color .15s; }
+.erp-category-button { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 36px; padding: 12px 16px; border-radius: 0; text-align: left; font-size: 14px; font-weight: 500; color: var(--foreground); transition: background-color .15s, color .15s; }
 .erp-category-button > svg { width: 18px; height: 18px; flex-shrink: 0; color: var(--muted-foreground); }
 .erp-category-button > span { min-width: 0; flex: 1; }
 .erp-category-button:hover { background: var(--muted); }
@@ -135,14 +135,14 @@ html { scroll-padding-top: 76px; }
 .erp-brand-name strong { display: block; font-size: 14px; line-height: 20px; }
 .erp-brand-name small { display: block; font-size: 12px; color: var(--muted-foreground); }
 .erp-sidebar-footer { display: flex; justify-content: flex-end; padding: 8px; border-top: 1px solid var(--border); }
-.erp-sidebar-toggle { display: grid; place-items: center; width: 40px; height: 40px; flex-shrink: 0; border-radius: 6px; color: var(--muted-foreground); }
+.erp-sidebar-toggle { display: grid; place-items: center; width: 40px; height: 36px; flex-shrink: 0; border-radius: 6px; color: var(--muted-foreground); }
 .erp-sidebar-heading .erp-sidebar-toggle { margin-right: 8px; }
 .erp-sidebar-toggle svg { width: 18px; height: 18px; }
 .erp-sidebar-toggle:hover { color: var(--primary); background: var(--accent); }
 .erp-sidebar-toggle:focus-visible { outline: 2px solid var(--ring); outline-offset: -2px; }
 .erp-panel-heading { display: flex; align-items: center; gap: 12px; min-height: 64px; padding: 12px 20px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
 .erp-panel-heading h2 { flex: 1; font-size: 18px; font-weight: 600; }
-.erp-menu-icon { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 6px; flex-shrink: 0; }
+.erp-menu-icon { display: grid; place-items: center; width: 40px; height: 36px; border-radius: 6px; flex-shrink: 0; }
 .erp-menu-icon:hover { background: var(--muted); }
 .erp-menu-icon svg { width: 20px; height: 20px; }
 .erp-module-groups { display: grid; gap: 18px; align-content: start; padding: 16px; }
@@ -157,18 +157,18 @@ html { scroll-padding-top: 76px; }
   background: var(--sidebar);
 }
 .erp-navigation-drawer .erp-panel-heading { min-height: 56px; gap: 4px; padding: 4px 10px 4px 14px; }
-.erp-drawer-account { display: flex; flex: 1; min-width: 0; min-height: 44px; align-items: center; gap: 10px; border-radius: 8px; font-size: 14px; font-weight: 600; }
+.erp-drawer-account { display: flex; flex: 1; min-width: 0; min-height: 36px; align-items: center; gap: 10px; border-radius: 8px; font-size: 14px; font-weight: 600; }
 .erp-drawer-account img { flex-shrink: 0; }
 .erp-drawer-account span { flex: 1; min-width: 0; }
 .erp-drawer-account > svg, .erp-drawer-search > svg { width: 16px; height: 16px; flex-shrink: 0; color: var(--muted-foreground); }
 .erp-drawer-account small, .erp-drawer-scroll .erp-option small { display: block; color: var(--muted-foreground); font-size: 12px; font-weight: 400; }
-.erp-navigation-drawer .erp-menu-icon { width: 44px; height: 44px; }
+.erp-navigation-drawer .erp-menu-icon { width: 44px; height: 36px; }
 .erp-drawer-search { display: flex; align-items: center; gap: 8px; margin: 10px 12px 2px; padding-inline: 10px; border: 1px solid var(--input); border-radius: 8px; background: var(--background); }
 .erp-drawer-search:focus-within { outline: 2px solid var(--ring); outline-offset: 1px; }
-.erp-drawer-search input { width: 100%; min-width: 0; min-height: 44px; outline: none; font-size: 18px; }
+.erp-drawer-search input { width: 100%; min-width: 0; min-height: 36px; outline: none; font-size: 14px; }
 .erp-drawer-scroll { overflow-y: auto; min-height: 0; padding: 8px 12px max(16px, env(safe-area-inset-bottom)); overscroll-behavior: contain; }
 .erp-drawer-scroll .erp-home-links { padding-bottom: 6px; margin-bottom: 4px; }
-.erp-drawer-scroll :is(.erp-module-button, .erp-option) { min-height: 44px; padding: 6px 8px; gap: 8px; line-height: 1.3; overflow-wrap: anywhere; }
+.erp-drawer-scroll :is(.erp-module-button, .erp-option) { min-height: 36px; padding: 6px 8px; gap: 8px; line-height: 1.3; overflow-wrap: anywhere; }
 .erp-drawer-group { margin-top: 12px; }
 .erp-drawer-scroll .erp-nav-caption { margin: 0 8px 4px; }
 .erp-drawer-branch, .erp-drawer-recent > ul { margin: 0 0 4px 16px; padding-left: 7px; border-left: 1px solid var(--border); }
@@ -193,7 +193,7 @@ html { scroll-padding-top: 76px; }
   .erp-workspace[data-collapsed=true] .erp-sidebar :is(.erp-brand-name, .erp-nav-caption, .erp-module-button > span, .erp-module-chevron) { display: none; }
   .erp-workspace[data-collapsed=true] .erp-module-list { gap: 4px; border: 0; border-radius: 0; background: transparent; overflow: visible; }
   .erp-workspace[data-collapsed=true] .erp-module-list > li + li { border-top: 0; }
-  .erp-workspace[data-collapsed=true] .erp-sidebar .erp-module-button { display: grid; place-items: center; width: 44px; height: 44px; min-height: 44px; padding: 0; margin-inline: auto; border-radius: 8px; }
+  .erp-workspace[data-collapsed=true] .erp-sidebar .erp-module-button { display: grid; place-items: center; width: 44px; height: 36px; min-height: 36px; padding: 0; margin-inline: auto; border-radius: 8px; }
   .erp-workspace[data-collapsed=true] .erp-sidebar-heading .erp-brand { display: none; }
   .erp-workspace[data-collapsed=true] :is(.erp-sidebar-heading, .erp-sidebar-footer) { justify-content: center; }
   .erp-workspace[data-collapsed=true] .erp-sidebar-heading .erp-sidebar-toggle { margin: 0; }
@@ -211,10 +211,10 @@ html { scroll-padding-top: 76px; }
   .erp-company-link span { display: block; max-width: 96px; }
   .erp-company-link small { display: none; }
   .erp-company-link strong { font-size: 12px; }
-  .erp-search-trigger { width: 44px; min-width: 44px; height: 44px; padding: 0; justify-content: center; margin-left: auto; border: 0; background: transparent; }
+  .erp-search-trigger { width: 44px; min-width: 44px; height: 36px; padding: 0; justify-content: center; margin-left: auto; border: 0; background: transparent; }
   .erp-search-trigger > span { display: none; }
   .erp-global-actions { margin-left: 0; gap: 0; }
-  .erp-header .icon-action { width: 44px; height: 44px; }
+  .erp-header .icon-action { width: 44px; height: 36px; }
 }
 @media (prefers-reduced-motion: reduce) { .erp-navigation-drawer { transition: none; animation: none; } }
 

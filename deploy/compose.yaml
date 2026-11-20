@@ -5,25 +5,6 @@ services:
     logging:
       driver: json-file
       options: {max-size: "10m", max-file: "3"}
-    env_file: api.env
-    environment:
-      ERP_CNPJ_WS_ENABLED: "true"
-      ERP_TYPESCRIPT_API_URL: http://127.0.0.1:8081
-    extra_hosts:
-      - host.docker.internal:host-gateway
-    networks: [erp]
-    ports:
-      - "127.0.0.1:3141:8080"
-      - "127.0.0.1:3140:3000"
-    security_opt: [no-new-privileges:true]
-    cap_drop: [ALL]
-  api-ts:
-    image: ${ERP_WEB_IMAGE:?CI image required}
-    command: [node, apps/api-ts/dist/server.js]
-    restart: unless-stopped
-    logging:
-      driver: json-file
-      options: {max-size: "10m", max-file: "3"}
     env_file:
       - path: api-ts.env
         required: true
@@ -32,16 +13,13 @@ services:
     environment:
       NODE_ENV: production
       API_TS_HOST: 0.0.0.0
-      API_TS_PORT: "8081"
-    network_mode: service:api
-    depends_on:
-      api:
-        condition: service_healthy
-    healthcheck:
-      test: [CMD, node, -e, "fetch('http://127.0.0.1:8081/health/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
-      interval: 15s
-      timeout: 5s
-      start_period: 30s
+      API_TS_PORT: "8080"
+    extra_hosts:
+      - host.docker.internal:host-gateway
+    networks: [erp]
+    ports:
+      - "127.0.0.1:3141:8080"
+      - "127.0.0.1:3140:3000"
     security_opt: [no-new-privileges:true]
     cap_drop: [ALL]
     mem_limit: 384m
@@ -55,7 +33,7 @@ services:
     env_file: web.env
     environment:
       ERP_API_URL: http://127.0.0.1:8080
-      ERP_TYPESCRIPT_API_URL: http://127.0.0.1:8081
+      ERP_TYPESCRIPT_API_URL: http://127.0.0.1:8080
       ERP_WEB_ORIGIN: https://erp.avilaops.com
       AUTH_ISSUER: https://auth.avilaops.com
       ERP_RELEASE_SHA: ${ERP_RELEASE_SHA:?CI revision required}

@@ -185,7 +185,7 @@ test("novo pedido mantém cliente e produto em buscas compactas até pesquisar",
 })
 
 test("selecionar novamente um produto acrescenta uma unidade e preserva acabamentos no pedido", async ({ page }, info) => {
-  const product = { id: "33333333-3333-4333-8333-333333333333", name: "Hack 45° Para Agachamento", sku: "LD-WH034", unit: "UN", basePrice: "16865.42", upholsteryConfigurable: false }
+  const product = { id: "33333333-3333-4333-8333-333333333333", name: "Hack 45° Para Agachamento", sku: "LD-WH034", unit: "UN", basePrice: "16865.42", upholsteryConfigurable: false, plateHolderTypes: ["Standard", "Olímpico"] }
   const snapshot = { tenantId: tenant, canEdit: true, data: { ...order, customerId: record, revision: 1 }, items: [] }
   let sent: unknown
   await page.route(/\/api\/erp\/orders\?/, route => route.fulfill({ json: { tenantId: tenant, canEdit: true, total: 0, data: [] } }))

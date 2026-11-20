@@ -30,7 +30,7 @@ const files = [
   'apps/api/src/http/mod.rs', 'apps/api/src/http/openapi.rs', 'apps/api/src/domains/mod.rs',
   'apps/api/src/domains/fiscal/mod.rs', 'apps/api/src/platform/auth.rs',
   'apps/api/src/platform/access.rs', 'apps/api/src/platform/state.rs', 'apps/api/src/config.rs',
-  'apps/api/tests/fixtures/nfe-protocol-synthetic.xml', 'apps/api/tests/fixtures/danfe-provider-synthetic.b64',
+  'apps/api-ts/test/fixtures/nfe-protocol-synthetic.xml', 'apps/api-ts/test/fixtures/danfe-provider-synthetic.b64',
   'apps/web/src/server/bff/erp-danfe-proxy.ts', 'apps/web/src/features/fiscal/danfe-download.tsx',
   'apps/web/src/server/auth/erp-session.ts', 'apps/web/package.json', 'apps/web/next.config.ts',
   'apps/web/tests/danfe-ui.spec.ts', 'apps/web/playwright.danfe.config.ts',

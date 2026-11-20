@@ -18,6 +18,7 @@ import { quantity, useCommand, useResource } from "@/hooks/use-operation"
 import { ColorChoice, Lookup, PlateHolderChoice, type Choice } from "./orders"
 import { ProposalDocument, type ProposalIssuer } from "./proposal-document"
 import { ProposalEmail } from "./proposal-email"
+import { OrderWeightSummary } from "./order-weight-summary"
 import { catalogPaletteFor } from "@/features/catalog/catalog-color-photo-model"
 import { CatalogPaletteReference } from "@/features/catalog/catalog-color-photos"
 import {PaymentTermPicker,type AppliedTerm} from "./payment-term-picker"
@@ -135,11 +136,12 @@ function ProposalForm({ initial, tenantId, etag, reload, source }: { source?:Pro
                 {Boolean(item.structureColors?.length || item.structureColor) && <ColorChoice part="structure" palette={catalogPaletteFor(item.finishingPalette)} label={`Estrutura de ${item.name}`} catalog={{ productId: item.id, tenantId, field: "structureColors" }} options={item.structureColors} value={item.structureColor} onChange={value => changeItem(item.id, { structureColor: value })} />}
                 {Boolean(item.swingArmColors?.length || item.swingArmColor) && <ColorChoice part="swingArm" optional={Boolean(initial?.items.some(line => line.productId === item.id && !line.swingArmColor))} palette={catalogPaletteFor(item.finishingPalette)} label={`Braços de ${item.name}`} catalog={{ productId: item.id, tenantId, field: "swingArmColors" }} options={item.swingArmColors} value={item.swingArmColor} onChange={value => changeItem(item.id, { swingArmColor: value })} />}
                 {Boolean(item.upholsteryColors?.length || item.upholsteryColor) && (item.upholsteryConfigurable !== false || item.upholsteryColor) && <ColorChoice part="upholstery" palette={catalogPaletteFor(item.finishingPalette)} label={`Estofado de ${item.name}`} catalog={{ productId: item.id, tenantId, field: "upholsteryColors" }} options={item.upholsteryConfigurable === false ? [] : item.upholsteryColors} value={item.upholsteryColor} onChange={value => changeItem(item.id, { upholsteryColor: value })} />}
-                <PlateHolderChoice label={`Tipo de anilheiro de ${item.name}`} value={item.plateHolderType} onChange={value => changeItem(item.id, { plateHolderType: value })} />
+                <PlateHolderChoice label={`Tipo de anilheiro de ${item.name}`} options={item.plateHolderTypes} value={item.plateHolderType} onChange={value => changeItem(item.id, { plateHolderType: value })} />
               </div>
               <CatalogPaletteReference palette={catalogPaletteFor(item.finishingPalette)} />
             </details>}
           </section>)}
+          <OrderWeightSummary tenantId={tenantId} items={items.map(item => ({ productId: item.id, quantity: item.quantity }))} />
           <PaymentTermPicker tenant={tenantId} customer={customer?.id} disabled={frozen} total={pricing.status==="ready"?pricing.quote.sale.totalCents:proposalCatalogTotal(items)} apply={p=>{setTermPlan(p);setPaymentTerms(p.term.name+" • Entrada "+money((p.entryCents/100).toFixed(2))+" • "+p.installments.map(i=>i.dueOn.split("-").reverse().join("/")+" "+money((i.amountCents/100).toFixed(2))).join(" • "));setDirty(true)}}/>
           <ProposalCommercialFields entryCents={termPlan?.entryCents} tenantId={tenantId} customerId={customer?.id} items={items} initial={initial?.commercial} disabled={frozen} onChange={setPricing} />
           <details className="min-w-0 border-y py-2" onInvalidCapture={event => { event.currentTarget.open = true }}>

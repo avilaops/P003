@@ -14,7 +14,7 @@ import { discountFromEntry, hundredths, money, percent, parseSimulation, type Di
 import { SimulationResult } from "./simulator-result"
 import { SimulationOrder } from "./simulator-order"
 
-const selectClass = "min-h-11 w-full min-w-0 rounded-lg border border-input bg-background px-3"
+const selectClass = "min-h-9 w-full min-w-0 rounded-lg border border-input bg-background px-3"
 
 export function SalesSimulator() {
   const [line, setLine] = useState<"imported" | "national">("imported")

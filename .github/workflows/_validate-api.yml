@@ -13,7 +13,7 @@ name: Validate API
         default: false
     outputs:
       digest:
-        description: Published registry image digest reused by this release
+        description: Registry digest of the TypeScript API image published for this revision
         value: ${{ jobs.api.outputs.digest }}
       openapi_artifact_name:
         description: Exact contract artifact from its producing attempt
@@ -72,7 +72,6 @@ jobs:
         python3 scripts/ci/timed.py --label 'api/typescript-openapi-drift' --output "artifacts/timings/$GITHUB_JOB.jsonl" -- pnpm --filter api-ts openapi:check
         python3 scripts/ci/timed.py --label 'api/typescript-openapi-valid' --output "artifacts/timings/$GITHUB_JOB.jsonl" -- node scripts/contracts/check-api-ts-openapi.mjs
         python3 scripts/ci/timed.py --label 'api/typescript-route-coverage' --output "artifacts/timings/$GITHUB_JOB.jsonl" -- pnpm --filter api-ts route-coverage
-        python3 scripts/ci/timed.py --label 'api/typescript-migration-inventory' --output "artifacts/timings/$GITHUB_JOB.jsonl" -- pnpm --filter api-ts exec tsx ../../verification/ts-migration-inventory.mjs --summary
     - name: Verify inventory commands and upgrades against PostgreSQL
       env:
         API_TS_TEST_ADMIN_URL: postgres://postgres:ci_isolated_only@127.0.0.1:5432/postgres
@@ -83,20 +82,29 @@ jobs:
         node apps/api-ts/dist/migrate.js migrations
         node apps/api-ts/dist/migrate.js migrations > "$RUNNER_TEMP/migrate-second.json"
         node -e 'const {applied,existing}=require(process.argv[1]); if (applied.length || !existing) process.exit(1)' "$RUNNER_TEMP/migrate-second.json"
-    - name: Check published API readiness against the migrated schema
-      if: inputs.publish
-      env:
-        API_DIGEST: ${{ steps.published.outputs.api }}
+    - name: Package and smoke-test the TypeScript production package
+      run: |
+        python3 scripts/ci/timed.py --label 'api/typescript-package' --output "artifacts/timings/$GITHUB_JOB.jsonl" -- pnpm --filter api-ts deploy --prod --legacy artifacts/api-ts
+        python3 scripts/ci/timed.py --label 'api/typescript-package-smoke' --output "artifacts/timings/$GITHUB_JOB.jsonl" -- node apps/api-ts/scripts/verify-package.mjs artifacts/api-ts
+    - name: Build the API image and check readiness against the migrated schema
       run: |
         set -euo pipefail
-        reference="ghcr.io/avilaops/erp-next-api@$API_DIGEST"
-        docker run --rm --network none --read-only --cap-drop ALL "$reference" openapi > "$RUNNER_TEMP/published-openapi.json"
-        python3 -c 'import json,sys; assert json.load(open(sys.argv[1])) == json.load(open(sys.argv[2])), "Published API contract mismatch"' "$RUNNER_TEMP/published-openapi.json" artifacts/contracts/candidate.json
-        docker run --detach --name published-api --network host --read-only --cap-drop ALL \
-          --security-opt no-new-privileges --env DATABASE_URL --env ERP_BACKGROUND_WORKERS_ENABLED=false \
-          --env API_BIND_ADDRESS=127.0.0.1:18080 "$reference"
-        trap 'docker rm -f published-api >/dev/null' EXIT
+        docker build -f deploy/api-ts.Dockerfile -t erp-next-api:ci .
+        docker run --detach --name api-image --network host --read-only --cap-drop ALL \
+          --security-opt no-new-privileges --env DATABASE_URL --env AUTH_ISSUER=https://auth.example.test \
+          --env ERP_BACKGROUND_WORKERS_ENABLED=false --env API_TS_PORT=18080 erp-next-api:ci
+        trap 'docker rm -f api-image >/dev/null' EXIT
         curl --fail --silent --show-error --retry 20 --retry-all-errors --retry-delay 1 http://127.0.0.1:18080/health/ready
+        test "$(curl --silent --output /dev/null --write-out '%{http_code}' http://127.0.0.1:18080/api/v1/rota-sem-porte)" = 404
+    - name: Publish the API image by immutable digest
+      id: image
+      if: inputs.publish
+      uses: docker/build-push-action@v6
+      with:
+        context: .
+        file: deploy/api-ts.Dockerfile
+        push: true
+        tags: ghcr.io/avilaops/erp-next-api:sha-${{ inputs.source_sha }}
     - uses: actions/upload-artifact@v4
       with:
         name: erp-openapi-${{ inputs.source_sha }}-${{ github.run_attempt }}
@@ -112,5 +120,5 @@ jobs:
         retention-days: 7
         if-no-files-found: warn
     outputs:
-      digest: ${{ steps.published.outputs.api }}
+      digest: ${{ steps.image.outputs.digest }}
       openapi_artifact_name: erp-openapi-${{ inputs.source_sha }}-${{ github.run_attempt }}

@@ -9,8 +9,8 @@ import { monitorOrigin as origin } from "../playwright.monitor.config"
 
 const documentId = "22222222-2222-4222-8222-222222222222"
 const runId = "33333333-3333-4333-8333-333333333333"
-const xml = readFileSync(resolve("../api/src/http/fixtures/cte-received.xml"), "utf8")
-const inspectionFacts = JSON.parse(readFileSync(resolve("../api/src/http/fixtures/cte-received-inspection.json"), "utf8"))
+const xml = readFileSync(resolve("../fiscal-engine/tests/fixtures/http/cte-received.xml"), "utf8")
+const inspectionFacts = JSON.parse(readFileSync(resolve("../fiscal-engine/tests/fixtures/http/cte-received-inspection.json"), "utf8"))
 const hash = createHash("sha256").update(xml).digest("hex")
 const document = { id: documentId, runId, environment: "homologation", companyTaxId: "04252011000110", nsu: "000000000000001", schema: "procCTe_v4.00.xsd", kind: "full", xmlSha256: hash, verification: "pending", createdAt: "2026-11-03T10:00:00Z" }
 const requests: { url: string; method: string; tenant?: string; authorization?: string; command?: string; revision?: string; actor?: string; body?: unknown }[] = []

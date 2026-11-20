@@ -18,7 +18,7 @@ export function WorkspaceCapabilityUnavailable({
           de backend verificáveis. Nenhum conteúdo local será apresentado como
           informação operacional.
         </p>
-        <Link className="mt-5 inline-flex min-h-11 items-center font-medium text-primary underline" href="/">
+        <Link className="mt-5 inline-flex min-h-9 items-center font-medium text-primary underline" href="/">
           Voltar para a visão geral
         </Link>
       </section>

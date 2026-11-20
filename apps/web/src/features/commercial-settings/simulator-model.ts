@@ -7,6 +7,7 @@ export type Equipment = {
   productId: string; sku: string; name: string; unit: string
   priceWithoutIpiCents: number; priceWithIpiCents: number
   structureColors: string[]; swingArmColors?: string[]; finishingPalette?: string | null; upholsteryColors: string[]; upholsteryConfigurable?: boolean
+  plateHolderTypes?: string[]
 }
 export type PublishedTable = {
   id: string; version: number; publishedAt: string; originState: string

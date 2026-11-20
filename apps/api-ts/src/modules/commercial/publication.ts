@@ -30,7 +30,7 @@ function prices(p:CommercialParameters,costs:number,c:Cost) {
   const denominator=share*BigInt(10000-p.freeDiscountBps)
   if(denominator<=0n||adjusted<=0n)invalidCommercial("O custo ajustado e a margem disponível devem ser positivos para publicar")
   const priceWithoutIpiCents=up(adjusted*retained,denominator)
-  const priceWithIpiCents=up(priceWithoutIpiCents*BigInt(10000+p.ipiBps),10000n)
+  const priceWithIpiCents=rounded(priceWithoutIpiCents*BigInt(10000+p.ipiBps),10000n)
   if(priceWithIpiCents>1000000000000n)invalidCommercial("Preço calculado ultrapassa o limite de R$ 10 bilhões")
   return {priceWithoutIpiCents,ipiBps:p.ipiBps,priceWithIpiCents}
 }

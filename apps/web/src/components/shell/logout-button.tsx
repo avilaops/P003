@@ -5,7 +5,7 @@ import { LogOut } from "lucide-react"
 import { useAllowNextUnload, useConfirmNavigation } from "./navigation-guard"
 import { endPartyDraftSession } from "@/lib/party-draft-session"
 
-export function LogoutButton({ label = "Sair", className = "flex min-h-11 items-center gap-1.5 rounded-xl px-2 text-sm text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-60" }: { label?: string; className?: string }) {
+export function LogoutButton({ label = "Sair", className = "flex min-h-9 items-center gap-1.5 rounded-xl px-2 text-sm text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-60" }: { label?: string; className?: string }) {
   const confirmNavigation = useConfirmNavigation()
   const allowNextUnload = useAllowNextUnload()
   const errorId = useId()

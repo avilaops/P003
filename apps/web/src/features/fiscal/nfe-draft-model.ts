@@ -34,6 +34,12 @@ export function applyRecipientFiscal(draft: DraftInput, fiscal: PartyFiscal | nu
   if (draft.model === 65) return { ...draft, taxDeclaration: { ...declaration, recipientTaxpayerIndicator: "9", recipientTaxpayer: false, recipientStateRegistration: null } }
   return { ...draft, taxDeclaration: { ...declaration, recipientTaxpayerIndicator: fiscal?.taxpayerIndicator, recipientTaxpayer: fiscal ? fiscal.taxpayerIndicator !== "9" : null, recipientStateRegistration: fiscal?.stateRegistration || null } }
 }
+/** Fills the transport net and gross weight with the order's equipment weight, never overwriting a value already typed. */
+export function applySuggestedWeight(draft: DraftInput, weightKg: string | null | undefined): DraftInput {
+  if (!weightKg) return draft
+  const transport = { ...emptyTransport(), ...draft.transport }
+  return { ...draft, transport: { ...transport, netWeight: transport.netWeight || weightKg, grossWeight: transport.grossWeight || weightKg } }
+}
 export const blankIbptItem = (): IbptDraftItem => ({ ex: "", origin: "", version: null })
 
 export function fixed(value: string, scale: number, wholeDigits: number): string {
@@ -162,6 +168,14 @@ export const blockerLabels: Record<string, string> = {
   production_emission_disabled: "A emissão em produção permanece bloqueada até homologação externa e liberação operacional",
 }
 
+
+/** Fills every item's CFOP from the chosen operation nature, by comparing the issuer and recipient states; unknown states keep the CFOPs as typed. */
+export function applyNatureCfop(draft: DraftInput, nature: { internalCfop: string; interstateCfop: string; foreignCfop: string }, issuerState: string | null | undefined): DraftInput {
+ const recipientState = draft.recipient.state
+ if (!issuerState || !recipientState) return draft
+ const cfop = recipientState === "EX" ? nature.foreignCfop : recipientState === issuerState ? nature.internalCfop : nature.interstateCfop
+ return cfop ? { ...draft, items: draft.items.map(item => ({ ...item, cfop })) } : draft
+}
 
 /** Copies only accountant-declared defaults; all other fiscal decisions stay unchanged. */
 export function applyTaxProfile(draft: DraftInput, profile: TaxProfile, revision: number, scenario?: FiscalScenario): DraftInput {

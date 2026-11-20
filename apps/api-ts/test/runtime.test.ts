@@ -57,3 +57,17 @@ test("Browser Use stays disabled unless its server-side key is configured", () =
   assert.equal("browserUseApiKey" in loadConfiguration({ ...environment, BROWSER_USE_API_KEY: "   " }), false)
   assert.equal(loadConfiguration({ ...environment, BROWSER_USE_API_KEY: " bu_test_key " }).browserUseApiKey, "bu_test_key")
 })
+
+test("rota ainda não portada responde 404 claro sem autenticar nem consultar o banco", async () => {
+  let authCalls = 0, connections = 0
+  const app = buildApp({ pool: { async connect() { connections++; throw Error("Unexpected database") } }, userinfoUrl: "http://auth.test/userinfo", fetchAuth: async () => { authCalls++; throw Error("Unexpected auth") } })
+  try {
+    for (const method of ["GET", "POST"] as const) {
+      const response = await app.inject({ method, url: "/api/v1/rota-sem-porte?secret=1" })
+      assert.equal(response.statusCode, 404)
+      assert.match(response.headers["content-type"] as string, /^application\/problem\+json/)
+      assert.deepEqual(response.json(), { type: "https://erp.avilaops.com/problems/route_not_ported", title: "Rota inexistente ou ainda não portada para a API TypeScript", status: 404, error: "route_not_ported", path: "/api/v1/rota-sem-porte" })
+    }
+    assert.equal(authCalls + connections, 0)
+  } finally { await app.close() }
+})

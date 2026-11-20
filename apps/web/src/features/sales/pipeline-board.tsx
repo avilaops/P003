@@ -12,7 +12,7 @@ export function PipelineBoard({stages,items,totals,members,selected}:{stages:Sta
       <h2 className="break-words text-sm font-semibold">{stage.label}{stage.active?"":" • arquivada"}</h2>
       <p className="text-xs text-muted-foreground">{total?.count??0} oportunidades • {pipelineMoney(Number(total?.estimatedCents??0))}</p>
       {group.map(o=><article key={o.id} className="min-w-0 space-y-1 rounded-md border bg-background p-2 text-sm [overflow-wrap:anywhere]">
-        <Link className="flex min-h-11 items-center font-medium text-primary underline sm:min-h-9" href={"/vendas/funil/"+o.id}>{o.title}</Link>
+        <Link className="flex min-h-9 items-center font-medium text-primary underline sm:min-h-9" href={"/vendas/funil/"+o.id}>{o.title}</Link>
         <p>{o.customerName || o.companyName}</p>{o.contactName&&<p>{o.contactName}</p>}
         <p>{pipelineMoney(o.estimatedCents)}</p>{o.ownerId&&<p>{members.find(m=>m.id===o.ownerId)?.name||"Responsável arquivado"}</p>}
       </article>)}

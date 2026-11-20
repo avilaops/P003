@@ -48,12 +48,12 @@ export function AccountClient({ section }: { section: AccountSection }) {
   const subscription = account.subscriptions.find(item => !["cancelled", "rejected"].includes(item.status)) || account.subscriptions[0]
   const checkout = subscription?.status === "pending" ? safeCheckout(subscription.details.checkoutUrl) : null
   return <section className="space-y-6 rounded-2xl border border-border bg-card p-4 sm:p-6">
-    <div className="flex flex-wrap items-start justify-between gap-4"><div><h2 className="text-xl font-semibold tracking-tight">{accountSections[section]}</h2><p className="mt-1 text-sm text-muted-foreground">Assinatura e gerenciamento da empresa ativa</p></div>{subscription && <Button variant="outline" className="min-h-11" disabled={busy || !account.canEdit || !account.providerConfigured} onClick={() => submit("refresh", { subscriptionId: subscription.id })}><RefreshCw className={busy ? "animate-spin" : ""} />Atualizar assinatura</Button>}</div>
+    <div className="flex flex-wrap items-start justify-between gap-4"><div><h2 className="text-xl font-semibold tracking-tight">{accountSections[section]}</h2><p className="mt-1 text-sm text-muted-foreground">Assinatura e gerenciamento da empresa ativa</p></div>{subscription && <Button variant="outline" className="min-h-9" disabled={busy || !account.canEdit || !account.providerConfigured} onClick={() => submit("refresh", { subscriptionId: subscription.id })}><RefreshCw className={busy ? "animate-spin" : ""} />Atualizar assinatura</Button>}</div>
     {!account.canEdit && <p role="status" className="text-sm text-muted-foreground">Acesso de consulta. Alterações exigem permissão de gerenciamento da empresa.</p>}
     {!account.providerConfigured && <Notice>A conexão de assinaturas com o Mercado Pago ainda não foi configurada neste ambiente. A contratação e as alterações de cobrança estão indisponíveis.</Notice>}
     {error && <div role="alert" className="rounded-xl border border-destructive/40 p-4 text-sm">{error}</div>}
     {notice && <div role="status" className="rounded-xl border border-primary/30 bg-primary/5 p-4 text-sm">{notice}</div>}
-    {checkout && account.canEdit && section !== "pagamento" && <a className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground" href={checkout}>Continuar no Mercado Pago<ExternalLink className="size-4" /></a>}
+    {checkout && account.canEdit && section !== "pagamento" && <a className="inline-flex min-h-9 items-center gap-2 rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground" href={checkout}>Continuar no Mercado Pago<ExternalLink className="size-4" /></a>}
     {section === "pagamento" && <PaymentPanel account={account} subscription={subscription} />}
     {section === "extrato" && <StatementPanel account={account} />}
     {section === "armazenamento" && <StoragePanel account={account} subscription={subscription} />}

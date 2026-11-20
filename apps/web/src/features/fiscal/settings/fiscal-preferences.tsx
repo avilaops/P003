@@ -115,7 +115,7 @@ export function FiscalPreferences({ section }: { section: "nfce" | "operation-na
               <label className="grid gap-2 text-sm">E-mail autorizado<Input type="email" required maxLength={254} value={person.email} onChange={event => updatePerson(index, { email: event.target.value })} /></label>
               <label className="grid gap-2 text-sm">CPF ou CNPJ<Input required maxLength={18} value={person.taxId} onChange={event => updatePerson(index, { taxId: event.target.value })} /></label>
               <label className="grid gap-2 text-sm">Função ou relação<Input required maxLength={60} value={person.role} onChange={event => updatePerson(index, { role: event.target.value })} /></label>
-              <label className="flex min-h-11 items-center gap-2 text-sm"><input type="checkbox" checked={person.active} onChange={event => updatePerson(index, { active: event.target.checked })} />Autorização ativa</label>
+              <label className="flex min-h-9 items-center gap-2 text-sm"><input type="checkbox" checked={person.active} onChange={event => updatePerson(index, { active: event.target.checked })} />Autorização ativa</label>
             </div></section>)}
           </div>
         </section> : <section className="space-y-4">
@@ -128,7 +128,7 @@ export function FiscalPreferences({ section }: { section: "nfce" | "operation-na
             <label className="grid gap-2 text-sm">Modelo<select aria-label="Modelo" className={selectClass} value={item.model} onChange={event => updateNature(index,{model:Number(event.target.value)})}><option value={55}>55: NF-e</option><option value={65}>65: NFC-e</option></select></label>
             <label className="grid gap-2 text-sm">Finalidade<select aria-label="Finalidade" className={selectClass} value={item.purpose} onChange={event => updateNature(index,{purpose:Number(event.target.value)})}><option value={1}>Normal</option><option value={2}>Complementar</option><option value={3}>Ajuste</option><option value={4}>Devolução</option></select></label>
             {([['internalCfop','CFOP interno'],['interstateCfop','CFOP interestadual'],['foreignCfop','CFOP exterior']] as const).map(([field,label]) => <label key={field} className="grid gap-2 text-sm">{label}<Input inputMode="numeric" pattern="[0-9]{4}" maxLength={4} value={item[field]} onChange={event => updateNature(index,{[field]:event.target.value})} /></label>)}
-            <label className="flex min-h-11 items-center gap-2 text-sm"><input type="checkbox" checked={item.active} onChange={event => updateNature(index,{active:event.target.checked})} />Ativa</label>
+            <label className="flex min-h-9 items-center gap-2 text-sm"><input type="checkbox" checked={item.active} onChange={event => updateNature(index,{active:event.target.checked})} />Ativa</label>
           </div></section>)}
           <Button type="button" variant="outline" disabled={items.length >= 200} onClick={() => setDraft({ items: [...items,{id:crypto.randomUUID(),code:"",name:"",direction:"",purpose:1,model:55,internalCfop:"",interstateCfop:"",foreignCfop:"",active:true}] })}>Adicionar natureza</Button>
         </section>}

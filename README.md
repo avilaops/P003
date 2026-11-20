@@ -10,7 +10,7 @@ estão vinculadas ao Ávila Experiments e são verificadas no CI.
 
 ## Fundação
 
-- API: Rust, Axum e SQLx.
+- API: TypeScript (Fastify) em `apps/api-ts`.
 - Banco: PostgreSQL 18.
 - Web: Next.js, React e TypeScript.
 - Multiempresa: `tenant_id`, políticas RLS e contexto transacional.
@@ -22,8 +22,8 @@ estão vinculadas ao Ávila Experiments e são verificadas no CI.
 
 1. Copie `.env.example` para `.env`.
 2. Execute `docker compose up -d postgres`.
-3. Com a conta de migração em `DATABASE_URL`, execute `cargo run -p erp-next-api -- migrate`.
-4. Com a conta de aplicação em `DATABASE_URL`, execute `cargo run -p erp-next-api`.
+3. Com a conta de migração em `DATABASE_URL`, execute `pnpm --filter api-ts build && node apps/api-ts/dist/migrate.js migrations`.
+4. Com a conta de aplicação em `DATABASE_URL`, execute `pnpm --filter api-ts dev`.
 5. Em outro terminal, execute `pnpm --filter web dev` (ou `pnpm dev:web` na raiz). O ERP Next abre em `http://localhost:3002`, sua porta padrão de desenvolvimento.
 
 A API não executa DDL ao iniciar o servidor HTTP. Em produção, a conta da

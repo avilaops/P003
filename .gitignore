@@ -4,7 +4,6 @@
 .next-*/
 node_modules/
 target/
-.sqlx/
 .venv-verification/
 .venv/
 __pycache__/

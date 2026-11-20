@@ -30,11 +30,17 @@ import { NfeFinancialFields, hasHeaderFiscalReference } from "./nfe-financial-fi
 import { NfeRecipientPicker, NfeMunicipalityLookup } from "./nfe-recipient-picker"
 import { applyMunicipalityCode } from "@/lib/municipality-code"
 import { EmissionActions } from "./emission-actions"
-import { applyRecipientFiscal, applyTaxProfile, blankDraft, blankIbptItem, blankItem, blankTaxDeclaration, blockerLabels, invoiceTotal, itemTotal, productsTotal, submission, type DraftInput, type DraftItem, type FiscalReadiness, type TaxDeclaration } from "./nfe-draft-model"
+import { applyRecipientFiscal, applySuggestedWeight, applyTaxProfile, blankDraft, blankIbptItem, blankItem, blankTaxDeclaration, blockerLabels, invoiceTotal, itemTotal, productsTotal, submission, type DraftInput, type DraftItem, type FiscalReadiness, type TaxDeclaration } from "./nfe-draft-model"
 import { IbptDraftFields, IbptSavedSnapshot } from "./ibpt-draft-fields"
+import { applyNatureCfop } from "./nfe-draft-model"
 
 type Snapshot = Schema<"DraftSnapshot">
-type Preparation = Schema<"OrderPreparation">
+// The TypeScript API also proposes the order's dated installments and payments (grouped by tPag) and adds the origin
+// registered for each product line. They are optional here until the generated contract (still sourced from the Rust schema) describes them.
+type Preparation = Omit<Schema<"OrderPreparation">, "items"> & {
+  items: (Schema<"OrderPreparation">["items"][number] & { origin?: number | null })[]
+  installments?: NonNullable<DraftInput["installments"]>; payments?: NonNullable<DraftInput["payments"]>
+}
 const editorSteps = ["Dados da nota", "Destinatário", "Produtos", "Tributação", "Pagamento", "Revisão e emissão"]
 const stepDescriptions = ["Defina a operação, o modelo e o ambiente da nota.", "Selecione o cliente e confira o endereço de entrega fiscal.", "Inclua os produtos, as quantidades, os preços e o frete.", "Confira os códigos fiscais de cada item e os tributos da operação.", "Informe como o valor da nota será pago.", "Confira os dados, salve o rascunho e acompanhe a emissão."]
 /** A complete recipient starts as a summary; an incomplete one keeps its fields open until the user closes them. */
@@ -95,8 +101,13 @@ export function NfeDraftEditor({ id, sourceOrderId, lotId, lotEnvironment="produ
         const current: Snapshot | undefined = id ? origin : undefined
         const proposed: Preparation | undefined = !id && sourceOrderId ? origin : undefined
         if (ready.tenantId !== me.tenant?.id || origin && origin.tenantId !== me.tenant.id) throw new Error("A empresa da sessão mudou. Reabra o rascunho")
-        const input: DraftInput = current ? {...current.data.input} : proposed ? { ...blankDraft(), model: initialModel, sourceOrderId: proposed.orderId, recipient: proposed.recipient, items: proposed.items.map(item => ({ ...blankItem(), code: item.code, description: item.description, additionalInfo: item.additionalInfo || null, unit: item.unit, ncm: item.ncm || "", quantity: item.quantity, unitPrice: item.unitPrice, grossTotal: item.grossTotal })), productsTotal: proposed.productsTotal } : { ...blankDraft(), model: initialModel }
+        // The preparation's weightKg (sum of the order lines) is newer than the generated contract type.
+        const suggestedWeight = (proposed as (Preparation & { weightKg?: string | null }) | undefined)?.weightKg
+        const prepared: DraftInput = current ? {...current.data.input} : proposed ? { ...blankDraft(), model: initialModel, sourceOrderId: proposed.orderId, recipient: proposed.recipient, items: proposed.items.map(item => ({ ...blankItem(), code: item.code, description: item.description, additionalInfo: item.additionalInfo || null, unit: item.unit, ncm: item.ncm || "", quantity: item.quantity, unitPrice: item.unitPrice, grossTotal: item.grossTotal })), productsTotal: proposed.productsTotal, ...(proposed.installments?.length ? { installments: proposed.installments } : {}), ...(proposed.payments?.length ? { payments: proposed.payments } : {}) } : { ...blankDraft(), model: initialModel }
+        const input: DraftInput = current ? prepared : applySuggestedWeight(prepared, suggestedWeight)
         if (!current) { input.environment = ready.environment; input.issuedAt = new Date().toISOString(); if (initialModel === 55) input.departureAt = input.issuedAt; input.presenceIndicator = initialModel === 65 ? 1 : 9 }
+        // Origin suggested by the preparation from each product's commercial line; items without it stay for manual choice.
+        if (!current && proposed) input.items = input.items.map((item, index) => { const origin = proposed.items[index]?.origin; return origin === 0 || origin === 1 ? { ...item, origin } : item })
         if (lotId && id) {
           const allocation:OrderLots=values[3]
           const lot=allocation?.lots.find(l=>l.id===lotId && l.draftId===id)
@@ -257,7 +268,7 @@ export function NfeDraftEditor({ id, sourceOrderId, lotId, lotEnvironment="produ
     {!loading && <>
       {!canEdit && !error && <p className="text-sm">Seu acesso permite somente consultar este rascunho.</p>}
       <nav aria-label="Etapas da nota fiscal" className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
-        {editorSteps.map((label, index) => <Button key={label} type="button" variant={step === index ? "default" : "outline"} className="h-auto min-h-11 justify-start whitespace-normal px-3 py-2 text-left" aria-current={step === index ? "step" : undefined} onClick={() => setStep(index)}>{index + 1}. {label}</Button>)}
+        {editorSteps.map((label, index) => <Button key={label} type="button" variant={step === index ? "default" : "outline"} className="h-auto min-h-9 justify-start whitespace-normal px-3 py-2 text-left" aria-current={step === index ? "step" : undefined} onClick={() => setStep(index)}>{index + 1}. {label}</Button>)}
       </nav>
       <p role="status" className="text-sm text-muted-foreground">Etapa {step + 1} de {editorSteps.length} · {editorSteps[step]}</p>
       <p className="text-sm text-muted-foreground">{stepDescriptions[step]}</p>
@@ -266,7 +277,7 @@ export function NfeDraftEditor({ id, sourceOrderId, lotId, lotEnvironment="produ
           <div hidden={step !== 0} data-editor-step="0" className="space-y-4">
           <section className="form-section grid gap-4 sm:grid-cols-2" aria-label="Operação fiscal">
             <NfeIdentificationFields draft={draft} change={patch => setDraft(previous => ({ ...previous, ...patch }))} profile={emissionHeader ? { ...(issuerProfile || snapshot?.data.issuer?.profile || readiness), series: emissionHeader.series } : issuerProfile || snapshot?.data.issuer?.profile || readiness} number={emissionHeader?.number} onImport={() => { if ((!dirty && !uncertain) || window.confirm("Sair desta preparação e abrir a importação de XML autorizado?")) router.push("/fiscal/notas-saida/importar") }} />
-            <div className="sm:col-span-2">{tenant && <OperationNaturePicker key={`nature-${tenant}`} tenant={tenant} value={draft.operationNature} onChange={operationNature=>setDraft(previous=>({...previous,operationNature}))} onApply={(nature,revision)=>setDraft(previous=>({...previous,operationNature:nature.name,taxRuleReference:`${nature.code} • revisão ${revision}`}))} />}</div>
+            <div className="sm:col-span-2">{tenant && <OperationNaturePicker key={`nature-${tenant}`} tenant={tenant} value={draft.operationNature} onChange={operationNature=>setDraft(previous=>({...previous,operationNature}))} onApply={(nature,revision)=>setDraft(previous=>applyNatureCfop({...previous,operationNature:nature.name,taxRuleReference:`${nature.code} • revisão ${revision}`},nature,(issuerProfile || snapshot?.data.issuer?.profile)?.state))} />}</div>
             <Field label="Ambiente do rascunho"><select disabled={!!lotId} aria-label="Ambiente do rascunho" className="h-10 w-full rounded-lg border bg-background px-3 text-sm" value={draft.environment} onChange={event => setDraft({ ...draft, environment: event.target.value as DraftInput["environment"] })}><option value="homologation">Homologação</option><option value="production">Produção</option></select></Field>
             {draft.model === 55 && <Field label="Finalidade fiscal"><select aria-label="Finalidade fiscal" disabled={draft.printType === 6 || !!draft.exportation || !!draft.sourceOrderId || draft.sourceReturnKind==="sale_partial_return"} className="h-10 w-full rounded-lg border bg-background px-3 text-sm" value={draft.purpose ?? 1} onChange={event => { const purpose = Number(event.target.value); setDraft({ ...draft, purpose, creditType: purpose === 5 ? draft.creditType || null : null, debitType: purpose === 6 ? draft.debitType || null : null, items: draft.items.map(item => ({ ...item, referencedDfe: null })), ...([5, 6].includes(purpose) ? { presenceIndicator: 0, referencedAccessKeys: [] } : {}), ...(purpose !== 4 ? { returnDirection: undefined, sourceReturnId: undefined, sourceReturnKind: undefined, ...(purpose === 1 ? { referencedAccessKeys: [] } : {}) } : {}) }) }}><option value={1}>1 · Normal</option><option value={2}>2: NF-e complementar</option><option value={3}>3: NF-e de ajuste</option><option value={4}>4: Devolução de mercadoria</option><option value={5}>5: Nota de crédito</option><option value={6}>6: Nota de débito</option></select></Field>}
             <Field label="Referência da instrução fiscal"><Input required maxLength={200} value={draft.taxRuleReference} onChange={event => setDraft({ ...draft, taxRuleReference: event.target.value })} /></Field>
@@ -363,7 +374,7 @@ export function NfeDraftEditor({ id, sourceOrderId, lotId, lotEnvironment="produ
           <div className="flex flex-wrap gap-3">
             {pendingAmounts && <p role="status" className="text-sm">Volte à etapa Produtos para aplicar ou descartar os totais digitados antes de salvar.</p>}
             {canEdit && <Button type="submit" disabled={!!allocationError || pendingAmounts || loading || saving || blocked || fiscalLocked || !profileReady || !!id && (!etag || uncertain) || !uncertain && !dirty}>{saving ? "Confirmando gravação…" : uncertain && !id ? "Confirmar mesma solicitação" : "Salvar rascunho"}</Button>}
-            {!id && <Button className="h-auto min-h-11 max-w-full whitespace-normal text-center" type="button" disabled>Transmitir {draft.model === 65 ? "NFC-e" : "NF-e"} à SEFAZ em {draft.environment === "production" ? "produção" : "homologação"}</Button>}
+            {!id && <Button className="h-auto min-h-9 max-w-full whitespace-normal text-center" type="button" disabled>Transmitir {draft.model === 65 ? "NFC-e" : "NF-e"} à SEFAZ em {draft.environment === "production" ? "produção" : "homologação"}</Button>}
             <Button type="button" variant="outline" disabled={saving || loading} onClick={refresh}>Recarregar dados do servidor</Button>
           </div>
           {!id && <p className="text-sm text-muted-foreground">Salve o rascunho para habilitar a transmissão à SEFAZ.</p>}

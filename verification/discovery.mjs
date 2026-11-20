@@ -94,34 +94,21 @@ function inspectTypeScript(ts, source, filename) {
 }
 
 export const contractFile = 'apps/api-ts/openapi.json';
-export const baselineFile = 'verification/ts-migration-baseline.json';
 
 // The API surface is the versioned OpenAPI contract generated from the routes the
 // TypeScript app registers (pnpm --filter api-ts openapi); its test fails on drift.
-// Operations of the former native backend that are not registered yet come from the
-// frozen migration baseline, flagged `legacy`, so ports shrink that list over time.
 async function apiRoutes(root, files) {
   const read = async file => {
     try { const text = await readFile(path.join(root, file), 'utf8'); files.push({ file, hash: hash(text) }); return JSON.parse(text); }
     catch (error) { if (error.code === 'ENOENT') return null; throw error; }
   };
-  const contract = await read(contractFile), baseline = await read(baselineFile);
-  const api = [], registered = new Set();
+  const contract = await read(contractFile);
+  const api = [];
   for (const [route, operations] of Object.entries(contract?.paths ?? {})) {
     const methods = Object.keys(operations).map(method => method.toUpperCase()).filter(method => verbs.has(method)).sort();
     if (!methods.length) continue;
-    for (const method of methods) registered.add(`${method} ${normalizedRoute(route)}`);
     api.push({ path: route, methods, file: contractFile, typescript: Object.fromEntries(methods.map(method => [method, { file: contractFile }])) });
   }
-  const pending = new Map();
-  for (const operation of baseline?.operations ?? []) {
-    if (!verbs.has(operation.method) || !operation.path?.startsWith('/')) throw Error('Invalid baseline operation: ' + operation.method + ' ' + operation.path);
-    if (registered.has(`${operation.method} ${normalizedRoute(operation.path)}`)) continue;
-    const entry = pending.get(operation.path) ?? { path: operation.path, methods: [], file: baselineFile, legacy: true };
-    entry.methods.push(operation.method);
-    pending.set(operation.path, entry);
-  }
-  api.push(...pending.values());
   return api;
 }
 

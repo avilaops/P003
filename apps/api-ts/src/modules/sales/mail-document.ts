@@ -9,7 +9,7 @@ type Fields = Record<string, unknown>
 const fields = (value: unknown): Fields => value && typeof value === "object" && !Array.isArray(value) ? value as Fields : {}
 const text = (value: unknown) => value == null ? "" : String(value).trim()
 const escape = (value: unknown) => text(value).replace(/[&<>"']/g, c => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" })[c]!)
-const asset = (path: string) => fileURLToPath(new URL("../../../../api/assets/" + path, import.meta.url))
+const asset = (path: string) => fileURLToPath(new URL("../../../assets/" + path, import.meta.url))
 const date = (value: unknown) => text(value).slice(0,10).replace(/^(\d{4})-(\d{2})-(\d{2})$/, "$3/$2/$1")
 const join = (v: Fields, keys: string[]) => keys.map(k => text(v[k])).filter(Boolean).join(", ")
 const addressFields = ["street","number","complement","district","city","state","postalCode"]
@@ -36,6 +36,26 @@ function weight(items: Fields[]) {
   }
   return decimal((sum / 1000000000000n) + "." + String(sum % 1000000000000n).padStart(12,"0")) + " kg"
 }
+function rounded(value: bigint, scale: bigint, digits: number) {
+  const unit = scale / 10n ** BigInt(digits)
+  const digitsText = ((value + unit / 2n) / unit).toString().padStart(digits + 1, "0")
+  return decimal(digitsText.slice(0, -digits) + "." + digitsText.slice(-digits))
+}
+// Floor area (length × width) and volume for freight quotes, from the frozen technical snapshot or the line's recorded dimensions.
+function freight(items: Fields[]) {
+  let area = 0n, volume = 0n
+  for (const item of items) {
+    const dims = fields(item.technical).dimensionsMm ?? item.equipmentDimensions
+    const valid = Array.isArray(dims) && dims.length === 3 && dims.every(n => Number.isInteger(n) && n > 0 && n <= 50000)
+    const m = /^(\d+)(?:[,.](\d{1,6}))?$/.exec(text(item.quantity))
+    const quantity = m ? BigInt(m[1]! + (m[2] ?? "").padEnd(6,"0")) : 0n
+    if (!valid || !quantity) return ["Incompleto • há equipamentos sem medidas válidas cadastradas."]
+    const [length, width, height] = (dims as number[]).map(n => BigInt(n)) as [bigint, bigint, bigint]
+    area += length * width * quantity
+    volume += length * width * height * quantity
+  }
+  return ["Área ocupada • " + rounded(area, 1000000000000n, 2) + " m²", "Volume • " + rounded(volume, 1000000000000000n, 3) + " m³"]
+}
 
 const stages: Record<string,string> = { draft:"Rascunho", sent:"Enviada", accepted:"Aceita", rejected:"Rejeitada", cancelled:"Cancelado", superseded:"Substituída", confirmed:"Confirmado", completed:"Concluído" }
 const finishLabels = { structureColor:"Estrutura", swingArmColor:"Braços", upholsteryColor:"Estofado", plateHolderColor:"Cor do anilheiro", plateHolderType:"Tipo de anilheiro" }
@@ -56,7 +76,7 @@ function technical(value: unknown) {
 type Section = { title: string; lines: string[] }
 type Document = {
   name: string; identity: string; company: string; issuer: string[]; logo: string; customer: string[]; dates: string;
-  items: Fields[]; total: string; weight?: string; sections: Section[]
+  items: Fields[]; total: string; weight?: string; freight?: string[]; sections: Section[]
 }
 const section = (title: string, ...lines: string[]): Section => ({ title, lines: lines.filter(Boolean) })
 
@@ -74,7 +94,7 @@ async function htmlDocument(d: Document) {
     block(section("Emitente",d.company,...d.issuer)) + block(section("Cliente",...d.customer)) + block(section("Identificação",d.dates)) +
     '<section class="commercial-section"><h2>Itens</h2><table class="commercial-document-table"><thead><tr><th>Produto</th><th>Acabamento</th><th class="numeric">Quantidade</th><th class="numeric">Unitário</th><th class="numeric">Total</th></tr></thead><tbody>' +
     rows + '</tbody></table></section><div class="commercial-document-total">Total • ' + escape(d.total) + "</div>" +
-    (d.weight ? block(section("Peso bruto total",d.weight)) : "") + d.sections.map(block).join("") +
+    (d.weight ? block(section("Peso bruto total",d.weight)) : "") + (d.freight?.length ? block(section("Dados para frete",...d.freight)) : "") + d.sections.map(block).join("") +
     '<footer class="commercial-document-footer">' + escape(d.identity) + " • Documento comercial • ERP Next</footer></article></body></html>"
 }
 
@@ -120,6 +140,7 @@ function commercialPdf(d: Document) {
   pdf.moveDown()
   group(section(d.weight ? "Total do pedido" : "Total da proposta",d.total))
   if (d.weight) group(section("Peso bruto total",d.weight))
+  if (d.freight?.length) group(section("Dados para frete",...d.freight))
   for (const s of d.sections) group(s)
   const pages = pdf.bufferedPageRange().count
   for (let i = 0; i < pages; i++) {
@@ -139,7 +160,9 @@ function proposalDocument(proposal: Awaited<ReturnType<typeof loadProposal>>, he
   const status = data.expired ? "Expirada" : data.status === "cancelled" ? "Cancelada" : stages[text(data.status)] ?? "Não informado"
   return { ...header, name:"Proposta comercial", identity:"Proposta " + data.number + " • Versão " + data.version + " • " + status,
     customer:[text(data.customerName),"CPF/CNPJ • " + text(data.customerTaxId)], dates:"Emissão • " + date(data.createdAt) + " • Validade • " + date(data.validUntil),
-    items, total:decimal(data.amount,true), sections:[section("Condições de pagamento",text(data.paymentTerms)),
+    items, total:decimal(data.amount,true),
+    freight:["Peso bruto total • " + weight(items.map(item => ({ ...item, equipmentWeight: fields(item.technical).weight }))), ...freight(items)],
+    sections:[section("Condições de pagamento",text(data.paymentTerms)),
       section("Condições de entrega",text(data.deliveryTerms)), section("Observações",text(data.notes))].filter(s => s.lines.length) }
 }
 
@@ -177,7 +200,7 @@ export async function salesMailDocument(context: AuthorizedContext, kind: "order
   }
   const number = "PV-" + data.number.replace(/^PV-/,"").padStart(6,"0")
   const d: Document = { ...header, name:"Pedido de venda", identity:number + " • Revisão " + data.revision + " • " + (data.status === "accepted" ? "Encomenda aceita" : stages[text(data.status)] ?? "Não informado"),
-    dates:"Vencimento • " + date(data.dueDate),customer:customerLines,items,total:decimal(data.amount,true),weight:weight(items),sections:sections.filter(s => s.lines.length) }
+    dates:"Vencimento • " + date(data.dueDate),customer:customerLines,items,total:decimal(data.amount,true),weight:weight(items),freight:freight(items),sections:sections.filter(s => s.lines.length) }
   const html = await htmlDocument(d)
   return { html, attachment:{ filename:"pedido-" + number + "-r" + data.revision + ".pdf",contentType:"application/pdf",content:await commercialPdf(d) } }
 }

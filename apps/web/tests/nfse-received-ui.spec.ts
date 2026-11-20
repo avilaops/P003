@@ -9,8 +9,8 @@ import { monitorOrigin as origin } from "../playwright.monitor.config"
 
 const documentId = "22222222-2222-4222-8222-222222222222"
 const otherTenant = "33333333-3333-4333-8333-333333333333"
-const xml = readFileSync(path.resolve("../api/src/http/fixtures/nfse-national.xml"), "utf8")
-const inspection = JSON.parse(readFileSync(path.resolve("../api/src/http/fixtures/nfse-national-inspection.json"), "utf8"))
+const xml = readFileSync(path.resolve("../fiscal-engine/tests/fixtures/http/nfse-national.xml"), "utf8")
+const inspection = JSON.parse(readFileSync(path.resolve("../fiscal-engine/tests/fixtures/http/nfse-national-inspection.json"), "utf8"))
 delete inspection.xml
 const document = { id: documentId, companyTaxId: "04252011000110", document: inspection, createdAt: "2026-11-03T10:00:00Z" }
 const requests: { url: string; method: string; tenant?: string; command?: string; body?: { xml: string } }[] = []

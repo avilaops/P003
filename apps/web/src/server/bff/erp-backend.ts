@@ -50,10 +50,10 @@ const routes: { module: MigratedModule; methods: readonly string[]; path: RegExp
   { module: "sales", methods: ["POST"], path: new RegExp(`^/commercial-contracts/${uuid}/prepare-signatures$`, "i") },
   { module: "sales", methods: ["GET", "POST"], path: new RegExp(`^/(?:orders|proposals)/${uuid}/email$`, "i") },
   { module: "preferences", methods: ["GET", "PUT"], path: /^\/preferences$/ },
-  { module: "registrations", methods: ["GET"], path: /^\/products\/finishes$/ },
-  { module: "registrations", methods: ["GET"], path: /^\/data-quality\/(?:party|product)\/(?:duplicates|completeness)$/ },
-  { module: "registrations", methods: ["POST"], path: /^\/data-quality\/merge$/ },
-  { module: "registrations", methods: ["GET"], path: new RegExp(`^/history/(?:party|product|product-categories|product-groups|tag-groups|tags|financial-categories|financial-accounts|payment-methods|warehouses)/${uuid}$`, "i") },
+  { module: "registrations", methods: ["GET"], path: /^\/products\/(?:finishes|catalog-pending)$/ },
+  { module: "registrations", methods: ["GET", "PUT"], path: new RegExp(`^/products/${uuid}/catalog$`, "i") },
+  { module: "registrations", methods: ["GET"], path: new RegExp(`^/products/${uuid}/media/${uuid}$`, "i") },
+  { module: "registrations", methods: ["GET", "POST"], path: /^\/catalog-publication$/ },
   { module: "registrations", methods: ["GET", "POST"], path: /^\/(?:parties|products|product-categories|product-groups|tag-groups|tags)$/ },
   { module: "registrations", methods: ["GET", "PUT"], path: new RegExp(`^/(?:parties|products|product-categories|product-groups|tag-groups|tags)/${uuid}$`, "i") },
   { module: "registrations", methods: ["GET", "PUT"], path: /^\/registration-settings\/(?:products|parties|contact-types|tax-profiles)$/ },
@@ -85,6 +85,12 @@ const routes: { module: MigratedModule; methods: readonly string[]; path: RegExp
   { module: "reports", methods: ["GET"], path: /^\/dashboard$/ },
   { module: "reports", methods: ["GET", "POST"], path: /^\/system\/custom-reports$/ },
   { module: "reports", methods: ["PUT"], path: new RegExp(`^/system/custom-reports/${uuid}$`, "i") },
+  { module: "reports", methods: ["GET"], path: /^\/reports\/sources$/ },
+  { module: "reports", methods: ["POST"], path: /^\/reports\/preview$/ },
+  { module: "reports", methods: ["GET"], path: new RegExp(`^/reports/definitions/${uuid}/run$`, "i") },
+  { module: "reports", methods: ["GET", "POST"], path: new RegExp(`^/reports/definitions/${uuid}/schedules$`, "i") },
+  { module: "reports", methods: ["PUT"], path: new RegExp(`^/reports/schedules/${uuid}$`, "i") },
+  { module: "reports", methods: ["GET"], path: new RegExp(`^/reports/runs/${uuid}/file$`, "i") },
 ]
 export function typescriptOrigin(environment: BackendEnvironment) {
   if (!environment.ERP_TYPESCRIPT_API_URL) throw Error("API TypeScript não configurada para o módulo ativo")

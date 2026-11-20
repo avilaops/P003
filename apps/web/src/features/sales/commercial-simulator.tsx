@@ -285,7 +285,7 @@ function Simulator({ transfer, table: initialTable, initialSourceLine, initialPr
           return
         }
         const selected = await customerForm.current?.save()
-        if (!selected) return
+        if (!selected) { setError("O cliente não foi salvo, por isso o pedido não foi criado. Veja o motivo no bloco Cliente."); focusOrderSection("customer"); return }
         const value = await command.send<{ tenantId: string; id: string }>((orderMode ? "/api/erp/commercial/mixed/orders" : "/api/erp/commercial/orders"), table.tenantId, { ...pendingOrder.current, customerId: selected.id, ...(opportunity ? { opportunityId: opportunity.id, opportunityRevision: opportunity.revision } : {}) }, "", "POST", reply => reply?.tenantId === table.tenantId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(reply.id))
         if (value?.tenantId === table.tenantId && value.id) { setDirty(false); router.push(`/vendas/pedidos/${value.id}`) }
       } finally { converting.current = false; setSavingOrder(false) }
@@ -329,7 +329,7 @@ function Simulator({ transfer, table: initialTable, initialSourceLine, initialPr
     } catch (reason) { setError(reason instanceof Error ? reason.message : "Não foi possível atualizar a tabela.") }
     finally { setReloading(false) }
   }
-  if (!table.data) return <section className="form-section space-y-3">{orderMode && lineControl}<p>Nenhuma tabela publicada nesta linha.</p>{table.canManage ? <Link className="inline-flex min-h-11 items-center text-primary underline" href={`/preferencias/tabela-precos?linha=${table.line}`}>Publicar tabela de preços</Link> : <p className="text-sm text-muted-foreground">Peça à gestão para publicar a tabela desta linha.</p>}</section>
+  if (!table.data) return <section className="form-section space-y-3">{orderMode && lineControl}<p>Nenhuma tabela publicada nesta linha.</p>{table.canManage ? <Link className="inline-flex min-h-9 items-center text-primary underline" href={`/preferencias/tabela-precos?linha=${table.line}`}>Publicar tabela de preços</Link> : <p className="text-sm text-muted-foreground">Peça à gestão para publicar a tabela desta linha.</p>}</section>
   if (orderMode) {
     const sale = result?.value.sale || null
     const quantityTotal = items.every(item => validOrderQuantity(item.quantity)) ? items.reduce((total, item) => total + Number(item.quantity), 0) : null
@@ -384,7 +384,7 @@ function Simulator({ transfer, table: initialTable, initialSourceLine, initialPr
               onUpdateMany={updates => { if (frozen) return; const byId = new Map(updates.map(item => [item.productId, item])); setItems(current => current.map(item => byId.get(item.productId) || item)); change() }}
             /> : <div className="order-equipment-empty"><p>Nenhum equipamento ainda.</p><Button type="button" variant="outline" disabled={frozen} onClick={focusSearch}>Adicionar equipamento</Button></div>}
             {attempted && orderIssues.filter(issue => issue.section === "equipment").map(issue => <p key={issue.field} className="text-xs text-destructive">{issue.message}</p>)}
-            <OrderWeightSummary tenantId={table.tenantId} loading={!!productDetails.loadingIds.length} unavailable={!!Object.keys(productDetails.errors).length} onRetry={() => productDetails.retry()} items={items.map(item => ({ ...item, equipmentWeight: productDetails.products[item.productId.toLowerCase()]?.weight ?? null, quantity: validOrderQuantity(item.quantity) ? String(Number(item.quantity)) : "" }))} />
+            <OrderWeightSummary tenantId={table.tenantId} loading={!!productDetails.loadingIds.length} unavailable={!!Object.keys(productDetails.errors).length} onRetry={() => productDetails.retry()} items={items.map(item => ({ ...item, equipmentWeight: productDetails.products[item.productId.toLowerCase()]?.weight ?? null, equipmentDimensions: productDetails.products[item.productId.toLowerCase()]?.dimensionsMm ?? null, quantity: validOrderQuantity(item.quantity) ? String(Number(item.quantity)) : "" }))} />
           </OrderSection>}
           customer={<OrderCustomerForm initialCustomerId={transfer?.input.customerId || opportunity?.customerId || undefined} ref={customerForm} tenantId={table.tenantId} disabled={frozen}
             canManage={canCreate && canManageCustomer} onDirty={markDirty}
@@ -423,12 +423,12 @@ function Simulator({ transfer, table: initialTable, initialSourceLine, initialPr
   }
   return <div data-simulation-dirty={dirty} className="space-y-4 [--workspace-control-height:44px] sm:[--workspace-control-height:36px]">
     <div className="sticky top-[52px] z-20 space-y-1 border-y bg-background py-1 lg:top-16">
-      <div className="flex min-w-0 items-center justify-between gap-2">
+      <div className="flex min-w-0 flex-wrap items-center justify-between gap-x-2 gap-y-1">
         {(error || command.error) ? <p role="alert" className="min-w-0 text-xs sm:text-sm"><RequestError message={error || command.error} status={command.status || undefined} /></p> : <p role="status" className="min-w-0 text-xs text-muted-foreground sm:text-sm">Tabela v{table.data.version} · {result ? "Calculada" : busy ? "Calculando…" : everCalculated ? "Atualizando condições" : "Simulação não salva"}</p>}
-        <div className="flex shrink-0 gap-2"><Button type="button" variant="outline" disabled={frozen || !items.length || quoteStale} onClick={()=>{try {simulationInput();const details=document.getElementById("simulator-customer")?.closest("details");if(details)details.open=true;setQuoteRetry(value=>value+1);jumpTo("result")} catch (reason) {setError(reason instanceof Error?reason.message:"Confira a seleção.");jumpTo("equipment")}}}>{busy?"Calculando…":"Simular"}</Button>{canCreate && <Button type="button" disabled={!result || frozen || quoteStale} onClick={continueOrder}>Continuar no novo pedido</Button>}</div>
+        <div className="ml-auto flex min-w-0 flex-wrap justify-end gap-2"><Button type="button" variant="outline" disabled={frozen || !items.length || quoteStale} onClick={()=>{try {simulationInput();const details=document.getElementById("simulator-customer")?.closest("details");if(details)details.open=true;setQuoteRetry(value=>value+1);jumpTo("result")} catch (reason) {setError(reason instanceof Error?reason.message:"Confira a seleção.");jumpTo("equipment")}}}>{busy?"Calculando…":"Simular"}</Button>{canCreate && <Button type="button" disabled={!result || frozen || quoteStale} onClick={continueOrder}>Continuar no novo pedido</Button>}</div>
       </div>
       <nav aria-label="Etapas da simulação" className={`grid ${canCreate?"grid-cols-4":"grid-cols-3"} gap-1 text-xs sm:text-sm`}>
-        {[["equipment", "Equipamentos"], ["conditions", "Condições"], ["result", "Resultado"], ...(canCreate?[["customer","Cliente"]]:[])].map(([id, label]) => <a key={id} href={`#simulator-${id}`} className="flex min-h-11 min-w-0 items-center justify-center rounded-md px-1 font-medium hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring sm:min-h-9" onClick={event => { event.preventDefault(); jumpTo(id) }}>{label}</a>)}
+        {[["equipment", "Equipamentos"], ["conditions", "Condições"], ["result", "Resultado"], ...(canCreate?[["customer","Cliente"]]:[])].map(([id, label]) => <a key={id} href={`#simulator-${id}`} className="flex min-h-9 min-w-0 items-center justify-center rounded-md px-1 font-medium hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring sm:min-h-9" onClick={event => { event.preventDefault(); jumpTo(id) }}>{label}</a>)}
       </nav>
     </div>
     <div className="grid min-w-0 items-start gap-4 lg:grid-cols-[minmax(0,1.65fr)_minmax(0,1fr)] lg:gap-5">
@@ -472,7 +472,7 @@ function Simulator({ transfer, table: initialTable, initialSourceLine, initialPr
         {table.paymentMethods !== undefined ? <CommercialCheckout ref={checkout} tenantId={table.tenantId} customerId={customer?.id} methods={table.paymentMethods} totalCents={paymentTotal} entryCents={paymentEntry} entryRaw={downPayment} onEntryChange={raw => { setDownPayment(raw); change() }} dueDate={dueDate} onDueDateChange={date => { setDueDate(date); setDirty(true) }} onDirty={() => { setDirty(true); setError("") }} disabled={frozen} /> : <label className="grid min-w-0 gap-1 sm:gap-2">Vencimento da conta a receber<Input type="date" disabled={frozen} value={dueDate} onChange={e => { setDueDate(e.target.value); setDirty(true) }} /></label>}
         {result && <>
           {(!customer || !dueDate) && <p className="text-xs text-muted-foreground">Selecione o cliente e informe o vencimento para criar o pedido.</p>}
-          <Button className="h-auto min-h-11 max-w-full whitespace-normal" disabled={!customer || !dueDate || busy || reloading || command.busy || command.stale} onClick={convert}>{command.uncertain ? "Conferir criação com o mesmo comando" : "Criar pedido com estas condições"}</Button>
+          <Button className="h-auto min-h-9 max-w-full whitespace-normal" disabled={!customer || !dueDate || busy || reloading || command.busy || command.stale} onClick={convert}>{command.uncertain ? "Conferir criação com o mesmo comando" : "Criar pedido com estas condições"}</Button>
           <p className="text-xs text-muted-foreground">{table.paymentMethods !== undefined ? "Depois de criar, aceite a encomenda para gerar as parcelas. Reserve os produtos quando houver estoque disponível." : "O pedido recebe um número. A confirmação seguinte reserva o estoque."}</p>
         </>}
       </details>}
@@ -496,6 +496,8 @@ function SelectedProductContent({ item, name, sku, tenant, update, remove, order
   const colors = product.value?.tenantId === tenant ? product.value.data : null
   const palette = catalogPaletteFor(item.line === "national" ? null : colors?.finishingPalette)
   const selectedFinishes = [item.structureColor, item.swingArmColor, item.upholsteryColor, item.plateHolderType].filter(Boolean).join(" · ")
+  // National items only offer the plate holder; without registered types there is nothing to choose.
+  const hasFinishes = item.line !== "national" || Boolean(colors?.plateHolderTypes?.length || item.plateHolderType)
   return <>
     <tr>
       <th scope="row" className="min-w-0 break-words py-3 pr-2 text-left align-top font-medium"><span className="block text-xs text-muted-foreground">{sku}</span>{name}</th>
@@ -506,7 +508,7 @@ function SelectedProductContent({ item, name, sku, tenant, update, remove, order
     <tr className="border-b last:border-0"><td colSpan={orderMode ? 6 : 3} className="min-w-0 pb-3">
       {product.error && <div className={orderMode ? "flex flex-wrap items-center gap-2 text-xs" : "space-y-2 rounded-lg border p-2 text-xs"}><p role="alert">{orderMode ? "Acabamentos indisponíveis" : <RequestError message={product.error} status={product.status} />}</p><Button type="button" variant="outline" disabled={product.loading} aria-label={`Recarregar acabamentos de ${name}`} onClick={product.reload}>{product.loading ? "Carregando acabamentos…" : orderMode ? "Tentar de novo" : "Recarregar acabamentos"}</Button></div>}
       {orderMode && product.loading && <p role="status" className="text-xs text-muted-foreground">Carregando acabamentos…</p>}
-      {(!orderMode || !!colors && !product.error) && <details className="group min-w-0" onInvalidCapture={event => { event.currentTarget.open = true }}>
+      {(!orderMode || !!colors && !product.error) && hasFinishes && <details className="group min-w-0" onInvalidCapture={event => { event.currentTarget.open = true }}>
         <summary className="min-h-10 cursor-pointer rounded-md py-2 text-sm font-medium focus-visible:outline-2 focus-visible:outline-ring">Acabamentos<span className="sr-only"> de {name}</span><span className="ml-2 text-xs font-normal text-muted-foreground group-open:hidden">{selectedFinishes || (item.line === "national" ? "Tipo de anilheiro" : "Escolher cores")}</span></summary>
         <fieldset disabled={disabled} className="grid min-w-0 gap-4 pt-3 sm:grid-cols-2">
           {orderColorParts.map(color=>{
@@ -514,7 +516,7 @@ function SelectedProductContent({ item, name, sku, tenant, update, remove, order
             if(item.line === "national" || !options.length&&!item[color.field])return null
             return <FinishChoice key={color.field} title={color.title} part={color.part} palette={palette} label={color.label+" de "+name} options={options} value={item[color.field]} onChange={value=>update({...item,[color.field]:value})}/>
           })}
-          <PlateHolderChoice label={`Tipo de anilheiro de ${name}`} value={item.plateHolderType} onChange={value=>update({...item,plateHolderType:value})}/>
+          <PlateHolderChoice label={`Tipo de anilheiro de ${name}`} options={colors?.plateHolderTypes} value={item.plateHolderType} onChange={value=>update({...item,plateHolderType:value})}/>
           <div className="sm:col-span-2"><CatalogPaletteReference palette={palette} /></div>
         </fieldset>
       </details>}

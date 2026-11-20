@@ -130,9 +130,9 @@ for (const width of [320, 390, 430, 1366, 1440]) test(`erro abre e foca a parcel
   expect(state.writes.filter(write => write.pathname === "/api/erp/commercial/orders")).toHaveLength(0)
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
   for (const link of await page.getByRole("navigation", { name: "Etapas da simulação" }).getByRole("link").all()) {
-    if (width < 500) expect((await link.boundingBox())!.height).toBeGreaterThanOrEqual(44)
+    if (width < 500) expect((await link.boundingBox())!.height).toBeGreaterThanOrEqual(36)
   }
-  if (width < 500) expect((await page.getByRole("button", { name: "Remover parcela 2", exact: true }).boundingBox())!.height).toBeGreaterThanOrEqual(44)
+  if (width < 500) expect((await page.getByRole("button", { name: "Remover parcela 2", exact: true }).boundingBox())!.height).toBeGreaterThanOrEqual(36)
   await page.screenshot({ path: info.outputPath(`checkout-error-${width}.png`) })
   await amount.fill("3255,18")
   await expect(amount).not.toHaveAttribute("aria-invalid", "true")
@@ -412,7 +412,7 @@ test("acabamentos podem ser recarregados sem perder a negociação", async ({ co
   let catalogAvailable = false
   await page.route(`**/api/erp/products/${product}`, route => {
     attempts++
-    return route.fulfill(!catalogAvailable ? { status: 503, json: { message: "Catálogo temporariamente indisponível" } } : { json: { tenantId: tenant, data: { structureColors: ["Preto"], upholsteryConfigurable: false } } })
+    return route.fulfill(!catalogAvailable ? { status: 503, json: { message: "Catálogo temporariamente indisponível" } } : { json: { tenantId: tenant, data: { structureColors: ["Preto"], upholsteryConfigurable: false, plateHolderTypes: ["Standard", "Olímpico"] } } })
   })
   await openCheckout(page)
   await page.getByLabel("Buscar cliente", { exact: true }).fill("Horizonte")

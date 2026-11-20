@@ -76,7 +76,7 @@ export function TaxProfilePicker({
       <label className="grid gap-2 text-sm">
         Perfil cadastrado
         <select
-          className="min-h-11 w-full min-w-0 max-w-full rounded-lg border bg-background px-3"
+          className="min-h-9 w-full min-w-0 max-w-full rounded-lg border bg-background px-3"
           value={selected}
           disabled={loading}
           onChange={(event) => {

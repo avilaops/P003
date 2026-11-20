@@ -24,13 +24,17 @@ import { runMigrations } from "../../src/platform/migrations.js"
 export const databaseTestOptions = { skip: process.env.API_TS_TEST_ADMIN_URL ? false : "defina API_TS_TEST_ADMIN_URL (PostgreSQL local descartável)" }
 
 /** `user` tem as permissões pedidas; `denied` é membro sem permissão; `outsider` só pertence à outra empresa; `anonymous` não envia token. */
-export type Persona = "user" | "denied" | "outsider" | "anonymous"
+export type Persona = "user" | "denied" | "outsider" | "anonymous" | (string & {})
 
 export type TestContextOptions = {
   /** Permissões do papel de `user` (códigos da tabela `permissions`). */
   permissions?: string[]
-  /** Dependências extras repassadas ao `buildApp` (fiscalOperations, documentCopies, etc.). */
-  dependencies?: Partial<AppDependencies>
+  /** Dependências extras repassadas ao `buildApp` (fiscalOperations, documentCopies, etc.). Use a função quando precisar dos IDs das empresas. */
+  dependencies?: Partial<AppDependencies> | ((ids: { tenant: string; otherTenant: string }) => Partial<AppDependencies>)
+  /** Membros adicionais da empresa do contexto: `{ seller: [permissões] }`. O token do `Authorization` é o próprio nome. */
+  members?: Record<string, string[]>
+  /** Identidades sem vínculo com nenhuma empresa (autenticadas, mas sem acesso). */
+  identitiesWithoutCompany?: string[]
 }
 
 export type RequestOptions = {
@@ -47,7 +51,7 @@ export type RequestOptions = {
 
 export type TestClient = ReturnType<typeof makeClient>
 
-const personas: Record<Exclude<Persona, "anonymous">, { code: string; name: string }> = {
+const personas: Record<string, { code: string; name: string }> = {
   user: { code: "user", name: "Usuário de teste" },
   denied: { code: "denied", name: "Sem permissão" },
   outsider: { code: "outsider", name: "Outra empresa" },
@@ -63,12 +67,16 @@ export async function createTestContext(options: TestContextOptions = {}) {
   const admin = new Pool({ connectionString: adminUrl })
   origin.pathname = "/" + database
   const seed = new Pool({ connectionString: origin.href }), runtime = new Pool({ connectionString: origin.href })
+  const tenant = randomUUID(), otherTenant = randomUUID()
+  const extra = options.dependencies
+  const known = new Set<string>([...Object.keys(personas), ...Object.keys(options.members ?? {}), ...(options.identitiesWithoutCompany ?? [])])
+  for (const name of known) assert.ok(name !== "anonymous", "`anonymous` é reservado para chamadas sem token")
   const app = buildApp({
-    ...options.dependencies,
+    ...(typeof extra === "function" ? extra({ tenant, otherTenant }) : extra),
     userinfoUrl: "http://auth.test/userinfo",
     fetchAuth: async (_url, init) => {
       const token = new Headers(init?.headers).get("authorization")?.replace(/^Bearer /, "") ?? ""
-      if (!(token in personas)) return new Response(null, { status: 401 })
+      if (!known.has(token)) return new Response(null, { status: 401 })
       return Response.json({ sub: token, email: `${token}@example.test` })
     },
     pool: { async connect() { const client = await runtime.connect(); await client.query(`SET ROLE ${role}`); return new PgClientAdapter(client) } },
@@ -92,12 +100,19 @@ export async function createTestContext(options: TestContextOptions = {}) {
       ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT,INSERT,UPDATE ON TABLES TO ${role};
       ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT USAGE ON SEQUENCES TO ${role};
       GRANT SELECT,INSERT,UPDATE ON ALL TABLES IN SCHEMA public TO ${role};
-      GRANT USAGE ON ALL SEQUENCES IN SCHEMA public TO ${role}`)
+      GRANT USAGE ON ALL SEQUENCES IN SCHEMA public TO ${role};
+      GRANT USAGE ON SCHEMA system_config TO ${role};
+      GRANT SELECT ON ALL TABLES IN SCHEMA system_config TO ${role};
+      GRANT EXECUTE ON FUNCTION system_config.has_permission(text) TO ${role}`)
 
-    const tenant = randomUUID(), otherTenant = randomUUID()
     await seed.query("INSERT INTO tenants(id,legal_name,tax_id) VALUES($1,'Empresa A','04252011000110'),($2,'Empresa B','52998224725')", [tenant, otherTenant])
     const roles: Record<string, string> = {}
-    for (const [key, persona] of Object.entries(personas)) {
+    const people: Record<string, { code: string; name: string }> = { ...personas }
+    for (const name of Object.keys(options.members ?? {})) {
+      assert.ok(!(name in personas), `Nome reservado pelo helper: ${name}`)
+      people[name] = { code: name, name }
+    }
+    for (const [key, persona] of Object.entries(people)) {
       const home = key === "outsider" ? otherTenant : tenant
       const identity = randomUUID(), membership = randomUUID(), roleId = randomUUID()
       await seed.query("INSERT INTO identities(id,auth_subject,email,display_name) VALUES($1,$2,$3,$4)", [identity, persona.code, `${persona.code}@example.test`, persona.name])
@@ -109,6 +124,7 @@ export async function createTestContext(options: TestContextOptions = {}) {
 
     /** Concede permissões a um papel (falha com mensagem clara se o código não existir). */
     const grant = async (persona: Exclude<Persona, "anonymous">, ...permissions: string[]) => {
+      assert.ok(persona in roles, `Persona desconhecida: ${persona}`)
       for (const code of permissions) {
         const known = await seed.query("SELECT 1 FROM permissions WHERE code=$1", [code])
         assert.equal(known.rowCount, 1, `Permissão desconhecida: ${code}`)
@@ -116,6 +132,9 @@ export async function createTestContext(options: TestContextOptions = {}) {
       }
     }
     await grant("user", ...(options.permissions ?? []))
+    for (const [name, codes] of Object.entries(options.members ?? {})) await grant(name, ...codes)
+    for (const name of options.identitiesWithoutCompany ?? [])
+      await seed.query("INSERT INTO identities(auth_subject,email,display_name) VALUES($1,$2,$1)", [name, `${name}@example.test`])
     // `outsider` tem todas as permissões na empresa B: prova que o isolamento é por empresa, não por papel.
     const everything = await seed.query("SELECT code FROM permissions")
     await grant("outsider", ...everything.rows.map(row => row.code as string))
