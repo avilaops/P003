@@ -11,8 +11,7 @@ export const desktopMenus = [
   {
     label: "Cadastros",
     columns: [
-      { title: "", items: [{ label: "Visão geral", href: "/cadastros" }, { label: "Produtos", href: "/cadastros/produtos" }, { label: "Clientes e fornecedores", href: "/cadastros/clientes-fornecedores" }, { label: "Funcionários", href: "/cadastros/funcionarios" }] },
-      { title: "Ferramentas", items: [{ label: "Contas financeiras", href: "/cadastros/contas-financeiras" }, { label: "Categorias financeiras", href: "/cadastros/categorias-financeiras" }, { label: "Categorias de produtos", href: "/cadastros/categorias-produtos" }, { label: "Listas de preços", href: "/cadastros/listas-precos" }, { label: "Formas de pagamento", href: "/cadastros/formas-pagamento" }, { label: "Grupos de produtos", href: "/cadastros/grupos-produtos" }, { label: "Grupos de tags", href: "/cadastros/grupos-tags" }, { label: "Tags", href: "/cadastros/tags" }] },
+      { title: "", items: [{ label: "Meu negócio", href: "/cadastros" }, { label: "Clientes e fornecedores", href: "/cadastros/clientes-fornecedores" }, { label: "Produtos", href: "/cadastros/produtos" }, { label: "Categorias de produtos", href: "/cadastros/categorias-produtos" }, { label: "Listas de preços", href: "/cadastros/listas-precos" }, { label: "Funcionários", href: "/cadastros/funcionarios" }, { label: "Contas financeiras", href: "/cadastros/contas-financeiras" }, { label: "Categorias financeiras", href: "/cadastros/categorias-financeiras" }, { label: "Formas de pagamento", href: "/cadastros/formas-pagamento" }, { label: "Condições de pagamento", href: "/cadastros/condicoes-pagamento" }, { label: "Grupos de tags", href: "/cadastros/grupos-tags" }, { label: "Tags", href: "/cadastros/tags" }, { label: "Grupos de produtos", href: "/cadastros/grupos-produtos" }, { label: "Duplicados e qualidade", href: "/cadastros/duplicados" }] },
     ],
   },
   {

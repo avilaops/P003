@@ -14,7 +14,8 @@ export function PaymentTermPicker({tenant,customer,total,disabled,apply}:{tenant
  const terms=catalog.value?.tenantId===tenant?catalog.value.terms.filter(t=>t.active):[]
  const selected=terms.find(t=>t.id===(chosen||catalog.value?.defaultTermId))
  if(!terms.length) return null
- return <div className="flex flex-wrap items-end gap-2"><label className="grid gap-1">Condição de pagamento<select className="min-h-10 rounded border bg-background px-2" disabled={disabled||busy} value={selected?.id??""} onChange={e=>setChosen(e.target.value)}><option value="">Selecione</option>{terms.map(t=><option value={t.id} key={t.id}>{t.name}{t.id===catalog.value?.defaultTermId?" • padrão do cliente":""}</option>)}</select></label>
+ const origin=customer&&catalog.value?.tenantId===tenant?[catalog.value.defaultTermId&&selected?.id===catalog.value.defaultTermId?`condição ${selected.name}`:"",catalog.value.defaultSeller?`vendedor ${catalog.value.defaultSeller.name}`:"",catalog.value.region?`região ${catalog.value.region}`:""].filter(Boolean):[]
+ return <div className="flex flex-wrap items-end gap-2">{origin.length>0&&<p role="status" className="w-full text-sm text-muted-foreground">Origem: cadastro comercial do cliente • {origin.join(" • ")}</p>}<label className="grid gap-1">Condição de pagamento<select className="min-h-10 rounded border bg-background px-2" disabled={disabled||busy} value={selected?.id??""} onChange={e=>setChosen(e.target.value)}><option value="">Selecione</option>{terms.map(t=><option value={t.id} key={t.id}>{t.name}{t.id===catalog.value?.defaultTermId?" • padrão do cliente":""}</option>)}</select></label>
  <Button type="button" variant="outline" disabled={disabled||busy||!selected||!total} onClick={async()=>{
   if(!selected||!total)return
   setBusy(true);setError("")

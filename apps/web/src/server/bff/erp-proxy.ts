@@ -91,6 +91,8 @@ export async function forwardErp(request: Request, resource: string) {
   const serviceKeyResource = /^\/integrations\/service-keys(?:\/[a-f0-9-]{36})?$/i.test(resource)
   const productCatalogResource = /^\/products\/[a-f0-9-]{36}\/catalog$/i.test(resource) && ["GET", "PUT"].includes(request.method)
   const productFinishesResource = resource === "/products/finishes"
+  const historyResource = request.method === "GET" && /^\/history\/(?:party|product|product-categories|product-groups|tag-groups|tags|financial-categories|financial-accounts|payment-methods|warehouses)\/[a-f0-9-]{36}$/i.test(resource)
+  const dataQualityResource = /^\/data-quality\/(?:(?:party|product)\/(?:duplicates|completeness)|merge)$/.test(resource) && request.method === (resource === "/data-quality/merge" ? "POST" : "GET")
   if (productFinishesResource && request.method !== "GET") return Response.json({ title: "Método inválido" }, { status: 405 })
   const financialEmailResource = resource === "/financial-report/email" || /^\/(?:receivables|financial-payables|commercial-contracts)\/[a-f0-9-]{36}\/email$/i.test(resource)
   const packageEmailResource = ["GET", "POST"].includes(request.method) && /^\/commercial-contracts\/[a-f0-9-]{36}\/send-package$/i.test(resource)

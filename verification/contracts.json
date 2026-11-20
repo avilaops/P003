@@ -40831,6 +40831,355 @@
           "response"
         ]
       }
+    },
+    {
+      "id": "get-api-v1-data-quality-entity-duplicates",
+      "flow": "parties",
+      "status": "implemented",
+      "operation": {
+        "method": "GET",
+        "path": "/api/v1/data-quality/{entity}/duplicates"
+      },
+      "actor": "active_tenant_member",
+      "permissions": [
+        "catalog.parties.read",
+        "catalog.products.read"
+      ],
+      "input": {
+        "headers": [
+          "Authorization",
+          "X-Tenant-Id"
+        ],
+        "pathParameters": [
+          "entity"
+        ],
+        "body": null,
+        "query": null
+      },
+      "preconditions": [
+        "Sem identidade/empresa/permissão: recusar antes de efeitos de domínio."
+      ],
+      "transition": {
+        "from": "estado atual",
+        "to": "sem alteração de estado"
+      },
+      "effects": {
+        "writes": [],
+        "external": [],
+        "excludes": [
+          "Consulta não executa comando de escrita."
+        ]
+      },
+      "concurrency": {
+        "revision": false,
+        "idempotency": false,
+        "rule": "Consulta limitada ao escopo autorizado."
+      },
+      "response": {
+        "successStatuses": [
+          200
+        ],
+        "errorStatuses": [
+          401,
+          403,
+          422,
+          500
+        ],
+        "action": "Listar prováveis duplicados"
+      },
+      "recovery": "Repetir a consulta.",
+      "ui": {
+        "pages": [
+          "/cadastros/duplicados"
+        ],
+        "bff": {
+          "method": "GET",
+          "path": "/api/erp/data-quality/[entity]/duplicates"
+        },
+        "gap": null
+      },
+      "sources": [
+        "apps/api-ts/src/modules/data-quality/routes.ts"
+      ],
+      "verification": {
+        "status": "not_verified_by_catalog",
+        "criteria": [
+          "interface",
+          "request",
+          "authorization",
+          "domain",
+          "persistence",
+          "effects",
+          "failure",
+          "response"
+        ]
+      }
+    },
+    {
+      "id": "get-api-v1-data-quality-entity-completeness",
+      "flow": "parties",
+      "status": "implemented",
+      "operation": {
+        "method": "GET",
+        "path": "/api/v1/data-quality/{entity}/completeness"
+      },
+      "actor": "active_tenant_member",
+      "permissions": [
+        "catalog.parties.read",
+        "catalog.products.read"
+      ],
+      "input": {
+        "headers": [
+          "Authorization",
+          "X-Tenant-Id"
+        ],
+        "pathParameters": [
+          "entity"
+        ],
+        "body": null,
+        "query": null
+      },
+      "preconditions": [
+        "Sem identidade/empresa/permissão: recusar antes de efeitos de domínio."
+      ],
+      "transition": {
+        "from": "estado atual",
+        "to": "sem alteração de estado"
+      },
+      "effects": {
+        "writes": [],
+        "external": [],
+        "excludes": [
+          "Consulta não executa comando de escrita."
+        ]
+      },
+      "concurrency": {
+        "revision": false,
+        "idempotency": false,
+        "rule": "Consulta limitada ao escopo autorizado."
+      },
+      "response": {
+        "successStatuses": [
+          200
+        ],
+        "errorStatuses": [
+          401,
+          403,
+          422,
+          500
+        ],
+        "action": "Consultar completude cadastral"
+      },
+      "recovery": "Repetir a consulta.",
+      "ui": {
+        "pages": [
+          "/cadastros/duplicados"
+        ],
+        "bff": {
+          "method": "GET",
+          "path": "/api/erp/data-quality/[entity]/completeness"
+        },
+        "gap": null
+      },
+      "sources": [
+        "apps/api-ts/src/modules/data-quality/routes.ts"
+      ],
+      "verification": {
+        "status": "not_verified_by_catalog",
+        "criteria": [
+          "interface",
+          "request",
+          "authorization",
+          "domain",
+          "persistence",
+          "effects",
+          "failure",
+          "response"
+        ]
+      }
+    },
+    {
+      "id": "post-api-v1-data-quality-merge",
+      "flow": "parties",
+      "status": "implemented",
+      "operation": {
+        "method": "POST",
+        "path": "/api/v1/data-quality/merge"
+      },
+      "actor": "active_tenant_member",
+      "permissions": [
+        "catalog.parties.manage",
+        "catalog.products.manage"
+      ],
+      "input": {
+        "headers": [
+          "Authorization",
+          "X-Tenant-Id",
+          "Idempotency-Key"
+        ],
+        "pathParameters": [],
+        "body": {
+          "type": "mergeSchema",
+          "source": "apps/api-ts/src/modules/data-quality/routes.ts"
+        },
+        "query": null
+      },
+      "preconditions": [
+        "Sem identidade/empresa/permissão: recusar antes de efeitos de domínio.",
+        "UUID de idempotência obrigatório; repetir a mesma intenção/chave, sem gerar novo comando.",
+        "As revisões informadas dos dois registros devem estar vigentes (412)."
+      ],
+      "transition": {
+        "from": "dois registros ativos",
+        "to": "secundário arquivado e vínculos no principal"
+      },
+      "effects": {
+        "writes": [
+          "parties",
+          "products",
+          "audit_log",
+          "outbox_events"
+        ],
+        "external": [],
+        "excludes": []
+      },
+      "concurrency": {
+        "revision": false,
+        "idempotency": true,
+        "rule": "A chave e o conteúdo identificam a operação; a mesma chave repete o resultado."
+      },
+      "response": {
+        "successStatuses": [
+          200
+        ],
+        "errorStatuses": [
+          400,
+          401,
+          403,
+          404,
+          409,
+          412,
+          422,
+          428,
+          500
+        ],
+        "action": "Mesclar cadastros duplicados"
+      },
+      "recovery": "Após resposta incerta, repetir com a mesma chave.",
+      "ui": {
+        "pages": [
+          "/cadastros/duplicados"
+        ],
+        "bff": {
+          "method": "POST",
+          "path": "/api/erp/data-quality/merge"
+        },
+        "gap": null
+      },
+      "sources": [
+        "apps/api-ts/src/modules/data-quality/routes.ts"
+      ],
+      "verification": {
+        "status": "not_verified_by_catalog",
+        "criteria": [
+          "interface",
+          "request",
+          "authorization",
+          "domain",
+          "persistence",
+          "effects",
+          "failure",
+          "response"
+        ]
+      }
+    },
+    {
+      "id": "get-api-v1-history-entity-id",
+      "flow": "parties",
+      "status": "implemented",
+      "operation": {
+        "method": "GET",
+        "path": "/api/v1/history/{entity}/{id}"
+      },
+      "actor": "active_tenant_member",
+      "permissions": [
+        "catalog.parties.read",
+        "catalog.products.read",
+        "catalog.categories.read"
+      ],
+      "input": {
+        "headers": [
+          "Authorization",
+          "X-Tenant-Id"
+        ],
+        "pathParameters": [
+          "entity",
+          "id"
+        ],
+        "body": null,
+        "query": "before"
+      },
+      "preconditions": [
+        "Sem identidade/empresa/permissão: recusar antes de efeitos de domínio."
+      ],
+      "transition": {
+        "from": "registro existente",
+        "to": "sem alteração de estado"
+      },
+      "effects": {
+        "writes": [],
+        "external": [],
+        "excludes": [
+          "Consulta não executa comando de escrita."
+        ]
+      },
+      "concurrency": {
+        "revision": false,
+        "idempotency": false,
+        "rule": "Consulta limitada ao escopo autorizado."
+      },
+      "response": {
+        "successStatuses": [
+          200
+        ],
+        "errorStatuses": [
+          401,
+          403,
+          404,
+          422,
+          500
+        ],
+        "action": "Consultar histórico de alterações do cadastro"
+      },
+      "recovery": "Repetir a consulta.",
+      "ui": {
+        "pages": [
+          "/cadastros/clientes-fornecedores/[id]",
+          "/cadastros/produtos/[id]",
+          "/cadastros/tags/[id]"
+        ],
+        "bff": {
+          "method": "GET",
+          "path": "/api/erp/history/[entity]/[id]"
+        },
+        "gap": null
+      },
+      "sources": [
+        "apps/api-ts/src/modules/history/routes.ts"
+      ],
+      "verification": {
+        "status": "not_verified_by_catalog",
+        "criteria": [
+          "interface",
+          "request",
+          "authorization",
+          "domain",
+          "persistence",
+          "effects",
+          "failure",
+          "response"
+        ]
+      }
     }
   ],
   "pendingFlows": [

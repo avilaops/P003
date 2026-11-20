@@ -7,6 +7,7 @@ import { z } from "zod"
 import type { AppDependencies } from "../../app.js"
 import { authorizeRequest, requirePermission } from "../../platform/access.js"
 import { databaseId } from "../../platform/database-id.js"
+import { diffChanges } from "../../platform/change-diff.js"
 import { Problem } from "../../platform/problem.js"
 import { sameJson } from "../../platform/json.js"
 import { integer } from "../registrations/query.js"
@@ -114,7 +115,7 @@ export function registerProductRoutes(app: FastifyInstance, dependencies: AppDep
       if (data.status === "archived") { const balance = await context.client.query<{ quantity: string }>("SELECT COALESCE((SELECT quantity_micros FROM stock_balances WHERE tenant_id=$1 AND product_id=$2),0)::text AS quantity", [context.tenantId, request.params.id]); if (balance.rows[0]?.quantity !== undefined && balance.rows[0].quantity !== "0") throw new Problem(409, "domain_conflict", "Regularize o saldo antes de arquivar o produto") }
       await context.client.query("UPDATE products SET sku=$3,name=$4,unit=$5,ncm=$6,cest=$7,price_cents=$8,status=$9,revision=$10,structure_colors=$11,upholstery_colors=$12,plate_holder_colors=$13,plate_holder_types=$14,plate_holder_type=$15,photo_data_url=$16,category_id=$17,swing_arm_colors=$18,finishing_palette=$19,updated_at=now() WHERE tenant_id=$1 AND id=$2", [context.tenantId, request.params.id, data.sku, data.name, data.unit, data.ncm, data.cest, cents(data.basePrice).toString(), data.status, nextRevision(expected), data.structureColors, data.upholsteryColors, data.plateHolderColors, data.plateHolderTypes, legacyType(data.plateHolderTypes), data.photoDataUrl, data.categoryId, data.swingArmColors, data.finishingPalette])
       const next = await context.client.query(`SELECT ${projection} FROM products WHERE tenant_id=$1 AND id=$2`, [context.tenantId, request.params.id])
-      await context.client.query("INSERT INTO audit_log(tenant_id,identity_id,action,entity_type,entity_id,request_id,details) SELECT $1,id,'product.updated','product',$3,$4,$5 FROM identities WHERE auth_subject=$2", [context.tenantId, context.identity.subject, request.params.id, one(request.headers["x-request-id"]) ?? null, { previousRevision: expected, revision: nextRevision(expected) }])
+      await context.client.query("INSERT INTO audit_log(tenant_id,identity_id,action,entity_type,entity_id,request_id,details) SELECT $1,id,'product.updated','product',$3,$4,$5 FROM identities WHERE auth_subject=$2", [context.tenantId, context.identity.subject, request.params.id, one(request.headers["x-request-id"]) ?? null, { previousRevision: expected, revision: nextRevision(expected), changes: diffChanges(previous, product(next.rows[0]!) as Record<string, unknown>) }])
       await context.client.query("INSERT INTO outbox_events(tenant_id,aggregate_type,aggregate_id,event_type,payload) VALUES($1,'product',$2,'product.updated',$3)", [context.tenantId, request.params.id, { previousRevision: expected, revision: nextRevision(expected) }])
       return { tenantId: context.tenantId, canEdit: true, data: product(next.rows[0]!) }
     })

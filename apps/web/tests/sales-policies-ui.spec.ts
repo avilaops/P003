@@ -94,7 +94,7 @@ test("preferências grava condição, alçada, crédito e lista do cliente e do 
         expect(body).toEqual({kind:"routing",level:"manager",revision:3,dueHours:24,substituteId:seller,until:"2027-01-19"})
         return receipt(r,"manager",++routeRevision)
       case "customer":
-        expect(body).toEqual({kind:"customer",id:record,revision:5,creditLimitCents:129987,validUntil:"2027-01-31",overdueDays:3,blocked:true,termId:term,listId:list})
+        expect(body).toEqual({kind:"customer",id:record,revision:5,creditLimitCents:129987,validUntil:"2027-01-31",overdueDays:3,blocked:true,termId:term,listId:list,sellerId:null,region:null})
         return receipt(r,record,++customerRevision)
       case "channel":
         expect(body).toEqual({kind:"channel",channel:"atacado",revision:1,listId:list})

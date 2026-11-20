@@ -104,6 +104,8 @@ for (const uncertainty of ["unavailable", "foreignTenant", "authRetry", "custome
     await page.route("**/api/erp/me", route => route.fulfill({ json: { tenant: { id: tenant }, permissions: ["sales.orders.read", "sales.orders.manage", "catalog.parties.read", "catalog.products.read"] } }))
     await page.route(/\/api\/erp\/parties\?/, route => route.fulfill({ json: { tenantId: tenant, canEdit: false, data: [party], total: 1 } }))
     await page.route(`**/api/erp/parties/${customerId}`, route => route.fulfill({ headers: { ETag: '"1"' }, json: { tenantId: tenant, canEdit: false, data: party } }))
+    const commercialTerm = "88888888-8888-4888-8888-888888888888"
+    await page.route(`**/api/erp/commercial/policies/catalog/${customerId}`, route => route.fulfill({ json: { tenantId: tenant, manage: false, channels: [{ channel: "Loja" }], terms: [{ id: commercialTerm, revision: 1, name: "30/60", entryBps: 2000, days: [30, 60], methodId: pix, active: true }], defaultTermId: commercialTerm, defaultSeller: { id: "99999999-9999-4999-8999-999999999999", name: "Ana Vendas" }, region: "Sudeste" } }))
   }
   await page.goto("/vendas/pedidos/novo")
   await page.getByLabel("Buscar equipamento", { exact: true }).fill("Mesa")
@@ -119,6 +121,9 @@ for (const uncertainty of ["unavailable", "foreignTenant", "authRetry", "custome
     await page.getByRole("button", { name: "Pesquisar cliente", exact: true }).click()
     await page.getByRole("button", { name: "Selecionar Cliente de teste", exact: true }).click()
     await expect(page.locator(".order-customer-selected")).toContainText("Cliente de teste")
+    // CA4 — Escolher o cliente no Novo pedido preenche condição e vendedor, com a origem indicada.
+    await expect(page.getByRole("combobox", { name: "Condição de pagamento", exact: true })).toHaveValue("88888888-8888-4888-8888-888888888888")
+    await expect(page.getByRole("status").filter({ hasText: "Origem: cadastro comercial do cliente • condição 30/60 • vendedor Ana Vendas • região Sudeste" })).toBeVisible()
     await expect(page.getByRole("button", { name: "Editar cadastro", exact: true })).toHaveCount(0)
   } else {
   await page.getByRole("button", { name: "Cadastrar cliente", exact: true }).click()

@@ -1,5 +1,6 @@
 "use client"
 import { Pagination } from "@/components/workspace/pagination"
+import { RecordHistory } from "@/features/records/record-history"
 import { DataTable } from "@/components/workspace/data-table"
 
 import { erpFetch } from "@/lib/api/client"
@@ -234,6 +235,7 @@ export function CatalogEditor({ id, view = false, draftScope }: { id?: string; v
           <Button type="submit" disabled={saving || photoBusy || conflict || storageInvalid || !snapshot.canEdit || (!dirty && !!id)}>{saving ? "Salvando…" : uncertain ? "Conferir gravação" : "Salvar produto"}</Button>
         </form>}
         {view && <ProductCategory tenantId={snapshot.tenantId} value={snapshot.data.categoryId || ""} disabled onChange={() => {}} />}
+        {view && id && <RecordHistory entity="product" id={id} />}
         {view && <details className="min-w-0 space-y-3 rounded-lg border p-3">
           <summary className="cursor-pointer font-medium">Acabamentos disponíveis</summary>
           <div className="grid min-w-0 gap-3 sm:grid-cols-2">

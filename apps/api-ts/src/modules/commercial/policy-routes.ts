@@ -15,7 +15,7 @@ import { decideReview,decisionSchema,listReviews,reviewAuthority,reviewNotificat
 const root = "/api/v1/commercial/policies"
 const rev = z.number().int().nonnegative().safe()
 const term = z.strictObject({kind:z.literal("term"),id:id.optional(),revision:rev,name:z.string().trim().min(1).max(120),entryBps:z.number().int().min(0).max(10000),days:z.array(z.number().int().min(0).max(3650)).max(120),methodId:id,active:z.boolean()})
-const buyer = z.strictObject({kind:z.literal("customer"),id,revision:rev,creditLimitCents:z.number().int().min(0).max(99999999999999).nullable(),validUntil:z.iso.date().nullable(),blocked:z.boolean(),overdueDays:z.number().int().min(0).max(3650).nullable(),termId:id.nullable(),listId:id.nullable()})
+const buyer = z.strictObject({kind:z.literal("customer"),id,revision:rev,creditLimitCents:z.number().int().min(0).max(99999999999999).nullable(),validUntil:z.iso.date().nullable(),blocked:z.boolean(),overdueDays:z.number().int().min(0).max(3650).nullable(),termId:id.nullable(),listId:id.nullable(),sellerId:id.nullable().default(null),region:z.string().trim().min(1).max(80).nullable().default(null)})
 const channel = z.strictObject({kind:z.literal("channel"),channel:z.string().trim().min(1).max(80),listId:id,revision:rev})
 const routing = z.strictObject({kind:z.literal("routing"),level:z.enum(["manager","director","credit"]),dueHours:z.number().int().min(1).max(2160),substituteId:id.nullable(),until:z.iso.date().nullable(),revision:rev})
 const settings = z.discriminatedUnion("kind",[term,buyer,channel,routing])
@@ -64,13 +64,14 @@ export function registerSalesPolicies(app:FastifyInstance,deps:AppDependencies){
    if (!ctx.permissions.includes("sales.orders.read")) requirePermission(ctx,"sales.proposals.read")
    const {client,tenantId}=ctx, manage=ctx.permissions.includes("platform.company.manage")
    const terms=await client.query("SELECT id,revision::int,name,entry_bps AS \"entryBps\",due_days AS days,method_id AS \"methodId\",active FROM sales_payment_terms WHERE tenant_id=$1 AND (active OR $2) ORDER BY name",[tenantId,manage])
-   const policy=customer?(await client.query("SELECT revision::int,payment_term_id AS \"termId\",price_list_id AS \"listId\",credit_limit_cents::float8 AS \"creditLimitCents\",valid_until::text AS \"validUntil\",blocked,overdue_days AS \"overdueDays\" FROM sales_customer_policies WHERE tenant_id=$1 AND customer_id=$2",[tenantId,customer.data])).rows[0]:null
+   const policy=customer?(await client.query("SELECT revision::int,payment_term_id AS \"termId\",price_list_id AS \"listId\",credit_limit_cents::float8 AS \"creditLimitCents\",valid_until::text AS \"validUntil\",blocked,overdue_days AS \"overdueDays\",seller_staff_id AS \"sellerId\",(SELECT name FROM staff s WHERE s.tenant_id=c.tenant_id AND s.id=c.seller_staff_id) AS \"sellerName\",region FROM sales_customer_policies c WHERE tenant_id=$1 AND customer_id=$2",[tenantId,customer.data])).rows[0]:null
    const channels=(await client.query("SELECT channel,price_list_id AS \"listId\",revision::int FROM sales_channel_prices WHERE tenant_id=$1 ORDER BY channel",[tenantId])).rows
    const lists=manage?(await client.query("SELECT id,name FROM price_lists WHERE tenant_id=$1 AND status='active' ORDER BY name",[tenantId])).rows:[]
    const methods=(await client.query("SELECT id,name FROM payment_methods WHERE tenant_id=$1 AND status='active' ORDER BY name",[tenantId])).rows
    const routes=manage?(await client.query("SELECT level,revision::int,due_hours AS \"dueHours\",substitute_id AS \"substituteId\",substitute_until::text AS until FROM sales_approval_routing WHERE tenant_id=$1",[tenantId])).rows:[]
    const people=manage?(await client.query("SELECT i.id,i.display_name AS name FROM identities i JOIN tenant_memberships m ON m.identity_id=i.id WHERE m.tenant_id=$1 AND m.status='active' ORDER BY i.display_name",[tenantId])).rows:[]
-   return {tenantId,manage,terms:terms.rows,defaultTermId:policy?.termId??null,policy:manage?policy??null:null,channels:manage?channels:channels.map(c=>({channel:c.channel})),lists,methods,routes,people}
+   const sellers=manage?(await client.query("SELECT id,name FROM staff WHERE tenant_id=$1 AND is_seller AND status='active' ORDER BY name",[tenantId])).rows:[]
+   return {tenantId,manage,terms:terms.rows,defaultTermId:policy?.termId??null,defaultSeller:policy?.sellerId?{id:policy.sellerId,name:policy.sellerName}:null,region:policy?.region??null,sellers,policy:manage?policy??null:null,channels:manage?channels:channels.map(c=>({channel:c.channel})),lists,methods,routes,people}
   })
   return reply.header("cache-control","no-store").send(body)
  })
@@ -95,9 +96,10 @@ export function registerSalesPolicies(app:FastifyInstance,deps:AppDependencies){
    }else if(input.kind==="customer"){
     const person=await client.query("SELECT id FROM parties WHERE tenant_id=$1 AND id=$2 AND is_customer",[tenantId,input.id])
     if(!person.rows.length) return invalid("Selecione um cliente desta empresa")
-    result=await client.query(`INSERT INTO sales_customer_policies(tenant_id,customer_id,credit_limit_cents,valid_until,blocked,overdue_days,payment_term_id,price_list_id)
-     SELECT $1,$2,$3,$4,$5,$6,$7,$8 WHERE $9::bigint=0 OR EXISTS(SELECT 1 FROM sales_customer_policies WHERE tenant_id=$1 AND customer_id=$2)
-     ON CONFLICT(tenant_id,customer_id) DO UPDATE SET credit_limit_cents=$3,valid_until=$4,blocked=$5,overdue_days=$6,payment_term_id=$7,price_list_id=$8,revision=sales_customer_policies.revision+1 WHERE sales_customer_policies.revision=$9 RETURNING customer_id AS id,revision`,[tenantId,input.id,input.creditLimitCents,input.validUntil,input.blocked,input.overdueDays,input.termId,input.listId,input.revision])
+    if(input.sellerId&&!(await client.query("SELECT id FROM staff WHERE tenant_id=$1 AND id=$2 AND is_seller AND status='active'",[tenantId,input.sellerId])).rows.length) return invalid("Escolha um vendedor ativo desta empresa")
+    result=await client.query(`INSERT INTO sales_customer_policies(tenant_id,customer_id,credit_limit_cents,valid_until,blocked,overdue_days,payment_term_id,price_list_id,seller_staff_id,region)
+     SELECT $1,$2,$3,$4,$5,$6,$7,$8,$10,$11 WHERE $9::bigint=0 OR EXISTS(SELECT 1 FROM sales_customer_policies WHERE tenant_id=$1 AND customer_id=$2)
+     ON CONFLICT(tenant_id,customer_id) DO UPDATE SET credit_limit_cents=$3,valid_until=$4,blocked=$5,overdue_days=$6,payment_term_id=$7,price_list_id=$8,seller_staff_id=$10,region=$11,revision=sales_customer_policies.revision+1 WHERE sales_customer_policies.revision=$9 RETURNING customer_id AS id,revision`,[tenantId,input.id,input.creditLimitCents,input.validUntil,input.blocked,input.overdueDays,input.termId,input.listId,input.revision,input.sellerId,input.region])
    }else if(input.kind==="channel"){
     result=await client.query(`INSERT INTO sales_channel_prices(tenant_id,channel,price_list_id) SELECT $1,$2,$3 WHERE $4::bigint=0 OR EXISTS(SELECT 1 FROM sales_channel_prices WHERE tenant_id=$1 AND channel=$2)
      ON CONFLICT(tenant_id,channel) DO UPDATE SET price_list_id=$3,revision=sales_channel_prices.revision+1 WHERE sales_channel_prices.revision=$4 RETURNING channel AS id,revision`,[tenantId,input.channel,input.listId,input.revision])
