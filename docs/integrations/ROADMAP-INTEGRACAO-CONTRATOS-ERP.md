@@ -119,22 +119,32 @@ Legenda: ✅ já existe no ERP · 🟡 parcial · ❌ falta · **API** = o porta
 - `GET` e `POST /api/avila/templates/:id`: publicação idempotente, versão imutável.
 - `DELETE /api/templates/:id` (arquivar), webhooks com segredo.
 
-#### 5.2 O que o portal precisa ganhar (Admin API, a construir neste repositório)
+#### 5.2 Admin API do portal (construída neste repositório)
 
-| Endpoint (proposta) | Para quê | Fase |
-| --- | --- | --- |
-| `POST /api/avila/accounts` (token de plataforma) | Provisionar a conta de um tenant, com certificado próprio, e devolver o token **uma única vez** | F0 |
-| `GET/PUT /api/avila/settings` | Lembretes (1º, 2º, 3º), prazo padrão, provedor de SMS, textos de e-mail | F3 |
-| `PUT /api/avila/branding` | Logo e nome da empresa | F3 |
-| `GET /api/avila/submissions/:id/evidence` | Selfie (hash, IP, aparelho, consentimento), validação de CPF/CNPJ, estado da cadeia de hash | F4 |
-| Cabeçalho de embed (`frame-ancestors`) | Permitir o ERP incorporar o formulário do signatário interno | F5 |
+| Endpoint | Para quê | Fase | Estado |
+| --- | --- | --- | --- |
+| `GET/POST /api/avila/accounts/:tenantId` (header `X-Platform-Token`) | Provisiona a conta da empresa, com certificado próprio e usuário de serviço; o token aparece **uma única vez**; repetir devolve 409 | F0 | Entregue (PR #16) |
+| `GET/PUT /api/avila/settings` | Lembretes (1º, 2º, 3º), provedor de SMS (o segredo só entra), nome e logo da empresa | F3 | Entregue (PR #16) |
+| `GET /api/avila/submissions/:id/evidence` | CPF/CNPJ informados, selfies ao vivo com consentimento, linha do tempo e integridade do log | F4 | Entregue (PR #16) |
+| Incorporação da página de assinatura (`EMBED_ALLOWED_ORIGINS`) | Permitir o ERP exibir a assinatura do signatário interno em um quadro | F5 | Entregue (PR #16) |
 
-Todos exigem o token da conta, devolvem erro padronizado e **nunca** devolvem segredo.
+O token de plataforma vem de `AVILA_PLATFORM_TOKEN` (mínimo de 32 caracteres); sem ele o recurso responde 404.
+Nenhuma resposta devolve segredo. O ERP precisa configurar essas duas variáveis no servidor do portal
+(`AVILA_PLATFORM_TOKEN`, `EMBED_ALLOWED_ORIGINS=https://erp.avilaops.com`) para usá-las.
 
-#### 5.3 O que o ERP usa da API padrão (a validar uma a uma antes da fase 2)
+#### 5.3 API padrão do portal que o ERP usa nas ações do ciclo (F2) — conferido no código
 
-Reenvio (`PUT /api/submitters/:id`), arquivar (`DELETE /api/submissions/:id`) e correção de participante.
-Cada uma entra com teste de contrato contra o portal real de homologação.
+Não exige nenhuma mudança no portal:
+
+| Ação no ERP | Chamada ao portal |
+| --- | --- |
+| Reenviar convite (e-mail ou SMS) | `PUT /api/submitters/:id` com `send_email` ou `send_sms` |
+| Trocar e-mail ou telefone do participante | `PUT /api/submitters/:id` com `email` ou `phone` |
+| Cancelar o envio | `DELETE /api/submissions/:id` (arquiva) |
+| Prorrogar o prazo | `PUT /api/submissions/:id` com `expire_at` |
+| Linha do tempo | `GET /api/submissions/:id` (`submission_events`) |
+
+Um participante que já concluiu não aceita alteração (o portal responde 422).
 
 ### 6. Decisão central: contas e marca por empresa
 
@@ -146,7 +156,8 @@ lembretes por empresa, e foi justamente o risco que o PR #7 tratou.
 | **A. Uma conta do portal por empresa (recomendada)** | Certificado, logo, SMS e lembretes próprios; isolamento real; alinhado ao PR #7 | Migrar os modelos da conta única; guardar um token por empresa |
 | B. Conta única e marca por envio | Nada a migrar | Certificado e marca únicos; empresas se misturam |
 
-Recomendação: **A**. O token de cada empresa fica no cofre ou no banco do ERP (cifrado), e
+**Decisão tomada: A** (adotada em 20/11/2026 ao mandar executar o plano até o fim, sem escolher a alternativa;
+reversível enquanto nenhuma empresa for migrada). O token de cada empresa fica no cofre ou no banco do ERP (cifrado), e
 `DOCUSEAL_TENANT_TEMPLATES` deixa de existir. **Atenção:** o ERP lê `DOCUSEAL_URL` e exige o host
 `contrato.avilaops.com`; manter esse host.
 
@@ -200,8 +211,15 @@ dois repositórios e uma prova no ambiente real, não só em teste isolado.
 
 | Repositório | Itens |
 | --- | --- |
-| Portal (`contratos.avilaops.com`) | F0 provisionamento; F1 **(entregue)**; Admin API de configurações, marca e evidência; cabeçalho de embed |
-| ERP (`P003`) | Editor com os novos tipos; ações novas no `contracts.tsx`, no BFF (`contracts-proxy.ts`) e em `commercial-contracts/routes.ts`; tratamento de novos eventos em `contract-webhook.ts`; telas de configuração, evidências e lote; token por empresa |
+| Portal (`contratos.avilaops.com`) | **Entregue no PR #16:** F0 provisionamento, F1, F3 configurações, F4 evidências, F5 incorporação; ICP passos 1 e 2 |
+| ERP (`P003`) | **Pendente, ver abaixo:** editor com os novos tipos; ações novas no `contracts.tsx`, no BFF (`contracts-proxy.ts`) e em `commercial-contracts/routes.ts`; tratamento de novos eventos em `contract-webhook.ts`; telas de configuração, evidências e lote; token por empresa |
+
+**Trava do ERP que molda o trabalho dele.** O teste `verification/test/contracts.test.mjs` do P003 confere o
+catálogo `verification/contracts.json` contra o código e **conta as operações com valor exato** (575 da API e 440 do
+BFF na leitura de 20/11/2026), exigindo uma ficha por operação (ator, permissões, estados, revisão e idempotência,
+recuperação, fontes). Toda rota nova no ERP, portanto, precisa vir com sua ficha e o novo total no mesmo PR. Isso é
+trabalho de pessoa que conhece o P003 e deve ser feito em PRs pequenos, uma ação por vez, começando pelas
+leituras (evidências, linha do tempo), que não mudam estado nem exigem revisão ou idempotência.
 
 ### 11. O que já foi entregue deste plano
 
@@ -209,20 +227,30 @@ dois repositórios e uma prova no ambiente real, não só em teste isolado.
   `capture: "camera"` (selfie ao vivo, com consentimento e evidência) e campos `text` com
   `validation: "cpf" | "cnpj"` (o servidor confere os dígitos verificadores). Qualquer outra combinação é recusada.
   Testes em `spec/requests/api_avila_templates_spec.rb`.
-- **ICP-Brasil, passo 1 (prioridade definida em 20/11/2026):** a tela de certificados do portal
-  (Configurações > Assinatura eletrônica) agora reconhece e rotula o certificado instalado: ICP-Brasil ou não,
-  titular (e-CNPJ ou e-CPF) e nível (A1 a A4). Código em `lib/icp_brasil.rb`. **Isto só classifica pelo emissor e
-  pelas políticas declaradas; não valida a cadeia contra a raiz da ICP-Brasil nem a revogação**, e a tela diz isso.
+- **ICP-Brasil, passos 1 e 2 (prioridade definida em 20/11/2026):** a tela de certificados do portal
+  (Configurações > Assinatura eletrônica) reconhece o certificado instalado (ICP-Brasil ou não, e-CNPJ ou e-CPF,
+  A1 a A4; `lib/icp_brasil.rb`) e **valida a cadeia contra as 6 raízes oficiais** (`config/icp_brasil`,
+  `lib/icp_brasil/trust.rb`), a validade e o uso da chave. O selo verde só aparece com a cadeia válida; um certificado
+  com "ICP-Brasil" no nome mas sem cadeia oficial vira aviso amarelo. Instalar certificado vencido é recusado.
+  **Não consulta revogação (CRL/OCSP)** e as raízes vêm do download oficial sem segunda fonte para cruzar as
+  impressões digitais (ver `config/icp_brasil/README.md`).
+- **F0, lado do portal:** `GET/POST /api/avila/accounts/:tenantId` cria uma conta por empresa (conta com o UUID do
+  tenant, certificado próprio, token devolvido uma vez).
+- **Isolamento entre contas:** `AccountConfigs.find_for_account` herdava a configuração da primeira conta (textos de
+  e-mail e lembretes). Corrigido: cada conta usa só a própria. Sem isso, a conta por empresa vazaria texto entre empresas.
+- **F3, F4 e F5, lado do portal:** `GET/PUT /api/avila/settings`, `GET /api/avila/submissions/:id/evidence` e a
+  incorporação da página de assinatura por `EMBED_ALLOWED_ORIGINS`.
 
 ### 12. ICP-Brasil: ordem de execução
 
 | Passo | O que | Depende de | Estado |
 | --- | --- | --- | --- |
 | 1 | Reconhecer e rotular o certificado (e-CNPJ/e-CPF, A1 a A4) | — | Entregue (PR #16) |
-| 2 | Validar a cadeia contra as raízes oficiais da ICP-Brasil, a validade e o uso da chave; bloquear como padrão um certificado vencido | Fixar as raízes obtidas do ITI e conferir a origem | A fazer |
+| 2 | Validar a cadeia contra as raízes oficiais da ICP-Brasil, a validade e o uso da chave; recusar certificado vencido | Raízes do ITI | Entregue (PR #16) |
+| 2b | Consultar revogação (CRL/OCSP) com destinos públicos revisados, tempo limite e sem redirecionamento privado | Desenho de rede do servidor | A fazer |
 | 3 | Prova real: assinar um PDF com um certificado A1 ICP-Brasil de **teste** e passar pelo validador do ERP | Um certificado ICP de teste (decisão do dono) | Bloqueado |
 | 4 | Assinatura individual por participante (e-CPF): baixar, assinar, subir, validar | Passo 3 e o serviço de validação do ERP publicado | A fazer |
 
 Hoje o portal assina com a cadeia autoassinada gerada pelo próprio sistema, que **não é ICP-Brasil**.
-Um e-CNPJ A1 instalado pelo cliente passa a ser usado como certificado padrão, mas a assinatura só será
-considerada ICP-Brasil depois dos passos 2 e 3.
+Um e-CNPJ A1 instalado pelo cliente passa a ser usado como certificado padrão e a tela mostra se a cadeia chega à
+raiz oficial, mas a assinatura só será considerada ICP-Brasil depois da prova real (passo 3) e da revogação (2b).
