@@ -113,6 +113,8 @@ export function CatalogEditor({ id, view = false, draftScope }: { id?: string; v
   const router = useRouter()
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null)
   const [draft, setDraft] = useState<ProductInput>({ ...empty })
+  const [plateHolderOpen, setPlateHolderOpen] = useState(false)
+  const hasPlateHolder = plateHolderOpen || (draft.plateHolderTypes || []).length > 0
   const [baseline, setBaseline] = useState(JSON.stringify(empty))
   const [etag, setEtag] = useState("")
   const [error, setError] = useState("")
@@ -228,7 +230,7 @@ export function CatalogEditor({ id, view = false, draftScope }: { id?: string; v
             <div className="grid min-w-0 grid-cols-2 gap-3">
               {([["structureColors", "Cores da estrutura"], ["swingArmColors", "Cores dos braços"], ...(snapshot.data.upholsteryConfigurable === false ? [] : [["upholsteryColors", "Cores do estofado"] as const])] as const).map(([field, label]) => <label key={field} className="grid min-w-0 gap-1">{label}<textarea rows={2} maxLength={1951} className="catalog-finishing-input w-full min-w-0 rounded-lg border border-input bg-background text-base" value={(draft[field] || []).join("\n")} onChange={event => setDraft({ ...draft, [field]: event.target.value.split("\n") })} placeholder="Uma cor por linha" /></label>)}
             </div>
-            <fieldset className="min-w-0 border-t pt-2"><legend className="px-1 text-sm font-medium">Anilheiro — opções no fechamento</legend><div className="mt-1 flex flex-wrap gap-x-5 gap-y-2">{(["Standard", "Olímpico"] as const).map(type => <label key={type} className="inline-flex min-h-9 items-center gap-2 text-sm"><input type="checkbox" checked={(draft.plateHolderTypes || []).includes(type)} onChange={event => { const checked = event.target.checked; setDraft(previous => { const selected = new Set(previous.plateHolderTypes || []); if (checked) selected.add(type); else selected.delete(type); return { ...previous, plateHolderTypes: ["Standard", "Olímpico"].filter(value => selected.has(value)) } }) }} />{type}</label>)}</div><p className="mt-1 text-xs text-muted-foreground">As opções marcadas ficam disponíveis no pedido e na proposta. Sem opções marcadas: Não se aplica.</p></fieldset>
+            <fieldset className="min-w-0 border-t pt-2"><legend className="px-1 text-sm font-medium">Anilheiro</legend><label className="inline-flex min-h-9 items-center gap-2 text-sm"><input type="checkbox" checked={hasPlateHolder} onChange={event => { setPlateHolderOpen(event.target.checked); if (!event.target.checked) setDraft(previous => ({ ...previous, plateHolderTypes: [] })) }} />Este equipamento tem anilheiro</label>{hasPlateHolder && <><div className="mt-1 flex flex-wrap gap-x-5 gap-y-2">{(["Standard", "Olímpico"] as const).map(type => <label key={type} className="inline-flex min-h-9 items-center gap-2 text-sm"><input type="checkbox" checked={(draft.plateHolderTypes || []).includes(type)} onChange={event => { const checked = event.target.checked; setPlateHolderOpen(true); setDraft(previous => { const selected = new Set(previous.plateHolderTypes || []); if (checked) selected.add(type); else selected.delete(type); return { ...previous, plateHolderTypes: ["Standard", "Olímpico"].filter(value => selected.has(value)) } }) }} />{type}</label>)}</div><p className="mt-1 text-xs text-muted-foreground">As opções marcadas ficam disponíveis no pedido e na proposta. Sem opções marcadas: Não se aplica.</p></>}</fieldset>
           </fieldset></details>
           {uncertain && <p role="status">A confirmação está pendente. Conferir repetirá o mesmo comando, sem criar outro produto.</p>}
           <Button type="submit" disabled={saving || photoBusy || conflict || storageInvalid || !snapshot.canEdit || (!dirty && !!id)}>{saving ? "Salvando…" : uncertain ? "Conferir gravação" : "Salvar produto"}</Button>
@@ -242,7 +244,7 @@ export function CatalogEditor({ id, view = false, draftScope }: { id?: string; v
               {part === "upholstery" && snapshot.data.upholsteryConfigurable === false ? <p className="text-sm">Estofado padrão</p> : colors?.length ? <CatalogColorPhotos label={label} part={part} options={colors} palette={catalogPaletteFor(snapshot.data.finishingPalette)} readOnly showSource={false} /> : <p className="text-sm">Sem opções cadastradas</p>}
             </div>)}
           </div>
-          <p className="text-xs"><span className="text-muted-foreground">Anilheiro: </span>{snapshot.data.plateHolderTypes?.length ? snapshot.data.plateHolderTypes.join(" ou ") : "Não se aplica"}</p>
+          {snapshot.data.plateHolderTypes?.length ? <p className="text-xs"><span className="text-muted-foreground">Anilheiro: </span>{snapshot.data.plateHolderTypes.join(" ou ")}</p> : null}
           <CatalogPaletteReference palette={catalogPaletteFor(snapshot.data.finishingPalette)} />
         </details>}
       </>}
