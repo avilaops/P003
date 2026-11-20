@@ -159,6 +159,7 @@ test("atalhos preservam desconto, frete e total sem confundir teto com aprova√ß√
   await page.getByLabel("Modalidade de entrega", { exact: true }).selectOption("company")
   await page.getByLabel("Frete por nossa conta (R$)", { exact: true }).fill("100,00")
   await expect(quick).toContainText("R$ 1.017,00")
+  await page.getByLabel("Valor negociado (com IPI)", { exact: true }).focus()
   await page.getByLabel("Valor negociado (com IPI)", { exact: true }).fill("1017,00")
   await expect(page.getByLabel("Desconto (%)", { exact: true })).toHaveValue(/^10(?:[,.]00)?$/)
   await page.getByRole("button", { name: "Revisar pedido", exact: true }).click()

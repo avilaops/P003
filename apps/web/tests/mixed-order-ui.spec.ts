@@ -139,6 +139,7 @@ test("novo pedido reúne ambas as tabelas e só libera proposta após cálculo a
   await page.getByLabel("Prazo de fabricação", { exact: true }).fill("45")
   await page.getByLabel("Parcelas", { exact: true }).fill("2")
   await page.getByRole("button", { name: "Gerar parcelas", exact: true }).click()
+  await page.getByLabel("Valor da parcela 1 (R$)", { exact: true }).focus()
   await page.getByLabel("Valor da parcela 1 (R$)", { exact: true }).fill("300,00")
   await page.getByLabel("Vencimento da parcela 1", { exact: true }).fill("2026-12-20")
   await page.getByLabel("Observações do pagamento", { exact: true }).fill("Condição comercial conferida")
