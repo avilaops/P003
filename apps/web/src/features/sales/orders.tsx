@@ -2,7 +2,6 @@
 
 import { useProtectedReload } from "@/features/finance/use-protected-reload"
 
-import { OrderFinancePanel } from "@/features/finance/order-finance"
 import { SalesRecordList } from "./sales-record-list"
 
 import { erpFetch } from "@/lib/api/client"
@@ -13,6 +12,7 @@ import { decimalPattern } from "@/lib/decimal-input"
 
 import { RequestError } from "@/components/feedback/session-recovery"
 
+import dynamic from "next/dynamic"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useEffect, useId, useRef, useState } from "react"
@@ -26,18 +26,20 @@ import { CatalogColorPicker } from "@/features/catalog/catalog-color-picker"
 import { catalogPaletteFor, type CatalogPalette } from "@/features/catalog/catalog-color-photo-model"
 import type { CatalogFinishPart } from "@/features/catalog/catalog-finish-palettes"
 import { quantity, useCommand, useResource } from "../../hooks/use-operation"
-import { OrderFiscalLots } from "../fiscal/order-lots"
-import { CommercialReturn } from "../returns/commercial-return"
-import { OrderCommissionTerms } from "@/features/finance/commissions-workspace"
-import { OrderNegotiation } from "./order-negotiation"
 import { commercialMoney, orderNumber, orderStatusLabels as labels } from "./order-presentation"
-import { OrderPricing } from "@/features/commercial-settings/order-pricing"
 import { OrderDetailCommercial } from "./order-detail-commercial"
-import {DocumentWarehouses} from "@/features/inventory/document-warehouses"
-import {OrderSerials} from "@/features/inventory/order-serials"
 import { OrderEmail } from "./order-email"
 import { OrderPdfDownload } from "./order-pdf-download"
 import type { CheckoutSnapshot } from "./commercial-payment-model"
+// Painéis abaixo da dobra: carregados sob demanda para não pesar no JavaScript inicial do detalhe do pedido.
+const OrderFinancePanel = dynamic(() => import("@/features/finance/order-finance").then(module => module.OrderFinancePanel), { ssr: false })
+const OrderFiscalLots = dynamic(() => import("../fiscal/order-lots").then(module => module.OrderFiscalLots), { ssr: false })
+const CommercialReturn = dynamic(() => import("../returns/commercial-return").then(module => module.CommercialReturn), { ssr: false })
+const OrderCommissionTerms = dynamic(() => import("@/features/finance/commissions-workspace").then(module => module.OrderCommissionTerms), { ssr: false })
+const OrderNegotiation = dynamic(() => import("./order-negotiation").then(module => module.OrderNegotiation), { ssr: false })
+const OrderPricing = dynamic(() => import("@/features/commercial-settings/order-pricing").then(module => module.OrderPricing), { ssr: false })
+const DocumentWarehouses = dynamic(() => import("@/features/inventory/document-warehouses").then(module => module.DocumentWarehouses), { ssr: false })
+const OrderSerials = dynamic(() => import("@/features/inventory/order-serials").then(module => module.OrderSerials), { ssr: false })
 import { OrderWeightSummary } from "./order-weight-summary"
 
 type Detail = Schema<"OrderSnapshot"> & { pricingOrigin?: boolean; checkout?: CheckoutSnapshot | null;overdueProduction?:{id:string;sku:string;plannedOn:string}[];

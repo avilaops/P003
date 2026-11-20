@@ -25,9 +25,12 @@ test("botão abre destinatário real e envia somente a mensagem explícita com r
   expect(sends).toBe(0)
   await composer.getByLabel("Mensagem", { exact: true }).fill("Confira seu pedido em anexo.")
   await composer.getByRole("button", { name: "Enviar e-mail com anexo", exact: true }).click()
-  await expect(composer.getByRole("status")).toContainText("Aceito pelo servidor de e-mail")
-  await expect(composer.getByRole("button", { name: "Enviar e-mail com anexo", exact: true })).toBeDisabled()
+  await expect(composer.getByRole("status")).toContainText("E-mail enviado")
+  await expect(composer.getByRole("status")).toContainText("cliente@example.test")
+  await expect(composer.getByRole("button", { name: "Enviar e-mail com anexo", exact: true })).toHaveCount(0)
   expect(sends).toBe(1)
+  await composer.getByRole("button", { name: "Fechar", exact: true }).first().click()
+  await expect(page.getByRole("dialog")).toHaveCount(0)
 })
 
 for (const mode of ["unconfigured", "readonly", "uncertain"] as const) test(`envio ${mode} informa motivo e impede nova mensagem`, async ({ page }) => {

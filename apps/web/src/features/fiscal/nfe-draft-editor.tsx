@@ -297,10 +297,10 @@ export function NfeDraftEditor({ id, sourceOrderId, lotId, lotEnvironment="produ
           <div hidden={step !== 2} data-editor-step="2" className="space-y-4">
           <section className="form-section space-y-4" aria-label="Itens do rascunho"><h2 className="text-lg font-semibold">Itens</h2>
             {canSearch && !draft.sourceOrderId && <NfeProductPicker key={`${tenant}:${reload}`} tenant={tenant} disabled={draft.items.length >= 990} onSelect={addProduct} />}
-            <NfeGlobalAmounts onPendingChange={setPendingAmounts} draft={draft} change={(items, totals) => { setAllocationRules(previous => { const next = { ...previous }; for (const [key] of amountFields) if (totals[key] !== undefined) next[key] = { total: totals[key] || "0", locked: [] }; return next }); setDraft(previous => ({ ...previous, items })) }} />
-            {allocationError && <p role="alert" className="text-sm text-destructive">{allocationError}</p>}
             <NfeItemsTable editable={editable} draft={draft} changeItem={changeItem} remove={index => { setAllocationRules(previous => Object.fromEntries(Object.entries(previous).map(([key, rule]) => [key, { ...rule, locked: rule.locked.filter(position => position !== index).map(position => position > index ? position - 1 : position) }]))); setDraft({ ...draft, items: draft.items.filter((_, position) => position !== index), ...(draft.ibpt ? { ibpt: { ...draft.ibpt, items: draft.ibpt.items.filter((_, position) => position !== index) } } : {}) }) }} />
             <Button type="button" variant="outline" disabled={!!draft.sourceOrderId || draft.items.length >= 990} onClick={() => setDraft({ ...draft, items: [...draft.items, blankItem()], ...(draft.ibpt ? { ibpt: { ...draft.ibpt, items: [...draft.ibpt.items, blankIbptItem()] } } : {}) })}>Adicionar item manualmente</Button>
+            <NfeGlobalAmounts onPendingChange={setPendingAmounts} draft={draft} change={(items, totals) => { setAllocationRules(previous => { const next = { ...previous }; for (const [key] of amountFields) if (totals[key] !== undefined) next[key] = { total: totals[key] || "0", locked: [] }; return next }); setDraft(previous => ({ ...previous, items })) }} />
+            {allocationError && <p role="alert" className="text-sm text-destructive">{allocationError}</p>}
           </section>
           <NfeAmountsSummary draft={draft} />
           <NfeTransportFields draft={draft} change={patch => setDraft(previous => ({ ...previous, ...patch }))} />
