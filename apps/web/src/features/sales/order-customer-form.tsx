@@ -227,6 +227,15 @@ export function OrderCustomerForm({ initialCustomerId, ref, tenantId, disabled, 
     applyDraft(emptyOrderCustomerDraft())
   }
 
+  // Desfaz a escolha do cliente (por exemplo, quando o cliente errado foi selecionado) e volta para a busca.
+  function removeCustomer() {
+    if (frozen || running.current) return
+    activeSelection.current?.abort(); generation.current++
+    confirmed.current = null; command.current = null; lookupGenerated.current = {}
+    setRequestedId(null); setSelectedName(""); setDocumentEdited(false); setCepRevision(0); setCepMessage(""); setFocusField(null); setAttempted(false); setError(""); setEditorOpen(false); setSearchOpen(true)
+    applyDraft(emptyOrderCustomerDraft())
+  }
+
   function read() {
     setAttempted(true)
     if (loading || requestedId && confirmed.current?.id !== requestedId) throw Error("Selecione novamente o cliente e aguarde a conferência do cadastro.")
@@ -342,7 +351,7 @@ export function OrderCustomerForm({ initialCustomerId, ref, tenantId, disabled, 
       <div><p className="font-medium">{draft.legalName || selectedName}</p><p className="text-sm text-muted-foreground">{formatOrderCustomerValue("taxId", draft.taxId, draft.personType)}</p></div>
       <p className="text-sm">{[draft.responsible, draft.phone, draft.email].filter(Boolean).join(" · ") || "Contato não informado"}</p>
       <div><p className="text-xs text-muted-foreground">Endereço cadastral</p><p className="text-sm">{[draft.street, draft.number, draft.district, draft.city, draft.state, formatOrderCustomerValue("postalCode", draft.postalCode)].filter(Boolean).join(", ") || "Endereço não informado"}</p></div>
-      <div className="order-customer-actions"><Button type="button" variant="outline" disabled={disabled || busy || uncertain || loading} onClick={() => { setSearchOpen(true); setEditorOpen(false) }}>Trocar</Button>{canManage && <Button type="button" variant="outline" disabled={frozen} aria-expanded={editorOpen} onClick={() => { setEditorOpen(value => !value); setSearchOpen(false) }}>{editorOpen ? "Fechar edição" : "Editar cadastro"}</Button>}</div>
+      <div className="order-customer-actions"><Button type="button" variant="outline" disabled={disabled || busy || uncertain || loading} onClick={() => { setSearchOpen(true); setEditorOpen(false) }}>Trocar</Button><Button type="button" variant="outline" disabled={frozen} onClick={removeCustomer}>Remover cliente</Button>{canManage && <Button type="button" variant="outline" disabled={frozen} aria-expanded={editorOpen} onClick={() => { setEditorOpen(value => !value); setSearchOpen(false) }}>{editorOpen ? "Fechar edição" : "Editar cadastro"}</Button>}</div>
       {!editorOpen && registration}
     </div>}
     {selectedName && !documentEdited && <CnpjRegistrationCheck value={draft.taxId} tenantId={tenantId} />}
