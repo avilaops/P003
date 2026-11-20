@@ -15,7 +15,7 @@ test("listas de Vendas • vencimento financeiro, período, vendedor, validade e
     try {
       await client.query("BEGIN")
       await client.query("INSERT INTO sales_proposals(id,tenant_id) VALUES($1,$2)",[proposal,tenant])
-      await client.query("INSERT INTO sales_proposal_versions(tenant_id,proposal_id,version,customer_id,customer_name,customer_tax_id,valid_until,payment_terms,delivery_terms,amount_cents,status,created_by) VALUES($1,$2,1,$1,'Cliente','52998224725',current_date-1,'À vista','Retirada',2000,'draft','cashier')",[tenant,proposal])
+      await client.query("INSERT INTO sales_proposal_versions(tenant_id,proposal_id,version,customer_id,customer_name,customer_tax_id,valid_until,payment_terms,delivery_terms,amount_cents,status,created_by) VALUES($1,$2,1,$1,'Cliente','52998224725',(CURRENT_TIMESTAMP AT TIME ZONE 'America/Sao_Paulo')::date-1,'À vista','Retirada',2000,'draft','cashier')",[tenant,proposal])
       await client.query("COMMIT")
     }finally {client.release()}
     await seed.query(`INSERT INTO sales_opportunities(id,tenant_id,order_id,proposal_id,data,created_by)
