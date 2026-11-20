@@ -526,7 +526,8 @@ for (const width of [390, 1366]) test(`negociação preserva cliente, entrada e 
 
   await page.getByLabel("Valor da parcela 2 (R$)", { exact: true }).fill("2170,11")
   await page.getByRole("button", { name: "Criar pedido com estas condições", exact: true }).click()
-  await expect(page.getByRole("alert").filter({ hasText: "a soma deve corresponder ao saldo" })).toBeVisible()
+  // No celular a mensagem aparece junto da parcela e no resumo, sem o aviso geral; o que importa é o usuário vê-la e o pedido não sair.
+  await expect(page.getByText("a soma deve corresponder ao saldo").first()).toBeVisible()
   expect(state.writes.filter(write => write.pathname === "/api/erp/commercial/orders")).toHaveLength(0)
   await page.locator("summary").filter({ hasText: "Parcela 3 de 3" }).click()
   await page.getByLabel("Valor da parcela 3 (R$)", { exact: true }).fill("2170,12")
