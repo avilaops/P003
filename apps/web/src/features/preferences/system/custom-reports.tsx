@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import { PageHeader } from "@/components/page-header"
 import { AccessLink } from "@/components/feedback/session-recovery"
 import { GuardedLink } from "@/components/shell/navigation-guard"
 import { Button } from "@/components/ui/button"
@@ -40,6 +41,7 @@ export function CustomReports() {
   }
   const engine=Object.fromEntries((resource.value?.engineSources??[]).map(source=>[source.id,source.label]))
   return <div className="mx-auto max-w-5xl space-y-6 px-4 pb-28 pt-8 lg:px-6">
+    <PageHeader eyebrow="Preferências / Sistema" title="Relatórios customizados" description="Salve definições de relatórios usando fontes, colunas e filtros autorizados. Esta tela não aceita SQL nem executa consultas arbitrárias." />
     <p className="form-section text-sm">Vendas, auditoria e as demais fontes do motor (agrupamentos, totais, exportação e envio agendado) ficam em <GuardedLink className="font-medium underline" href="/relatorios/configuraveis">Relatórios configuráveis</GuardedLink>.</p>
 
     {resource.error&&<div role="alert" className="form-section space-y-3"><p>{resource.error}</p>{resource.status===401?<AccessLink/>:<Button variant="outline" onClick={resource.reload}>Tentar novamente</Button>}</div>}
