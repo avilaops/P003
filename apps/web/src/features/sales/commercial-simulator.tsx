@@ -285,7 +285,7 @@ function Simulator({ transfer, table: initialTable, initialSourceLine, initialPr
           return
         }
         const selected = await customerForm.current?.save()
-        if (!selected) return
+        if (!selected) { setError("O cliente não foi salvo, por isso o pedido não foi criado. Veja o motivo no bloco Cliente."); focusOrderSection("customer"); return }
         const value = await command.send<{ tenantId: string; id: string }>((orderMode ? "/api/erp/commercial/mixed/orders" : "/api/erp/commercial/orders"), table.tenantId, { ...pendingOrder.current, customerId: selected.id, ...(opportunity ? { opportunityId: opportunity.id, opportunityRevision: opportunity.revision } : {}) }, "", "POST", reply => reply?.tenantId === table.tenantId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(reply.id))
         if (value?.tenantId === table.tenantId && value.id) { setDirty(false); router.push(`/vendas/pedidos/${value.id}`) }
       } finally { converting.current = false; setSavingOrder(false) }
@@ -384,7 +384,7 @@ function Simulator({ transfer, table: initialTable, initialSourceLine, initialPr
               onUpdateMany={updates => { if (frozen) return; const byId = new Map(updates.map(item => [item.productId, item])); setItems(current => current.map(item => byId.get(item.productId) || item)); change() }}
             /> : <div className="order-equipment-empty"><p>Nenhum equipamento ainda.</p><Button type="button" variant="outline" disabled={frozen} onClick={focusSearch}>Adicionar equipamento</Button></div>}
             {attempted && orderIssues.filter(issue => issue.section === "equipment").map(issue => <p key={issue.field} className="text-xs text-destructive">{issue.message}</p>)}
-            <OrderWeightSummary tenantId={table.tenantId} loading={!!productDetails.loadingIds.length} unavailable={!!Object.keys(productDetails.errors).length} onRetry={() => productDetails.retry()} items={items.map(item => ({ ...item, equipmentWeight: productDetails.products[item.productId.toLowerCase()]?.weight ?? null, quantity: validOrderQuantity(item.quantity) ? String(Number(item.quantity)) : "" }))} />
+            <OrderWeightSummary tenantId={table.tenantId} loading={!!productDetails.loadingIds.length} unavailable={!!Object.keys(productDetails.errors).length} onRetry={() => productDetails.retry()} items={items.map(item => ({ ...item, equipmentWeight: productDetails.products[item.productId.toLowerCase()]?.weight ?? null, equipmentDimensions: productDetails.products[item.productId.toLowerCase()]?.dimensionsMm ?? null, quantity: validOrderQuantity(item.quantity) ? String(Number(item.quantity)) : "" }))} />
           </OrderSection>}
           customer={<OrderCustomerForm initialCustomerId={transfer?.input.customerId || opportunity?.customerId || undefined} ref={customerForm} tenantId={table.tenantId} disabled={frozen}
             canManage={canCreate && canManageCustomer} onDirty={markDirty}

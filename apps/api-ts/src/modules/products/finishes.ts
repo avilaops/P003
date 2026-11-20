@@ -27,6 +27,7 @@ type FinishRow = {
   plate_holder_types: string[]
   plate_holder_type: string
   weight: string | null
+  dimensions_mm: number[] | null
 }
 
 export function productPlateHolderTypes(options: unknown, legacyType: unknown): string[] {
@@ -47,7 +48,7 @@ export function registerProductFinishesRoute(app: FastifyInstance, dependencies:
       const { rows } = await context.client.query<FinishRow>(`
         SELECT product.id, product.name, product.structure_colors, product.swing_arm_colors,
           product.finishing_palette, product.upholstery_colors, product.plate_holder_colors,
-          product.plate_holder_types, product.plate_holder_type, profile.weight,
+          product.plate_holder_types, product.plate_holder_type, profile.weight, profile.dimensions_mm,
           COALESCE((settings.data->>'upholsteryConfigurable')::boolean, true) AS upholstery_configurable
         FROM products product
         LEFT JOIN product_catalog_profiles profile
@@ -71,6 +72,8 @@ export function registerProductFinishesRoute(app: FastifyInstance, dependencies:
           plateHolderColors: row.plate_holder_colors,
           plateHolderTypes: productPlateHolderTypes(row.plate_holder_types, row.plate_holder_type),
           weight: row.weight,
+          // Length, width and height in millimetres; feeds the freight area and volume of orders and proposals.
+          dimensionsMm: row.dimensions_mm,
         })),
         missingIds: ids.filter(id => !found.has(id)),
       }

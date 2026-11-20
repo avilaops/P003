@@ -4,8 +4,21 @@ import { ProductThumbnail } from "@/features/catalog/product-thumbnail"
 import type { Schema } from "@/lib/api/types"
 import { commercialMoney, commercialQuantity } from "./order-presentation"
 import { proposalTechnicalSummary, type ProposalTechnical } from "./proposal-commercial-model"
+import { orderEquipmentFootprint, orderEquipmentWeight } from "./order-weight-model"
 
 export type ProposalIssuer = DocumentIssuer
+
+// Freight figures come from the technical snapshot frozen with the proposal, never from the current catalog.
+function ProposalFreight({ items }: { items: { quantity: string; technical?: ProposalTechnical }[] }) {
+  const weight = orderEquipmentWeight(items.map(item => ({ quantity: item.quantity, weight: item.technical?.weight ?? null })))
+  const footprint = orderEquipmentFootprint(items.map(item => ({ quantity: item.quantity, dimensionsMm: item.technical?.dimensionsMm ?? null })))
+  const value = (amount: string | null, unit: string) => amount === null ? "Incompleto" : `${commercialQuantity(amount)} ${unit}`
+  return <DocumentSection title="Dados para frete" className="proposal-freight" aria-label="Dados para frete"><dl className="proposal-dates">
+    <div><dt>Peso bruto total</dt><dd>{value(weight.totalKg, "kg")}</dd></div>
+    <div><dt>Área ocupada</dt><dd>{value(footprint.areaM2, "m²")}</dd></div>
+    <div><dt>Volume</dt><dd>{value(footprint.volumeM3, "m³")}</dd></div>
+  </dl></DocumentSection>
+}
 const labels: Record<string, string> = { draft: "Rascunho", sent: "Enviada", accepted: "Aceita", rejected: "Rejeitada", cancelled: "Cancelada", expired: "Expirada", superseded: "Substituída" }
 function date(value: string) {
   const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(value)
@@ -42,6 +55,7 @@ export function ProposalDocument({ snapshot, issuer, issuerName }: { snapshot: O
       </tr>)}</tbody>
     </DataTable></DocumentSection>
     <div className="commercial-document-total proposal-total"><p>Total: {commercialMoney(data.amount)}</p></div>
+    <ProposalFreight items={items} />
     <div className="commercial-document-grid proposal-conditions">
       {data.paymentTerms && <DocumentSection title="Pagamento"><p>{data.paymentTerms}</p></DocumentSection>}
       {data.deliveryTerms && <DocumentSection title="Entrega"><p>{data.deliveryTerms}</p></DocumentSection>}

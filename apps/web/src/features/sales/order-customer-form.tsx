@@ -54,6 +54,8 @@ export function OrderCustomerForm({ initialCustomerId, ref, tenantId, disabled, 
   const [error, setError] = useState("")
   const [focusField, setFocusField] = useState<{ field: string } | null>(null)
   const [attempted, setAttempted] = useState(false)
+  const [touched, setTouched] = useState<string[]>([])
+  const [duplicate, setDuplicate] = useState<{ document: string; id: string; name: string } | null>(null)
   const [editorOpen, setEditorOpen] = useState(false)
   const [searchOpen, setSearchOpen] = useState(true)
   const progressCallback = useRef(onProgressChange)
@@ -267,15 +269,23 @@ export function OrderCustomerForm({ initialCustomerId, ref, tenantId, disabled, 
   }
 
   useImperativeHandle(ref, () => ({ read, save, focus }))
+  // Errors show after the user leaves a field, or as soon as a full CPF/CNPJ has been typed.
+  function shows(field: OrderCustomerField) {
+    if (attempted || touched.includes(field)) return true
+    if (field !== "taxId") return false
+    const length = normalizeOrderCustomerDocument(draft.taxId).length
+    return length >= (draft.personType === "fisica" ? 11 : 14)
+  }
   function validationProps(field: OrderCustomerField) {
-    const invalid = attempted && issues.some(issue => issue.field === field)
+    const invalid = shows(field) && issues.some(issue => issue.field === field)
     return { "data-order-customer-field": field, "aria-invalid": invalid || undefined, "aria-describedby": invalid ? `${issueId}-${field}` : undefined }
   }
   function inlineError(field: OrderCustomerField) {
-    const issue = attempted && issues.find(issue => issue.field === field)
+    const issue = shows(field) && issues.find(issue => issue.field === field)
     return issue ? <span id={`${issueId}-${field}`} className="text-xs text-destructive">{issue.message}</span> : null
   }
   function format(field: OrderCustomerField) {
+    setTouched(current => current.includes(field) ? current : [...current, field])
     if (frozen || running.current) return
     const previous = currentDraft.current[field]
     const next = formatOrderCustomerValue(field, previous, currentDraft.current.personType)
@@ -292,7 +302,26 @@ export function OrderCustomerForm({ initialCustomerId, ref, tenantId, disabled, 
     <label className="order-customer-exempt"><input type="checkbox" checked={draft.stateRegistration.trim().toUpperCase() === "ISENTO"} disabled={frozen} onChange={event => change("stateRegistration", event.target.checked ? "ISENTO" : "")} /><span>Isento de inscrição estadual</span></label>
     <p className="text-xs text-muted-foreground">IE ou ISENTO será usado nas condições deste pedido.</p>
   </div>
-  const documentField = <label className="grid min-w-0 gap-1"><span>{draft.personType === "juridica" ? "CNPJ" : "CPF"}{required}</span><Input {...validationProps("taxId")} aria-label={draft.personType === "juridica" ? "CNPJ" : "CPF"} name="order-customer-taxId" required maxLength={30} inputMode={draft.personType === "fisica" ? "numeric" : "text"} autoCapitalize="characters" value={draft.taxId} disabled={!editable} onChange={event => change("taxId", event.target.value)} onBlur={() => format("taxId")} />{inlineError("taxId")}</label>
+  const documentValid = !issues.some(issue => issue.field === "taxId")
+  // The match belongs to the document it was found for; any edit hides it until the next lookup answers.
+  const visibleDuplicate = duplicate && editorOpen && !requestedId && documentValid && duplicate.document === normalizeOrderCustomerDocument(draft.taxId) ? duplicate : null
+  const documentField = <label className="grid min-w-0 gap-1"><span>{draft.personType === "juridica" ? "CNPJ" : "CPF"}{required}</span><Input {...validationProps("taxId")} aria-label={draft.personType === "juridica" ? "CNPJ" : "CPF"} name="order-customer-taxId" required maxLength={30} inputMode={draft.personType === "fisica" ? "numeric" : "text"} autoCapitalize="characters" value={draft.taxId} disabled={!editable} onChange={event => change("taxId", event.target.value)} onBlur={() => format("taxId")} />{inlineError("taxId")}{visibleDuplicate && <span role="alert" className="grid gap-1 text-xs text-destructive">Já existe um cadastro com este {draft.personType === "fisica" ? "CPF" : "CNPJ"}: {visibleDuplicate.name}.<Button type="button" variant="outline" className="h-9 w-fit px-3" onClick={() => void selectCustomer({ id: visibleDuplicate.id, legalName: visibleDuplicate.name })}>Usar este cliente</Button></span>}</label>
+  useEffect(() => {
+    const document = normalizeOrderCustomerDocument(draft.taxId)
+    if (!editorOpen || requestedId || !documentValid || !document) return
+    const controller = new AbortController()
+    const timer = window.setTimeout(async () => {
+      try {
+        const params = new URLSearchParams({ q: document, offset: "0", limit: "5", status: "active", role: "customer" })
+        const response = await erpFetch(`/api/erp/parties?${params}`, { signal: controller.signal })
+        const reply = await response.json() as { tenantId?: string; data?: (Choice & { taxId?: string })[] }
+        if (!response.ok || reply.tenantId !== tenantId) return
+        const match = reply.data?.find(item => normalizeOrderCustomerDocument(item.taxId ?? "") === document)
+        setDuplicate(match ? { document, id: match.id, name: match.legalName || match.name || "cliente cadastrado" } : null)
+      } catch { /* The server still rejects duplicates when the order is saved. */ }
+    }, 500)
+    return () => { controller.abort(); clearTimeout(timer) }
+  }, [draft.taxId, documentValid, editorOpen, requestedId, tenantId])
   useEffect(() => {
     if (!initialCustomerId) return
     const timer = window.setTimeout(() => void selectCustomer({id: initialCustomerId, legalName: "Cliente da negociação"}), 0)
