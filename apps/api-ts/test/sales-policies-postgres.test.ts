@@ -93,7 +93,7 @@ test("Condições, preços, crédito e aprovação por empresa e documento", {sk
     const quote=await simulate(priced)
     assert.equal(quote.sale.items[0].priceOrigin.kind,"customer")
     const signed=ok(await post("commercial/orders",{simulation:priced,digest:quote.digest,customerId:buyer,dueDate:"2027-01-01"}),201).id
-    await seed.query("UPDATE price_lists SET valid_until=CURRENT_DATE-1 WHERE tenant_id=$1 AND id=$2",[tenant,customerList])
+    await seed.query("UPDATE price_lists SET valid_until=(CURRENT_TIMESTAMP AT TIME ZONE 'America/Sao_Paulo')::date-1 WHERE tenant_id=$1 AND id=$2",[tenant,customerList])
     assert.equal((await simulate(priced)).sale.items[0].priceOrigin.kind,"channel")
     await seed.query("UPDATE price_lists SET status='archived' WHERE tenant_id=$1 AND id=$2",[tenant,channelList])
     assert.equal((await simulate(priced)).sale.items[0].tableUnitCents,1256323)
