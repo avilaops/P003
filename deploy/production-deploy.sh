@@ -132,7 +132,8 @@ web = environment(config["services"]["web"])
 # The TypeScript API is the only API. Its configuration is rebuilt from an explicit allowlist,
 # keeping private values already present in the previous release; recovery selects a whole prior release.
 KEYS = ("DATABASE_URL", "DATABASE_MAX_CONNECTIONS", "AUTH_ISSUER", "AUTH_USERINFO_URL", "ERP_MCP_ORIGIN",
-        "DOCUSEAL_URL", "DOCUSEAL_API_TOKEN", "BROWSER_USE_API_KEY")
+        "DOCUSEAL_URL", "DOCUSEAL_API_TOKEN", "DOCUSEAL_WEBHOOK_SECRET", "DOCUSEAL_TENANT_TEMPLATES", "DOCUSEAL_EMAIL_READY",
+        "BROWSER_USE_API_KEY")
 settings = {key: previous_api_ts.get(key) or api.get(key) for key in KEYS if previous_api_ts.get(key) or api.get(key)}
 settings.setdefault("AUTH_ISSUER", web.get("AUTH_ISSUER", ""))
 settings.update({"NODE_ENV": "production", "API_TS_HOST": "0.0.0.0", "API_TS_PORT": "8080"})

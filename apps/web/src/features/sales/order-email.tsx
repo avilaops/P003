@@ -1,6 +1,7 @@
 "use client"
 
 import { useId, useState } from "react"
+import { CheckCircle2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
@@ -19,15 +20,15 @@ export function OrderEmail({ id, number, tenantId, etag, onReload }: { id: strin
   return <>
     <Button variant="outline" className="h-9 px-3" onClick={() => setOpen(true)}>Enviar por e-mail</Button>
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-xl">
+      <DialogContent className="max-h-[90dvh] gap-5 overflow-y-auto p-5 sm:max-w-xl">
         <DialogHeader><DialogTitle>Enviar {orderNumber(number)} por e-mail</DialogTitle><DialogDescription>Confira o destinatário e a mensagem antes de enviar o documento do pedido.</DialogDescription></DialogHeader>
-        {open && <OrderEmailComposer id={id} number={number} tenantId={tenantId} etag={etag} onReload={onReload} />}
+        {open && <OrderEmailComposer id={id} number={number} tenantId={tenantId} etag={etag} onReload={onReload} onClose={() => setOpen(false)} />}
       </DialogContent>
     </Dialog>
   </>
 }
 
-function OrderEmailComposer({ id, number, tenantId, etag, onReload }: { id: string; number: string; tenantId: string; etag: string; onReload: () => void }) {
+function OrderEmailComposer({ id, number, tenantId, etag, onReload, onClose }: { id: string; number: string; tenantId: string; etag: string; onReload: () => void; onClose: () => void }) {
   const messageId = useId()
   const resource = useResource<EmailStatus>(`/api/erp/orders/${id}/email`)
   const command = useCommand()
@@ -43,6 +44,13 @@ function OrderEmailComposer({ id, number, tenantId, etag, onReload }: { id: stri
   const frozen = command.busy || command.uncertain || command.stale || !!pendingDelivery || receipt?.status === "sent"
   if (resource.loading && !value) return <p role="status">Consultando envio de e-mail…</p>
   if (resource.error || !value) return <div className="space-y-3"><p role="alert"><RequestError message={resource.error || "Não foi possível consultar o envio deste pedido."} status={resource.status} /></p><Button variant="outline" onClick={resource.reload}>Consultar novamente</Button></div>
+  if (receipt?.status === "sent") return <div role="status" className="space-y-5 py-2 text-center">
+    <CheckCircle2 aria-hidden className="mx-auto size-14 text-emerald-600" />
+    <div className="space-y-1"><p className="text-lg font-semibold">E-mail enviado</p><p className="text-sm text-muted-foreground">Aceito pelo servidor de e-mail</p></div>
+    <div className="space-y-1 rounded-lg border bg-muted/30 p-3 text-sm"><p className="break-all font-medium">{receipt.recipient}</p><p className="text-muted-foreground">{orderNumber(number)} em PDF · {new Date(receipt.createdAt).toLocaleString("pt-BR")}</p></div>
+    <p className="text-sm text-muted-foreground">A entrega na caixa do destinatário depende do provedor.</p>
+    <Button type="button" className="h-11 w-full" onClick={onClose}>Fechar</Button>
+  </div>
   return <form className="space-y-4" onSubmit={async event => {
     event.preventDefault()
     if (!command.uncertain && (!value.canSend || !value.emailReady || frozen)) return
@@ -51,20 +59,20 @@ function OrderEmailComposer({ id, number, tenantId, etag, onReload }: { id: stri
   }}>
     {!value.emailReady && <p role="status" className="rounded-lg border p-3">O envio de e-mail ainda não está configurado no servidor. Nenhuma mensagem será enviada até a configuração estar disponível.</p>}
     {!value.canSend && <p role="status">Envio indisponível: verifique sua permissão de gestão e se o pedido está cancelado.</p>}
-    <fieldset disabled={frozen || !value.canSend || !value.emailReady} className="space-y-3">
-      <label className="block space-y-2">Destinatário<Input type="email" autoComplete="email" required maxLength={254} value={recipient} onChange={event => setRecipientOverride(event.target.value)} /></label>
-      <label className="block space-y-2">Assunto<Input required maxLength={200} value={subject} onChange={event => setSubject(event.target.value)} /></label>
-      <div className="space-y-2"><label htmlFor={messageId} className="block">Mensagem</label><textarea id={messageId} required maxLength={10000} rows={5} className="w-full rounded-lg border border-input bg-background p-3" value={message} onChange={event => setMessage(event.target.value)} /></div>
+    <fieldset disabled={frozen || !value.canSend || !value.emailReady} className="space-y-4">
+      <label className="block space-y-1.5 text-sm font-medium">Destinatário<Input type="email" autoComplete="email" required maxLength={254} value={recipient} onChange={event => setRecipientOverride(event.target.value)} /></label>
+      <label className="block space-y-1.5 text-sm font-medium">Assunto<Input required maxLength={200} value={subject} onChange={event => setSubject(event.target.value)} /></label>
+      <div className="space-y-1.5"><label htmlFor={messageId} className="block text-sm font-medium">Mensagem</label><textarea id={messageId} required maxLength={10000} rows={9} className="min-h-48 w-full resize-y rounded-lg border border-input bg-background p-3 text-sm font-normal leading-relaxed" value={message} onChange={event => setMessage(event.target.value)} /></div>
     </fieldset>
-    <p className="rounded-lg border bg-muted/30 p-3 text-sm">Anexo: documento do pedido em PDF, com cliente, itens, acabamentos, peso e valores registrados. Para enviar o contrato para assinatura, use “Pedido e contratos”.</p>
+    <p className="rounded-lg border bg-muted/30 p-3 text-xs text-muted-foreground">Anexo: documento do pedido em PDF, com cliente, itens, acabamentos, peso e valores. Contrato para assinatura: use “Pedido e contratos”.</p>
     {command.error && <p role="alert"><RequestError message={command.error} status={command.status} /></p>}
     {command.stale && <Button type="button" variant="outline" onClick={() => { command.reset(); onReload(); resource.reload() }}>Recarregar pedido</Button>}
-    {receipt && <p role="status">{deliveryLabels[receipt.status]} · {receipt.recipient}{receipt.status === "sent" ? ". A entrega na caixa do destinatário depende do provedor." : "."}</p>}
+    {receipt && <p role="status" className="text-sm">{deliveryLabels[receipt.status]} · {receipt.recipient}.</p>}
     {pendingDelivery && <p role="status">Há um envio sem confirmação definitiva. Consulte o histórico e confirme com o provedor antes de realizar outro envio.</p>}
     {command.uncertain && <p role="status">Resultado ainda não confirmado. A consulta abaixo repete o mesmo comando, sem criar um novo envio.</p>}
-    <div className="flex flex-wrap gap-2">
-      <Button type="submit" disabled={command.busy || command.stale || (!command.uncertain && (!value.canSend || !value.emailReady || frozen || !etag))}>{command.busy ? "Confirmando envio…" : command.uncertain ? "Consultar resultado do envio" : "Enviar e-mail com anexo"}</Button>
-      <Button type="button" variant="outline" disabled={command.busy} onClick={resource.reload}>Atualizar histórico</Button>
+    <div className="flex flex-col gap-2 sm:flex-row-reverse">
+      <Button type="submit" className="h-11 sm:h-9 sm:flex-1" disabled={command.busy || command.stale || (!command.uncertain && (!value.canSend || !value.emailReady || frozen || !etag))}>{command.busy ? "Confirmando envio…" : command.uncertain ? "Consultar resultado do envio" : "Enviar e-mail com anexo"}</Button>
+      <Button type="button" variant="outline" className="h-10 sm:h-9" disabled={command.busy} onClick={resource.reload}>Atualizar histórico</Button>
     </div>
     {!!value.deliveries.length && <details><summary className="cursor-pointer text-sm font-medium">Histórico de envios</summary><ul className="mt-3 space-y-3 text-sm">{value.deliveries.map(delivery => <li key={delivery.id} className="break-words rounded-lg border p-3">{deliveryLabels[delivery.status]}<br />{delivery.recipient} · {new Date(delivery.createdAt).toLocaleString("pt-BR")}</li>)}</ul></details>}
   </form>
