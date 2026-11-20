@@ -4,6 +4,9 @@ import { installFrontendFixture, record, tenant } from "./helpers/frontend-fixtu
 import type { CheckoutInput, CheckoutSnapshot } from "../src/features/sales/commercial-payment-model"
 import type { SimulationInput } from "../src/features/sales/negotiation-types"
 
+// Campos de dinheiro mostram "R$ 1.500,00" sem foco e o texto cru ("1500,00") com foco; aceita os dois.
+const amountText = (raw: string) => new RegExp("^(?:R\\$\\s)?" + raw.replace(/(\d)(?=(\d{3})+,)/g, "$1\\.?") + "$")
+
 const product = "33333333-3333-4333-8333-333333333333"
 const customer = "44444444-4444-4444-8444-444444444444"
 const version = "55555555-5555-4555-8555-555555555555"
@@ -124,8 +127,8 @@ for (const width of [320, 390, 430, 1366, 1440]) test(`erro abre e foca a parcel
   await expect(amount).toBeFocused()
   await expect(amount).toHaveAttribute("aria-invalid", "true")
   await expect(amount).toHaveAccessibleDescription("Informe um valor maior que zero para a parcela 2.")
-  await expect(amount).toHaveValue("0,00")
-  await expect(page.getByLabel("Valor da parcela 1 (R$)", { exact: true })).toHaveValue("6510,36")
+  await expect(amount).toHaveValue(amountText("0,00"))
+  await expect(page.getByLabel("Valor da parcela 1 (R$)", { exact: true })).toHaveValue(amountText("6510,36"))
   expect(state.creation()).toBeNull()
   expect(state.writes.filter(write => write.pathname === "/api/erp/commercial/orders")).toHaveLength(0)
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
@@ -153,7 +156,7 @@ test("erro na fabricação recolhida abre as observações e preserva o plano", 
   await expect(field).toBeFocused()
   await expect(field).toHaveAttribute("aria-invalid", "true")
   await expect(page.getByLabel("Observações da entrega", { exact: true })).toHaveValue("Preservar agendamento")
-  await expect(page.getByLabel("Valor da parcela 2 (R$)", { exact: true })).toHaveValue("3255,18")
+  await expect(page.getByLabel("Valor da parcela 2 (R$)", { exact: true })).toHaveValue(amountText("3255,18"))
   expect(state.creation()).toBeNull()
 })
 
@@ -213,7 +216,7 @@ for (const action of ["remover inválida", "remover anterior", "substituir", "ca
   if (action === "cancelar") {
     await expect(description).toContainText("parcela 2")
     await expect(amount).toHaveAttribute("aria-invalid", "true")
-    await expect(amount).toHaveValue("0,00")
+    await expect(amount).toHaveValue(amountText("0,00"))
   } else if (action === "remover anterior") {
     await expect(description).toContainText("parcela 1")
     await expect(description).not.toContainText("parcela 2")
@@ -340,14 +343,14 @@ test("refazer parcelas exige confirmação e cancelar preserva edições", async
   await expect(dialog).toBeVisible()
   await dialog.getByRole("button", { name: "Manter parcelas", exact: true }).click()
   await expect(page.getByRole("list", { name: "Parcelas negociadas", exact: true }).getByRole("listitem")).toHaveCount(2)
-  await expect(page.getByLabel("Valor da parcela 1 (R$)", { exact: true })).toHaveValue("100,00")
+  await expect(page.getByLabel("Valor da parcela 1 (R$)", { exact: true })).toHaveValue(amountText("100,00"))
   await expect(page.getByLabel("Forma da parcela 1", { exact: true })).toHaveValue(pix)
   await expect(page.getByLabel("Vencimento da conta a receber", { exact: true })).toHaveValue("2027-03-03")
   await page.getByRole("button", { name: "Gerar parcelas", exact: true }).click()
   await dialog.getByRole("button", { name: "Substituir parcelas", exact: true }).click()
   await expect(dialog).toBeHidden()
   await expect(page.getByRole("list", { name: "Parcelas negociadas", exact: true }).getByRole("listitem")).toHaveCount(3)
-  await expect(page.getByLabel("Valor da parcela 1 (R$)", { exact: true })).toHaveValue("2170,12")
+  await expect(page.getByLabel("Valor da parcela 1 (R$)", { exact: true })).toHaveValue(amountText("2170,12"))
   await expect(page.getByLabel("Forma da parcela 1", { exact: true })).toHaveValue(boleto)
   await expect(page.getByText(/Parcelas:.*Soma conferida/)).toBeVisible()
 })
@@ -464,18 +467,18 @@ for (const width of [390, 1366]) test(`negociação preserva cliente, entrada e 
   // A percentage with a fractional cent must produce the agreed amount exactly.
   await page.getByLabel("Entrada (%)", { exact: true }).fill("75")
   await page.getByLabel("Entrada (%)", { exact: true }).press("Tab")
-  await expect(page.getByLabel("Entrada (R$)", { exact: true })).toHaveValue("16275,91")
+  await expect(page.getByLabel("Entrada (R$)", { exact: true })).toHaveValue(amountText("16275,91"))
   await simulate(page)
   expect(state.simulations.at(-1)?.downPaymentCents).toBe(1627591)
   // A direct amount is preserved rather than reconstructed from its rounded percentage.
   await page.getByLabel("Entrada (R$)", { exact: true }).fill("15190,86")
   await simulate(page)
-  await expect(page.getByLabel("Entrada (R$)", { exact: true })).toHaveValue("15190,86")
+  await expect(page.getByLabel("Entrada (R$)", { exact: true })).toHaveValue(amountText("15190,86"))
   expect(state.simulations.at(-1)?.downPaymentCents).toBe(1519086)
   await expect(page.getByLabel("Entrada (%)", { exact: true })).toHaveValue("70,00")
   await page.getByLabel("Entrada (%)", { exact: true }).focus()
   await page.getByLabel("Entrada (%)", { exact: true }).press("Tab")
-  await expect(page.getByLabel("Entrada (R$)", { exact: true })).toHaveValue("15190,86")
+  await expect(page.getByLabel("Entrada (R$)", { exact: true })).toHaveValue(amountText("15190,86"))
   await expect(page.getByRole("button", { name: "Continuar no novo pedido", exact: true })).toBeVisible()
   await page.getByLabel("Forma da entrada", { exact: true }).selectOption(pix)
   await page.getByLabel("Data da entrada", { exact: true }).fill("2026-11-30")
@@ -485,9 +488,9 @@ for (const width of [390, 1366]) test(`negociação preserva cliente, entrada e 
   await page.getByLabel("Intervalo (dias)", { exact: true }).fill("30")
   await page.getByLabel("Vencimento da conta a receber", { exact: true }).fill("2026-12-30")
   await page.getByRole("button", { name: "Gerar parcelas", exact: true }).click()
-  await expect(page.getByLabel("Valor da parcela 1 (R$)", { exact: true })).toHaveValue("2170,12")
-  await expect(page.getByLabel("Valor da parcela 2 (R$)", { exact: true })).toHaveValue("2170,12")
-  await expect(page.getByLabel("Valor da parcela 3 (R$)", { exact: true })).toHaveValue("2170,11")
+  await expect(page.getByLabel("Valor da parcela 1 (R$)", { exact: true })).toHaveValue(amountText("2170,12"))
+  await expect(page.getByLabel("Valor da parcela 2 (R$)", { exact: true })).toHaveValue(amountText("2170,12"))
+  await expect(page.getByLabel("Valor da parcela 3 (R$)", { exact: true })).toHaveValue(amountText("2170,11"))
   await expect(page.getByLabel("Vencimento da parcela 1", { exact: true })).toHaveValue("2026-12-30")
   await expect(page.getByLabel("Vencimento da parcela 2", { exact: true })).toHaveValue("2027-01-29")
   await expect(page.getByLabel("Vencimento da parcela 3", { exact: true })).toHaveValue("2027-02-28")
@@ -504,7 +507,7 @@ for (const width of [390, 1366]) test(`negociação preserva cliente, entrada e 
   await expect(page.getByLabel("Forma da parcela 2", { exact: true })).toHaveValue(pix)
   await expect(page.getByLabel("Observações da entrega", { exact: true })).toHaveValue("Entregar no galpão 2 com agendamento.")
   await page.getByRole("button", { name: "Adicionar parcela", exact: true }).click()
-  await expect(page.getByLabel("Valor da parcela 4 (R$)", { exact: true })).toHaveValue("0,00")
+  await expect(page.getByLabel("Valor da parcela 4 (R$)", { exact: true })).toHaveValue(amountText("0,00"))
   await expect(page.getByLabel("Vencimento da parcela 4", { exact: true })).toHaveValue("2027-03-30")
   await page.getByRole("button", { name: "Remover parcela 4", exact: true }).click()
   await expect(page.getByLabel("Valor da parcela 4 (R$)", { exact: true })).toHaveCount(0)
@@ -517,7 +520,7 @@ for (const width of [390, 1366]) test(`negociação preserva cliente, entrada e 
   await expect(page.getByRole("alert").filter({ hasText: "A entrada deve estar entre 0% e 100%." })).toBeVisible()
   await page.getByLabel("Entrada (%)", { exact: true }).fill("70,00")
   await page.getByLabel("Entrada (%)", { exact: true }).press("Tab")
-  await expect(page.getByLabel("Entrada (R$)", { exact: true })).toHaveValue("15190,86")
+  await expect(page.getByLabel("Entrada (R$)", { exact: true })).toHaveValue(amountText("15190,86"))
 
   await page.getByLabel("Valor da parcela 2 (R$)", { exact: true }).fill("2170,11")
   await page.getByRole("button", { name: "Criar pedido com estas condições", exact: true }).click()
