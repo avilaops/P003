@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import { PageHeader } from "@/components/page-header"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -22,7 +23,7 @@ export function FixedExpenses() {
   const available = categorySnapshot && expenseSnapshot && categorySnapshot.tenantId === expenseSnapshot.tenantId
     ? categorySnapshot.data.filter(row => row.direction === "expense" && row.status === "active") : []
   return <main className="mx-auto max-w-5xl space-y-5 px-4 pb-24 pt-6">
-
+    <PageHeader eyebrow="Preferências / Comercial" title="Despesas fixas" description="Despesas mensais recorrentes usadas na formação da tabela de preços." />
     <Link className="text-primary underline" href="/preferencias/comercial">Voltar aos parâmetros</Link>
     {expenses.loading || categories.loading ? <p role="status">Carregando despesas e categorias…</p> : expenses.error ? <p role="alert"><RequestError message={expenses.error} status={expenses.status} /></p> : categories.error ? <p role="alert"><RequestError message={categories.error} status={categories.status} /></p> : expenses.value && <>
       <p>Total mensal vigente: <strong>{money(expenses.value.monthlyExpensesCents)}</strong></p>
