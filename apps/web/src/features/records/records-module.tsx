@@ -35,7 +35,7 @@ const recordModules: RecordModule[] = [
 export function RecordsOverview() {
   return (
     <div className="workspace-page-frame">
-      <PageHeader eyebrow="Cadastros" title="Cadastros" description="Áreas de cadastro da empresa ativa." />
+      <PageHeader eyebrow="Cadastros" title="Central de cadastros" description="Registros fundamentais compartilhados pelos módulos do ERP." />
       <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3" aria-label="Áreas de cadastros">
         {recordModules.map(({ href, title, description, icon: Icon }) => (
           <Link className="group rounded-2xl border border-border bg-card p-5 transition hover:border-primary/40 hover:bg-muted/30" href={href} key={href}>
