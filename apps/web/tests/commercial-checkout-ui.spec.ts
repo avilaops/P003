@@ -425,7 +425,8 @@ test("acabamentos podem ser recarregados sem perder a negociação", async ({ co
   await page.getByLabel(`Quantidade de ${name}`, { exact: true }).fill("2")
   const finishes = page.locator("summary").filter({ hasText: `Acabamentos de ${name}` })
   await finishes.click()
-  await page.getByLabel(`Tipo de anilheiro de ${name}`, { exact: true }).selectOption({ label: "Olímpico" })
+  // Sem o catálogo do produto não há tipos cadastrados, então o seletor de anilheiro não aparece.
+  await expect(page.getByLabel(`Tipo de anilheiro de ${name}`, { exact: true })).toHaveCount(0)
   const retryFinishes = page.getByRole("button", { name: `Recarregar acabamentos de ${name}`, exact: true })
   await expect(retryFinishes).toBeVisible()
   const attemptsBeforeRetry = attempts
@@ -437,6 +438,7 @@ test("acabamentos podem ser recarregados sem perder a negociação", async ({ co
   await expect(colors.getByRole("option", { name: "Preto", exact: true })).toHaveCount(1)
   await colors.getByRole("option", { name: "Preto", exact: true }).click()
   await expect(structure).toContainText("Preto")
+  await page.getByLabel(`Tipo de anilheiro de ${name}`, { exact: true }).selectOption({ label: "Olímpico" })
   await expect(page.getByLabel(`Quantidade de ${name}`, { exact: true })).toHaveValue("2")
   await expect(page.getByLabel(`Tipo de anilheiro de ${name}`, { exact: true })).toHaveValue("Olímpico")
   await expect(page.getByText(/Cliente selecionado: Academia Horizonte LTDA/)).toBeVisible()

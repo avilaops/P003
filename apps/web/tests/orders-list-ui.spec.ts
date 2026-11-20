@@ -281,7 +281,7 @@ test("consulta de peso descarta outra empresa e permite recuperar o total", asyn
   await page.route(`**/api/erp/orders/${record}`, route => route.fulfill({ headers: { ETag: '"1"' }, json: { tenantId: tenant, canEdit: false, data: order, items: [
     { productId: record, name: "Hack", sku: "HACK", unit: "UN", quantity: "2.000000", unitPrice: "10.00", amount: "20.00" },
   ] } }))
-  await page.route(`**/api/erp/products/${record}/catalog`, route => route.fulfill({ json: { tenantId: correctTenant ? tenant : record, data: { weight: correctTenant ? "180 kg" : "999 kg" } } }))
+  await page.route(`**/api/erp/products/${record}/catalog`, route => route.fulfill({ json: { tenantId: correctTenant ? tenant : record, data: { weight: correctTenant ? "180 kg" : "999 kg", dimensionsMm: [1200, 1000, 900] } } }))
   await page.goto(`/vendas/pedidos/${record}`)
   const weight = page.getByRole("region", { name: "Peso do pedido", exact: true })
   await expect(weight).toContainText("Não foi possível consultar todos os pesos.")
