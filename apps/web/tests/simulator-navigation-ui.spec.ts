@@ -34,7 +34,7 @@ for (const width of [320, 390, 768, 1280]) test(`navegação conserva negociaç�
   await page.keyboard.press("Enter")
   await chooseCatalogColor(page, `Cor da estrutura de ${name}`, "Titanium Grey")
   await expect(page.getByLabel(`Cor dos anilheiros de ${name}`, { exact: true })).toHaveCount(0)
-  await expect(page.getByLabel(`Tipo de anilheiro de ${name}`, { exact: true }).getByRole("option")).toHaveText(["Não se aplica", "Standard", "Olímpico"])
+  await expect(page.getByLabel(`Tipo de anilheiro de ${name}`, { exact: true }).getByRole("option")).toHaveText(["Não se aplica", "Olímpico"])
   await page.getByRole("combobox", { name: `Cor dos braços de ${name}`, exact: true }).click()
   const photos = page.getByRole("listbox", { name: `Cor dos braços de ${name}`, exact: true })
   await expect(photos.getByRole("option", { name: "Performance Red", exact: true })).toBeVisible()
