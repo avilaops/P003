@@ -302,7 +302,8 @@ export function mapDraft(value: unknown): NfeInput {
   const ipiCst = declaration?.ipiCst == null ? null : text(declaration.ipiCst, "CST do IPI", 2);
   if (ipiCst !== null && ![...IPI_TAXED_CSTS, ...IPI_UNTAXED_CSTS].includes(ipiCst)) refuse("CST do IPI fora do recorte");
   const ipiRate = declaration ? rate(declaration.ipiRate, ipiCst !== null && IPI_TAXED_CSTS.includes(ipiCst)) : 0;
-  const ipiFrameCode = ipiCst === null ? "999" : text(declaration?.ipiFrameCode, "Enquadramento do IPI", 3);
+  // O XSD exige cEnq sempre que há grupo de IPI; 999 é o código padrão enquanto a Receita não publica a tabela.
+  const ipiFrameCode = declaration?.ipiFrameCode == null ? "999" : text(declaration.ipiFrameCode, "Enquadramento do IPI", 3);
   if (!/^\d{3}$/.test(ipiFrameCode) || ipiCst === null && declaration?.ipiFrameCode != null) refuse("Enquadramento do IPI incompatível com o CST declarado");
   const ibs = declaration ? declaredObject(declaration.ibsCbs, ["cst", "classCode", "ibsStateRate", "ibsCityRate", "cbsRate"]) : null;
   const immunity = foreign && ibs?.cst === "410" && ibs.classCode === "410004";
