@@ -135,7 +135,7 @@ for (const scheme of ["light", "dark"] as const) test(`contraste dos textos oper
   for (const selector of ["h1", ".sales-summary-number", ".sales-panel-heading a", ".sales-record-identity > a", ".sales-recent-table th", ".sales-record-action"]) {
     await expect(page.locator(".sales-overview").locator(selector).first(), selector).toBeAttached()
   }
-  const ratios = await page.locator(".sales-overview").evaluate(root => {
+  const ratios = await page.locator(".sales-overview").filter({ hasNotText: "Carregando" }).first().evaluate(root => {
     const canvas = document.createElement("canvas")
     canvas.width = canvas.height = 1
     const paint = canvas.getContext("2d")!
