@@ -22,6 +22,13 @@ function preparation(): any {
   };
 }
 
+test("IPI tributado sem enquadramento declarado emite cEnq 999, e o declarado é respeitado", async () => {
+  const padrao = preparation(); delete padrao.draft.taxDeclaration.ipiFrameCode;
+  assert.match(String((await dispatch("prepare", padrao)).signedXml), /<cEnq>999<\/cEnq>/);
+  const declarado = preparation(); declarado.draft.taxDeclaration.ipiFrameCode = "001";
+  assert.match(String((await dispatch("prepare", declarado)).signedXml), /<cEnq>001<\/cEnq>/);
+});
+
 test("explicit taxpayer indicators preserve exempt status and non-taxpayer IE in signed XML", async () => {
   for (const [indicator, taxpayer, registration] of [["1", true, "110042490114"], ["2", true, null], ["9", false, null], ["9", false, "123456"]] as const) {
     const input = preparation();
