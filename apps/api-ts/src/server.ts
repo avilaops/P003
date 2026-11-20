@@ -9,8 +9,11 @@ import { HttpOutgoingNfseEngine } from "./modules/outgoing-nfse/engine-client.js
 import { SettingsSecretVault } from "./modules/platform-admin/secret-vault.js"
 import { createBrowserUseRuns } from "./platform/browser-use.js"
 import { createCatalogMedia } from "./platform/catalog-media.js"
+import { init as initLangfuse, shutdown as shutdownLangfuse } from "./platform/langfuse.js"
 
 const configuration = loadConfiguration()
+// Opt-in (LANGFUSE_ENABLED=true); invalid or missing configuration only disables tracing.
+initLangfuse()
 const pool = new PostgresPool(configuration.databaseUrl, configuration.maximumConnections)
 const vault=configuration.fiscalEngine ? new FiscalCertificateVault(configuration.fiscalEngine.keyring) : undefined
 const outgoingNfse = configuration.fiscalEngine && vault ? (() => {
@@ -24,6 +27,7 @@ if (workers !== "false" && workers !== "true") throw new Error("ERP_BACKGROUND_W
 const stopCostWorker = workers === "true" ? startCostWorker(pool) : undefined
 app.addHook("onClose", async () => {
   await stopCostWorker?.()
+  await shutdownLangfuse()
   await pool.close()
 })
 if (workers === "true") startPayrollWorker(app, pool)

@@ -4,6 +4,7 @@ import { z } from "zod"
 
 import type { AppDependencies } from "../app.js"
 import type { AuthenticatedIdentity } from "./auth.js"
+import { observe } from "./langfuse.js"
 import { Problem } from "./problem.js"
 import { runWithMcpIdentity } from "./request-identity.js"
 import { registerInventoryMcp } from "../modules/inventory/mcp.js"
@@ -68,7 +69,8 @@ export function registerMcpDispatch(app: FastifyInstance, dependencies: AppDepen
       throw new Problem(422, "invalid_input", "Corpo MCP inválido")
     }
     const identity: AuthenticatedIdentity = { subject: grant.subject, email: grant.email, name: grant.name, emailVerified: grant.verified_email }
-    const response = await runWithMcpIdentity(identity, () => app.inject({ method: input.method, url: input.resource, headers, ...(body === undefined ? {} : { payload: body }) }))
+    // Metadata-only trace: fixed name, only success/error is recorded, never the resource, headers or body.
+    const response = await observe("mcp-dispatch", "tool", () => runWithMcpIdentity(identity, () => app.inject({ method: input.method, url: input.resource, headers, ...(body === undefined ? {} : { payload: body }) })), result => result.statusCode >= 400)
     for (const name of responseHeaders) {
       const value = response.headers[name]
       if (value !== undefined) reply.header(name, value)
