@@ -1,6 +1,7 @@
 "use client"
 
 import Link from "next/link"
+import { Skeleton } from "@/components/ui/skeleton"
 import { useResource } from "@/hooks/use-operation"
 import { dateLabel, reais, type Portfolio, type Side } from "./finance-insights-model"
 
@@ -54,7 +55,19 @@ export function OverviewBalances() {
   return (
     <section className="space-y-3">
       {position.loading ? (
-        <p role="status">Consultando carteiras…</p>
+        <>
+          <p role="status" className="sr-only">
+            Consultando carteiras…
+          </p>
+          <div aria-hidden="true" className="space-y-3">
+            <Skeleton className="h-7 w-56" />
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+              {Array.from({ length: 6 }, (_, index) => (
+                <Skeleton key={index} className="h-[84px] rounded-lg" />
+              ))}
+            </div>
+          </div>
+        </>
       ) : position.error ? (
         <p role="alert">{position.error}</p>
       ) : (
