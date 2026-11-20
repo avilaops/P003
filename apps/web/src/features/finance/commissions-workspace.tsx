@@ -1,5 +1,6 @@
 "use client"
 
+import { PageHeader } from "@/components/page-header"
 import { Pagination } from "@/components/workspace/pagination"
 import { GuardedLink as Link } from "@/components/shell/navigation-guard"
 import { orderNumber } from "@/features/sales/order-presentation"
@@ -34,7 +35,7 @@ export function CommissionsWorkspace() {
   const [selected, setSelected] = useState("")
   const result = useResource<Listing>(`/api/erp/commissions?offset=${offset}&limit=25`)
   return <>
-
+    <PageHeader eyebrow="Financeiro" title="Comissões" description="Comissões sobre recebimentos sem IPI. Os débitos são descontados quando sua competência está incluída no pagamento. Os pagamentos anteriores ficam preservados." />
     <CommercialMetrics kind="commissions" />
     <section className="form-section min-w-0 space-y-5">
       {result.loading ? <p role="status">Carregando comissões…</p> : result.error ? <div role="alert"><RequestError message={result.error} status={result.status} /><Button variant="outline" onClick={result.reload}>Consultar comissões novamente</Button></div> : result.value && <>
