@@ -254,3 +254,45 @@ leituras (evidências, linha do tempo), que não mudam estado nem exigem revisã
 Hoje o portal assina com a cadeia autoassinada gerada pelo próprio sistema, que **não é ICP-Brasil**.
 Um e-CNPJ A1 instalado pelo cliente passa a ser usado como certificado padrão e a tela mostra se a cadeia chega à
 raiz oficial, mas a assinatura só será considerada ICP-Brasil depois da prova real (passo 3) e da revogação (2b).
+
+### 13. Teste real de ponta a ponta em produção (20/11/2026)
+
+Feito com Chrome e câmera falsa, em conta de teste isolada (criada e **apagada** ao final; as contas 1, 2 e 3 não
+foram tocadas). Mobile emulado (420 px). Não foi feito em iPhone/Safari.
+
+| Etapa | Resultado |
+| --- | --- |
+| Página de assinatura abre, marca e português | OK |
+| CPF com dígitos errados | Recusado, mensagem "Informe um CPF válido" |
+| CPF válido | Aceito e gravado |
+| Selfie: consentimento, câmera, foto | OK. Evidência gravada: origem `camera`, IP, aparelho, consentimento `lgpd-selfie-v1`, **hash SHA-256 igual ao do arquivo** |
+| Localização (opcional) | Não exercitada (permissão não dada) |
+| Assinar digitando o nome e concluir | "O documento foi assinado!"; envio concluído |
+| Log de auditoria | 10 eventos, cadeia de hash **válida** |
+| PDF final | 1 assinatura digital, relatório de auditoria anexado |
+| Quem assina o PDF | **"DocuSeal"**, emissor "DocuSeal Sub-CA", cadeia autogerada de 100 anos, hora declarada pelo próprio servidor (sem carimbo de tempo). **Não é ICP-Brasil** |
+
+**Defeitos que o teste achou (todos corrigidos):**
+
+1. **Locale `pt-BR` não existe no portal.** O provisionamento de conta que eu tinha escrito criava contas com
+   `pt-BR`, e a página de assinatura dessas contas daria **erro 500**. O portal só aceita `pt-PT` para português.
+   Corrigido (valida contra `I18n.available_locales`, mapeia `pt-BR` para `pt-PT`) e coberto por teste que renderiza a página.
+2. **Redirecionamento do `contrato.avilaops.com` quebrou o ERP.** Alguém trocou o bloco do Caddy por um redirecionamento
+   permanente; o ERP chama a API com `redirect: "error"` e a integração passou a falhar (`fetch failed`). Corrigido no
+   servidor: `/api/*` e `/file/*` voltam a ser servidos direto nesse domínio, o resto continua redirecionando para
+   `contratos.avilaops.com`.
+3. **O ERP só baixa PDF de URL com origem `contrato.avilaops.com`**, mas o portal emitia `contratos.avilaops.com`
+   (`contract-webhook.ts`: `url.origin !== this.base.origin`). Isso faria o ERP **recusar guardar o PDF assinado de
+   qualquer contrato concluído**. Ninguém tinha exercitado, porque nenhum contrato tinha sido concluído. Corrigido
+   fazendo o portal emitir `https://contrato.avilaops.com` (APP_URL da conta 1).
+4. **`Docuseal.default_url_options` lia o APP_URL de uma conta qualquer** (consulta sem ordem). Com uma conta por empresa,
+   o endereço dos links e dos documentos mudaria conforme a posição física das linhas no banco. Corrigido (ordena pela
+   conta mais antiga) e o provisionamento deixou de criar um APP_URL por conta.
+
+**Decisão pendente do dono / do ERP:** hoje o ERP exige o host `contrato.avilaops.com` em três lugares
+(`docusealFromEnv`, `pdf()` e a validação de `DOCUSEAL_URL`). Enquanto isso valer, e-mails de convite levam o endereço
+`contrato.avilaops.com` (que redireciona as páginas para `contratos.avilaops.com`). Para tornar `contratos` o único
+endereço, é preciso uma mudança pequena no P003 aceitando os dois hosts.
+
+**Ainda sem teste real:** iPhone/Safari, geolocalização, e-mail de convite chegando na caixa de entrada,
+SMS (simulado), assinatura desenhada, recusa e expiração pelo lado do signatário, reenvio e lembretes.
