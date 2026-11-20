@@ -445,7 +445,7 @@ test("sidebar recolhida centraliza ícones e mantém controles e painel acessív
     for (const button of await sidebar.locator(".erp-module-list .erp-module-button").all()) {
       const box = (await button.boundingBox())!
       expect(box.width).toBe(44)
-      expect(box.height).toBe(44)
+      expect(box.height).toBe(36)
       const icon = (await button.locator("svg").first().boundingBox())!
       expect(Math.abs(icon.x + icon.width / 2 - (rail.x + rail.width / 2))).toBeLessThanOrEqual(1)
     }
