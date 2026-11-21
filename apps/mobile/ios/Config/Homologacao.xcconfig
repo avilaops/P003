@@ -1,0 +1,7 @@
+// Endereços públicos de homologação; não são segredos (cliente OIDC público com PKCE).
+// A API vazia mantém o app em "API não configurada". No CI: xcodebuild ERP_API_BASE_URL=...
+// Em xcconfig, "//" inicia comentário: a barra dupla da URL é escrita como $(SLASH)$(SLASH).
+SLASH = /
+ERP_API_BASE_URL =
+ERP_AUTH_ISSUER = https:$(SLASH)$(SLASH)auth.avilaops.com
+ERP_AUTH_CLIENT_ID = erp-mobile

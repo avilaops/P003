@@ -1,0 +1,25 @@
+{
+  "contract": "apps/api-ts/openapi.json",
+  "operations": [
+    "getApiV1Me",
+    "getApiV1Orders",
+    "getApiV1OrdersId",
+    "getApiV1OrdersIdPricing",
+    "postApiV1OrdersIdPricingApprove",
+    "postApiV1Parties"
+  ],
+  "pending": {
+    "getApiV1Companies": {
+      "method": "GET",
+      "path": "/api/v1/companies",
+      "requiresTenant": false,
+      "waitingFor": "porte para a API TypeScript (#283/#285); hoje a rota só existe no Rust"
+    },
+    "postApiV1CompanySelection": {
+      "method": "POST",
+      "path": "/api/v1/company-selection",
+      "requiresTenant": true,
+      "waitingFor": "porte para a API TypeScript (#283/#285); hoje a rota só existe no Rust"
+    }
+  }
+}

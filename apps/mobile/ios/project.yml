@@ -1,0 +1,62 @@
+# Projeto Xcode gerado com XcodeGen (`xcodegen generate`): o .xcodeproj não é versionado.
+name: ErpMobile
+options:
+  bundleIdPrefix: com.avilaops
+  deploymentTarget:
+    iOS: "17.0"
+  createIntermediateGroups: true
+configs:
+  Debug: debug
+  Release: release
+configFiles:
+  Debug: Config/Homologacao.xcconfig
+  Release: Config/Homologacao.xcconfig
+settings:
+  base:
+    SWIFT_VERSION: "5.9"
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
+    CODE_SIGN_STYLE: Automatic
+targets:
+  ErpMobile:
+    type: application
+    platform: iOS
+    sources:
+      - ErpMobile
+    info:
+      path: ErpMobile/Info.plist
+      properties:
+        CFBundleDisplayName: ERP
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        UILaunchScreen: {}
+        UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
+        ITSAppUsesNonExemptEncryption: false
+        NSFaceIDUsageDescription: Desbloquear a sessão do ERP com Face ID.
+        ERPApiBaseURL: $(ERP_API_BASE_URL)
+        ERPAuthIssuer: $(ERP_AUTH_ISSUER)
+        ERPAuthClientID: $(ERP_AUTH_CLIENT_ID)
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.avilaops.erp
+        TARGETED_DEVICE_FAMILY: "1"
+        GENERATE_INFOPLIST_FILE: NO
+  ErpMobileTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - ErpMobileTests
+    dependencies:
+      - target: ErpMobile
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+schemes:
+  ErpMobile:
+    build:
+      targets:
+        ErpMobile: all
+        ErpMobileTests: [test]
+    test:
+      targets:
+        - ErpMobileTests

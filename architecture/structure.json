@@ -4,7 +4,8 @@
     "web": "Interface Next.js e BFF autenticado.",
     "api": "Autoridade Rust para permissões, transações e persistência.",
     "fiscal-engine": "Adaptador interno XML, A1, XSD e SOAP; sem banco e sem acesso do navegador.",
-    "fiscal-mcp": "Validação fiscal XSD, verificação de assinaturas e geração de PDF em serviço Python interno."
+    "fiscal-mcp": "Validação fiscal XSD, verificação de assinaturas e geração de PDF em serviço Python interno.",
+    "mobile": "Apps Android (Kotlin/Compose) e iOS (Swift/SwiftUI); consomem só a API pelo cliente gerado do OpenAPI, sem acesso a banco."
   },
   "webLayers": {
     "content": "Conteúdo e composição MDX de páginas; importa componentes, sem consultas HTTP, sessão ou regras de negócio.",
